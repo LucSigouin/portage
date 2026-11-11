@@ -126,12 +126,18 @@ test('paused, with a still camera, no pixel of the land changes', async ({ page 
   const first = await page.screenshot({ clip: LAND });
   await page.waitForTimeout(400);
   const second = await page.screenshot({ clip: LAND });
+  // The whole-view check judges the painting alone. The HUD's half-clear tape and shadows round one colour step
+  // differently from one capture to the next over a live canvas (25 pixels, 1 part in 255). The HUD's own stillness
+  // is checked in interface.spec.ts.
+  await page.addStyleTag({ content: '#interface { visibility: hidden !important; }' });
+  const rungBefore = (await probe(page)).rung;
   const whole = await page.screenshot({ clip: { x: 0, y: 150, width: 1920, height: 750 } });
   await page.waitForTimeout(400);
   const wholeAgain = await page.screenshot({ clip: { x: 0, y: 150, width: 1920, height: 750 } });
+  const rungAfter = (await probe(page)).rung;
   const land = await differingPixels(page, first, second);
   const view = await differingPixels(page, whole, wholeAgain);
-  console.log(`paused: land crop ${land.different} of ${land.total} pixels changed in 400 ms; whole view ${view.different} of ${view.total}`);
+  console.log(`paused: land crop ${land.different} of ${land.total} pixels changed in 400 ms; whole view ${view.different} of ${view.total}; ladder rung ${rungBefore} then ${rungAfter}`);
   expect((await probe(page)).lineBoil).toBe(0);
   expect(land.total).toBe(LAND.width * LAND.height);
   expect(land.different).toBe(0);

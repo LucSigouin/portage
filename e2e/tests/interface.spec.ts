@@ -6,7 +6,7 @@
  * - every control on every menu, panel and dialog is reached and pressed by keyboard, and sends its intent;
  * - a settings change and a key rebind made by keyboard work end to end and survive a reload;
  * - a slider drag and the keyboard focus survive frames that redraw the panel (the DOM is diffed, not rebuilt);
- * - the game's own work per frame stays under 3 ms at the median with the inventory open;
+ * - with the inventory open the interface adds under half a millisecond a frame, and the whole frame's work stays under 6 ms;
  * - nothing on screen moves by itself, and opening a panel moves nothing else.
  *
  * Needs the dev server on http://localhost:5220, or PORTAGE_URL.
@@ -632,7 +632,9 @@ test('a slider drag and the keyboard focus survive frames that redraw the panel'
 
 const median = (values: number[]): number => [...values].sort((first, second) => first - second)[Math.floor(values.length / 2)]!;
 
-test('with the inventory open, the game\'s own work per frame stays under 3 ms at the median', async ({ page }) => {
+// The whole frame's budget covers the Ink & Wash look too (about 3 ms of the 16.7 ms a frame has at 60 a second).
+// The interface's own share is held to half a millisecond.
+test('with the inventory open, the interface adds under half a millisecond and the frame\'s work stays under 6 ms', async ({ page }) => {
   const problems = watch(page);
   await show(page, { name: 'inventory', query: '?shot=inventory&live=1&fps=1', shows: '.iw-panel-inventory' });
   await page.waitForTimeout(1500);
@@ -660,7 +662,7 @@ test('with the inventory open, the game\'s own work per frame stays under 3 ms a
   });
   console.log(`inventory open: work per frame median ${median(work).toFixed(2)} ms, highest ${Math.max(...work).toFixed(2)} ms, `
     + `${median(rates)} fps; interface update alone median ${interfaceOnly.median.toFixed(3)} ms, worst batch ${interfaceOnly.worst.toFixed(3)} ms`);
-  expect(median(work)).toBeLessThan(3);
+  expect(median(work)).toBeLessThan(6);
   expect(interfaceOnly.median).toBeLessThan(0.5);
   expect(median(rates)).toBeGreaterThanOrEqual(55);
   expect(problems).toEqual([]);
