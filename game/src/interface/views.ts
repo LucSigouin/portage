@@ -1,0 +1,414 @@
+/**
+ * The Ink & Wash views: one function per screen, card and panel, each turning
+ * a piece of the interface model into a description of markup.
+ *
+ * They are pure. Nothing here reads the DOM, keeps state or knows a game
+ * rule: every label, count and reason comes from the model, and every
+ * control carries the intent the model gave it.
+ */
+import type {
+  BuildRowModel, ButtonModel, ConfirmModel, CostRowModel, DebugModel, HotbarSlotModel, HudModel, InterfaceIntent,
+  ItemSlotModel, LobbyModel, MapMarkerModel, ObjectiveRowModel, PanelModel, PromptModel, QuestRowModel, RecipeRowModel,
+  SaveSlotModel, SettingRowModel, ToastModel,
+} from '../client/contracts.ts';
+import { control, h } from './dom.ts';
+import type { ViewChild, ViewNode } from './dom.ts';
+import { ICON, SEAL, logotype, toolIcon, waterGauge } from './icons.ts';
+
+const icon = (markup: string, className = ''): ViewNode => h('i.iw-i', { class: className, html: markup, 'aria-hidden': 'true' });
+
+const classes = (...names: (string | false | null | undefined)[]): string => names.filter(Boolean).join(' ');
+
+const percent = (share: number): string => `${(share * 100).toFixed(2)}%`;
+
+/** Destructive choices are drawn quietly, so the eye lands on the safe one. */
+const isQuiet = (intent: InterfaceIntent): boolean =>
+  intent.type === 'delete_save' || (intent.type === 'command' && intent.command.type === 'discard');
+
+/** A paper button. The note says why it is disabled, or adds a detail. */
+function buttonView(button: ButtonModel, selector: string, showNote = true, key: string | number | null = null): ViewNode {
+  return control(h(selector, { key, type: 'button', disabled: !button.enabled, class: isQuiet(button.intent) ? 'iw-quiet' : '' },
+    h('span.iw-label', null, button.label),
+    showNote && button.note ? h('small.iw-note', null, button.note) : null), button.intent);
+}
+
+/** A line of the big menus: the lobby, the pause card, a survivor's answers. */
+function menuItemView(button: ButtonModel, index: number): ViewNode {
+  return control(h('button.iw-mi', { key: index, type: 'button', disabled: !button.enabled },
+    h('span.iw-label', null, button.label),
+    button.note ? h('span.iw-n', null, button.note) : null), button.intent);
+}
+
+function objectivesView(objectives: ObjectiveRowModel[]): ViewNode {
+  return h('ul.iw-objectives', null, objectives.map((objective, index) => {
+    // "2 / 4" also draws as pips while the count is small enough to take in at a glance.
+    const counted = /^(\d+) \/ (\d+)$/.exec(objective.progressText);
+    const total = counted ? Number(counted[2]) : 0;
+    const filled = counted ? Number(counted[1]) : 0;
+    return h('li', { key: index, class: objective.done ? 'iw-done' : '' },
+      h('span.iw-objective-text', null, objective.text),
+      h('span.iw-pips', null,
+        counted && total <= 6
+          ? Array.from({ length: total }, (_, pip) => h('i', { class: pip < filled ? 'iw-filled' : '' }))
+          : null,
+        objective.progressText ? h('b', null, objective.progressText) : h('i.iw-box', { class: objective.done ? 'iw-filled' : '' })));
+  }));
+}
+
+const costsView = (costs: CostRowModel[]): ViewNode => h('div.iw-costs', null, costs.map((cost, index) =>
+  h('span.iw-cost', { key: index, class: cost.enough ? '' : 'iw-short' }, cost.name, ' ', h('b', null, `${cost.have}/${cost.need}`))));
+
+// --- Lobby -------------------------------------------------------------------------
+
+export function lobbyView(lobby: LobbyModel): ViewNode[] {
+  return [h('div.iw-lobby-col', { key: 'lobby' },
+    h('div.iw-logo-row', null, h('h1.iw-logo-holder', { html: logotype(lobby.title) }), icon(SEAL, 'iw-seal-holder')),
+    h('p.iw-tagline', null, lobby.tagline),
+    h('nav.iw-menu', null, lobby.buttons.map(menuItemView)))];
+}
+
+// --- HUD ---------------------------------------------------------------------------
+
+const METER_ICON = { hunger: ICON.hunger, thirst: ICON.thirst, energy: ICON.energy } as const;
+
+/** Top left: the three meters, the water in the hull and the canoe's status lines. */
+export function vitalsView(hud: HudModel, patterned: boolean): ViewNode[] {
+  const water = hud.water;
+  return [h('div.iw-vitals.iw-paper', { key: 'vitals' },
+    h('i.iw-tape'),
+    hud.meters.map((meter) => h('div.iw-meter', { key: meter.id, class: meter.low ? 'iw-low' : '' },
+      icon(METER_ICON[meter.id]),
+      h('span.iw-lab', null, meter.label),
+      h('div.iw-bar', { class: classes(`iw-bar-${meter.id}`, patterned && `iw-${meter.pattern}`) },
+        h('i', { style: `--v:${meter.value / 100}` }),
+        meter.cap < 100 ? h('u', { style: `--v:${meter.cap / 100}` }) : null),
+      h('span.iw-val', null, meter.value))),
+    water.visible ? h('div.iw-bilge', { key: 'water', class: water.warning ? 'iw-low' : '' },
+      h('div.iw-gauge-holder', { html: waterGauge(water.value / 100, patterned) }),
+      h('div.iw-bilge-text', null,
+        h('b', null, water.label),
+        h('span', null, `${water.value}%`, icon(ICON[water.trend], 'iw-trend-holder'), water.trend))) : null,
+    hud.canoeLines.length > 0 ? h('div.iw-canoe-lines', { key: 'canoe' }, hud.canoeLines.map((line, index) =>
+      h('div', { key: index, class: `iw-tone-${line.tone}` }, line.text))) : null)];
+}
+
+/** Top right: the field notes. The day, the place, the weather and the tracked quest. */
+export function notesView(hud: HudModel): ViewNode[] {
+  const tracker = hud.tracker;
+  return [h('div.iw-notes.iw-paper', { key: 'notes' },
+    h('i.iw-tape'),
+    h('div.iw-over', null, icon(hud.night ? ICON.moon : ICON.sun, 'iw-sky'), h('span', null, hud.clockText), h('span', null, hud.placeText)),
+    h('div.iw-weather', { class: hud.stormWarning ? 'iw-tone-danger' : '' }, hud.weatherText),
+    tracker ? h('div.iw-tracker', { key: 'tracker' },
+      h('h3', null, tracker.name,
+        tracker.kind === 'side' ? h('small.iw-kind', null, tracker.kind) : null,
+        tracker.ready ? icon(ICON.check, 'iw-ready') : null),
+      objectivesView(tracker.objectives)) : null)];
+}
+
+export function hintView(hint: string): ViewNode[] {
+  return [h('div.iw-hint', { key: 'hint' }, hint)];
+}
+
+export function promptView(prompt: PromptModel): ViewNode[] {
+  return [h('div.iw-prompt.iw-paper', { key: 'prompt', class: `iw-prompt-${prompt.mode}` },
+    h('span.iw-key', null, prompt.keyLabel),
+    prompt.mode === 'hold' ? h('span.iw-mode', null, prompt.mode) : null,
+    h('span.iw-prompt-text', null, prompt.text),
+    prompt.mode === 'hold' ? h('span.iw-hold', null, h('i', { style: `--v:${prompt.progress.toFixed(3)}` })) : null)];
+}
+
+export function hotbarView(hotbar: HotbarSlotModel[]): ViewNode[] {
+  return [h('div.iw-hotbar', { key: 'hotbar' }, hotbar.map((slot) => (slot.intent && slot.toolId
+    // The number keys pick these; they stay out of the Tab order so Tab stays the game's.
+    ? control(h('button.iw-slot.iw-paper', {
+      key: slot.number, type: 'button', tabindex: -1, class: slot.selected ? 'iw-selected' : '', title: slot.name,
+      'aria-label': `${slot.keyLabel}: ${slot.name}`, 'aria-pressed': String(slot.selected),
+    },
+    h('span.iw-n', null, slot.keyLabel),
+    icon(toolIcon(slot.toolId)),
+    slot.selected ? h('span.iw-nm', null, slot.name) : null,
+    slot.selected ? h('i.iw-underline') : null), slot.intent)
+    : h('div.iw-slot.iw-empty', { key: slot.number }, h('span.iw-n', null, slot.keyLabel)))))];
+}
+
+export const toastsView = (toasts: ToastModel[]): ViewNode[] => toasts.map((toast) =>
+  h('div.iw-toast', { key: toast.id, class: `iw-toast-${toast.tone}`, role: 'status' }, h('i.iw-dab'), h('span', null, toast.text)));
+
+export function debugView(debug: DebugModel): ViewNode[] {
+  const lines = debug.showFrameRate
+    ? [`${debug.framesPerSecond} fps · frame ${debug.frameMilliseconds.toFixed(1)} ms · work ${debug.workMilliseconds.toFixed(1)} ms`, ...debug.lines]
+    : debug.lines;
+  return lines.map((line, index) => h('div', { key: index }, line));
+}
+
+// --- Panels ------------------------------------------------------------------------
+
+type PanelSize = 'wide' | 'mid' | 'narrow';
+
+/** The sheet every full panel is written on: taped corners, a title, a body that scrolls, a way out. */
+function sheet(
+  panel: PanelModel, size: PanelSize, subtitle: string, body: ViewChild, footerStart: ViewChild = null,
+): ViewNode[] {
+  return [h('section.iw-panel.iw-paper', { key: panel.id, class: `iw-panel-${panel.id} iw-${size}`, role: 'dialog', 'aria-label': panel.title },
+    h('i.iw-tape.iw-a'),
+    size === 'wide' ? h('i.iw-tape.iw-b') : null,
+    h('header', null, h('h2', null, panel.title), subtitle ? h('span.iw-sub', null, subtitle) : null),
+    body,
+    h('footer', null, footerStart ?? h('span'), buttonView(panel.close, 'button.iw-btn.iw-go')))];
+}
+
+function settingRowView(row: SettingRowModel): ViewNode {
+  const id = `iw-setting-${row.setting}`;
+  let field: ViewNode;
+  if (row.kind === 'slider') {
+    field = h('span.iw-sl', null,
+      h('input', {
+        type: 'range', id, 'data-setting': row.setting, min: row.minimum, max: row.maximum, step: row.step, value: row.value,
+        'aria-valuetext': row.valueText,
+      }),
+      h('output', { for: id }, row.valueText));
+  } else if (row.kind === 'toggle') {
+    field = h('span.iw-tg', null,
+      h('input', { type: 'checkbox', id, 'data-setting': row.setting, checked: row.value }),
+      h('span.iw-box', { html: ICON.check }),
+      h('output', { for: id }, row.valueText));
+  } else {
+    field = h('span.iw-dd', null,
+      h('select', { id, 'data-setting': row.setting, value: JSON.stringify(row.value) }, row.options.map((option) =>
+        h('option', { key: JSON.stringify(option.value), value: JSON.stringify(option.value) }, option.label))),
+      icon(ICON.caret));
+  }
+  return h('div.iw-row', { key: row.setting }, h('label.iw-l', { for: id }, row.label), field);
+}
+
+function settingsView(panel: Extract<PanelModel, { id: 'settings' }>): ViewNode[] {
+  const tabs = h('div.iw-tabs', null, panel.tabs.map((tab) => control(h('button.iw-tab', {
+    key: tab.tab, type: 'button', class: tab.selected ? 'iw-on' : '', 'aria-current': tab.selected ? 'page' : null,
+  }, tab.label), tab.intent)));
+  const bindings = panel.bindings.length > 0 ? [
+    h('p.iw-notice', { key: 'notice', role: 'status' }, panel.bindingNotice || 'Click a key to change it.'),
+    h('table.iw-bindings', { key: 'bindings', style: `--iw-rows:${Math.ceil(panel.bindings.length / 2)}` },
+      h('tbody', null, panel.bindings.map((binding) => h('tr', { key: binding.action, class: binding.unbound ? 'iw-unbound' : '' },
+        h('th', { scope: 'row' }, binding.label, h('small', null, binding.contextLabel)),
+        binding.slots.map((slot) => h('td', { key: slot.slot },
+          control(h('button.iw-key.iw-bind', {
+            type: 'button', class: slot.capturing ? 'iw-listen' : slot.keyLabel === null ? 'iw-none' : '',
+          }, slot.capturing ? 'press…' : slot.keyLabel ?? 'none'), slot.rebind),
+          slot.clear ? control(h('button.iw-clear', {
+            type: 'button', 'aria-label': 'Remove this key', title: 'Remove this key', html: ICON.cross,
+          }), slot.clear) : null)))))),
+  ] : null;
+  return sheet(panel, 'wide', '', [
+    tabs,
+    h('div.iw-body', { key: 'body' }, h('div.iw-rows', null, panel.rows.map(settingRowView)), bindings),
+  ], panel.resetBindings ? buttonView(panel.resetBindings, 'button.iw-btn.iw-quiet') : null);
+}
+
+/** "W / Up, S / Down" as key caps: a comma parts the keys, a slash the two ways to press one. */
+const keyCapsView = (keys: string): ViewNode[] => keys.split(', ').map((group, index) =>
+  h('span.iw-ks', { key: index }, group.split(' / ').map((key, alternative) => h('span.iw-key', { key: alternative }, key))));
+
+function howToPlayView(panel: Extract<PanelModel, { id: 'how_to_play' }>): ViewNode[] {
+  return sheet(panel, 'wide', '', h('div.iw-body.iw-howto', { key: 'body' }, panel.sections.map((section, index) =>
+    h('section', { key: index },
+      h('h3', null, section.heading),
+      section.lines.map((line, lineIndex) => h('p', { key: lineIndex }, line)),
+      section.controls.length > 0 ? h('dl.iw-keys', null, section.controls.map((line, lineIndex) =>
+        h('div', { key: lineIndex }, h('dt', { 'aria-label': line.keys }, keyCapsView(line.keys)), h('dd', null, line.label)))) : null))));
+}
+
+function creditsView(panel: Extract<PanelModel, { id: 'credits' }>): ViewNode[] {
+  return sheet(panel, 'mid', '', h('div.iw-body.iw-credits', { key: 'body', class: panel.completed ? 'iw-completed' : '' },
+    icon(SEAL, 'iw-seal-holder'),
+    panel.lines.map((line, index) => (line
+      ? h('p', { key: index, class: index === 0 ? 'iw-credit-title' : '' }, line)
+      : h('p.iw-gap', { key: index, 'aria-hidden': 'true' })))));
+}
+
+function pauseView(panel: Extract<PanelModel, { id: 'pause' }>): ViewNode[] {
+  return [h('section.iw-panel.iw-paper.iw-narrow', { key: panel.id, class: `iw-panel-${panel.id}`, role: 'dialog', 'aria-label': panel.title },
+    h('i.iw-tape.iw-a'),
+    icon(SEAL, 'iw-seal-holder'),
+    h('h2', null, panel.title),
+    h('p.iw-pause-note', null, panel.summary),
+    h('nav.iw-menu', null, panel.buttons.map(menuItemView)),
+    h('div.iw-foot', null, buttonView(panel.close, 'button.iw-btn.iw-quiet')))];
+}
+
+function saveSlotView(slot: SaveSlotModel): ViewNode {
+  return h('li.iw-save', { key: slot.slot, class: classes(slot.empty && 'iw-blank', slot.corrupt && 'iw-corrupt', slot.current && 'iw-current') },
+    h('div.iw-entry-text', null,
+      h('h3', null, slot.title, slot.current ? h('small.iw-kind', null, 'playing') : null),
+      h('p.iw-save-summary', null, slot.summary),
+      slot.questText ? h('p', null, slot.questText) : null,
+      slot.savedText ? h('p', null, slot.savedText) : null),
+    h('div.iw-actions', null, slot.buttons.map((button, index) => buttonView(button, 'button.iw-btn', true, index))));
+}
+
+/** Rows of a pack or the hold. Two stacks of one item are told apart by which comes first. */
+function itemRowsView(slots: ItemSlotModel[]): ViewNode[] {
+  const seen = new Map<string, number>();
+  return slots.map((slot, index) => {
+    if (slot.itemId === null) return h('li.iw-item.iw-blank', { key: `empty-${index}` }, 'empty');
+    const occurrence = seen.get(slot.itemId) ?? 0;
+    seen.set(slot.itemId, occurrence + 1);
+    return h('li.iw-item', { key: `${slot.itemId}-${occurrence}` },
+      h('div.iw-entry-text', null,
+        h('b', null, slot.name), ' ', h('span.iw-count', null, `× ${slot.count}`),
+        h('small', null, slot.description)),
+      h('div.iw-actions', null, slot.buttons.map((button, buttonIndex) => buttonView(button, 'button.iw-btn.iw-small', true, buttonIndex))));
+  });
+}
+
+function inventoryView(panel: Extract<PanelModel, { id: 'inventory' }>): ViewNode[] {
+  return sheet(panel, 'wide', panel.stationsText, h('div.iw-body', { key: 'body' },
+    panel.pendingRewards ? h('div.iw-reward', { key: 'reward' },
+      h('span', null, panel.pendingRewards.text), buttonView(panel.pendingRewards.claim, 'button.iw-btn.iw-go')) : null,
+    h('div.iw-columns', { key: 'columns' },
+      h('section', null,
+        h('h3', null, panel.backpack.label),
+        h('ul.iw-items', null, itemRowsView(panel.backpack.slots))),
+      h('section', { class: panel.cargo.accessible ? '' : 'iw-out-of-reach' },
+        h('h3', null, panel.cargo.label),
+        h('ul.iw-items', null, itemRowsView(panel.cargo.slots)))),
+    h('div.iw-belt-row', { key: 'belt' },
+      h('section', null,
+        h('h3', null, 'Tool belt'),
+        panel.tools.length > 0 ? h('div.iw-belt', null, panel.tools.map((tool) => control(h('button.iw-slot.iw-paper.iw-tool', {
+          key: tool.toolId, type: 'button', class: tool.selected ? 'iw-selected' : '', 'aria-pressed': String(tool.selected),
+        }, icon(toolIcon(tool.toolId)), h('span.iw-tool-name', null, tool.name), tool.selected ? h('i.iw-underline') : null), tool.intent)))
+          : h('p.iw-soft', null, 'No tools')),
+      h('section', null,
+        h('div.iw-pack-actions', null, buttonView(panel.stow, 'button.iw-btn'), buttonView(panel.fillWater, 'button.iw-btn')),
+        panel.keyItems.length > 0 ? [
+          h('h3.iw-next', { key: 'key-items-heading' }, 'Key items'),
+          h('ul.iw-key-items', { key: 'key-items' }, panel.keyItems.map((item, index) =>
+            h('li', { key: index }, item.name, ' ', h('span.iw-count', null, `× ${item.count}`)))),
+        ] : null))));
+}
+
+function recipeView(recipe: RecipeRowModel): ViewNode {
+  return h('li.iw-entry', { key: recipe.recipeId, class: recipe.known ? '' : 'iw-unknown' },
+    h('div.iw-entry-text', null,
+      h('b', null, recipe.name), ' ', h('span.iw-count', null, recipe.outputText),
+      recipe.known ? null : h('small.iw-kind', null, 'not learned'),
+      h('small', null, recipe.description),
+      costsView(recipe.inputs),
+      recipe.missingText ? h('p.iw-missing', null, recipe.missingText) : null),
+    h('div.iw-actions', null,
+      buttonView(recipe.craft, 'button.iw-btn.iw-small', false, 'one'),
+      recipe.craftAll ? buttonView(recipe.craftAll, 'button.iw-btn.iw-small', true, 'all') : null));
+}
+
+function craftingView(panel: Extract<PanelModel, { id: 'crafting' }>): ViewNode[] {
+  return sheet(panel, 'wide', '', h('div.iw-body', { key: 'body' }, panel.stations.map((station) =>
+    h('section', { key: station.name, class: station.inReach ? '' : 'iw-out-of-reach' },
+      h('h3', null, station.name, station.inReach ? null : h('small.iw-kind', null, 'not in reach')),
+      h('ul.iw-grid', null, station.recipes.map(recipeView))))));
+}
+
+function buildRowView(row: BuildRowModel): ViewNode {
+  return h('li.iw-entry', { key: row.id, class: row.built ? 'iw-built' : '' },
+    h('div.iw-entry-text', null,
+      h('b', null, row.name),
+      row.built ? h('span.iw-stamp', null, icon(ICON.check, 'iw-ready'), 'built') : null,
+      h('small', null, row.description),
+      row.built ? null : costsView(row.costs),
+      row.missingText ? h('p.iw-missing', null, row.missingText) : null),
+    row.build ? h('div.iw-actions', null, buttonView(row.build, 'button.iw-btn.iw-small', false)) : null);
+}
+
+function canoeBuilderView(panel: Extract<PanelModel, { id: 'canoe_builder' }>): ViewNode[] {
+  return sheet(panel, 'wide', '', h('div.iw-body', { key: 'body' },
+    panel.blockedText ? h('p.iw-blocked', { key: 'blocked' }, panel.blockedText) : null,
+    h('ul.iw-stats', { key: 'stats' }, panel.statLines.map((line, index) => h('li', { key: index }, line))),
+    h('section', { key: 'hull' },
+      h('h3', null, 'Hull'),
+      h('ul.iw-grid.iw-single', null, panel.hull ? buildRowView(panel.hull)
+        : h('li.iw-entry.iw-built', null, h('div.iw-entry-text', null, 'The hull is as good as it gets.')))),
+    h('section', { key: 'attachments' },
+      h('h3', null, 'Attachments'),
+      h('ul.iw-grid', null, panel.attachments.map(buildRowView)))));
+}
+
+function questView(quest: QuestRowModel): ViewNode {
+  return h('li.iw-entry', { key: quest.questId, class: classes(quest.done && 'iw-built', quest.tracked && 'iw-tracked') },
+    h('div.iw-entry-text', null,
+      quest.tracked ? icon(ICON.flag, 'iw-tracked-flag') : null,
+      h('b', null, quest.name), ' ',
+      h('span.iw-count', null, quest.statusText),
+      quest.giverText ? h('span.iw-giver', null, quest.giverText) : null,
+      h('small', null, quest.description),
+      quest.done ? null : objectivesView(quest.objectives)),
+    quest.track ? h('div.iw-actions', null, buttonView(quest.track, 'button.iw-btn.iw-small')) : null);
+}
+
+function questLogView(panel: Extract<PanelModel, { id: 'quest_log' }>): ViewNode[] {
+  return sheet(panel, 'wide', '', h('div.iw-body', { key: 'body' }, panel.groups.map((group) =>
+    h('section', { key: group.heading }, h('h3', null, group.heading), h('ul.iw-grid', null, group.quests.map(questView))))));
+}
+
+const MARKER_ICON: Record<MapMarkerModel['kind'], string> = {
+  player: ICON.you, canoe: ICON.canoe, respawn: ICON.camp, quest: ICON.flag, survivor: ICON.person,
+};
+
+function mapView(panel: Extract<PanelModel, { id: 'map' }>): ViewNode[] {
+  const chart = h('div.iw-chart', { class: panel.fullChart ? 'iw-full-chart' : '' },
+    panel.regions.map((region) => h('div.iw-water-band', { key: region.name, style: `top:${percent(region.top)};height:${percent(region.height)}` },
+      h('span', null, region.name), h('small', null, `roughness ${region.roughness}`))),
+    panel.islands.map((island) => [
+      h('i.iw-island', {
+        key: island.islandId,
+        style: `left:${percent(island.left)};top:${percent(island.top)};width:${percent(island.width)};height:${percent(island.height)};`
+          + `--turn:${island.rotationDegrees}deg`,
+      }),
+      // A name near the edge of the chart is nudged inward, so it is never cut off.
+      h('span.iw-island-name', {
+        key: `${island.islandId}-name`,
+        style: `left:clamp(4.2rem, ${percent(island.left)}, calc(100% - 4.2rem));top:${percent(island.top + island.height / 2)}`,
+      },
+        island.name, island.bearingText ? h('small', null, island.bearingText) : null),
+    ]),
+    panel.markers.map((marker, index) => h('span.iw-marker', {
+      key: `marker-${index}`, class: `iw-marker-${marker.kind}`, style: `left:${percent(marker.left)};top:${percent(marker.top)}`, title: marker.label,
+    }, icon(MARKER_ICON[marker.kind]))));
+  const legend = h('ul.iw-legend', null, panel.markers.map((marker, index) =>
+    h('li', { key: index }, icon(MARKER_ICON[marker.kind]), h('span', null, marker.label))));
+  return sheet(panel, 'mid', panel.summary, h('div.iw-body.iw-map-body', { key: 'body' }, chart, legend));
+}
+
+function dialogueView(panel: Extract<PanelModel, { id: 'dialogue' }>): ViewNode[] {
+  return [h('section.iw-panel.iw-paper', { key: panel.id, class: `iw-panel-${panel.id}`, role: 'dialog', 'aria-label': panel.title },
+    h('i.iw-tape.iw-a'),
+    h('header', null, h('h2', null, panel.speaker), buttonView(panel.close, 'button.iw-btn.iw-quiet')),
+    h('p.iw-speech', null, panel.text),
+    h('nav.iw-menu.iw-answers', null, panel.options.map(menuItemView)))];
+}
+
+export function panelView(panel: PanelModel): ViewNode[] {
+  switch (panel.id) {
+    case 'settings': return settingsView(panel);
+    case 'how_to_play': return howToPlayView(panel);
+    case 'credits': return creditsView(panel);
+    case 'pause': return pauseView(panel);
+    case 'save_slots':
+      return sheet(panel, 'mid', '', h('ul.iw-body.iw-saves', { key: 'body' }, panel.slots.map(saveSlotView)));
+    case 'inventory': return inventoryView(panel);
+    case 'crafting': return craftingView(panel);
+    case 'canoe_builder': return canoeBuilderView(panel);
+    case 'quest_log': return questLogView(panel);
+    case 'map': return mapView(panel);
+    case 'dialogue': return dialogueView(panel);
+  }
+}
+
+export function confirmView(confirm: ConfirmModel): ViewNode[] {
+  return [h('section.iw-panel.iw-paper.iw-narrow.iw-confirm-box', { key: 'confirm', role: 'alertdialog', 'aria-label': confirm.title },
+    h('i.iw-tape.iw-a'),
+    h('h2', null, confirm.title),
+    h('p.iw-confirm-message', null, confirm.message),
+    h('div.iw-confirm-actions', null,
+      buttonView(confirm.accept, 'button.iw-btn.iw-go'),
+      buttonView(confirm.cancel, 'button.iw-btn')))];
+}
