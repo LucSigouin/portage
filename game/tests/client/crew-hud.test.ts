@@ -164,12 +164,13 @@ describe('crewmates on the compass', () => {
     expect(lookingEast.relativeDegrees).toBe(0);
   });
 
-  it('leaves out a crewmate standing beside you on foot, and marks the one in the canoe you stepped out of', () => {
+  it('leaves out a crewmate standing beside you, and marks the one still out in the canoe', () => {
     const state = newGame(7, { crew: 3 });
     const [you, beside, aboard] = state.players as [PlayerState, PlayerState, PlayerState];
     putAshore(you, 'home_knoll');
     putAshore(beside, 'home_knoll', 2);
     expect(aboard.mode).toBe('canoe');
+    expect(Math.hypot(aboard.position.x - you.position.x, aboard.position.z - you.position.z)).toBeGreaterThan(CREW_WITH_YOU_METRES);
     expect(crewElsewhere(state, you.id).map((entry) => entry.player.id)).toEqual([aboard.id]);
     expect(crewMarks(state).map((mark) => mark.id)).toEqual(['crew-2']);
   });

@@ -38,7 +38,7 @@ function buildMeters(state: GameState, playerId: PlayerId): MeterModel[] {
 
 /**
  * A crewmate this close is with you: no distance beside their name and no mark of their own on the
- * compass or the map. Further off, or with one of you in the canoe and the other not, they get both.
+ * compass or the map. Further off they get both. The whole canoe is well inside it.
  */
 export const CREW_WITH_YOU_METRES = 10;
 
@@ -48,18 +48,14 @@ export function crewMark(playerId: PlayerId): { label: string; color: string } {
   return { label: mark.label, color: mark.toque };
 }
 
-/**
- * The crewmates of `playerId` who are somewhere else, each with the distance and bearing to them.
- * Two players in the canoe are together whatever their seats; so are two within a few steps on foot.
- */
+/** The crewmates of `playerId` who are somewhere else, each with the distance and bearing to them. */
 export function crewElsewhere(state: GameState, playerId: PlayerId): { player: PlayerState; distance: number; bearing: number }[] {
   const viewer = playerOf(state, playerId);
   const elsewhere: { player: PlayerState; distance: number; bearing: number }[] = [];
   for (const player of state.players) {
     if (player.id === viewer.id) continue;
-    if (player.mode === 'canoe' && viewer.mode === 'canoe') continue;
     const distance = Math.hypot(player.position.x - viewer.position.x, player.position.z - viewer.position.z);
-    if (player.mode === viewer.mode && distance < CREW_WITH_YOU_METRES) continue;
+    if (distance < CREW_WITH_YOU_METRES) continue;
     elsewhere.push({ player, distance, bearing: bearingBetween(viewer.position.x, viewer.position.z, player.position.x, player.position.z) });
   }
   return elsewhere;
