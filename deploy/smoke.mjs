@@ -31,13 +31,18 @@ const canoe = () => page.evaluate(() => { const c = window.portage.session.game.
 // 1. The lobby, then New Game by a real click.
 await page.goto(base);
 await page.waitForFunction(() => window.portage?.worldView?.probe?.().drawingWidth > 0, null, { timeout: 30000 });
-// Two tries: on a busy machine the first click can land before the page has settled. A broken menu fails both.
+// The menu moves a little when its fonts arrive, so wait for them before aiming a click at it.
+await page.evaluate(() => document.fonts.ready);
+await page.waitForTimeout(300);
 let slots = 0;
 let tries = 0;
+const opened = [];
 while (slots === 0 && tries < 2) {
   tries += 1;
   await page.getByText('New Game', { exact: true }).click();
   slots = await page.getByText('Save slots').waitFor({ timeout: 10000 }).then(() => 1, () => 0);
+  opened.push(await page.evaluate(() => [...window.portage.session.panels.stack].join(',') || 'none'));
+  if (slots === 0) await page.keyboard.press('Escape');
 }
 // 2. A game at quest 1: hold W, the canoe must move.
 await page.goto(`${base}?at=quest1`);
@@ -51,7 +56,7 @@ const drawing = await page.evaluate(() => { const p = window.portage.worldView.p
 const fonts = await page.evaluate(() => [...document.fonts].filter((font) => font.status === 'loaded').length);
 if (process.argv.includes('--shot')) await page.screenshot({ path: process.argv[process.argv.indexOf('--shot') + 1] });
 await browser.close();
-console.log(`${mode}: save slots opened ${slots === 1} (try ${tries}), canoe moved ${moved.toFixed(1)} m in 3 s, drawing ${drawing}, fonts loaded ${fonts}, off-origin requests ${offOrigin.length}, console problems ${problems.length}`);
+console.log(`${mode}: save slots opened ${slots === 1} (try ${tries}, panels ${opened.join(' then ')}), canoe moved ${moved.toFixed(1)} m in 3 s, drawing ${drawing}, fonts loaded ${fonts}, off-origin requests ${offOrigin.length}, console problems ${problems.length}`);
 for (const problem of problems.slice(0, 5)) console.log(`  ${problem.slice(0, 220)}`);
 const ok = slots === 1 && moved > 2 && fonts >= 2 && offOrigin.length === 0 && problems.length === 0;
 console.log(ok ? 'SMOKE PASS' : 'SMOKE FAIL');
