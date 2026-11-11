@@ -602,7 +602,9 @@ describe('determinism with four players', () => {
     dispatch(state, { type: 'disembark' }, 3);
     dispatch(state, { type: 'disembark' }, 1);
     dispatch(state, { type: 'fill_water', count: 1 }, 1);
-    runCrew(state, [{ paddle: -1 }, { moveX: 1, run: true, interactHeld: true }, { steer: 1 }, { moveY: 1, cameraYaw: 2, interactHeld: true }], 20);
+    runCrew(state, [{ paddle: -1 }, { moveX: 1, run: true }, { steer: 1 }, { moveY: 1, cameraYaw: 2 }], 20);
+    dispatch(state, { type: 'scavenge' }, 1);
+    dispatch(state, { type: 'scavenge' }, 3);
     dispatch(state, { type: 'eat', itemId: 'berries' }, 1);
     runCrew(state, [{ paddle: 1 }, { moveY: -1, cameraYaw: 1 }, {}, { moveX: -0.5, moveY: 0.5 }], 10);
     return state;

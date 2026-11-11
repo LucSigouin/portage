@@ -37,7 +37,7 @@
  */
 import type { AudioEngine } from '../audio/index.ts';
 import type { Settings } from '../settings/index.ts';
-import type { GameEvent, GameState } from '../sim/index.ts';
+import type { GameEvent, GameState, Vector3 } from '../sim/index.ts';
 import type { CameraPose } from './camera.ts';
 import type { InterfaceIntent } from './intents.ts';
 import type { InterfaceModel } from './viewmodels/types.ts';
@@ -57,6 +57,18 @@ export interface FrameInfo {
   elapsedSeconds: number;
   /** True while the simulation is frozen: a full panel, the pause menu, a hidden tab. */
   paused: boolean;
+  /**
+   * True while a panel or a menu covers the play view: inventory, map, pause,
+   * settings and the rest. A conversation does not count, the world shows
+   * through it. The look may spend less on a view nobody can see.
+   */
+  panelOpen: boolean;
+  /**
+   * Where the tracked quest sends the crew next, in world space, for a mark
+   * in the view. Null in the lobby, when its next step has no place, or when
+   * the place is not charted yet (`selectTrackedQuestTarget`).
+   */
+  trackedQuestTarget: Vector3 | null;
 }
 
 /**

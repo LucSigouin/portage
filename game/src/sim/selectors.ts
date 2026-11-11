@@ -28,8 +28,8 @@ import {
 import { objectiveRequired } from './quests.ts';
 import { hourOfDay, isNight, isSheltered, respawnPoint, sleepBlocked } from './survival.ts';
 import type { SleepBlock } from './survival.ts';
-import type { GameState, ItemStack, Missing, PlayerId } from './types.ts';
-import { waterRoughnessAt } from './world.ts';
+import type { GameState, ItemStack, Missing, PlayerId, Vector3 } from './types.ts';
+import { islandLanding, terrainHeight, waterRoughnessAt } from './world.ts';
 
 /** The current interactable and its prompt, or null. */
 export function selectInteractable(state: GameState, playerId: PlayerId = 0): Interactable | null {
@@ -242,18 +242,57 @@ export interface MapData {
   markers: MapMarker[];
 }
 
-/** Island a quest objective points at, if it points anywhere. */
-function objectiveIsland(state: GameState, questId: QuestId): IslandId | null {
+/** Where a quest's next step is: the island, and the spot on it. Null when it points nowhere. */
+function objectivePlace(state: GameState, questId: QuestId): { islandId: IslandId; x: number; z: number } | null {
   const definition = QUESTS[questId];
   const progress = state.quests[questId].progress;
+  const atSurvivor = (npcId: NpcId): { islandId: IslandId; x: number; z: number } => {
+    const npc = NPCS[npcId];
+    return { islandId: npc.islandId, ...spotPosition(ISLANDS_BY_ID[npc.islandId], npc.spot) };
+  };
   for (let index = 0; index < definition.objectives.length; index += 1) {
     const objective = definition.objectives[index];
     if (progress[index] >= objectiveRequired(objective)) continue;
-    if (objective.type === 'land') return objective.islandId;
-    if (objective.type === 'talk') return NPCS[objective.npcId].islandId;
-    if (objective.type === 'node') return NODES_BY_ID[objective.nodeId].islandId;
+    if (objective.type === 'land') return { islandId: objective.islandId, ...islandLanding(objective.islandId).shore };
+    if (objective.type === 'talk') return atSurvivor(objective.npcId);
+    if (objective.type === 'node') {
+      const node = NODES_BY_ID[objective.nodeId];
+      return { islandId: node.islandId, x: node.position.x, z: node.position.z };
+    }
   }
-  return definition.giver && state.quests[questId].status === 'ready' ? NPCS[definition.giver].islandId : null;
+  return definition.giver && state.quests[questId].status === 'ready' ? atSurvivor(definition.giver) : null;
+}
+
+/** Island a quest objective points at, if it points anywhere. */
+function objectiveIsland(state: GameState, questId: QuestId): IslandId | null {
+  return objectivePlace(state, questId)?.islandId ?? null;
+}
+
+export interface QuestTarget {
+  questId: QuestId;
+  islandId: IslandId;
+  /** The landing, the survivor or the node the next step is at. `y` is the ground there, or the water. */
+  position: Vector3;
+}
+
+/**
+ * Where the tracked quest (or, with none tracked, the first active one)
+ * sends the crew next, for a mark in the world. Null when its next step has
+ * no place, or the place is on an island not yet charted and there is no
+ * radio to mark it: the same rule as the quest marks on the map.
+ */
+export function selectTrackedQuestTarget(state: GameState): QuestTarget | null {
+  const quest = selectActiveQuests(state)[0];
+  if (!quest) return null;
+  const place = objectivePlace(state, quest.questId);
+  if (!place) return null;
+  const charted = hasAttachment(state, 'map_table') || state.discoveredIslands.includes(place.islandId);
+  if (!charted && !hasAttachment(state, 'radio')) return null;
+  return {
+    questId: quest.questId,
+    islandId: place.islandId,
+    position: { x: place.x, y: Math.max(0, terrainHeight(place.x, place.z)), z: place.z },
+  };
 }
 
 /** Discovered islands and markers. The radio shows quest markers on islands not yet seen. */

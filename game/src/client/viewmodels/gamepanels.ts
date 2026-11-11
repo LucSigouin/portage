@@ -36,7 +36,7 @@ function countInReach(inventory: InventoryView, state: GameState, itemId: ItemId
 function costRows(costs: readonly ItemAmount[], inventory: InventoryView, state: GameState): CostRowModel[] {
   return costs.map(({ itemId, count }) => {
     const have = countInReach(inventory, state, itemId);
-    return { name: itemName(itemId), have, need: count, enough: have >= count };
+    return { itemId, name: itemName(itemId), have, need: count, enough: have >= count };
   });
 }
 
@@ -83,10 +83,10 @@ export function buildInventoryPanel(state: GameState, playerId: PlayerId = 0): P
       accessible: inventory.cargoAccessible,
     },
     tools: inventory.tools.map((toolId) => ({
-      toolId, name: ITEMS[toolId].name, selected: toolId === inventory.selectedTool,
+      toolId, itemId: toolId, name: ITEMS[toolId].name, selected: toolId === inventory.selectedTool,
       intent: command({ type: 'select_tool', toolId: toolId === inventory.selectedTool ? null : toolId }),
     })),
-    keyItems: inventory.keyItems.map(({ itemId, count }) => ({ name: itemName(itemId), count })),
+    keyItems: inventory.keyItems.map(({ itemId, count }) => ({ itemId, name: itemName(itemId), count })),
     stow: button(
       'Stow backpack in the canoe', command({ type: 'stow_backpack' }),
       inventory.cargoAccessible && inventory.backpack.length > 0,
@@ -98,6 +98,7 @@ export function buildInventoryPanel(state: GameState, playerId: PlayerId = 0): P
     ),
     pendingRewards: rewards.length === 0 ? null : {
       text: `Waiting for room: ${rewards.map((stack) => countedName(stack.itemId, stack.count)).join(', ')}`,
+      items: rewards.map((stack) => ({ itemId: stack.itemId, name: itemName(stack.itemId), count: stack.count })),
       claim: button('Claim', command({ type: 'claim_rewards' })),
     },
     stationsText: `In reach: ${inventory.stations.map((station) => STATIONS[station].name.toLowerCase()).join(', ')}`,
@@ -123,6 +124,7 @@ export function buildCraftingPanel(state: GameState, playerId: PlayerId = 0): Pa
           const missingText = entry.known ? needsText(entry.missing) : 'A survivor teaches this';
           return {
             recipeId: recipe.id,
+            itemId: entry.known ? recipe.output.itemId : null,
             name: entry.known ? recipe.name : 'Unknown recipe',
             description: entry.known ? recipe.description : '',
             outputText: entry.known ? countedName(recipe.output.itemId, recipe.output.count) : '',
@@ -130,7 +132,7 @@ export function buildCraftingPanel(state: GameState, playerId: PlayerId = 0): Pa
             inputs: entry.known ? [
               ...costRows(recipe.inputs, inventory, state),
               ...recipe.tools.map((toolId) => ({
-                name: `${itemName(toolId)} (tool)`, have: inventory.tools.includes(toolId) ? 1 : 0, need: 1,
+                itemId: toolId, name: `${itemName(toolId)} (tool)`, have: inventory.tools.includes(toolId) ? 1 : 0, need: 1,
                 enough: inventory.tools.includes(toolId),
               })),
             ] : [],

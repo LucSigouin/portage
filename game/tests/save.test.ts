@@ -105,10 +105,17 @@ describe('old saves', () => {
       expect(state.version).toBe(SAVE_VERSION);
       expect(state.players).toHaveLength(1);
       const player = state.players[0];
-      const { keyItems, ...solo } = old.player;
-      // Every field the old player had is still on player 0, untouched.
+      const { keyItems, harvest, interactWasHeld, ...solo } = old.player;
+      // Every field the old player had is still on player 0, untouched...
       expect(player).toMatchObject(solo);
-      expect(player).toMatchObject({ id: 0, bailing: false, asleep: false, dialogue: old.dialogue });
+      // ...except the hold-to-scavenge state, which went with the hold.
+      expect(harvest).toBeNull();
+      expect(interactWasHeld).toBe(false);
+      expect(Object.keys(player)).not.toContain('harvest');
+      expect(Object.keys(player)).not.toContain('interactWasHeld');
+      // It has exactly the shape of a player in a new game.
+      expect(Object.keys(player).sort()).toEqual(Object.keys(newGame().players[0]).sort());
+      expect(player).toMatchObject({ id: 0, paddling: false, bailing: false, asleep: false, dialogue: old.dialogue });
       expect(player.seat).toBe(old.player.mode === 'canoe' ? 0 : null);
       // The key items moved to the crew. Nothing of the old shape is left behind.
       expect(state.keyItems).toEqual(keyItems);

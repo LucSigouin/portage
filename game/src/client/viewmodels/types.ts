@@ -48,6 +48,8 @@ export interface HotbarSlotModel {
   number: number;
   keyLabel: string;
   toolId: ToolId | null;
+  /** The tool as an item, for its icon. Null for an empty slot. */
+  itemId: ItemId | null;
   name: string;
   selected: boolean;
   /** Selects the tool, or puts it away when it is already selected. Null for an empty slot. */
@@ -76,14 +78,14 @@ export interface CompassMarkModel {
   label: string;
   /** Bearing from the player, degrees, 0 = north, clockwise. */
   bearingDegrees: number;
-  /** Bearing relative to where the camera looks, -180 to 180. 0 is dead ahead. */
+  /** Bearing relative to where the camera looks, -180 to 180, to a hundredth of a degree. 0 is dead ahead. */
   relativeDegrees: number;
   /** "420 m", or an empty string for cardinal points. */
   distanceText: string;
 }
 
 export interface CompassModel {
-  /** Bearing the camera looks along, degrees. */
+  /** Bearing the camera looks along, degrees, 0 to 360, to a hundredth of a degree. */
   headingDegrees: number;
   /** "N", "NE", ... */
   cardinal: string;
@@ -93,10 +95,8 @@ export interface CompassModel {
 export interface PromptModel {
   text: string;
   keyLabel: string;
-  /** `press`: one tap. `hold`: keep it down. `blocked`: something is missing. */
-  mode: 'press' | 'hold' | 'blocked';
-  /** 0 to 1 while holding. */
-  progress: number;
+  /** `press`: one tap does it. `blocked`: something is missing. */
+  mode: 'press' | 'blocked';
 }
 
 export interface HudModel {
@@ -124,6 +124,8 @@ export interface ToastModel {
   id: number;
   text: string;
   tone: Tone;
+  /** The item a loot toast is about (gained, lost, left behind, made), for its icon. Null otherwise. */
+  itemId: ItemId | null;
   /** 1 fresh to 0 about to go. */
   life: number;
 }
@@ -185,6 +187,8 @@ export interface ItemSlotModel {
 }
 
 export interface CostRowModel {
+  /** The item or tool this row asks for, for its icon. */
+  itemId: ItemId;
   name: string;
   have: number;
   need: number;
@@ -193,6 +197,8 @@ export interface CostRowModel {
 
 export interface RecipeRowModel {
   recipeId: RecipeId;
+  /** The item the recipe makes, for its icon. Null while the recipe is untaught. */
+  itemId: ItemId | null;
   name: string;
   description: string;
   /** "2 x Plank". */
@@ -272,12 +278,12 @@ export type PanelModel = { title: string; close: ButtonModel } & (
     id: 'inventory';
     backpack: { label: string; slots: ItemSlotModel[] };
     cargo: { label: string; slots: ItemSlotModel[]; accessible: boolean };
-    tools: { toolId: ToolId; name: string; selected: boolean; intent: InterfaceIntent }[];
-    keyItems: { name: string; count: number }[];
+    tools: { toolId: ToolId; itemId: ItemId; name: string; selected: boolean; intent: InterfaceIntent }[];
+    keyItems: { itemId: ItemId; name: string; count: number }[];
     stow: ButtonModel;
     fillWater: ButtonModel;
     /** Rewards that did not fit, with the button that claims them. */
-    pendingRewards: { text: string; claim: ButtonModel } | null;
+    pendingRewards: { text: string; items: { itemId: ItemId; name: string; count: number }[]; claim: ButtonModel } | null;
     stationsText: string;
   }
   | { id: 'crafting'; stations: { name: string; inReach: boolean; recipes: RecipeRowModel[] }[] }

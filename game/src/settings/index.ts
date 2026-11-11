@@ -5,7 +5,8 @@
  */
 import type { Difficulty } from '../data/types.ts';
 
-export const SETTINGS_VERSION = 1;
+/** 2: F is the main action key and L the lantern; the hold-or-toggle scavenging option is gone. */
+export const SETTINGS_VERSION = 2;
 export const SETTINGS_KEY = 'portage.settings';
 
 /** The part of `Storage` the settings layer uses. */
@@ -54,7 +55,7 @@ export const ACTION_LABELS: Record<InputAction, string> = {
   paddle: 'Paddle', backPaddle: 'Back-paddle', steerPort: 'Steer to port', steerStarboard: 'Steer to starboard',
   powerStroke: 'Power stroke', bail: 'Bail (hold)', lantern: 'Lantern', sail: 'Raise or lower sail',
   moveForward: 'Walk forward', moveBack: 'Walk back', moveLeft: 'Walk left', moveRight: 'Walk right', run: 'Run',
-  interact: 'Land / interact (hold to scavenge)',
+  interact: 'Land / interact / scavenge / board',
   inventory: 'Inventory', craft: 'Crafting', canoeBuilder: 'Canoe builder', questLog: 'Quest log', map: 'Map',
   pause: 'Pause',
   tool1: 'Tool 1', tool2: 'Tool 2', tool3: 'Tool 3', tool4: 'Tool 4', tool5: 'Tool 5',
@@ -72,14 +73,14 @@ export const DEFAULT_KEY_BINDINGS: Readonly<KeyBindings> = Object.freeze({
   steerStarboard: ['KeyD', 'ArrowRight'],
   powerStroke: ['ShiftLeft', 'ShiftRight'],
   bail: ['KeyR'],
-  lantern: ['KeyF'],
+  lantern: ['KeyL'],
   sail: ['KeyV'],
   moveForward: ['KeyW', 'ArrowUp'],
   moveBack: ['KeyS', 'ArrowDown'],
   moveLeft: ['KeyA', 'ArrowLeft'],
   moveRight: ['KeyD', 'ArrowRight'],
   run: ['ShiftLeft', 'ShiftRight'],
-  interact: ['KeyE'],
+  interact: ['KeyF'],
   inventory: ['Tab'],
   craft: ['KeyC'],
   canoeBuilder: ['KeyB'],
@@ -96,7 +97,6 @@ export const DEFAULT_KEY_BINDINGS: Readonly<KeyBindings> = Object.freeze({
 export type QualityPreset = 'low' | 'medium' | 'high' | 'ultra';
 export type ShadowQuality = 'off' | 'low' | 'high';
 export type WaterDetail = 'low' | 'medium' | 'high';
-export type ScavengeMode = 'hold' | 'toggle';
 
 export interface Settings {
   version: number;
@@ -137,7 +137,6 @@ export interface Settings {
     uiScale: number;
     reduceCameraMotion: boolean;
     patternedMeters: boolean;
-    scavengeMode: ScavengeMode;
   };
 }
 
@@ -161,7 +160,7 @@ export function createDefaultSettings(): Settings {
       mouseSensitivity: 1, invertY: false, cameraAutoCentre: true,
     },
     gameplay: { difficulty: 'standard', autosaveIntervalSeconds: 300, hints: true },
-    accessibility: { uiScale: 1, reduceCameraMotion: false, patternedMeters: false, scavengeMode: 'hold' },
+    accessibility: { uiScale: 1, reduceCameraMotion: false, patternedMeters: false },
   };
 }
 
@@ -178,7 +177,6 @@ export const SETTINGS_LIMITS = {
   shadows: ['off', 'low', 'high'] as ShadowQuality[],
   waterDetail: ['low', 'medium', 'high'] as WaterDetail[],
   difficulties: ['relaxed', 'standard'] as Difficulty[],
-  scavengeModes: ['hold', 'toggle'] as ScavengeMode[],
 } as const;
 
 /** What each quality preset sets the detailed graphics options to. */
@@ -217,6 +215,27 @@ function sanitizeKeyBindings(value: unknown): KeyBindings {
   return bindings;
 }
 
+/** The defaults that changed in version 2: what each action was, and what it is now. */
+const MOVED_DEFAULTS: readonly { action: InputAction; from: string; to: string }[] = [
+  { action: 'lantern', from: 'KeyF', to: 'KeyL' },
+  { action: 'interact', from: 'KeyE', to: 'KeyF' },
+];
+
+/**
+ * Bindings stored by a version 1 build: an action still on its old default
+ * moves to the new one. A key the player chose stays, and so does an old
+ * default whose new key the player has given to something else.
+ */
+function moveOldDefaults(bindings: KeyBindings): KeyBindings {
+  let next = bindings;
+  for (const { action, from, to } of MOVED_DEFAULTS) {
+    const untouched = next[action].length === 1 && next[action][0] === from;
+    if (!untouched || findBindingConflicts(next, action, to).length > 0) continue;
+    next = { ...next, [action]: [to] };
+  }
+  return next;
+}
+
 /**
  * Build valid settings from anything: stored JSON from an older build, a
  * partial object, or junk. Unknown fields are dropped, missing or invalid
@@ -231,6 +250,9 @@ export function sanitizeSettings(value: unknown): Settings {
   const gameplay = record(source.gameplay);
   const accessibility = record(source.accessibility);
   const limits = SETTINGS_LIMITS;
+  // Stored settings carry the version that wrote them. With none, they are from before versions mattered.
+  const storedVersion = typeof source.version === 'number' ? source.version : 1;
+  const keyBindings = sanitizeKeyBindings(controls.keyBindings);
   const volume = (input: unknown, fallback: number): number => numberIn(input, limits.volume.minimum, limits.volume.maximum, fallback);
   return {
     version: SETTINGS_VERSION,
@@ -250,7 +272,7 @@ export function sanitizeSettings(value: unknown): Settings {
       showFps: flag(graphics.showFps, defaults.graphics.showFps),
     },
     controls: {
-      keyBindings: sanitizeKeyBindings(controls.keyBindings),
+      keyBindings: storedVersion < 2 && controls.keyBindings !== undefined ? moveOldDefaults(keyBindings) : keyBindings,
       mouseSensitivity: numberIn(controls.mouseSensitivity, limits.mouseSensitivity.minimum, limits.mouseSensitivity.maximum, defaults.controls.mouseSensitivity),
       invertY: flag(controls.invertY, defaults.controls.invertY),
       cameraAutoCentre: flag(controls.cameraAutoCentre, defaults.controls.cameraAutoCentre),
@@ -264,7 +286,6 @@ export function sanitizeSettings(value: unknown): Settings {
       uiScale: numberIn(accessibility.uiScale, limits.uiScale.minimum, limits.uiScale.maximum, defaults.accessibility.uiScale),
       reduceCameraMotion: flag(accessibility.reduceCameraMotion, defaults.accessibility.reduceCameraMotion),
       patternedMeters: flag(accessibility.patternedMeters, defaults.accessibility.patternedMeters),
-      scavengeMode: oneOf(accessibility.scavengeMode, limits.scavengeModes, defaults.accessibility.scavengeMode),
     },
   };
 }

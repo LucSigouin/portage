@@ -404,13 +404,13 @@ describe('layers from the game state', () => {
     rig.engine.dispose();
   });
 
-  it('keeps the scavenging rhythm while a node is worked', async () => {
+  it('plays one hit for a one-press scavenge, and no rhythm after it', async () => {
     const rig = await createRig();
     const state = newGame();
     standAtCamp(state);
     const spruce = nodeOfType('spruce');
     const { voicesStarted } = rig.engine.inspector;
-    const hold = (seconds: number): void => {
+    const wait = (seconds: number): void => {
       for (let frame = 0; frame < seconds * 60; frame += 1) {
         state.tick += 1;
         rig.context.advance(FIXED_STEP);
@@ -418,20 +418,12 @@ describe('layers from the game state', () => {
       }
     };
 
-    // The engine reads the held action from the state it was last given, which the game mutates in place.
     rig.engine.update(state, FIXED_STEP);
-    // The event plays the first chop; the layer keeps time after it.
-    state.players[0].harvest = { nodeId: spruce, actionIndex: 1, progress: 0 };
-    rig.engine.handleEvents([{ type: 'harvest_started', nodeId: spruce }]);
+    rig.engine.handleEvents([{ type: 'harvest_started', nodeId: spruce, actionIndex: 1, playerId: 0 }]);
     expect(voicesStarted('scavenge_chop')).toBe(1);
-    hold(5);
-    expect(voicesStarted('scavenge_chop')).toBeGreaterThanOrEqual(5);
-    expect(voicesStarted('scavenge_chop')).toBeLessThanOrEqual(7);
-
-    state.players[0].harvest = null;
-    const whenReleased = voicesStarted('scavenge_chop');
-    hold(3);
-    expect(voicesStarted('scavenge_chop')).toBe(whenReleased);
+    // Nothing is held any more, so nothing keeps time: the one chop is all there is.
+    wait(5);
+    expect(voicesStarted('scavenge_chop')).toBe(1);
     rig.engine.dispose();
   });
 });

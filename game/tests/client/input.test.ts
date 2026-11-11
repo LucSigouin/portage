@@ -5,7 +5,7 @@ import { DEFAULT_KEY_BINDINGS, cloneKeyBindings } from '../../src/settings/index
 import type { Interactable } from '../../src/sim/index.ts';
 
 const controller = (options: Partial<InputOptions> = {}): InputController => new InputController({
-  keyBindings: cloneKeyBindings(DEFAULT_KEY_BINDINGS), scavengeMode: 'hold', mouseSensitivity: 1, invertY: false, ...options,
+  keyBindings: cloneKeyBindings(DEFAULT_KEY_BINDINGS), mouseSensitivity: 1, invertY: false, ...options,
 });
 
 const snapshot = (overrides: Partial<InputSnapshot> = {}): InputSnapshot => ({
@@ -13,8 +13,8 @@ const snapshot = (overrides: Partial<InputSnapshot> = {}): InputSnapshot => ({
 });
 
 const node = (nodeId = 'driftwood_1', actionIndex = 0, available = true): Interactable => ({
-  kind: 'node', nodeId, name: 'Driftwood pile', prompt: 'Gather: Driftwood pile', actionIndex, holdSeconds: 2, progress: 0,
-  available, missing: null, distance: 1,
+  kind: 'node', nodeId, name: 'Driftwood pile', prompt: 'Gather: Driftwood pile', actionIndex,
+  available, missing: null, command: { type: 'scavenge' }, distance: 1,
 });
 
 const board: Interactable = { kind: 'board', name: 'Canoe', prompt: 'Board the canoe', command: { type: 'board' }, distance: 1 };
@@ -47,76 +47,76 @@ describe('keys to simulation intent', () => {
   it('gives a neutral input when the keys do not drive the game', () => {
     const input = controller();
     input.keyDown('KeyW', false, snapshot());
-    expect(input.sample(null, 0.3)).toMatchObject({ paddle: 0, steer: 0, moveX: 0, moveY: 0, interactHeld: false, cameraYaw: 0.3 });
+    expect(input.sample(null, 0.3)).toMatchObject({ paddle: 0, steer: 0, moveX: 0, moveY: 0, cameraYaw: 0.3 });
   });
 
   it('lets go of every key on blur', () => {
-    const input = controller({ scavengeMode: 'toggle' });
+    const input = controller();
     const canoe = snapshot({ interactable: node() });
     input.keyDown('KeyW', false, canoe);
-    input.keyDown('KeyE', false, canoe);
+    input.keyDown('KeyR', false, canoe);
     input.pointerDown();
-    expect(input.sample(canoe, 0)).toMatchObject({ paddle: 1, interactHeld: true });
+    expect(input.sample(canoe, 0)).toMatchObject({ paddle: 1, bail: true });
     input.releaseAll();
-    expect(input.sample(canoe, 0)).toMatchObject({ paddle: 0, interactHeld: false });
+    expect(input.sample(canoe, 0)).toMatchObject({ paddle: 0, bail: false });
     input.pointerMove(50, 0);
     expect(input.takeCameraInput()).toMatchObject({ yawDelta: 0, dragging: false });
   });
 });
 
 describe('the interact key', () => {
-  it('dispatches the command an interactable carries, once per press', () => {
+  it('is F by default, and the lantern is L', () => {
+    expect(DEFAULT_KEY_BINDINGS.interact).toEqual(['KeyF']);
+    expect(DEFAULT_KEY_BINDINGS.lantern).toEqual(['KeyL']);
+    const input = controller();
+    const canoe = snapshot();
+    expect(input.keyDown('KeyL', false, canoe)).toEqual([{ type: 'command', command: { type: 'toggle_lantern' } }]);
+    expect(input.keyDown('KeyF', false, canoe)).toEqual([]); // nothing to act on, and no lantern
+    expect(input.keyDown('KeyE', false, canoe)).toEqual([]); // E does nothing any more
+  });
+
+  it('dispatches the command an interactable carries, once per press: land, board, talk, sleep', () => {
     const input = controller();
     const foot = snapshot({ mode: 'foot', interactable: board });
-    expect(input.keyDown('KeyE', false, foot)).toEqual([{ type: 'command', command: { type: 'board' } }]);
-    expect(input.keyDown('KeyE', true, foot)).toEqual([]); // key repeat
-    expect(input.sample(foot, 0).interactHeld).toBe(false);
+    expect(input.keyDown('KeyF', false, foot)).toEqual([{ type: 'command', command: { type: 'board' } }]);
+    expect(input.keyDown('KeyF', true, foot)).toEqual([]); // key repeat
+    const land: Interactable = { kind: 'land', name: 'Shore', prompt: 'Land', command: { type: 'disembark' }, distance: 0 };
+    input.keyUp('KeyF');
+    expect(input.keyDown('KeyF', false, snapshot({ interactable: land }))).toEqual([{ type: 'command', command: { type: 'disembark' } }]);
   });
 
-  it('holds for a node, and only while the key is down', () => {
+  it('scavenges a node with one press: no holding, and holding does not repeat it', () => {
     const input = controller();
     const foot = snapshot({ mode: 'foot', interactable: node() });
-    expect(input.keyDown('KeyE', false, foot)).toEqual([]);
-    expect(input.sample(foot, 0).interactHeld).toBe(true);
-    input.keyUp('KeyE');
-    expect(input.sample(foot, 0).interactHeld).toBe(false);
-    // Nothing to scavenge: holding the key does nothing.
-    input.keyDown('KeyE', false, snapshot({ mode: 'foot' }));
-    expect(input.sample(snapshot({ mode: 'foot' }), 0).interactHeld).toBe(false);
+    expect(input.keyDown('KeyF', false, foot)).toEqual([{ type: 'command', command: { type: 'scavenge' } }]);
+    // Still down: the browser's key repeat sends nothing more, and the step input carries no scavenging.
+    expect(input.keyDown('KeyF', true, foot)).toEqual([]);
+    expect(Object.keys(input.sample(foot, 0))).not.toContain('interactHeld');
+    input.keyUp('KeyF');
+    // The next press scavenges again (the node's other action, or what was left behind).
+    expect(input.keyDown('KeyF', false, foot)).toEqual([{ type: 'command', command: { type: 'scavenge' } }]);
+    // Nothing in reach: the press does nothing.
+    input.keyUp('KeyF');
+    expect(input.keyDown('KeyF', false, snapshot({ mode: 'foot' }))).toEqual([]);
   });
 
-  it('does not start scavenging with the press that boarded the canoe', () => {
+  it('does not scavenge with the press that boarded the canoe', () => {
     const input = controller();
-    input.keyDown('KeyE', false, snapshot({ mode: 'foot', interactable: board }));
-    // Still holding E, now aboard beside a fishing spot.
+    expect(input.keyDown('KeyF', false, snapshot({ mode: 'foot', interactable: board }))).toHaveLength(1);
+    // Still holding F, now aboard beside a fishing spot: only key repeats arrive, and they do nothing.
     const aboard = snapshot({ mode: 'canoe', interactable: node('fishing_1') });
-    expect(input.sample(aboard, 0).interactHeld).toBe(false);
-    input.keyUp('KeyE');
-    input.keyDown('KeyE', false, aboard);
-    expect(input.sample(aboard, 0).interactHeld).toBe(true);
+    expect(input.keyDown('KeyF', true, aboard)).toEqual([]);
+    input.keyUp('KeyF');
+    expect(input.keyDown('KeyF', false, aboard)).toEqual([{ type: 'command', command: { type: 'scavenge' } }]);
   });
 
-  it('latches in toggle mode: one press starts, a second press, a step or a finished node stops', () => {
-    const input = controller({ scavengeMode: 'toggle' });
-    const foot = snapshot({ mode: 'foot', interactable: node('spruce_1', 0) });
-    input.keyDown('KeyE', false, foot);
-    input.keyUp('KeyE');
-    expect(input.sample(foot, 0).interactHeld).toBe(true);
-    input.keyDown('KeyE', false, foot);
-    input.keyUp('KeyE');
-    expect(input.sample(foot, 0).interactHeld).toBe(false);
-
-    input.keyDown('KeyE', false, foot);
-    input.keyUp('KeyE');
-    input.keyDown('KeyW', false, foot); // walking off
-    expect(input.sample(foot, 0).interactHeld).toBe(false);
-    input.keyUp('KeyW');
-
-    input.keyDown('KeyE', false, foot);
-    input.keyUp('KeyE');
-    // The gum is done and the same spruce now offers the chop: do not roll into it.
-    expect(input.sample(snapshot({ mode: 'foot', interactable: node('spruce_1', 1) }), 0).interactHeld).toBe(false);
-    expect(input.sample(foot, 0).interactHeld).toBe(false);
+  it('follows a rebind: the new key acts, the old one does not', () => {
+    const bindings = cloneKeyBindings(DEFAULT_KEY_BINDINGS);
+    bindings.interact = ['KeyG'];
+    const input = controller({ keyBindings: bindings });
+    const foot = snapshot({ mode: 'foot', interactable: node() });
+    expect(input.keyDown('KeyF', false, foot)).toEqual([]);
+    expect(input.keyDown('KeyG', false, foot)).toEqual([{ type: 'command', command: { type: 'scavenge' } }]);
   });
 });
 
@@ -142,7 +142,7 @@ describe('discrete presses', () => {
 
   it('sends lantern, sail and tool keys as commands', () => {
     const input = controller();
-    expect(input.keyDown('KeyF', false, snapshot())).toEqual([{ type: 'command', command: { type: 'toggle_lantern' } }]);
+    expect(input.keyDown('KeyL', false, snapshot())).toEqual([{ type: 'command', command: { type: 'toggle_lantern' } }]);
     expect(input.keyDown('KeyV', false, snapshot())).toEqual([{ type: 'command', command: { type: 'set_sail', raised: true } }]);
     expect(input.keyDown('KeyV', false, snapshot({ sailRaised: true }))).toEqual([{ type: 'command', command: { type: 'set_sail', raised: false } }]);
     expect(input.keyDown('Digit2', false, snapshot())).toEqual([{ type: 'command', command: { type: 'select_tool', toolId: 'stone_knife' } }]);
@@ -150,8 +150,8 @@ describe('discrete presses', () => {
     expect(input.keyDown('Digit2', false, snapshot({ selectedTool: 'stone_knife' })))
       .toEqual([{ type: 'command', command: { type: 'select_tool', toolId: null } }]);
     expect(input.keyDown('Digit4', false, snapshot())).toEqual([]);
-    // Lantern is a canoe key: on foot F means nothing.
-    expect(input.keyDown('KeyF', false, snapshot({ mode: 'foot' }))).toEqual([]);
+    // Lantern is a canoe key: on foot L means nothing.
+    expect(input.keyDown('KeyL', false, snapshot({ mode: 'foot' }))).toEqual([]);
   });
 
   it('reports which keys the game uses, so the browser default can be stopped', () => {
@@ -169,18 +169,18 @@ describe('rebinding', () => {
     input.beginCapture('paddle', 0);
     expect(input.capture).toEqual({ action: 'paddle', slot: 0 });
     // E is Interact, which is live everywhere, so it clashes with a canoe key.
-    const outcomes = input.keyDown('KeyE', false, null);
+    const outcomes = input.keyDown('KeyF', false, null);
     expect(outcomes).toHaveLength(1);
-    expect(outcomes[0]).toMatchObject({ type: 'rebound', action: 'paddle', slot: 0, keyCode: 'KeyE', unbound: ['interact'] });
+    expect(outcomes[0]).toMatchObject({ type: 'rebound', action: 'paddle', slot: 0, keyCode: 'KeyF', unbound: ['interact'] });
     expect(input.capture).toBeNull();
-    expect(input.keyBindings.paddle).toEqual(['KeyE', 'ArrowUp']);
+    expect(input.keyBindings.paddle).toEqual(['KeyF', 'ArrowUp']);
     expect(input.keyBindings.interact).toEqual([]);
 
     // The new key paddles; the old one no longer does.
     const canoe = snapshot();
-    input.keyDown('KeyE', false, canoe);
+    input.keyDown('KeyF', false, canoe);
     expect(input.sample(canoe, 0).paddle).toBe(1);
-    input.keyUp('KeyE');
+    input.keyUp('KeyF');
     input.keyDown('KeyW', false, canoe);
     expect(input.sample(canoe, 0).paddle).toBe(0);
   });

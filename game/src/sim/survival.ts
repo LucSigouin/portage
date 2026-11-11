@@ -61,7 +61,7 @@ export function updateSurvival(state: GameState, player: PlayerState, input: { m
     if (player.mode === 'foot') energyRate -= tuning.runEnergyPerSecond;
     else energyRate -= player.bailing ? tuning.bailEnergyPerSecond : tuning.powerStrokeEnergyPerSecond;
   } else {
-    energyRate += input.moving || player.harvest ? tuning.lightActivityEnergyPerSecond : tuning.restEnergyPerSecond;
+    energyRate += input.moving ? tuning.lightActivityEnergyPerSecond : tuning.restEnergyPerSecond;
   }
   const sheltered = isSheltered(state, player);
   if (sheltered && campInReach(player)) energyRate += tuning.fireWarmthEnergyPerSecond;
@@ -159,7 +159,6 @@ export function sleepBlocked(state: GameState, player: PlayerState): SleepBlock 
  */
 export function sleep(state: GameState, player: PlayerState): number {
   player.asleep = true;
-  player.harvest = null;
   if (!state.players.every((member) => member.asleep)) return 0;
 
   for (const member of state.players) {
@@ -172,7 +171,6 @@ export function sleep(state: GameState, player: PlayerState): number {
   for (const member of state.players) {
     const starving = member.hunger <= 0 || member.thirst <= 0;
     member.energy = starving ? TUNING.survival.starvingEnergyCap : 100;
-    member.harvest = null;
     member.asleep = false;
     emit(state, { type: 'slept', hours, islandId: member.islandId }, member);
   }
@@ -210,14 +208,14 @@ function loseHalf(stacks: ItemStack[]): ItemAmount[] {
   return lost;
 }
 
-/** A failed player comes round: meters at 50, nothing in hand, out of any talk or bed. */
+/** A failed player comes round: meters at 50, out of any talk or bed. */
 function comeRound(player: PlayerState): void {
   player.hunger = TUNING.survival.failMeterValue;
   player.thirst = TUNING.survival.failMeterValue;
   player.energy = TUNING.survival.failMeterValue;
-  player.harvest = null;
   player.exerting = false;
   player.running = false;
+  player.paddling = false;
   player.bailing = false;
   player.asleep = false;
   player.dialogue = null;

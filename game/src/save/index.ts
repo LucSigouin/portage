@@ -39,15 +39,18 @@ export type SaveMigration = (envelope: { version: number; savedAt: number; state
  * Version 1 was the solo game: one `player` on the state, holding the key
  * items, with the conversation beside it. Version 2 is the crew: `players`
  * (the old player becomes player 0, in the stern seat when aboard), key items
- * held by the crew, and the conversation on the player having it.
+ * held by the crew, the conversation on the player having it, and no scavenge
+ * in progress (it takes one press now).
  */
 function migrateSoloToCrew(envelope: { version: number; savedAt: number; state: unknown }): { version: number; savedAt: number; state: unknown } {
   const state = { ...(envelope.state as Record<string, unknown>) };
-  const { keyItems, ...solo } = { ...(state.player as Record<string, unknown>) };
+  // The hold-to-scavenge state went with the hold: scavenging takes one press.
+  const { keyItems, harvest: _harvest, interactWasHeld: _interactWasHeld, ...solo } = { ...(state.player as Record<string, unknown>) };
   state.players = [{
     ...solo,
     id: 0,
     seat: solo.mode === 'canoe' ? 0 : null,
+    paddling: false,
     bailing: false,
     asleep: false,
     dialogue: state.dialogue ?? null,

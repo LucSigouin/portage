@@ -62,12 +62,11 @@
  *
  * `StepInput` is per-frame intent, not key codes: `paddle` and `steer` axes,
  * `powerStroke`, `bail`, `moveX` / `moveY` with `cameraYaw` for
- * camera-relative walking, `run`, and `interactHeld` to scavenge. Start from
- * `NEUTRAL_INPUT`.
+ * camera-relative walking, and `run`. Start from `NEUTRAL_INPUT`.
  *
- * The interact key is context-sensitive: read `selectInteractable(state)`. For
- * a `node`, hold `interactHeld` until it completes. For anything else,
- * dispatch the `command` it carries on key press.
+ * The interact key is context-sensitive: read `selectInteractable(state)` and
+ * dispatch the `command` it carries on key press. One press does it, for a
+ * node too: `scavenge` rolls the loot and hands it over at once.
  *
  * ## Commands
  *
@@ -85,6 +84,7 @@
  * | `transfer` / `discard` | Move a stack between backpack and cargo, or drop it |
  * | `eat` / `drink` | Consume one food or drink |
  * | `fill_water` | Scoop dirty water with the bailing can, at the water |
+ * | `scavenge` | Scavenge the node in reach, or pick up what it left, in one press |
  * | `sleep` / `wake` | Lie down at a camp, or aboard with the canopy; the night skips once the whole crew has. Get up again |
  * | `board` / `disembark` | Get in the canoe, or step ashore and pull it up |
  * | `talk`, `choose_dialogue_option`, `end_dialogue` | Conversations |
@@ -97,13 +97,14 @@
  *
  * | Selector | Gives |
  * |---|---|
- * | `selectInteractable` | What the interact key would act on, its prompt, hold progress, what it is missing |
+ * | `selectInteractable` | What the interact key would act on, its prompt, the command to send, what it is missing |
  * | `selectCraftableRecipes` | Every recipe: known, craftable, how many, missing inputs, tools and station |
  * | `selectBuildOptions` | The next hull tier and all 19 attachments: built, buildable, missing, transform |
  * | `selectCanoeStats` | Stability, roughness here, cargo, speeds, leak, flood rate, sail factor, fog gear |
  * | `selectActiveQuests` / `selectQuestLog` | Quests with objective text, progress and required count |
  * | `selectCurrentMainQuest` | Id of the main quest in progress, null once the Beacon is lit |
  * | `selectMap` | Islands (discovered or not), markers, bearings with the map table |
+ * | `selectTrackedQuestTarget` | Where the tracked quest's next step is in the world, or null |
  * | `selectRespawnPoint` | Where a fail would put the player |
  * | `selectTimeOfDay` | Day, hour, clock text, night flag, whether sleep is allowed |
  * | `selectWeather` | Kind, next kind and when, storm level, wind, rain, visibility |
@@ -181,11 +182,11 @@ export type {
 export {
   selectInteractable, selectCraftableRecipes, selectBuildOptions, selectCanoeStats, selectActiveQuests,
   selectQuestLog, selectCurrentMainQuest, selectMap, selectRespawnPoint, selectTimeOfDay, selectWeather,
-  selectDialogue, selectInventory, selectMeters,
+  selectDialogue, selectInventory, selectMeters, selectTrackedQuestTarget,
 } from './selectors.ts';
 export type {
   RecipeAvailability, BuildOptions, CanoeStats, ObjectiveView, QuestView, MapMarker, MapData,
-  RespawnPoint, TimeOfDay, WeatherView, DialogueView, InventoryView, Meters,
+  RespawnPoint, TimeOfDay, WeatherView, DialogueView, InventoryView, Meters, QuestTarget,
 } from './selectors.ts';
 export type { Interactable } from './interact.ts';
 export type { SleepBlock } from './survival.ts';

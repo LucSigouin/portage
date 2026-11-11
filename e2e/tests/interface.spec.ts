@@ -478,10 +478,13 @@ test('by keyboard alone: a settings change and a key rebind work end to end and 
   await page.keyboard.press('Enter');
   await focusOn(page, (focused) => focused.label === 'accessibility.patternedMeters');
   await page.keyboard.press('Space');
-  await focusOn(page, (focused) => focused.label === 'accessibility.scavengeMode');
-  // A closed picker takes the first letter of an option: P for "Press once to start, again to stop".
-  await page.keyboard.press('KeyP');
-  expect((await settings()).accessibility).toMatchObject({ patternedMeters: true, scavengeMode: 'toggle' });
+  expect((await settings()).accessibility).toMatchObject({ patternedMeters: true });
+  await focusOn(page, (focused) => focused.label === 'Gameplay');
+  await page.keyboard.press('Enter');
+  await focusOn(page, (focused) => focused.label === 'gameplay.difficulty');
+  // A closed picker takes the first letter of an option: R for "Relaxed (meters drain 40% slower)".
+  await page.keyboard.press('KeyR');
+  expect((await settings()).gameplay).toMatchObject({ difficulty: 'relaxed' });
 
   // A key rebind: Paddle from W to I.
   await focusOn(page, (focused) => focused.label === 'Controls');
@@ -507,7 +510,8 @@ test('by keyboard alone: a settings change and a key rebind work end to end and 
   await page.waitForFunction(() => (window as any).portage?.app?.lastModel != null);
   const reloaded = await settings();
   expect(reloaded.audio.master).toBeCloseTo(0.65, 5);
-  expect(reloaded.accessibility).toMatchObject({ patternedMeters: true, scavengeMode: 'toggle' });
+  expect(reloaded.accessibility).toMatchObject({ patternedMeters: true });
+  expect(reloaded.gameplay).toMatchObject({ difficulty: 'relaxed' });
   expect(reloaded.controls.keyBindings.paddle).toEqual(['KeyI', 'ArrowUp']);
 
   // The reloaded page draws the saved values.

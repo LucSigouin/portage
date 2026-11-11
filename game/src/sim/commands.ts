@@ -1,12 +1,13 @@
 import type { DialogueCondition, DialogueEffect, DialogueOption, ItemAmount, NpcId } from '../data/types.ts';
 import { NPCS } from '../data/dialogue.ts';
+import { NODES_BY_ID } from '../data/nodes.ts';
 import { ITEMS, isStackable } from '../data/items.ts';
 import { QUESTS } from '../data/quests.ts';
 import { TUNING } from '../data/tuning.ts';
 import { ISLANDS_BY_ID, spotPosition } from '../data/world.ts';
 import { beachCanoe } from './canoe.ts';
 import { buildAttachment, craft, failure, success, upgradeHull } from './crafting.ts';
-import { clearSpot, disembarkSpot, distanceToHull } from './interact.ts';
+import { PICK_UP_ACTION, clearSpot, completeHarvest, disembarkSpot, distanceToHull, findInteractable } from './interact.ts';
 import {
   addToStacks, cargoAccessible, countAccessible, countInStacks, emit, emptyMissing, freeSeat, grantItems,
   hasAttachment, hasTool, playerOf, removeFromStacks, slotsOf, spendItems, stacksOf,
@@ -179,6 +180,23 @@ export function dispatch(state: GameState, command: Command, playerId: PlayerId 
       if (filled === 0) return failure('inventory_full');
       return success([{ itemId: 'dirty_water', count: filled }]);
     }
+    case 'scavenge': {
+      const target = findInteractable(state, player);
+      if (!target || target.kind !== 'node') return failure('nothing_in_reach');
+      if (!target.available) {
+        if (!target.missing) return failure('quest_not_ready');
+        emit(state, { type: 'harvest_blocked', nodeId: target.nodeId, missing: target.missing }, player);
+        return failure('missing_requirements', target.missing);
+      }
+      const definition = NODES_BY_ID[target.nodeId];
+      if (target.actionIndex !== PICK_UP_ACTION) {
+        // Effort is refused when it would leave too little energy, so it never causes a fail.
+        const energyCost = definition.actions[target.actionIndex].energyCost;
+        if (energyCost > 0 && player.energy < TUNING.survival.minimumEnergyToExert + energyCost) return failure('too_tired');
+      }
+      emit(state, { type: 'harvest_started', nodeId: target.nodeId, actionIndex: target.actionIndex }, player);
+      return success(completeHarvest(state, player, definition, target.actionIndex));
+    }
     case 'sleep': {
       if (player.asleep) return success();
       const blocked = sleepBlocked(state, player);
@@ -196,7 +214,6 @@ export function dispatch(state: GameState, command: Command, playerId: PlayerId 
       player.seat = freeSeat(state);
       player.mode = 'canoe';
       player.islandId = null;
-      player.harvest = null;
       player.position.x = canoe.position.x;
       player.position.y = canoe.position.y;
       player.position.z = canoe.position.z;
@@ -215,6 +232,7 @@ export function dispatch(state: GameState, command: Command, playerId: PlayerId 
       player.mode = 'foot';
       player.seat = null;
       player.exerting = false;
+      player.paddling = false;
       player.bailing = false;
       const spot = clearSpot(state, player, landing);
       player.position.x = spot.x;
@@ -235,7 +253,6 @@ export function dispatch(state: GameState, command: Command, playerId: PlayerId 
       const entry = npc.entries.find((candidate) => conditionHolds(state, candidate.condition));
       if (!entry) return failure('npc_out_of_reach');
       player.dialogue = { npcId: command.npcId, nodeId: entry.nodeId };
-      player.harvest = null;
       emit(state, { type: 'dialogue_opened', npcId: command.npcId }, player);
       notifyTalked(state, command.npcId);
       updateQuests(state, player);

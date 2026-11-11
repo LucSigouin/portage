@@ -88,10 +88,12 @@ describe('event cues', () => {
     const spruce = nodeOfType('spruce');
     expect(scavengeRequest(spruce, 0)?.cue).toBe('scavenge_pick');
     expect(scavengeRequest(spruce, 1)?.cue).toBe('scavenge_chop');
-    // With the state in hand, the event knows which action is being held.
+    // The event says which action it was: the chop, not the gum. A pick-up sounds like the first action.
     const state = newGame();
-    state.players[0].harvest = { nodeId: spruce, actionIndex: 1, progress: 0 };
-    expect(resolveEventCue({ type: 'harvest_started', nodeId: spruce }, { state })?.cue).toBe('scavenge_chop');
+    expect(resolveEventCue({ type: 'harvest_started', nodeId: spruce, actionIndex: 1 }, { state })?.cue).toBe('scavenge_chop');
+    expect(resolveEventCue({ type: 'harvest_started', nodeId: spruce, actionIndex: 0 }, { state })?.cue).toBe('scavenge_pick');
+    expect(resolveEventCue({ type: 'harvest_started', nodeId: spruce, actionIndex: -1 }, { state })?.cue).toBe('scavenge_pick');
+    expect(resolveEventCue({ type: 'harvest_started', nodeId: spruce }, { state })?.cue).toBe('scavenge_pick');
     expect(scavengeRequest('no.such.node', 0)).toBeNull();
   });
 

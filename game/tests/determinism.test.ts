@@ -36,8 +36,10 @@ function scriptedInput(tick: number, state: GameState): { input: StepInput; comm
     const range = Math.max(1, Math.hypot(offsetX, offsetZ));
     input = {
       ...NEUTRAL_INPUT, moveX: range > 1.5 ? offsetX / range : 0, moveY: range > 1.5 ? -offsetZ / range : 0,
-      run: noise > 0.7, interactHeld: true,
+      run: noise > 0.7,
     };
+    // A press of the interact key every second: scavenge whatever is in reach.
+    if (tick % 60 === 0) commands.push({ type: 'scavenge' });
   } else {
     input = { ...NEUTRAL_INPUT, paddle: noise > 0.3 ? -1 : 0.5, steer: noise - 0.5, powerStroke: noise > 0.8 };
   }

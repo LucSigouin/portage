@@ -3,12 +3,13 @@
  * UI and a sound engine, and runs one frame at a time. No DOM in here, so
  * the whole frame can run in a test with fakes; `main.ts` adds the browser.
  */
-import { eventsFor } from '../sim/index.ts';
+import { eventsFor, selectTrackedQuestTarget } from '../sim/index.ts';
 import type { GameState } from '../sim/index.ts';
 import { ChaseCamera, lobbyCameraPose, subjectFromState, surfaceFromState } from './camera.ts';
 import type { CameraOptions, CameraPose } from './camera.ts';
 import type { AudioEngine, FrameInfo, GameInterface, StageName, WorldView } from './contracts.ts';
 import type { FrameStats } from './loop.ts';
+import { coversPlayView } from './panels.ts';
 import { Session } from './session.ts';
 import type { SessionOptions, SessionSignal } from './session.ts';
 import { ToastQueue, buildInterfaceModel, toastsFromEvents } from './viewmodels/index.ts';
@@ -152,6 +153,8 @@ export class App {
       simulatedSeconds: session.simulatedSeconds,
       elapsedSeconds: this.elapsedSeconds,
       paused: session.paused,
+      panelOpen: coversPlayView(session.panels),
+      trackedQuestTarget: session.game ? selectTrackedQuestTarget(session.game)?.position ?? null : null,
     };
     const pose = this.updateCamera(state, frameSeconds);
     this.lastPose = pose;

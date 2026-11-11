@@ -70,7 +70,7 @@
  * | Loon calls | Dusk and night over open water, now and then |
  * | Fog hush | Fog weather or the Fog region: the whole ambience closes down |
  * | Footsteps | Distance walked; a run is louder, wading splashes |
- * | Bailing, scavenging hits | `canoe.bailing`, `player.harvest`, in rhythm while held |
+ * | Bailing | `canoe.bailing`, in rhythm while held. A scavenge is one press and one hit, from its `harvest_started` event |
  *
  * The state carries no input, so "is the canoe being paddled" is read off the
  * hull speed: a coasting hull loses half its speed per second, a paddled one

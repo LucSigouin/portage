@@ -4,7 +4,6 @@ import { ISLANDS, START } from '../data/world.ts';
 import { stepCanoe } from './canoe.ts';
 import type { CrewMember } from './canoe.ts';
 import { stepOnFoot } from './foot.ts';
-import { updateHarvest } from './interact.ts';
 import { emit, freeSeat, playersAboard } from './inventory.ts';
 import { createQuestStates, updateQuests } from './quests.ts';
 import { seedToRandomState } from './random.ts';
@@ -20,7 +19,7 @@ export const FIXED_STEP: number = TUNING.fixedStep;
 /** An input with nothing pressed. Spread it and override what is held. */
 export const NEUTRAL_INPUT: Readonly<StepInput> = Object.freeze({
   paddle: 0, steer: 0, powerStroke: false, bail: false,
-  moveX: 0, moveY: 0, run: false, interactHeld: false, cameraYaw: 0,
+  moveX: 0, moveY: 0, run: false, cameraYaw: 0,
 });
 
 /**
@@ -46,11 +45,10 @@ export function addPlayer(state: GameState): PlayerState | null {
     selectedTool: null,
     islandId: null,
     regionId: regionAt(canoe.position.x, canoe.position.z).id,
-    harvest: null,
     running: false,
     exerting: false,
+    paddling: false,
     bailing: false,
-    interactWasHeld: false,
     asleep: false,
     dialogue: null,
   };
@@ -171,7 +169,6 @@ function fixedStep(state: GameState, inputs: readonly (StepInput | undefined)[])
       stepOnFoot(state, player, input, deltaSeconds);
       moving = Math.hypot(input.moveX, input.moveY) > 0.01;
     }
-    updateHarvest(state, player, input.interactHeld, deltaSeconds);
     updateSurvival(state, player, { moving }, deltaSeconds);
   }
   updatePassiveAttachments(state, deltaSeconds, timeBefore);

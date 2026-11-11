@@ -13,6 +13,9 @@ import type {
 } from './types.ts';
 
 export const HOTBAR_SLOTS = 5;
+
+/** Degrees to two decimals: fine enough for the compass to glide, coarse enough to sit still. */
+const hundredths = (degrees: number): number => Math.round(degrees * 100) / 100;
 const HOTBAR_ACTIONS = ['tool1', 'tool2', 'tool3', 'tool4', 'tool5'] as const;
 
 export function objectiveRows(quest: QuestView): ObjectiveRowModel[] {
@@ -63,6 +66,7 @@ function buildHotbar(state: GameState, settings: Settings, playerId: PlayerId): 
       number: index + 1,
       keyLabel: primaryKey(settings.controls.keyBindings, action),
       toolId,
+      itemId: toolId,
       name: toolId ? ITEMS[toolId].name : '',
       selected,
       intent: toolId ? { type: 'command', command: { type: 'select_tool', toolId: selected ? null : toolId } } : null,
@@ -85,7 +89,7 @@ function buildCompass(state: GameState, cameraYaw: number, trackedQuestId: strin
   const mark = (id: string, kind: CompassMarkModel['kind'], label: string, bearing: number, distance: number | null): CompassMarkModel => ({
     id, kind, label,
     bearingDegrees: bearingDegrees(bearing),
-    relativeDegrees: Math.round((bearingDifference(bearing, cameraYaw) * 180) / Math.PI),
+    relativeDegrees: hundredths((bearingDifference(bearing, cameraYaw) * 180) / Math.PI),
     distanceText: distance === null ? '' : distanceText(distance),
   });
   const marks: CompassMarkModel[] = [
@@ -100,20 +104,16 @@ function buildCompass(state: GameState, cameraYaw: number, trackedQuestId: strin
     if (marker.kind === 'quest' && marker.questId === trackedQuestId) marks.push(mark('quest', 'quest', marker.label, bearing, distance));
     if (marker.kind === 'canoe') marks.push(mark('canoe', 'canoe', 'Canoe', bearing, distance));
   }
-  return { headingDegrees: bearingDegrees(cameraYaw), cardinal: cardinalName(cameraYaw, 8), marks };
+  const heading = hundredths((cameraYaw * 180) / Math.PI) % 360;
+  return { headingDegrees: heading < 0 ? heading + 360 : heading, cardinal: cardinalName(cameraYaw, 8), marks };
 }
 
 function buildPrompt(state: GameState, settings: Settings, playerId: PlayerId): PromptModel | null {
   const interactable = selectInteractable(state, playerId);
   if (!interactable) return null;
   const keyLabel = primaryKey(settings.controls.keyBindings, 'interact');
-  if (interactable.kind !== 'node') return { text: interactable.prompt, keyLabel, mode: 'press', progress: 0 };
-  if (!interactable.available) return { text: interactable.prompt, keyLabel, mode: 'blocked', progress: 0 };
-  return {
-    text: interactable.prompt, keyLabel,
-    mode: settings.accessibility.scavengeMode === 'toggle' ? 'press' : 'hold',
-    progress: Math.max(0, Math.min(1, interactable.progress)),
-  };
+  const blocked = interactable.kind === 'node' && !interactable.available;
+  return { text: interactable.prompt, keyLabel, mode: blocked ? 'blocked' : 'press' };
 }
 
 function buildCanoeLines(state: GameState, playerId: PlayerId): { text: string; tone: Tone }[] {

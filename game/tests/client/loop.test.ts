@@ -250,7 +250,7 @@ describe('one frame of the app', () => {
     game.canoe.position = { x: landing.shore.x, y: 0, z: landing.shore.z - 2 };
     game.canoe.heading = landing.bearing;
     game.players[0].position = { ...game.canoe.position };
-    app.session.keyDown('KeyE');
+    app.session.keyDown('KeyF');
     app.frame(1 / 60);
 
     const events = seen.audioEvents.at(-1)!;

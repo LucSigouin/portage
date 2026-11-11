@@ -79,8 +79,6 @@ export function settingsRows(settings: Settings, tab: SettingsTabId): SettingRow
         slider('accessibility.uiScale', 'Interface size', settings.accessibility.uiScale, limits.uiScale, 0.05, percent(settings.accessibility.uiScale)),
         toggle('accessibility.reduceCameraMotion', 'Reduce camera motion', settings.accessibility.reduceCameraMotion),
         toggle('accessibility.patternedMeters', 'Patterned meters', settings.accessibility.patternedMeters),
-        choice('accessibility.scavengeMode', 'Scavenging', settings.accessibility.scavengeMode, limits.scavengeModes,
-          (mode) => (mode === 'hold' ? 'Hold the key' : 'Press once to start, again to stop')),
       ];
   }
 }

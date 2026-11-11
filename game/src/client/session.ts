@@ -128,7 +128,6 @@ export class Session {
     this.settings = loadSettings(options.storage);
     this.input = new InputController({
       keyBindings: this.settings.controls.keyBindings,
-      scavengeMode: this.settings.accessibility.scavengeMode,
       mouseSensitivity: this.settings.controls.mouseSensitivity,
       invertY: this.settings.controls.invertY,
     });
@@ -377,7 +376,9 @@ export class Session {
   dispatch(command: Command, quiet = false): CommandResult {
     if (!this.game) return { ok: false, reason: 'unknown_id', missing: null };
     const result = dispatch(this.game, command, this.localPlayerId);
-    if (!result.ok && !quiet) {
+    // A node that needs a tool says so itself, with a `harvest_blocked` event: no second notice.
+    const toldByEvent = command.type === 'scavenge' && !result.ok && result.reason === 'missing_requirements';
+    if (!result.ok && !quiet && !toldByEvent) {
       this.notice(failureText(result.reason, result.missing), 'warning');
       this.sound('error');
     }
@@ -587,7 +588,6 @@ export class Session {
     saveSettings(this.storage, settings);
     this.input.configure({
       keyBindings: settings.controls.keyBindings,
-      scavengeMode: settings.accessibility.scavengeMode,
       mouseSensitivity: settings.controls.mouseSensitivity,
       invertY: settings.controls.invertY,
     });

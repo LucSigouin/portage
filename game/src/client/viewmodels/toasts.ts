@@ -2,6 +2,7 @@
 import {
   ATTACHMENTS, BOTTLES, HULL_TIERS, ISLANDS_BY_ID, NODES_BY_ID, QUESTS, RECIPES, REGIONS_BY_ID, WEATHER,
 } from '../../data/index.ts';
+import type { ItemId } from '../../data/index.ts';
 import type { GameEvent, GameState } from '../../sim/index.ts';
 import { selectTimeOfDay } from '../../sim/index.ts';
 import { countedName, itemName, needsText } from './format.ts';
@@ -10,23 +11,27 @@ import type { ToastModel, Tone } from './types.ts';
 export interface ToastInput {
   text: string;
   tone: Tone;
+  /** The item a loot toast is about, for its icon. */
+  itemId?: ItemId;
 }
 
-const toast = (text: string, tone: Tone = 'info'): ToastInput => ({ text, tone });
+const toast = (text: string, tone: Tone = 'info', itemId?: ItemId): ToastInput => (itemId ? { text, tone, itemId } : { text, tone });
 
 /** One event as a toast, or null when it needs no words (the HUD already shows it). */
 export function toastForEvent(event: GameEvent, state: GameState): ToastInput | null {
   switch (event.type) {
     case 'item_gained':
-      if (event.container === 'belt') return toast(`New tool: ${itemName(event.itemId)}`, 'good');
-      if (event.container === 'key_items') return toast(`Found: ${itemName(event.itemId)}`, 'good');
-      return toast(`+${event.count} ${itemName(event.itemId)}`);
+      if (event.container === 'belt') return toast(`New tool: ${itemName(event.itemId)}`, 'good', event.itemId);
+      if (event.container === 'key_items') return toast(`Found: ${itemName(event.itemId)}`, 'good', event.itemId);
+      return toast(`+${event.count} ${itemName(event.itemId)}`, 'info', event.itemId);
     case 'item_lost':
-      return toast(`-${event.count} ${itemName(event.itemId)}`, 'warning');
+      return toast(`-${event.count} ${itemName(event.itemId)}`, 'warning', event.itemId);
     case 'item_left_behind':
-      return toast(`No room: ${countedName(event.itemId, event.count)} left at the ${NODES_BY_ID[event.nodeId].name.toLowerCase()}`, 'warning');
-    case 'crafted':
-      return toast(`Made ${countedName(RECIPES[event.recipeId].output.itemId, RECIPES[event.recipeId].output.count * event.count)}`, 'good');
+      return toast(`No room: ${countedName(event.itemId, event.count)} left at the ${NODES_BY_ID[event.nodeId].name.toLowerCase()}`, 'warning', event.itemId);
+    case 'crafted': {
+      const output = RECIPES[event.recipeId].output;
+      return toast(`Made ${countedName(output.itemId, output.count * event.count)}`, 'good', output.itemId);
+    }
     case 'harvest_blocked':
       return toast(`${NODES_BY_ID[event.nodeId].name}: ${needsText(event.missing).toLowerCase()}`, 'warning');
     case 'bottle_found':
@@ -123,7 +128,7 @@ export function toastsFromEvents(events: readonly GameEvent[], state: GameState)
     if (event.type === 'item_gained' && gains.has(event.itemId)) {
       if (told.has(event.itemId)) continue;
       told.add(event.itemId);
-      toasts.push(toast(`+${gains.get(event.itemId)} ${itemName(event.itemId)}`));
+      toasts.push(toast(`+${gains.get(event.itemId)} ${itemName(event.itemId)}`, 'info', event.itemId));
       continue;
     }
     const built = toastForEvent(event, state);
@@ -137,7 +142,7 @@ export const MAXIMUM_TOASTS = 6;
 
 /** The toasts on screen. Runs on real time, so they fade while the game is paused too. */
 export class ToastQueue {
-  private entries: { id: number; text: string; tone: Tone; seconds: number; total: number }[] = [];
+  private entries: { id: number; text: string; tone: Tone; itemId: ItemId | null; seconds: number; total: number }[] = [];
   private nextId = 1;
 
   add(input: ToastInput): void {
@@ -148,7 +153,7 @@ export class ToastQueue {
       return;
     }
     const total = TOAST_SECONDS[input.tone];
-    this.entries.push({ id: this.nextId, text: input.text, tone: input.tone, seconds: total, total });
+    this.entries.push({ id: this.nextId, text: input.text, tone: input.tone, itemId: input.itemId ?? null, seconds: total, total });
     this.nextId += 1;
     if (this.entries.length > MAXIMUM_TOASTS) this.entries.splice(0, this.entries.length - MAXIMUM_TOASTS);
   }
@@ -169,7 +174,8 @@ export class ToastQueue {
   /** Oldest first. */
   models(): ToastModel[] {
     return this.entries.map((entry) => ({
-      id: entry.id, text: entry.text, tone: entry.tone, life: Math.round((entry.seconds / entry.total) * 10) / 10,
+      id: entry.id, text: entry.text, tone: entry.tone, itemId: entry.itemId,
+      life: Math.round((entry.seconds / entry.total) * 10) / 10,
     }));
   }
 }

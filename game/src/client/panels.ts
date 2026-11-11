@@ -128,6 +128,11 @@ export function pausesSimulation(state: PanelState): boolean {
   return state.stack.some((panel) => PANEL_RULES[panel].pausesSimulation);
 }
 
+/** True while a panel or a menu covers the play view. A conversation leaves the world showing. */
+export function coversPlayView(state: PanelState): boolean {
+  return state.stack.some((panel) => panel !== 'dialogue');
+}
+
 /** True when keys should drive the canoe and the player: in the game with nothing open. */
 export function allowsGameplayInput(state: PanelState): boolean {
   return state.screen === 'game' && state.stack.length === 0;
@@ -171,8 +176,14 @@ export function reducePanels(state: PanelState, action: PanelAction, context: Pa
   switch (action.type) {
     case 'open':
       return open(state, action.panel, context);
-    case 'toggle':
-      return topPanel(state) === action.panel ? close(state) : open(state, action.panel, context);
+    case 'toggle': {
+      // Under a menu (pause, settings, a confirm) the panel keys are dead: no refusal, no sound.
+      const top = topPanel(state);
+      if (top !== null && top !== action.panel && (PANEL_RULES[top].group === 'menu' || PANEL_RULES[top].group === 'confirm')) {
+        return unchanged(state);
+      }
+      return top === action.panel ? close(state) : open(state, action.panel, context);
+    }
     case 'close':
       return close(state);
     case 'close_all': {

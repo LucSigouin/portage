@@ -1,7 +1,7 @@
 import type { ItemAmount, NodeDefinition, NodeId, NpcId } from '../data/types.ts';
 import { NPCS, NPC_IDS } from '../data/dialogue.ts';
 import { ITEMS } from '../data/items.ts';
-import { LOOT_TABLES, NODES, NODES_BY_ID, NODES_BY_ISLAND } from '../data/nodes.ts';
+import { LOOT_TABLES, NODES, NODES_BY_ISLAND } from '../data/nodes.ts';
 import { TUNING } from '../data/tuning.ts';
 import { ISLANDS_BY_ID, spotPosition } from '../data/world.ts';
 import {
@@ -16,12 +16,10 @@ const CANOE_NODES = NODES.filter((definition) => definition.reach === 'canoe');
 
 /** Index used for "pick up what was left behind". */
 export const PICK_UP_ACTION = -1;
-const PICK_UP_SECONDS = 0.5;
 
 /**
- * The thing the interact key would act on right now.
- * - `node`: hold the interact input (`StepInput.interactHeld`) for `holdSeconds`.
- * - everything else: dispatch `command` on key press.
+ * The thing the interact key would act on right now. One press dispatches
+ * the `command` it carries: scavenge a node, talk, board, land, sleep.
  */
 export type Interactable =
   | {
@@ -31,12 +29,10 @@ export type Interactable =
     prompt: string;
     /** Action index in the node definition, or -1 to pick up leftovers. */
     actionIndex: number;
-    holdSeconds: number;
-    /** 0 to 1, how far the current hold has got. */
-    progress: number;
     /** False when a tool, attachment or quest step is missing. */
     available: boolean;
     missing: Missing | null;
+    command: Command;
     distance: number;
   }
   | { kind: 'npc'; npcId: NpcId; name: string; prompt: string; command: Command; distance: number }
@@ -93,13 +89,11 @@ export function chooseNodeAction(
 function nodeInteractable(state: GameState, player: PlayerState, definition: NodeDefinition, distance: number): Interactable | null {
   const choice = chooseNodeAction(state, player, definition);
   if (!choice) return null;
-  const harvest = player.harvest;
-  const holding = harvest !== null && harvest.nodeId === definition.id && harvest.actionIndex === choice.actionIndex;
+  const command: Command = { type: 'scavenge' };
   if (choice.actionIndex === PICK_UP_ACTION) {
     return {
       kind: 'node', nodeId: definition.id, name: definition.name, prompt: `Pick up from ${definition.name}`,
-      actionIndex: PICK_UP_ACTION, holdSeconds: PICK_UP_SECONDS,
-      progress: holding ? harvest.progress / PICK_UP_SECONDS : 0, available: true, missing: null, distance,
+      actionIndex: PICK_UP_ACTION, available: true, missing: null, command, distance,
     };
   }
   const action = definition.actions[choice.actionIndex];
@@ -112,9 +106,8 @@ function nodeInteractable(state: GameState, player: PlayerState, definition: Nod
   }
   return {
     kind: 'node', nodeId: definition.id, name: definition.name, prompt,
-    actionIndex: choice.actionIndex, holdSeconds: action.seconds,
-    progress: holding ? harvest.progress / action.seconds : 0,
-    available: choice.allowed, missing: hasMissing(missing) ? missing : null, distance,
+    actionIndex: choice.actionIndex,
+    available: choice.allowed, missing: hasMissing(missing) ? missing : null, command, distance,
   };
 }
 
@@ -250,14 +243,29 @@ function nodeStateFor(state: GameState, definition: NodeDefinition): NodeState {
   return nodeState;
 }
 
-function completeHarvest(state: GameState, player: PlayerState, definition: NodeDefinition, actionIndex: number): void {
+/** `items` less what is in `leftover`: what actually reached the player. */
+function taken(items: ItemAmount[], leftover: ItemAmount[]): ItemAmount[] {
+  return items
+    .map(({ itemId, count }) => ({ itemId, count: count - leftover.filter((stack) => stack.itemId === itemId).reduce((sum, stack) => sum + stack.count, 0) }))
+    .filter((stack) => stack.count > 0);
+}
+
+/**
+ * Scavenge a node action, or pick up what an earlier one left behind. It
+ * happens at once: the loot is rolled and handed over, the energy is spent
+ * and the action goes on its respawn clock. Returns what the player got.
+ * The caller has checked the tool, the quest gate and the energy.
+ */
+export function completeHarvest(state: GameState, player: PlayerState, definition: NodeDefinition, actionIndex: number): ItemAmount[] {
   const nodeState = nodeStateFor(state, definition);
   if (actionIndex === PICK_UP_ACTION) {
-    nodeState.leftover = grantItems(state, player, nodeState.leftover);
-    return;
+    const waiting = nodeState.leftover;
+    nodeState.leftover = grantItems(state, player, waiting);
+    return taken(waiting, nodeState.leftover);
   }
   const action = definition.actions[actionIndex];
-  const leftover = grantItems(state, player, rollLoot(state, action.lootTableId));
+  const loot = rollLoot(state, action.lootTableId);
+  const leftover = grantItems(state, player, loot);
   for (const stack of leftover) {
     nodeState.leftover.push(stack);
     emit(state, { type: 'item_left_behind', nodeId: definition.id, itemId: stack.itemId, count: stack.count }, player);
@@ -277,42 +285,5 @@ function completeHarvest(state: GameState, player: PlayerState, definition: Node
     emit(state, { type: 'cache_hauled', nodeId: definition.id });
   }
   updateQuests(state, player);
-}
-
-/** Advance (or drop) the scavenge hold. Called every fixed step. */
-export function updateHarvest(state: GameState, player: PlayerState, interactHeld: boolean, deltaSeconds: number): void {
-  const pressed = interactHeld && !player.interactWasHeld;
-  player.interactWasHeld = interactHeld;
-  if (!interactHeld || player.dialogue || player.asleep) {
-    player.harvest = null;
-    return;
-  }
-  const target = findInteractable(state, player);
-  if (!target || target.kind !== 'node') {
-    player.harvest = null;
-    return;
-  }
-  if (!target.available) {
-    player.harvest = null;
-    if (pressed && target.missing) emit(state, { type: 'harvest_blocked', nodeId: target.nodeId, missing: target.missing }, player);
-    return;
-  }
-  const definition = NODES_BY_ID[target.nodeId];
-  if (target.actionIndex !== PICK_UP_ACTION) {
-    const energyCost = definition.actions[target.actionIndex].energyCost;
-    if (energyCost > 0 && player.energy < TUNING.survival.minimumEnergyToExert + energyCost) {
-      player.harvest = null;
-      return;
-    }
-  }
-  if (!player.harvest || player.harvest.nodeId !== target.nodeId || player.harvest.actionIndex !== target.actionIndex) {
-    player.harvest = { nodeId: target.nodeId, actionIndex: target.actionIndex, progress: 0 };
-    emit(state, { type: 'harvest_started', nodeId: target.nodeId }, player);
-  }
-  player.harvest.progress += deltaSeconds;
-  if (player.harvest.progress >= target.holdSeconds - 1e-9) {
-    const actionIndex = player.harvest.actionIndex;
-    player.harvest = null;
-    completeHarvest(state, player, definition, actionIndex);
-  }
+  return taken(loot, leftover);
 }

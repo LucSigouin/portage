@@ -2,7 +2,7 @@
 import type { AttachmentId, IslandId, ItemId, ToolId } from '../src/data/index.ts';
 import { ISLANDS_BY_ID, NODES_BY_ID, isStackable, spotPosition } from '../src/data/index.ts';
 import {
-  FIXED_STEP, NEUTRAL_INPUT, createGame, drainEvents, landingBerth, step, terrainHeight,
+  FIXED_STEP, NEUTRAL_INPUT, createGame, dispatch, drainEvents, landingBerth, step, terrainHeight,
 } from '../src/sim/index.ts';
 import type { GameEvent, GameOptions, GameState, StepInput } from '../src/sim/index.ts';
 
@@ -17,6 +17,12 @@ export function run(state: GameState, input: Partial<StepInput>, seconds: number
     if (state.events.length > 0) events.push(...drainEvents(state));
   }
   return events;
+}
+
+/** One press of the interact key at a node: scavenge it, or pick up what was left. Returns the events it caused. */
+export function scavenge(state: GameState, playerId = 0): GameEvent[] {
+  dispatch(state, { type: 'scavenge' }, playerId);
+  return drainEvents(state);
 }
 
 /** Step until the player fails (or time runs out). Stops on the very step it happens. */

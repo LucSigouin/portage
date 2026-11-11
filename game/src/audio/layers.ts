@@ -232,7 +232,8 @@ export function deriveLayerInputs(state: GameState, memory: DeriveMemory, frameS
     footSpeed: memory.footSpeed,
     wading: !aboard && player.position.y < 0.02,
     heightAboveWater: Math.max(0, player.position.y),
-    scavenge: player.harvest ? { nodeId: player.harvest.nodeId, actionIndex: player.harvest.actionIndex } : null,
+    // Scavenging takes one press: the `harvest_started` event plays its hit, and nothing is held.
+    scavenge: null,
   };
 }
 
@@ -704,7 +705,8 @@ export function createLayers(
       }
     }
 
-    // The harvest_started event plays the first hit; this keeps the rhythm while it is held.
+    // In the game a scavenge is one press: its harvest_started event plays the one hit and `scavenge`
+    // stays null. The rhythm below is only heard in the sound lab, which can hold a node open.
     const request = inputs.scavenge ? scavengeRequest(inputs.scavenge.nodeId, inputs.scavenge.actionIndex) : null;
     if (!inputs.scavenge || !request) {
       scavengeNodeId = null;

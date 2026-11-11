@@ -53,8 +53,6 @@ export interface StepInput {
   moveY: number;
   /** On foot: hold to run (costs energy). */
   run: boolean;
-  /** Hold to scavenge the current interactable node. */
-  interactHeld: boolean;
   /** Bearing the camera looks along, radians (0 = north, clockwise). */
   cameraYaw: number;
 }
@@ -87,14 +85,13 @@ export interface PlayerState {
   /** Island the player stands on, when on foot. */
   islandId: IslandId | null;
   regionId: RegionId;
-  /** Scavenge in progress. */
-  harvest: { nodeId: NodeId; actionIndex: number; progress: number } | null;
   running: boolean;
   /** True while a power stroke, run or bail is draining energy. */
   exerting: boolean;
+  /** True while this player is paddling the canoe, forward or back. */
+  paddling: boolean;
   /** True while this player is bailing the canoe. */
   bailing: boolean;
-  interactWasHeld: boolean;
   /** Lying down at a bed, waiting for the rest of the crew. The night skips once everyone is. */
   asleep: boolean;
   /** The conversation this player is in. It holds them still, nobody else. */
@@ -228,6 +225,8 @@ export type Command =
   | { type: 'eat'; itemId: ItemId }
   | { type: 'drink'; itemId: ItemId }
   | { type: 'fill_water'; count: number }
+  /** Scavenge, or pick up what was left, at the node the interact key points at. One press, done. */
+  | { type: 'scavenge' }
   | { type: 'sleep' }
   /** Get up again while waiting for the rest of the crew to sleep. */
   | { type: 'wake' }
@@ -263,6 +262,8 @@ export type FailureReason =
   | 'no_water_in_reach'
   | 'no_bed_in_reach'
   | 'not_tired'
+  | 'too_tired'
+  | 'nothing_in_reach'
   | 'npc_out_of_reach'
   | 'no_dialogue_open'
   | 'invalid_option'
@@ -322,7 +323,7 @@ type GameEventBody =
   | { type: 'crafted'; recipeId: RecipeId; count: number }
   | { type: 'ate'; itemId: ItemId }
   | { type: 'drank'; itemId: ItemId }
-  | { type: 'harvest_started'; nodeId: NodeId }
+  | { type: 'harvest_started'; nodeId: NodeId; actionIndex?: number }
   | { type: 'harvest_blocked'; nodeId: NodeId; missing: Missing }
   | { type: 'node_depleted'; nodeId: NodeId }
   | { type: 'bottle_found'; bottleId: BottleId }

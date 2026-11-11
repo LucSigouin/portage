@@ -122,23 +122,21 @@ describe('the HUD', () => {
     expect(buildHudModel(state, settings, 0).compass.marks.some((mark) => mark.kind === 'canoe')).toBe(true);
   });
 
-  it('prompts for what the interact key would do: press, hold with progress, or blocked', () => {
+  it('prompts for what the interact key would do, with the key it is bound to: press, or blocked', () => {
     const state = newGame();
     standOn(state, 'home_knoll');
-    expect(buildHudModel(state, settings, 0).prompt).toEqual({ text: 'Board the canoe', keyLabel: 'E', mode: 'press', progress: 0 });
+    expect(buildHudModel(state, settings, 0).prompt).toEqual({ text: 'Board the canoe', keyLabel: 'F', mode: 'press' });
 
+    // A node is one press too: no hold, no progress.
     teleportToNode(state, nodeOfType('driftwood_pile'));
-    const idle = buildHudModel(state, settings, 0).prompt!;
-    expect(idle).toMatchObject({ mode: 'hold', progress: 0, keyLabel: 'E' });
-    expect(idle.text).toContain('Driftwood pile');
-    run(state, { interactHeld: true }, 0.5);
-    const holding = buildHudModel(state, settings, 0).prompt!;
-    expect(holding.progress).toBeGreaterThan(0.05);
-    expect(holding.progress).toBeLessThan(1);
+    const node = buildHudModel(state, settings, 0).prompt!;
+    expect(node).toEqual({ text: 'Gather: Driftwood pile', keyLabel: 'F', mode: 'press' });
 
-    // In toggle mode the same node asks for a press.
-    const toggle = { ...settings, accessibility: { ...settings.accessibility, scavengeMode: 'toggle' as const } };
-    expect(buildHudModel(state, toggle, 0).prompt!.mode).toBe('press');
+    // Rebound, the prompt shows the new key. Unbound, it says so.
+    const rebound = { ...settings, controls: { ...settings.controls, keyBindings: { ...settings.controls.keyBindings, interact: ['KeyG'] } } };
+    expect(buildHudModel(state, rebound, 0).prompt!.keyLabel).toBe('G');
+    const unbound = { ...settings, controls: { ...settings.controls, keyBindings: { ...settings.controls.keyBindings, interact: [] } } };
+    expect(buildHudModel(state, unbound, 0).prompt!.keyLabel).toBe('unbound');
 
     // A birch needs the knife: blocked, and the prompt says why.
     teleportToNode(state, NODES_BY_ISLAND.birch_islet.find((node) => node.typeId === 'birch')!.id);
@@ -426,7 +424,7 @@ describe('settings', () => {
     'graphics.fieldOfView', 'graphics.fpsCap', 'graphics.showFps',
     'controls.mouseSensitivity', 'controls.invertY', 'controls.cameraAutoCentre',
     'gameplay.difficulty', 'gameplay.autosaveIntervalSeconds', 'gameplay.hints',
-    'accessibility.uiScale', 'accessibility.reduceCameraMotion', 'accessibility.patternedMeters', 'accessibility.scavengeMode',
+    'accessibility.uiScale', 'accessibility.reduceCameraMotion', 'accessibility.patternedMeters',
   ];
 
   it('has a row for every setting across the five tabs, each under its own tab', () => {
@@ -447,7 +445,7 @@ describe('settings', () => {
     expect(applySettingChange(settings, 'audio.master', 7).audio.master).toBe(1);
     expect(applySettingChange(settings, 'graphics.fieldOfView', 20).graphics.fieldOfView).toBe(45);
     expect(applySettingChange(settings, 'controls.invertY', true).controls.invertY).toBe(true);
-    expect(applySettingChange(settings, 'accessibility.scavengeMode', 'toggle').accessibility.scavengeMode).toBe('toggle');
+    expect(applySettingChange(settings, 'accessibility.patternedMeters', true).accessibility.patternedMeters).toBe(true);
     expect(applySettingChange(settings, 'gameplay.autosaveIntervalSeconds', 60).gameplay.autosaveIntervalSeconds).toBe(60);
     // Wrong type: left exactly as it was rather than reset to a default.
     const louder = applySettingChange(settings, 'audio.music', 0.9);

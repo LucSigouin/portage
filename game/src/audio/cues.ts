@@ -11,7 +11,6 @@
  */
 import { NODES_BY_ID, RECIPES } from '../data/index.ts';
 import type { NodeTypeId, RegionId, StationId } from '../data/index.ts';
-import { playerOf } from '../sim/index.ts';
 import type { GameEvent, GameEventType, GameState } from '../sim/index.ts';
 import { noteFrequency } from './graph.ts';
 import {
@@ -909,10 +908,8 @@ export const EVENT_CUES: { [Type in GameEventType]: CueName | CueResolver<Type> 
   crafted: (event) => ({ cue: CRAFT_CUE[RECIPES[event.recipeId]?.station ?? 'hands'] }),
   ate: 'eat',
   drank: 'drink',
-  harvest_started: (event, lookup) => {
-    const harvest = lookup.state ? playerOf(lookup.state, event.playerId).harvest : null;
-    return scavengeRequest(event.nodeId, harvest && harvest.nodeId === event.nodeId ? harvest.actionIndex : 0);
-  },
+  // A pick-up (action -1) sounds like the node's first action.
+  harvest_started: (event) => scavengeRequest(event.nodeId, Math.max(0, event.actionIndex ?? 0)),
   harvest_blocked: 'harvest_blocked',
   node_depleted: 'node_depleted',
   bottle_found: 'bottle_found',

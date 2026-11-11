@@ -60,8 +60,7 @@ function hudHtml(hud: HudModel, patterned: boolean): string {
     `${escapeHtml(mark.label)} ${mark.relativeDegrees < 0 ? 'behind left' : 'behind right'}, ${escapeHtml(mark.distanceText)}`).join(' | ');
   const prompt = hud.prompt
     ? `<div class="gb-prompt gb-prompt-${hud.prompt.mode}"><kbd>${escapeHtml(hud.prompt.keyLabel)}</kbd> `
-      + `${hud.prompt.mode === 'hold' ? 'Hold: ' : ''}${escapeHtml(hud.prompt.text)}`
-      + `${hud.prompt.progress > 0 ? `<div class="gb-bar"><i style="width:${Math.round(hud.prompt.progress * 100)}%"></i></div>` : ''}</div>`
+      + `${escapeHtml(hud.prompt.text)}</div>`
     : '';
   const hotbar = hud.hotbar.map((slot) => (slot.intent
     ? `<button class="gb-slot ${slot.selected ? 'gb-selected' : ''}" ${intentAttribute(slot.intent)}>`
@@ -69,7 +68,7 @@ function hudHtml(hud: HudModel, patterned: boolean): string {
     : `<span class="gb-slot gb-empty"><kbd>${escapeHtml(slot.keyLabel)}</kbd></span>`)).join('');
   return `<div class="gb-top-left">${meters}${water}${canoe}</div>`
     + `<div class="gb-top-centre"><div class="gb-compass">${marks}</div>`
-    + `<div class="gb-line">${hud.compass.cardinal} ${hud.compass.headingDegrees}&deg;${offscreen ? ` | ${offscreen}` : ''}</div></div>`
+    + `<div class="gb-line">${hud.compass.cardinal} ${Math.round(hud.compass.headingDegrees)}&deg;${offscreen ? ` | ${offscreen}` : ''}</div></div>`
     + `<div class="gb-top-right"><div class="gb-line">${escapeHtml(hud.clockText)}${hud.night ? ' (night)' : ''}</div>`
     + `<div class="gb-line ${hud.stormWarning ? 'gb-danger' : ''}">${escapeHtml(hud.weatherText)}</div>`
     + `<div class="gb-line">${escapeHtml(hud.placeText)}</div>${tracker}</div>`

@@ -107,6 +107,7 @@ export function stepCanoe(state: GameState, crew: readonly CrewMember[], deltaSe
       canoe.waterLevel = Math.max(0, canoe.waterLevel - tuning.bailPerSecond * deltaSeconds);
     }
     const paddle = player.bailing ? 0 : clamp(input.paddle, -1, 1);
+    player.paddling = paddle !== 0;
     const powerStroke = input.powerStroke && paddle > 0 && canExert;
     player.exerting = player.bailing || powerStroke;
     player.running = false;

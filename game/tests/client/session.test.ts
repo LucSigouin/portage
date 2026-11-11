@@ -183,8 +183,8 @@ describe('autosave', () => {
     const { session, storage } = h;
     session.newGame(0);
     nearShore(session.game!);
-    session.keyDown('KeyE'); // the interact key follows selectInteractable: here it lands
-    session.keyUp('KeyE');
+    session.keyDown('KeyF'); // the interact key follows selectInteractable: here it lands
+    session.keyUp('KeyF');
     expect(session.game!.players[0].mode).toBe('foot');
     expect(savedState(storage, 0).players[0].mode).toBe('canoe'); // not yet: the event is still queued
     const events = session.advance(FIXED_STEP, 0);
@@ -229,12 +229,12 @@ describe('settings', () => {
   it('saves every change and loads it back in the next session', () => {
     const h = harness();
     h.session.handleIntent({ type: 'change_setting', setting: 'audio.master', value: 0.3 });
-    h.session.handleIntent({ type: 'change_setting', setting: 'accessibility.scavengeMode', value: 'toggle' });
+    h.session.handleIntent({ type: 'change_setting', setting: 'accessibility.patternedMeters', value: true });
     expect(JSON.parse(h.storage.getItem(SETTINGS_KEY)!).audio.master).toBe(0.3);
     expect(h.signals.filter((signal) => signal.type === 'settings_changed')).toHaveLength(2);
     const next = harness(h.storage);
     expect(next.session.settings.audio.master).toBe(0.3);
-    expect(next.session.settings.accessibility.scavengeMode).toBe('toggle');
+    expect(next.session.settings.accessibility.patternedMeters).toBe(true);
   });
 
   it('applies the difficulty to the running game and to new and loaded ones', () => {
@@ -259,13 +259,13 @@ describe('settings', () => {
     session.handleIntent({ type: 'select_settings_tab', tab: 'controls' });
     session.handleIntent({ type: 'begin_rebind', action: 'paddle', slot: 0 });
     expect(session.input.capture).toEqual({ action: 'paddle', slot: 0 });
-    session.keyDown('KeyE');
-    session.keyUp('KeyE');
+    session.keyDown('KeyF');
+    session.keyUp('KeyF');
     expect(session.input.capture).toBeNull();
-    expect(session.settings.controls.keyBindings.paddle).toEqual(['KeyE', 'ArrowUp']);
+    expect(session.settings.controls.keyBindings.paddle).toEqual(['KeyF', 'ArrowUp']);
     expect(session.settings.controls.keyBindings.interact).toEqual([]);
-    expect(session.bindingNotice).toBe('Paddle is now E. Land / interact (hold to scavenge) lost that key.');
-    expect(JSON.parse(h.storage.getItem(SETTINGS_KEY)!).controls.keyBindings.paddle).toEqual(['KeyE', 'ArrowUp']);
+    expect(session.bindingNotice).toBe('Paddle is now F. Land / interact / scavenge / board lost that key.');
+    expect(JSON.parse(h.storage.getItem(SETTINGS_KEY)!).controls.keyBindings.paddle).toEqual(['KeyF', 'ArrowUp']);
     expect(session.isOpen('settings')).toBe(true); // the captured key did not close or open anything
 
     // Esc cancels a capture without closing the panel.
@@ -278,7 +278,7 @@ describe('settings', () => {
     // The new binding drives the game.
     session.handleIntent({ type: 'close_panel' });
     session.newGame(0);
-    session.keyDown('KeyE');
+    session.keyDown('KeyF');
     frames(session, 2);
     expect(session.game!.canoe.speed).toBeGreaterThan(0.5);
   });
@@ -375,7 +375,7 @@ describe('keys and commands', () => {
     session.keyDown('KeyM');
     expect(session.isOpen('map')).toBe(true);
     expect(session.inputSnapshot()).toBeNull();
-    session.keyDown('KeyF'); // would toggle the lantern
+    session.keyDown('KeyL'); // would toggle the lantern
     expect(session.game!.events).toEqual([]);
   });
 

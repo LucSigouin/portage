@@ -483,14 +483,13 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
     yield* walkTo(node.position, 1.6);
     if (action.energyCost > 0 && player.energy < action.energyCost + 12) yield* rest(40);
     if (player.selectedTool !== action.tool) must({ type: 'select_tool', toolId: action.tool });
-    const giveUpTick = state.tick + (action.seconds + 6) * 60;
-    while (nodeReady(node, actionIndex)) {
+    if (nodeReady(node, actionIndex)) {
       const target = selectInteractable(state);
       if (!target || target.kind !== 'node' || target.nodeId !== node.id || !target.available || target.actionIndex !== actionIndex) {
         throw new BotStuck(`cannot use ${node.id}: ${JSON.stringify(target)}`);
       }
-      if (state.tick > giveUpTick) throw new BotStuck(`harvest of ${node.id} never finished`);
-      yield { ...NEUTRAL_INPUT, interactHeld: true };
+      // One press and it is done.
+      must({ type: 'scavenge' });
     }
     yield NEUTRAL_INPUT;
     // Loot that did not fit stays on the node: stow, make room, pick it up.
@@ -502,13 +501,9 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
         stow();
         yield* walkTo(node.position, 1.6);
       } else if (!makeRoom()) break;
-      const pickUpUntil = state.tick + 120;
-      while ((state.nodes[node.id]?.leftover.length ?? 0) > 0 && state.tick < pickUpUntil) {
-        const before = state.nodes[node.id].leftover.reduce((sum, stack) => sum + stack.count, 0);
-        yield { ...NEUTRAL_INPUT, interactHeld: true };
-        const after = (state.nodes[node.id]?.leftover ?? []).reduce((sum, stack) => sum + stack.count, 0);
-        if (after === before && player.harvest === null) break;
-      }
+      // One press picks up whatever fits now.
+      const target = selectInteractable(state);
+      if (target?.kind === 'node' && target.nodeId === node.id) send({ type: 'scavenge' });
       yield NEUTRAL_INPUT;
     }
   }
