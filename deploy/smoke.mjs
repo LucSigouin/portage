@@ -31,8 +31,12 @@ const canoe = () => page.evaluate(() => { const c = window.portage.session.game.
 // 1. The lobby, then New Game by a real click.
 await page.goto(base);
 await page.waitForFunction(() => window.portage?.worldView?.probe?.().drawingWidth > 0, null, { timeout: 30000 });
-await page.getByText('New Game', { exact: true }).click();
-const slots = await page.getByText('Save slots').waitFor({ timeout: 5000 }).then(() => 1, () => 0);
+// The menu moves a little when its fonts arrive, so wait for them before aiming a click at it.
+await page.evaluate(() => document.fonts.ready);
+await page.getByText(process.env.SMOKE_CLICK ?? 'New Game', { exact: true }).click();
+// The words "save slots" are also in the menu line, so look for the panel itself and ask the session what is open.
+const slots = await page.locator('.iw-panel-save_slots').waitFor({ timeout: 10000 }).then(() => 1, () => 0);
+const opened = await page.evaluate(() => [...window.portage.session.panels.stack].join(',') || 'none');
 // 2. A game at quest 1: hold W, the canoe must move.
 await page.goto(`${base}?at=quest1`);
 await page.waitForFunction(() => window.portage?.session?.game != null && window.portage.worldView.probe().drawingWidth > 0, null, { timeout: 30000 });
@@ -45,8 +49,8 @@ const drawing = await page.evaluate(() => { const p = window.portage.worldView.p
 const fonts = await page.evaluate(() => [...document.fonts].filter((font) => font.status === 'loaded').length);
 if (process.argv.includes('--shot')) await page.screenshot({ path: process.argv[process.argv.indexOf('--shot') + 1] });
 await browser.close();
-console.log(`${mode}: save slots opened ${slots === 1}, canoe moved ${moved.toFixed(1)} m in 3 s, drawing ${drawing}, fonts loaded ${fonts}, off-origin requests ${offOrigin.length}, console problems ${problems.length}`);
+console.log(`${mode}: New Game opened ${opened}, canoe moved ${moved.toFixed(1)} m in 3 s, drawing ${drawing}, fonts loaded ${fonts}, off-origin requests ${offOrigin.length}, console problems ${problems.length}`);
 for (const problem of problems.slice(0, 5)) console.log(`  ${problem.slice(0, 220)}`);
-const ok = slots === 1 && moved > 2 && fonts >= 2 && offOrigin.length === 0 && problems.length === 0;
+const ok = slots === 1 && opened === 'save_slots' && moved > 2 && fonts >= 2 && offOrigin.length === 0 && problems.length === 0;
 console.log(ok ? 'SMOKE PASS' : 'SMOKE FAIL');
 process.exit(ok ? 0 : 1);

@@ -5,7 +5,7 @@
  * node once a voice has rung out.
  */
 import type { AudioGraph, NoiseColor } from './graph.ts';
-import { scheduleEnvelope } from './graph.ts';
+import { scheduleEnvelope, withinRange } from './graph.ts';
 
 export type BusName = 'music' | 'effects' | 'ambience' | 'interface';
 
@@ -215,9 +215,9 @@ export function createVoicePool(graph: AudioGraph, inputs: Record<BusName, BusIn
       const filter = graph.filter(settings.type, settings.frequency, settings.quality ?? 0.707);
       voice.nodes.push(filter);
       if (settings.sweepTo !== undefined) {
-        filter.frequency.setValueAtTime(settings.frequency, begin);
+        filter.frequency.setValueAtTime(withinRange(filter.frequency, settings.frequency), begin);
         filter.frequency.exponentialRampToValueAtTime(
-          Math.max(settings.sweepTo, 10), begin + (settings.sweepSeconds ?? lifetime),
+          withinRange(filter.frequency, Math.max(settings.sweepTo, 10)), begin + (settings.sweepSeconds ?? lifetime),
         );
       }
       return filter;
