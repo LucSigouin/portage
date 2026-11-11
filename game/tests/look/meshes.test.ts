@@ -54,7 +54,7 @@ describe('mesh registries', () => {
     for (const npcId of NPC_IDS) complete(buildCharacter(npcId).geometry);
   });
 
-  it('build all 19 attachments on the long hull, at most three as placeholders', () => {
+  it('build all 19 attachments on the long hull, none of them a placeholder', () => {
     const tier = 3;
     const dimensions = HULL_TIERS[tier].dimensions;
     const shape = makeHullShape(dimensions);

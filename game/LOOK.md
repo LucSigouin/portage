@@ -8,8 +8,10 @@
 
 | File | What it holds |
 |---|---|
-| `b2/*.js` (+ `.d.ts`) | B2's code, moved: `post` (pen, paper), `palette` (washes, shared uniforms `GU`), `detail` (pen marks by material), `geo` (`Builder`), `water`, `sky`, `waves`, `canoe`, `attachments`, `flora` |
+| `b2/*.js` (+ `.d.ts`) | B2's code, moved: `post` (pen, paper), `palette` (washes, shared uniforms `GU`), `detail` (pen marks by material), `geo` (`Builder`), `water`, `sky`, `waves`, `canoe`, `flora` |
 | `world-view.ts` | The `WorldView`. Builds the scene, syncs it each frame, culls, renders |
+| `canoe/*.ts` | The 19 attachments and what they are drawn with. Guide: `LOOK-canoe.md` |
+| `world/*.ts` | Landmark drawings by region, island dressing, detail by distance, the node material. Guide: `LOOK-world.md` |
 | `presets.ts`, `scatter.ts`, `props.ts`, `terrain.ts` | Region presets, seeded placement, instanced props, the ground |
 | `nodes.ts`, `landmarks.ts`, `characters.ts`, `attachments.ts` | One registry each. Step 2 adds meshes here |
 | `daylight.ts`, `quality.ts`, `surface.ts`, `marks.ts`, `effects.ts`, `canoe.ts` | Time of day, quality ladder, wave and shore numbers, world marks, puffs, hull and crew |
@@ -84,9 +86,9 @@ builder.beam([0, 0, 0], [0, 2, 0], 0.03, PAL.iron, { id: THIN });
 
 Call these before the view mounts. Each replaces the stand-in drawn today.
 
-- **Attachment**: `registerAttachment(id, (context) => ({ object, update? }))`. Build in the mount's own space: origin is the rules engine's mount, +y up. `context` gives hull tier, half beam, gunwale height. `update(canoe, time)` runs each frame. Still placeholders: `forge`, `map_table`, `figurehead`. The other 16 reuse B2's meshes through `fromB2(anchor)`.
-- **Landmark**: `registerLandmark(kind, (builder) => { ... })`. One mesh per kind, placed by the island table.
-- **Scavenge node**: `registerNode(typeId, build)`. Used-up nodes wash out by themselves. Set its mark height in `NODE_MARK_HEIGHT`.
+- **Attachment**: `registerAttachment(id, (context) => ({ object, update? }))`. Build in the mount's own space: origin is the rules engine's mount, +y up. `context` gives hull tier, half beam, gunwale height. `update(canoe, time)` runs each frame. All 19 are drawn in `canoe/`: author in canoe space with `partBuilder(context, seed)`. See `LOOK-canoe.md`.
+- **Landmark**: `registerLandmark(kind, (builder, detail) => { ... })`. Built twice: `detail` true for near, false for the far outline. See `LOOK-world.md`.
+- **Scavenge node**: `registerNode(typeId, (builder, stage) => { ... })`. Parts inside `stage.fresh()` go when it is used up, parts inside `stage.spent()` only show then. Set its mark height in `NODE_MARK_HEIGHT`. See `LOOK-world.md`.
 - **Character**: `registerCharacter(npcId, build)`. Faces -z, feet at the origin.
 - **Prop** (tree, rock, reed): add a kind to `VARIANTS` in `scatter.ts`, a builder to `PROP_BUILDERS` in `props.ts`, and a placement rule in `scatterIsland`. Props are instanced, so no per-instance code.
 - **Region preset**: add an id and an entry to `PRESETS` in `presets.ts` (rock, moss and sand colours, moss rule, bedding spacing, flora mix), then a rule in `presetIdFor`. Rules read island data only. Never tune one island by name.
@@ -115,7 +117,7 @@ Not built yet: lantern light, rain, storm water marks, wind in the trees.
 
 ```
 npm --prefix game run check                                   # typecheck + unit tests (tests/look/)
-PORTAGE_URL=http://localhost:5221 npm --prefix e2e test       # browser: bot, keys, settings, look
+PORTAGE_URL=http://localhost:5221 npm --prefix e2e test       # browser: bot, keys, settings, interface, look, canoe, world
 ```
 
 `e2e/tests/look.spec.ts` checks:
