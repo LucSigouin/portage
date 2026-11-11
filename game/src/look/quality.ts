@@ -3,6 +3,9 @@
  * frame-rate ladder sheds cost below it when frames run long. Cost goes in
  * this order: reflection size, fine strokes and hatching, the pen's
  * anti-aliasing, and only last the resolution.
+ *
+ * All of that is the world's. The heroes (the crew and the canoe) are drawn
+ * apart, at the window's full size with every stroke, on every rung.
  */
 import type { Settings } from '../settings/index.ts';
 
@@ -19,6 +22,9 @@ export interface Quality {
 
 /** The drawing never exceeds this many pixels at render scale 1: 3840×2160. */
 export const PIXEL_BUDGET = 8.3e6;
+
+/** The canvas, and so the heroes, never exceed this many pixels: 7680×4320. Below it they are the window's full size. */
+export const WINDOW_PIXEL_LIMIT = 3.4e7;
 
 /** Each rung lowers one thing. Rung 0 sheds nothing. */
 export const LADDER: readonly Partial<Quality>[] = [
@@ -72,6 +78,14 @@ export function drawingPixelRatio(width: number, height: number, devicePixelRati
   return Math.max(0.25, Math.min(hardCap, full * renderScale * resolution));
 }
 
+/**
+ * The canvas's pixel ratio: the window's own pixels (up to 2x on a dense screen). The heroes are drawn at this
+ * size whatever the world is drawn at. Neither the render scale nor the ladder touches it.
+ */
+export function windowPixelRatio(width: number, height: number, devicePixelRatio: number): number {
+  return Math.max(0.25, Math.min(devicePixelRatio, 2, Math.sqrt(WINDOW_PIXEL_LIMIT / Math.max(1, width * height))));
+}
+
 /** Words for the `&fps=1` readout: what was shed, if anything. */
 export function shedNote(ceiling: Quality, quality: Quality): string {
   const shed: string[] = [];
@@ -82,14 +96,45 @@ export function shedNote(ceiling: Quality, quality: Quality): string {
   return shed.length > 0 ? `shed: ${shed.join(', ')}` : 'nothing shed';
 }
 
+/** The ladder changes at most once in this many seconds, up or down. */
+export const LADDER_REST_SECONDS = 10;
+/** Seconds of good frames before it tries the rung above. */
+export const CLIMB_AFTER_SECONDS = 10;
+/** A rung that ran long this many times is out for the session. */
+export const FAILS_ALLOWED = 2;
+/** A frame is long past this many milliseconds (under 49 a second). */
+const LONG_FRAME = 20.5;
+
+export interface LadderChange {
+  /** Seconds of frames the ladder had seen when it changed. */
+  at: number;
+  from: number;
+  to: number;
+}
+
 /**
- * Watches frame times. Two seconds of long frames step one rung down (two if
- * badly behind). It never climbs back by itself: a settings change resets it.
+ * Watches frame times and moves the world's quality one change at a time.
+ *
+ * - Down: two seconds of long frames step one rung down (two rungs under 29 frames a second, three under 20).
+ * - Up: ten seconds of good frames step one rung back up.
+ * - Never pumping: at most one change every ten seconds, and a rung that ran long twice is left alone for
+ *   the session. So a rung that cannot hold is tried twice at most, ten seconds apart, and then never again.
+ *
+ * A settings change resets it.
  */
 export class FrameLadder {
   rung: number;
+  /** Every change this session, oldest first. */
+  readonly changes: LadderChange[] = [];
   private readonly hold: boolean;
+  /** The best rung still allowed: every rung above it ran long twice. */
+  private best = 0;
+  private fails: number[] = LADDER.map(() => 0);
+  private clock = 0;
+  private lastChange = Number.NEGATIVE_INFINITY;
   private slowWindows = 0;
+  private slowest = 0;
+  private goodSeconds = 0;
   private frames = 0;
   private windowSeconds = 0;
   private windowFrames = 0;
@@ -99,27 +144,66 @@ export class FrameLadder {
     this.rung = Math.max(0, Math.min(LADDER.length - 1, options.startRung ?? 0));
   }
 
+  /** The best rung the ladder may still climb to this session. */
+  get bestAllowed(): number {
+    return this.best;
+  }
+
+  /** Start over from rung 0 with every rung allowed again. A pinned ladder (`&hold=1`) stays where it is. */
   reset(): void {
+    if (this.hold) return;
     this.rung = 0;
+    this.best = 0;
+    this.fails = LADDER.map(() => 0);
+    this.lastChange = Number.NEGATIVE_INFINITY;
     this.slowWindows = 0;
+    this.slowest = 0;
+    this.goodSeconds = 0;
     this.frames = 0;
   }
 
-  /** Call once a frame with the real frame time. Returns true when it stepped down. */
+  private move(rung: number): boolean {
+    this.changes.push({ at: this.clock, from: this.rung, to: rung });
+    this.rung = rung;
+    this.lastChange = this.clock;
+    this.slowWindows = 0;
+    this.slowest = 0;
+    this.goodSeconds = 0;
+    return true;
+  }
+
+  /** Call once a frame with the real frame time. Returns true when the rung changed. */
   note(frameSeconds: number): boolean {
+    // A stall (the tab was hidden, a shader compiled) says nothing about the frame rate.
+    if (frameSeconds > 0.25) return false;
     this.frames += 1;
+    this.clock += frameSeconds;
     this.windowSeconds += frameSeconds;
     this.windowFrames += 1;
     if (this.windowSeconds <= 0.5) return false;
-    const milliseconds = (this.windowSeconds / this.windowFrames) * 1000;
+    const span = this.windowSeconds;
+    const milliseconds = (span / this.windowFrames) * 1000;
     this.windowSeconds = 0;
     this.windowFrames = 0;
     // The first three seconds compile shaders and fill buffers: they prove nothing.
     if (this.frames <= 180 || this.hold) return false;
-    this.slowWindows = milliseconds > 20.5 ? this.slowWindows + (milliseconds > 30 ? 2 : 1) : 0;
-    if (this.slowWindows < 4 || this.rung >= LADDER.length - 1) return false;
-    this.rung += 1;
-    this.slowWindows = 0;
-    return true;
+    if (milliseconds > LONG_FRAME) {
+      this.slowWindows += milliseconds > 30 ? 2 : 1;
+      this.slowest = Math.max(this.slowest, milliseconds);
+      this.goodSeconds = 0;
+    } else {
+      this.slowWindows = 0;
+      this.slowest = 0;
+      this.goodSeconds += span;
+    }
+    if (this.clock - this.lastChange < LADDER_REST_SECONDS) return false;
+    const last = LADDER.length - 1;
+    if (this.slowWindows >= 4 && this.rung < last) {
+      this.fails[this.rung] += 1;
+      if (this.fails[this.rung] >= FAILS_ALLOWED) this.best = Math.max(this.best, this.rung + 1);
+      return this.move(Math.min(last, this.rung + (this.slowest > 50 ? 3 : this.slowest > 34 ? 2 : 1)));
+    }
+    if (this.goodSeconds >= CLIMB_AFTER_SECONDS && this.rung > this.best) return this.move(this.rung - 1);
+    return false;
   }
 }

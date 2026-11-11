@@ -1,4 +1,4 @@
-import type { Color, DataTexture, IUniform, ShaderMaterial, Vector3, Vector4 } from 'three';
+import type { Color, DataTexture, IUniform, ShaderMaterial, Vector3, Vector4, Object3D } from 'three';
 import type { WAVE_UNIFORMS } from './waves.js';
 
 /** B2's colours, as display values. */
@@ -62,3 +62,5 @@ export interface TerrainPreset {
 }
 export const TERRAIN_DEFAULTS: TerrainPreset;
 export function terrainMaterialFor(preset?: Partial<TerrainPreset>): ShaderMaterial & { uniforms: { uMoss: IUniform<Vector4> } };
+/** Put every mesh under `root` in its mirror material ('mirror': it discards below the waterline) or back in its own ('plain'). */
+export function wearMaterials(root: Object3D, which: 'mirror' | 'plain'): void;

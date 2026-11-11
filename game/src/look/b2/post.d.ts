@@ -1,18 +1,42 @@
-import type { Camera, IUniform, Mesh, PerspectiveCamera, Scene, Texture, Vector2, WebGLRenderer } from 'three';
+import type { Camera, IUniform, Mesh, Object3D, PerspectiveCamera, Scene, Texture, Vector2, WebGLRenderer } from 'three';
+
+/** A rectangle of the canvas in pixels, from the bottom left. */
+export interface PostWindow { x: number; y: number; w: number; h: number }
 
 export interface Post {
   uniforms: Record<string, IUniform>;
-  /** The pen's settings: uLineW, uWobble, uBoil (off, always), uBoilTime. */
+  /** The pen's settings: uLineW, uWobble, uBoil (off, always), uBoilTime. Shared by the world's pen and the heroes'. */
   pen: Record<string, IUniform<number>>;
   reflection: Texture;
-  /** Drawing size in pixels. */
+  /** The world's drawing size in pixels. */
   resolution: Vector2;
-  state: { w: number; h: number; inkScale: number; reflScale: number; inkW: number; inkH: number };
-  /** reflectionScale: reflection size against the drawing. inkMaximum: most ink texels per pixel, each way. */
-  setSize(width: number, height: number, reflectionScale?: number, inkMaximum?: number): void;
+  /** w, h: the world's drawing. sheetW, sheetH: the canvas. hero*: the hero buffers and the last frame's windows. */
+  state: {
+    w: number; h: number; inkScale: number; reflScale: number; inkW: number; inkH: number;
+    sheetW: number; sheetH: number; fine: number;
+    heroRoomW: number; heroRoomH: number; heroInkScale: number; heroWindows: PostWindow[]; heroFine: number;
+    /** Pixels of hero colour buffer drawn for the last hero window of the last frame. 0 when none was. */
+    heroDrawnW: number; heroDrawnH: number;
+  };
+  /**
+   * `?bench=N` draws every pass N times, `&benchpass=<name>` only that pass (reflection, colour, ink, composite, hero).
+   * `discard`: every pass keeps the mirror's materials, as it was before: to measure what shading each pixel once saves.
+   */
+  bench: { draws: number; pass: string; discard: boolean };
+  /**
+   * width, height: the world's drawing size. reflectionScale: reflection size against the drawing.
+   * inkMaximum: most ink texels per pixel, each way. sheetWidth, sheetHeight: the canvas. fine: the world's fine strokes.
+   */
+  setSize(width: number, height: number, reflectionScale?: number, inkMaximum?: number, sheetWidth?: number, sheetHeight?: number, fine?: number): void;
   linkWater(drift: IUniform<Vector2>): void;
-  /** onPass is called before each scene pass: 2 reflection, 0 colour. */
-  render(scene: Scene, camera: PerspectiveCamera, water: Mesh, overlay?: Scene | null, reflect?: boolean, onPass?: ((pass: number) => void) | null): void;
+  /**
+   * onPass is called before each scene pass: 2 reflection, 0 colour.
+   * heroes: the group (a child of the scene) drawn apart at the canvas's size, inside heroWindows. Null leaves it in the world.
+   */
+  render(
+    scene: Scene, camera: PerspectiveCamera, water: Mesh, overlay?: Scene | null, reflect?: boolean,
+    onPass?: ((pass: number) => void) | null, heroes?: Object3D | null, heroWindows?: PostWindow[],
+  ): void;
   dispose(): void;
 }
 export function createPost(renderer: WebGLRenderer, camera: Camera): Post;

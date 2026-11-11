@@ -5,9 +5,10 @@
  * the state, and owns no clock: every motion comes from `state.time` and the
  * `FrameInfo`.
  *
- * The frame: mirrored scene -> reflection; scene -> colour (4x multisampled);
- * scene -> ink buffer (normals, 11-bit ink ids, line wobble); composite ->
- * pen lines, foam, paper; marks on top. See LOOK.md.
+ * The frame: mirrored scene -> reflection; world -> colour (4x multisampled);
+ * world -> ink buffer (normals, 11-bit ink ids, line wobble); composite ->
+ * pen lines, foam, paper; then the heroes (the crew and the canoe) on their
+ * own, at the window's full size with every stroke; marks on top. See LOOK.md.
  */
 import * as THREE from 'three';
 import { ISLANDS, ISLANDS_BY_ID, NODES_BY_ID, NODES_BY_ISLAND, NPCS, NPC_IDS, TUNING, WEATHER, spotPosition } from '../data/index.ts';
@@ -17,6 +18,7 @@ import { bearingBetween, regionAt, selectTimeOfDay, terrainHeight, waterRoughnes
 import type { GameEvent, GameState } from '../sim/index.ts';
 import type { CameraPose, FrameInfo, StageName, WorldView } from '../client/contracts.ts';
 import { crewOf } from './crew.ts';
+import type { Crew } from './crew.ts';
 import { KIND } from './b2/detail.js';
 import { Builder, THIN } from './b2/geo.js';
 import { GU, PAL, inkMaterial } from './b2/palette.js';
@@ -31,6 +33,8 @@ import { buildCharacter } from './characters.ts';
 import { mistDensity, overcastFor, paletteAt } from './daylight.ts';
 import type { Rgb } from './daylight.ts';
 import { Effects } from './effects.ts';
+import { heroMargin, heroWindow, heroWindows } from './hero-windows.ts';
+import type { HeroWindow } from './hero-windows.ts';
 import { LANDMARK_HEIGHT, disposeLandmarks, landmarkGeometry } from './landmarks.ts';
 import { Marks } from './marks.ts';
 import type { Anchor } from './marks.ts';
@@ -38,8 +42,8 @@ import { NODE_MARK_HEIGHT, disposeNodes, nodeGeometry } from './nodes.ts';
 import { floraFor } from './presets.ts';
 import { buildIslandProps, buildValleyForest, disposePropLibrary, instancedMesh } from './props.ts';
 import type { IslandProps } from './props.ts';
-import { FrameLadder, HATCH_BY_SHADOWS, WATER_CELL_BY_DETAIL, drawingPixelRatio, qualityAt, qualityCeiling, shedNote } from './quality.ts';
-import type { Quality } from './quality.ts';
+import { FrameLadder, HATCH_BY_SHADOWS, WATER_CELL_BY_DETAIL, drawingPixelRatio, qualityAt, qualityCeiling, shedNote, windowPixelRatio } from './quality.ts';
+import type { LadderChange, Quality } from './quality.ts';
 import { hashText, scatterIsland } from './scatter.ts';
 import { GROUND_UNIFORM, regionUniforms, shoreUniforms, waveUniforms } from './surface.ts';
 import { buildIslandTerrain, buildValleyTerrain, disposeTerrainMaterials } from './terrain.ts';
@@ -79,9 +83,28 @@ interface IslandView {
 
 /** What `probe()` reports. */
 export interface LookProbe {
-  /** Size of the drawing in pixels. */
+  /** Size of the world's drawing in pixels. */
   drawingWidth: number;
   drawingHeight: number;
+  /** Size of the canvas in pixels: the window's own. The heroes are drawn at this size. */
+  canvasWidth: number;
+  canvasHeight: number;
+  hero: {
+    /** The hero windows of the last frame, in canvas pixels from the bottom left. Empty when no hero is on screen, or with `?hero=0`. */
+    windows: HeroWindow[];
+    /** Hero colour buffer pixels drawn per canvas pixel of the last hero window: 1 at the window's size. 0 when the heroes are not drawn apart. */
+    pixelsPerCanvasPixel: number;
+    /** Ink texels per canvas pixel in the hero's ink buffer, each way. */
+    inkScale: number;
+    /** Fine strokes on the heroes: 1 on. */
+    fine: number;
+    /** How many crew figures are in the picture. */
+    crew: number;
+    /** The local player's figure on the page, in CSS pixels from the top left. Null when off screen. */
+    subject: { x: number; y: number; width: number; height: number } | null;
+  };
+  /** The frame-rate ladder: every change this session, and the best rung it may still climb to. */
+  ladder: { changes: LadderChange[]; bestAllowed: number };
   /** Rungs shed by the frame-rate ladder, and what the look draws now. */
   rung: number;
   quality: Quality;
@@ -116,6 +139,16 @@ export class InkWashWorldView implements WorldView {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.3, 1700);
   private readonly canoe = new CanoeView();
+  /** The crew and the canoe: left out of the world's passes and drawn apart, at the window's size. */
+  private readonly heroes = new THREE.Group();
+  /** `?hero=0` leaves them in the world, as it was: only to prove the sharpness tests can fail. */
+  private heroPass = true;
+  /** `&fakecrew=N` draws a crew of N, the extra ones made up by the look. */
+  private fakeCrew = 0;
+  /** `&stall=N` (or `stall(N)`) holds every frame N milliseconds: a slow spell on demand, for the ladder test. */
+  private stallMilliseconds = 0;
+  private canvasWidth = 1;
+  private canvasHeight = 1;
   private readonly effects = new Effects();
   private readonly islands: IslandView[] = [];
   private readonly beacon = new THREE.Group();
@@ -168,11 +201,16 @@ export class InkWashWorldView implements WorldView {
     this.ladder = new FrameLadder({ hold: switches.has('hold'), startRung: Number(switches.get('rung')) || 0 });
     this.boil = switches.has('boil');
     this.benchDraws = Math.max(1, Math.min(64, Number(switches.get('bench')) || 1));
+    this.heroPass = switches.get('hero') !== '0';
+    this.fakeCrew = Math.max(0, Math.min(4, Number(switches.get('fakecrew')) || 0));
+    this.stallMilliseconds = Math.max(0, Number(switches.get('stall')) || 0);
 
     const post = createPost(renderer, this.camera);
     this.post = post;
     // ?boil=1 turns B2's line boil on, on real time. It exists so the steadiness test can be seen to fail. Never on otherwise.
     post.pen.uBoil.value = this.boil ? 1 : 0;
+    post.bench.draws = this.benchDraws;
+    post.bench.pass = switches.get('benchpass') ?? '';
     const sky = createSky();
     this.sky = sky;
     const water = createWater(post.reflection, post.resolution);
@@ -180,7 +218,8 @@ export class InkWashWorldView implements WorldView {
     post.linkWater(water.uniforms.uDrift);
     water.uniforms.uGround.value.set(...GROUND_UNIFORM);
 
-    this.scene.add(sky.mesh, water.mesh, buildValleyTerrain(), this.canoe.group, this.canoe.ashore, this.effects.group, this.beacon);
+    this.heroes.add(this.canoe.group, this.canoe.ashore);
+    this.scene.add(sky.mesh, water.mesh, buildValleyTerrain(), this.heroes, this.effects.group, this.beacon);
     for (const stand of buildValleyForest()) {
       this.scene.add(stand.mesh);
       this.forest.push({ ...stand, shown: true });
@@ -300,12 +339,14 @@ export class InkWashWorldView implements WorldView {
   }
 
   /**
-   * Render scale 1 draws the screen's full size. Shadows set the hatching in
+   * Render scale 1 draws the world at the screen's full size (the heroes always are). Shadows set the hatching in
    * the shade (the look's only shadow), water detail sets the wave mesh and
    * the reflection, and the quality preset sets the pen's anti-aliasing and
    * the fine strokes. The frame-rate ladder then sheds below that if it must.
    */
   applyGraphicsSettings(graphics: Settings['graphics']): void {
+    // New settings are a new ceiling: the ladder starts over, and every rung gets a fresh try.
+    if (this.graphics && JSON.stringify(this.graphics) !== JSON.stringify(graphics)) this.ladder.reset();
     this.graphics = graphics;
     this.ceiling = qualityCeiling(graphics);
     GU.uHatch.value = HATCH_BY_SHADOWS[graphics.shadows];
@@ -317,14 +358,19 @@ export class InkWashWorldView implements WorldView {
     const { renderer, post, water } = this;
     if (!renderer || !post || !water) return;
     this.quality = qualityAt(this.ceiling, this.ladder.rung);
-    const ratio = drawingPixelRatio(this.width, this.height, this.pixelRatio, this.graphics?.renderScale ?? 1, this.quality.resolution);
-    renderer.setPixelRatio(ratio);
+    // The canvas is the window's own pixels, always: the heroes are drawn at that size. The world is drawn at
+    // whatever the pixel budget, the render scale and the ladder leave it, and stretched to the canvas.
+    const windowRatio = windowPixelRatio(this.width, this.height, this.pixelRatio);
+    const worldRatio = drawingPixelRatio(this.width, this.height, this.pixelRatio, this.graphics?.renderScale ?? 1, this.quality.resolution);
+    renderer.setPixelRatio(windowRatio);
     renderer.setSize(this.width, this.height, true);
-    const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    post.setSize(size.x, size.y, Math.max(0.25, this.quality.reflection), this.quality.ink);
+    const canvas = renderer.getDrawingBufferSize(new THREE.Vector2());
+    this.canvasWidth = canvas.x;
+    this.canvasHeight = canvas.y;
+    const worldWidth = worldRatio === windowRatio ? canvas.x : Math.max(1, Math.floor(this.width * worldRatio));
+    const worldHeight = worldRatio === windowRatio ? canvas.y : Math.max(1, Math.floor(this.height * worldRatio));
+    post.setSize(worldWidth, worldHeight, Math.max(0.25, this.quality.reflection), this.quality.ink, canvas.x, canvas.y, this.quality.fine);
     water.uniforms.uReflect.value = this.quality.reflection > 0 ? 1 : 0;
-    GU.uFine.value = this.quality.fine;
-    GU.uSc.value = size.y / 1080;
     this.camera.aspect = this.width / this.height;
     this.camera.updateProjectionMatrix();
   }
@@ -352,19 +398,35 @@ export class InkWashWorldView implements WorldView {
     this.frameCount += 1;
     GU.uTime.value = this.paintTime;
     if (this.post && this.boil) this.post.pen.uBoilTime.value = frame.elapsedSeconds;
+    const rungBefore = this.ladder.rung;
     if (this.ladder.note(frame.frameSeconds)) {
       this.applyQuality();
-      console.info(`Portage look: frames ran long, ${shedNote(this.ceiling, this.quality)}`);
+      console.info(`Portage look: ${this.ladder.rung > rungBefore ? 'frames ran long' : 'frames are quick again'}, rung ${this.ladder.rung}, ${shedNote(this.ceiling, this.quality)}`);
     }
 
     this.syncLight(state, jumped || this.frameCount <= 1);
     this.syncWaves(state);
-    const dips = this.canoe.sync(state, this.paintSeconds, this.paintTime, this.stage !== 'lobby', jumped);
+    const dips = this.canoe.sync(state, this.crewFor(state), this.paintSeconds, this.paintTime, this.stage !== 'lobby', jumped);
     this.syncWake(state, dips);
     this.syncNodes(state);
     this.effects.update(this.paintSeconds);
     this.beacon.visible = state.flags.beacon_lit === true;
     this.beacon.scale.setScalar(this.stage === 'credits' ? 1.5 : 1);
+  }
+
+  /** The crew to draw: the state's, and with `&fakecrew=N` enough made-up mates to bring it to N. */
+  private crewFor(state: GameState): Crew {
+    const crew = crewOf(state);
+    const { local } = crew;
+    const mates = [...crew.others];
+    for (let index = mates.length; index < this.fakeCrew - 1; index += 1) {
+      // Aboard, a mate is seated by their number. Ashore, they stand a few steps from the local player.
+      const bearing = local.heading + [2.3, -2.1, 3.4][index % 3];
+      const x = local.position.x + Math.sin(bearing) * (1.5 + 0.4 * index);
+      const z = local.position.z - Math.cos(bearing) * (1.5 + 0.4 * index);
+      mates.push(local.mode === 'canoe' ? local : { ...local, position: { x, y: terrainHeight(x, z), z }, heading: local.heading + [0.6, -0.8, 0.3][index % 3] });
+    }
+    return mates.length === crew.others.length ? crew : { local, others: mates };
   }
 
   /** The time-of-day palette and the weather's mist. */
@@ -547,7 +609,10 @@ export class InkWashWorldView implements WorldView {
       camera.updateProjectionMatrix();
     }
     camera.updateMatrixWorld();
-    GU.uPxK.value = (2 * Math.tan((camera.fov * Math.PI) / 360)) / post.resolution.y;
+    if (this.stallMilliseconds > 0) {
+      const until = performance.now() + this.stallMilliseconds;
+      while (performance.now() < until);
+    }
 
     const subject = crewOf(state).local.position;
     if (this.cullDue || this.frameCount % 10 === 1) {
@@ -561,9 +626,10 @@ export class InkWashWorldView implements WorldView {
 
     renderer.info.reset();
     water.renderWake(renderer);
-    for (let draw = 0; draw < this.benchDraws; draw += 1) {
-      post.render(this.scene, camera, water.mesh, marks.scene, this.quality.reflection > 0, (pass) => this.thinForMirror(pass === 2));
-    }
+    // Where the heroes are on the window: each gets a rectangle of the canvas, drawn at the canvas's own size.
+    this.heroes.updateMatrixWorld();
+    const windows = this.heroPass ? heroWindows(this.canoe.heroes(), camera, this.canvasWidth, this.canvasHeight, heroMargin(this.canvasHeight)) : [];
+    post.render(this.scene, camera, water.mesh, marks.scene, this.quality.reflection > 0, (pass) => this.thinForMirror(pass === 2), this.heroPass ? this.heroes : null, windows);
   }
 
   /** The mirror sees bare ground on far islands: their trees and loot would be a few pixels, at a third of the frame's draw calls. */
@@ -586,6 +652,16 @@ export class InkWashWorldView implements WorldView {
       stand.mesh.visible = false;
       this.mirrorHidden.push(stand.mesh);
     }
+  }
+
+  /** Test hook: draw every pass `draws` times from now on (`pass` names one pass only). The same as `&bench=N&benchpass=`. */
+  bench(draws: number, pass = ''): void {
+    if (this.post) Object.assign(this.post.bench, { draws: Math.max(1, Math.min(64, draws)), pass });
+  }
+
+  /** Test hook: hold every frame this many milliseconds from now on. 0 lets go. The same as `&stall=N`. */
+  stall(milliseconds: number): void {
+    this.stallMilliseconds = Math.max(0, milliseconds);
   }
 
   /** Draw calls and triangles of the last frame, all passes together. */
@@ -630,11 +706,25 @@ export class InkWashWorldView implements WorldView {
   /** Numbers for the browser tests and the console: `window.portage.worldView.probe()`. */
   probe(): LookProbe {
     const state = this.state;
-    const size = this.renderer?.getDrawingBufferSize(new THREE.Vector2()) ?? new THREE.Vector2();
     const canoe = state?.canoe.position ?? { x: 0, y: 0, z: 0 };
+    const drawn = this.post?.state;
+    const lastWindow = drawn?.heroWindows[drawn.heroWindows.length - 1];
+    const ratio = this.canvasHeight / this.height;
+    const figure = state && this.stage !== 'lobby' ? heroWindow(this.canoe.localFigure(), this.camera, this.canvasWidth, this.canvasHeight, 0) : null;
     return {
-      drawingWidth: size.x,
-      drawingHeight: size.y,
+      drawingWidth: drawn?.w ?? 0,
+      drawingHeight: drawn?.h ?? 0,
+      canvasWidth: this.canvasWidth,
+      canvasHeight: this.canvasHeight,
+      hero: {
+        windows: (drawn?.heroWindows ?? []).map((window) => ({ ...window })),
+        pixelsPerCanvasPixel: drawn && lastWindow ? Math.min(drawn.heroDrawnW / lastWindow.w, drawn.heroDrawnH / lastWindow.h) : 0,
+        inkScale: drawn && lastWindow ? drawn.heroInkScale : 0,
+        fine: drawn?.heroFine ?? 0,
+        crew: this.canoe.figuresShown(),
+        subject: figure && { x: figure.x / ratio, y: (this.canvasHeight - figure.y - figure.h) / ratio, width: figure.w / ratio, height: figure.h / ratio },
+      },
+      ladder: { changes: this.ladder.changes.map((change) => ({ ...change })), bestAllowed: this.ladder.bestAllowed },
       rung: this.ladder.rung,
       quality: { ...this.quality },
       shed: shedNote(this.ceiling, this.quality),

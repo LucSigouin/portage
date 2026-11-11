@@ -266,21 +266,22 @@ function ik(a, c, l1, l2, hint, elbow, hand) {
   hand.copy(a).addScaledVector(_n, d);
 }
 
-export function createPaddler() {
+// outfit: { coat, toque, legs } colours, so each of a crew of four reads as their own person
+export function createPaddler({ coat: coatColor = PAL.ochre, toque = '#a9483a', legs = '#57697b' } = {}) {
   const root = new THREE.Group();
   const torso = new THREE.Group();
   root.add(torso);
   const tb = new Builder(5);
   tb.kind = KIND.CLOTH; // wool coat, scarf and toque
   const coat = nextId();
-  tb.cyl(0.135, 0.195, 0.5, PAL.ochre, { pos: [0, 0.25, 0], id: coat, flat: true }, 10);
-  tb.sphere(0.16, PAL.ochre, { pos: [0, 0.46, 0], scale: [1.3, 0.5, 0.92], id: coat, flat: true }, 10);
+  tb.cyl(0.135, 0.195, 0.5, coatColor, { pos: [0, 0.25, 0], id: coat, flat: true }, 10);
+  tb.sphere(0.16, coatColor, { pos: [0, 0.46, 0], scale: [1.3, 0.5, 0.92], id: coat, flat: true }, 10);
   tb.box(0.012, 0.36, 0.01, '#a57f2e', { pos: [0, 0.27, 0.172], rot: [0.12, 0, 0], flat: true }); // button placket
   tb.torus(0.1, 0.036, PAL.rust, { pos: [0, 0.525, 0], rot: [Math.PI / 2, 0, 0] }, 10);
   tb.box(0.07, 0.2, 0.03, PAL.rust, { pos: [0.07, 0.43, -0.14], rot: [0.25, 0, -0.15] });
   // storybook proportions: a big head under a toque
   const head = tb.sphere(0.135, PAL.skin, { pos: [0, 0.69, 0.008], flat: true, kind: KIND.PLAIN }, 12);
-  tb.sphere(0.143, '#a9483a', { pos: [0, 0.772, -0.014], scale: [1, 0.8, 1], flat: true }, 12);
+  tb.sphere(0.143, toque, { pos: [0, 0.772, -0.014], scale: [1, 0.8, 1], flat: true }, 12);
   tb.torus(0.136, 0.034, PAL.cream, { pos: [0, 0.758, -0.012], rot: [Math.PI / 2 + 0.16, 0, 0] }, 12);
   tb.sphere(0.05, PAL.cream, { pos: [0, 0.905, -0.03] }, 8);
   for (const sx of [-0.052, 0.052]) tb.sphere(0.02, PAL.ink, { pos: [sx, 0.675, 0.128], id: head, flat: true, kind: KIND.PLAIN }, 6);
@@ -313,8 +314,8 @@ export function createPaddler() {
       hip: new THREE.Vector3(),
     };
   };
-  const L = side(PAL.ochre, '#57697b');
-  const R = side(PAL.ochre, '#57697b');
+  const L = side(coatColor, legs);
+  const R = side(coatColor, legs);
 
   const paddle = buildPaddle();
   root.add(paddle);
@@ -367,8 +368,8 @@ export function createPaddler() {
 }
 
 // The paddler and the paddle, posed for the canoe or for the shore. The model faces +z.
-export function createCrew() {
-  const paddler = createPaddler();
+export function createCrew(outfit) {
+  const paddler = createPaddler(outfit);
 
   // working vectors for the stroke
   const G = new THREE.Vector3();

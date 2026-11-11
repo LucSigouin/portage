@@ -1,18 +1,24 @@
 /**
- * The canoe and the paddler. The hull for each tier is lofted from the rules
+ * The canoe and its crew. The hull for each tier is lofted from the rules
  * engine's dimensions with B2's hull builder, turned to face -z and sunk by
  * its draft, so the group's origin is the hull centre on the waterline: the
  * game's canoe space. Attachments sit at their mount transforms.
+ *
+ * Every crew member is drawn: the local player paddles from the stern seat,
+ * the others sit along the centreline ahead of them, and anyone ashore
+ * stands where the state puts them. All of them, and the canoe, are heroes:
+ * the world view draws them at the window's full size (see LOOK.md).
  */
 import * as THREE from 'three';
 import { HULL_TIERS } from '../data/index.ts';
 import { attachmentTransformForHull } from '../sim/index.ts';
-import { crewOf } from './crew.ts';
+import type { Crew } from './crew.ts';
 import type { GameState } from '../sim/index.ts';
 import { buildAttachment } from './attachments.ts';
 import type { AttachmentPiece } from './attachments.ts';
 import { buildBilge, buildHull, buildStarterKit, createCrew, makeHullShape } from './b2/canoe.js';
-import type { Crew, HullShape } from './b2/canoe.js';
+import type { Crew as Figure, HullShape, Outfit } from './b2/canoe.js';
+import { PAL } from './b2/palette.js';
 
 interface TierMeshes {
   shape: HullShape;
@@ -27,15 +33,37 @@ const STRIDE_METRES = 1.5;
 
 export interface StrokeEvent { x: number; z: number; strength: number; size: number }
 
+/** What each crew member wears, by their place in the crew. The first is B2's paddler. */
+const OUTFITS: readonly Outfit[] = [
+  {},
+  { coat: PAL.barrelBlue, toque: PAL.ochre, legs: '#5d4b42' },
+  { coat: PAL.sageDeep, toque: PAL.cream, legs: '#4b4d57' },
+  { coat: PAL.rustLight, toque: PAL.slate, legs: '#57697b' },
+];
+/** Where the others sit, as a share of the way from the stern seat to the bow seat. */
+const SEATS = [1, 0.36, 0.68] as const;
+
+type CrewMember = Crew['local'];
+
+/** One of the crew other than the local player: their figure and their walk. */
+interface Mate {
+  figure: Figure;
+  stride: number;
+  moving: number;
+  lastX: number;
+  lastZ: number;
+}
+
 export class CanoeView {
   /** Canoe space: origin at the hull centre on the waterline, bow toward -z. */
   readonly group = new THREE.Group();
-  /** The paddler when ashore. Lives in the scene, not the canoe. */
+  /** The crew who are ashore. Lives in the scene, not the canoe. */
   readonly ashore = new THREE.Group();
   private readonly hullSpace = new THREE.Group();
   private readonly attachments = new THREE.Group();
   private readonly tiers = new Map<number, TierMeshes>();
-  private readonly crew: Crew = createCrew();
+  private readonly crew: Figure = createCrew();
+  private readonly mates: Mate[] = [];
   private pieces: AttachmentPiece[] = [];
   private attachmentsKey = '';
   private tier = -1;
@@ -109,9 +137,9 @@ export class CanoeView {
    * `snap` true on the first frame of a new state.
    * Returns the paddle dips of this frame, for rings on the water.
    */
-  sync(state: GameState, seconds: number, time: number, showPlayer: boolean, snap: boolean): StrokeEvent[] {
+  sync(state: GameState, everyone: Crew, seconds: number, time: number, showPlayer: boolean, snap: boolean): StrokeEvent[] {
     const canoe = state.canoe;
-    const player = crewOf(state).local;
+    const player = everyone.local;
     this.group.position.set(canoe.position.x, canoe.position.y, canoe.position.z);
     this.group.rotation.set(canoe.pitch, -canoe.heading, -canoe.roll);
 
@@ -179,7 +207,52 @@ export class CanoeView {
     }
     this.lastHeading = canoe.heading;
     this.lastWalked = state.statistics.distanceWalked;
+    everyone.others.forEach((member, index) => this.syncMate(member, index, shape, seconds, time, showPlayer));
+    for (let index = everyone.others.length; index < this.mates.length; index += 1) this.mates[index].figure.root.visible = false;
     return events;
+  }
+
+  /** Another crew member: seated ahead of the paddler with their paddle at rest, or standing where they are ashore. */
+  private syncMate(member: CrewMember, index: number, shape: HullShape, seconds: number, time: number, shown: boolean): void {
+    let mate = this.mates[index];
+    if (!mate) {
+      mate = { figure: createCrew(OUTFITS[(index + 1) % OUTFITS.length]), stride: 0, moving: 0, lastX: member.position.x, lastZ: member.position.z };
+      this.mates[index] = mate;
+    }
+    const root = mate.figure.root;
+    root.visible = shown;
+    if (member.mode === 'canoe') {
+      if (root.parent !== this.hullSpace) this.hullSpace.add(root);
+      const { seatY, seatZ, bowSeatZ, draft } = shape.HULL;
+      root.position.set(0, seatY + 0.035 - draft, seatZ + (bowSeatZ - seatZ) * SEATS[index % SEATS.length]);
+      root.rotation.set(0, 0, 0);
+      mate.figure.paddle(seconds, 0, 0, index % 2 ? 1 : -1);
+    } else {
+      if (root.parent !== this.ashore) this.ashore.add(root);
+      root.position.set(member.position.x, member.position.y, member.position.z);
+      root.rotation.set(0, Math.PI - member.heading, 0);
+      const walked = Math.hypot(member.position.x - mate.lastX, member.position.z - mate.lastZ);
+      if (seconds > 0) mate.moving += ((walked > 0.002 ? 1 : 0) - mate.moving) * Math.min(1, seconds * 8);
+      if (walked < 5) mate.stride += (walked / STRIDE_METRES) * Math.PI * 2;
+      mate.figure.stand(time, mate.stride, mate.moving);
+    }
+    mate.lastX = member.position.x;
+    mate.lastZ = member.position.z;
+  }
+
+  /** How many crew figures are in the picture right now. */
+  figuresShown(): number {
+    return [this.crew, ...this.mates.map((mate) => mate.figure)].filter(({ root }) => root.visible && root.parent !== null).length;
+  }
+
+  /** The local player's figure, wherever it stands or sits. */
+  localFigure(): THREE.Object3D {
+    return this.crew.root;
+  }
+
+  /** Each hero the world view draws apart from the world: the canoe with all aboard, and each person ashore. */
+  heroes(): THREE.Object3D[] {
+    return [this.group, ...this.ashore.children];
   }
 
   dispose(): void {
