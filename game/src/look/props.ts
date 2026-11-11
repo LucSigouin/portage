@@ -18,6 +18,7 @@ import { terrainHeight, valleyHalfWidth } from '../sim/index.ts';
 import { VARIANTS, seededRandom } from './scatter.ts';
 import { FINE_TREES, watchDistance, within } from './world/distance.ts';
 import type { Watcher } from './world/distance.ts';
+import { disposeNodeMaterial, nodeMaterial } from './world/spent.ts';
 import type { FloraKind, Placement } from './scatter.ts';
 
 /** `coarse` asks a tree for the same tree with about half the triangles. */
@@ -139,6 +140,7 @@ export function disposePropLibrary(): void {
   for (const geometry of Object.values(farLibrary ?? {})) geometry.dispose();
   library = null;
   coarseLibrary = null;
+  disposeNodeMaterial();
   farLibrary = null;
 }
 
@@ -165,16 +167,20 @@ export interface InstanceTransform { x: number; y: number; z: number; yaw: numbe
  * Draw one geometry many times. Each instance gets its own ink ids (so two
  * neighbours never merge into one outline) and its own stretch of the wash
  * noise. `spent` in `aInst.y` washes an instance out: nodes.ts uses it for
- * used-up loot.
+ * used-up loot. A geometry that marks its vertices with `aGone` (a scavenge
+ * node) is drawn in the node material, which also hides the half of it that
+ * does not belong to its state (world/spent.ts).
  */
 export function instancedMesh(source: THREE.BufferGeometry, transforms: readonly InstanceTransform[], seed: number): THREE.InstancedMesh {
   // The big vertex buffers are shared; only the per-instance attribute is this mesh's own.
   const geometry = new THREE.BufferGeometry();
   for (const name of SHARED_ATTRIBUTES) geometry.setAttribute(name, source.getAttribute(name));
   geometry.boundingSphere = source.boundingSphere;
+  const gone = source.getAttribute('aGone');
+  if (gone) geometry.setAttribute('aGone', gone);
   const random = seededRandom(seed);
   const perInstance = new Float32Array(transforms.length * 4);
-  const mesh = new THREE.InstancedMesh(geometry, inkMaterial, transforms.length);
+  const mesh = new THREE.InstancedMesh(geometry, gone ? nodeMaterial() : inkMaterial, transforms.length);
   transforms.forEach((transform, index) => {
     position.set(transform.x, transform.y, transform.z);
     quaternion.setFromAxisAngle(UP, transform.yaw);
