@@ -24,4 +24,6 @@ export interface Crew {
   /** Ashore. time: seconds, for the idle breath. stride: radians of the walk cycle. moving 0..1. */
   stand(time: number, stride?: number, moving?: number): void;
 }
-export function createCrew(): Crew;
+/** A crew member's colours. Left out, they are B2's paddler: ochre coat, red toque, blue-grey legs. */
+export interface Outfit { coat?: string; toque?: string; legs?: string }
+export function createCrew(outfit?: Outfit): Crew;

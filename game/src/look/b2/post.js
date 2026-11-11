@@ -6,15 +6,33 @@
 //   4. composite      -> colour + pen lines + white contact foam, paper frame, paper tooth.
 //                        Where an edge is near, the pen is worked out at four points inside the pixel
 //                        (one per ink-buffer texel) and averaged: that is its anti-aliasing.
+//   5. heroes         -> the crew and the canoe, drawn again on their own at the window's full size, whatever
+//                        the world behind was drawn at. See "The hero pass" below.
 // Nothing here resamples the colour, so nothing is smeared. The hand-drawn unevenness moves where a
 // line sits (and how heavy it is), and that wobble is read from the object the line belongs to.
+//
+// The hero pass. The world (steps 1 to 4) may be drawn smaller than the window: over the pixel budget, at
+// render scale below 1, or on the last rungs of the frame-rate ladder. It is then stretched to the window.
+// The heroes are never in it. For each hero window (a rectangle of the screen around a hero):
+//   a. hero colour: the world's depth is copied in, then the heroes are drawn at one sample per window
+//      pixel (4x multisampled), so the world still hides what it should
+//   b. hero ink: the world's ink buffer and depth are copied in, then the heroes are drawn over it at two
+//      texels per window pixel, with fine strokes on. Hero texels are marked (normal.x + 2).
+//   c. the same pen as step 4 runs on that merged buffer at the window's size, and writes only the pixels
+//      that a hero touches: the hero itself, and its lines and foam. Every other pixel keeps the world.
+// One pen, one line weight (pen widths are in window pixels at both sizes), so there is no seam.
 import * as THREE from 'three';
-import { PAL, GU, NOISE } from './palette.js';
+import { PAL, GU, NOISE, wearMaterials } from './palette.js';
 
 const COMPOSITE = /* glsl */ `
 precision highp float;
 uniform sampler2D tColor, tAux, tDepth;
-uniform vec2 uRes, uARes;
+uniform vec2 uRes, uARes, uPx;   // sheet size in pixels, ink buffer size in texels, one pixel in the ink buffer's uv
+#ifdef HERO
+uniform sampler2D tHero;
+uniform vec4 uRect;              // the hero window on the sheet, in uv: origin, size
+uniform vec2 uFill, uRectPx;     // share of the hero buffers the window fills, and its origin in pixels
+#endif
 uniform float uS, uSc, uLineW, uWobble, uBoil, uBoilTime, uNear, uFar, uTime;
 uniform float uGrain, uPaperLeft, uFrame, uWash;
 uniform vec3 uInk, uPaper, uFoam, uMist, uCamPos;
@@ -27,16 +45,25 @@ const vec2 OFFS[8] = vec2[8](
   vec2(1., 0.), vec2(.707, .707), vec2(0., 1.), vec2(-.707, .707),
   vec2(-1., 0.), vec2(-.707, -.707), vec2(0., -1.), vec2(.707, -.707));
 
+#ifdef HERO
+// the hero buffers hold one window: a read past its edge takes the edge, as a read past the screen's edge does
+vec2 inWindow(vec2 uv){ return clamp(uv, .5 / uARes, uFill - .5 / uARes); }
+#else
+#define inWindow(uv) (uv)
+#endif
 float invZ(vec2 uv){
-  float z = textureLod(tDepth, uv, 0.).x * 2. - 1.;
+  float z = textureLod(tDepth, inWindow(uv), 0.).x * 2. - 1.;
   return (uFar + uNear - z * (uFar - uNear)) / (2. * uNear * uFar);
 }
 bool solid(float id){ return id >= .002 && id <= .998; }
+// A hero's texel in the merged ink buffer: its normal is stored 2 higher (see palette.js).
+float heroAt(vec4 t){ return step(1.5, t.x); }
 
-// The pen at one point inside a pixel: (ink, foam). r: pen half-width in ink texels,
+// The pen at one point inside a pixel: (ink, foam, hero texels touched). r: pen half-width in ink texels,
 // de: how hard the depth steps across each of the four tap pairs (worked out once per pixel).
-vec2 penAt(vec2 uv, vec2 apx, float r, vec4 de, float inner, float weight, float nearK){
-  vec4 aux = textureLod(tAux, uv, 0.);
+vec3 penAt(vec2 uv, vec2 apx, float r, vec4 de, float inner, float weight, float nearK){
+  vec4 aux = textureLod(tAux, inWindow(uv), 0.);
+  float hit = 0.;
   float idc = aux.a;
   bool waterC = idc < .002;
   bool skyC = idc > .998;
@@ -48,8 +75,11 @@ vec2 penAt(vec2 uv, vec2 apx, float r, vec4 de, float inner, float weight, float
   float foam = 0.;
   for (int i = 0; i < 4; i++) {
     vec2 oa = OFFS[i] * r * apx;
-    vec4 a = textureLod(tAux, uv + oa, 0.);
-    vec4 b = textureLod(tAux, uv - oa, 0.);
+    vec4 a = textureLod(tAux, inWindow(uv + oa), 0.);
+    vec4 b = textureLod(tAux, inWindow(uv - oa), 0.);
+#ifdef HERO
+    hit += heroAt(a) + heroAt(b);
+#endif
     for (int k = 0; k < 2; k++) {
       vec4 t = k == 0 ? a : b;
       bool waterT = t.a < .002;
@@ -74,13 +104,16 @@ vec2 penAt(vec2 uv, vec2 apx, float r, vec4 de, float inner, float weight, float
   // the white line where things sit in the water reaches a little further than the pen
   if (waterC) {
     for (int i = 0; i < 4; i++) {
-      vec4 a = textureLod(tAux, uv + OFFS[i * 2 + 1] * r * 1.7 * apx, 0.);
+      vec4 a = textureLod(tAux, inWindow(uv + OFFS[i * 2 + 1] * r * 1.7 * apx), 0.);
       if (a.a >= .002 && a.b > .48) foam += 1.;
+#ifdef HERO
+      hit += heroAt(a);
+#endif
     }
   }
   float eS = smoothstep(.05, .21, inkS / 8.);
   float eI = smoothstep(.08, .3, inkI / 8.) * .64 * inner;
-  return vec2(max(eS, eI), smoothstep(.04, .3, foam / 8.) * mix(.55, 1., nearK));
+  return vec3(max(eS, eI), smoothstep(.04, .3, foam / 8.) * mix(.55, 1., nearK), hit);
 }
 
 void main(){
@@ -88,14 +121,23 @@ void main(){
   vec2 asp = vec2(uRes.x / uRes.y, 1.);
   vec2 q = vUv * asp;
 
+#ifdef HERO
+  // the hero at the exact pixel centre, over the world behind it (smoothed up to the window's size)
+  vec2 aUv = (vUv - uRect.xy) / uRect.zw * uFill;
+  vec4 hero = texelFetch(tHero, ivec2(gl_FragCoord.xy - uRectPx), 0);
+  vec3 col = texture(tColor, vUv).rgb * (1. - hero.a) + hero.rgb;
+#else
   // colour at the exact pixel centre: nothing is resampled
+  vec2 aUv = vUv;
   vec3 col = texelFetch(tColor, ivec2(gl_FragCoord.xy), 0).rgb;
+#endif
 
   // ---- pen ----
   vec2 apx = 1. / uARes;
-  vec4 aux = textureLod(tAux, vUv, 0.);
+  vec4 aux = textureLod(tAux, inWindow(aUv), 0.);
+  float hit = heroAt(aux);                   // hero texels this pixel's pen touches (hero pass only)
   bool plain = !solid(aux.a);                // open water or sky: no depth needed to know nothing is here
-  float wc = plain ? 1. / uFar : invZ(vUv);
+  float wc = plain ? 1. / uFar : invZ(aUv);
   float nearK = plain ? 1. : 1. - smoothstep(5., 110., 1. / wc);
   // pen half-width in ink-buffer texels (before its thick-and-thin), and how far a line may wander
   float rBase = uLineW * uSc * uS;
@@ -109,9 +151,12 @@ void main(){
   float sv = aux.b;
   float w4[4];
   for (int i = 0; i < 4; i++) {
-    vec2 uvt = vUv + OFFS[i * 2 + 1] * Rp * apx;
-    vec4 a = textureLod(tAux, uvt, 0.);
-    vec4 b = textureLod(tAux, vUv + OFFS[i * 2] * Rp * .55 * apx, 0.);
+    vec2 uvt = aUv + OFFS[i * 2 + 1] * Rp * apx;
+    vec4 a = textureLod(tAux, inWindow(uvt), 0.);
+    vec4 b = textureLod(tAux, inWindow(aUv + OFFS[i * 2] * Rp * .55 * apx), 0.);
+#ifdef HERO
+    hit += heroAt(a) + heroAt(b);
+#endif
     if (abs(a.a - aux.a) > .0003 || distance(a.xy, aux.xy) > .16 || abs(b.a - aux.a) > .0003 || distance(b.xy, aux.xy) > .16) busy = true;
     if (plain) {
       if (wNear == 0.) {
@@ -133,7 +178,7 @@ void main(){
     float weight = .5 + .5 * sin(s * 8. + 2.);
     // optional line boil (off by default): the whole drawing re-wobbles a few times a second
     if (uBoil > 0.) wob += (vnoise4(q * 13. + floor(uBoilTime * 7.) * 5.3).xy - .5) * 2.4 * uSc * uS;
-    vec2 uv = vUv + wob * apx;
+    vec2 uv = aUv + wob * apx;
     // depth is read once per pixel: the pen's width here, real depth steps across each tap pair
     // (planar surfaces are linear in 1/z, so this only fires on true steps), and how far the line's owner is
     float wq = invZ(uv);
@@ -151,10 +196,10 @@ void main(){
       de[i] = smoothstep(.012, .03, abs(wa + wb - 2. * wq) / wq);
       zmin = min(zmin, 1. / max(wa, wb));
     }
-    vec2 pen;
+    vec3 pen;
     if (uS > 1.2) {
       // four points inside the pixel, a quarter pixel out from its centre: one per ink texel at 2x
-      vec2 h = .25 / uRes;
+      vec2 h = .25 * uPx;
       pen = (penAt(uv + h, apx, r, de, inner, weight, nk) + penAt(uv - h, apx, r, de, inner, weight, nk)
            + penAt(uv + vec2(h.x, -h.y), apx, r, de, inner, weight, nk) + penAt(uv + vec2(-h.x, h.y), apx, r, de, inner, weight, nk)) * .25;
     } else {
@@ -171,7 +216,12 @@ void main(){
     }
     col = mix(col, mix(uInk, uMist * .6, smoothstep(50., 520., zmin) * .85), ink);
     col = mix(col, uFoam, pen.y);
+    hit += pen.z;
   }
+#ifdef HERO
+  // only what a hero touches is written: the hero, its lines, its foam. The rest of the window keeps the world.
+  if (hit + hero.a <= 0.) discard;
+#endif
 
   // pause: the painting is washed back toward paper
   col = mix(col, uPaper, uWash);
@@ -203,6 +253,34 @@ void main(){
 }`;
 
 const INK_TEXEL_BUDGET = 9.5e6; // twice the screen each way at 1920x1080, 1.6x at 2560x1440, 1.07x at 3840x2160
+const HERO_INK_TEXEL_BUDGET = 9.5e6; // a hero window gets two ink texels a pixel until it passes 2.4 million pixels (1780 x 1335)
+
+// The world's ink and depth under a hero window, copied into the hero's own buffers before the heroes are drawn.
+// Depth is smoothed between the world's texels (it is linear across a flat surface, so a waterline or a
+// footprint stays a clean line however small the world was drawn). Ink ids are never blended.
+const PREFILL = /* glsl */ `
+precision highp float;
+uniform sampler2D tAux, tDepth;
+uniform vec2 uARes;
+uniform vec4 uRect;
+varying vec2 vUv;
+void main(){
+  vec2 uv = uRect.xy + vUv * uRect.zw;
+  ivec2 top = ivec2(uARes) - 1;
+  vec2 p = uv * uARes - .5;
+  vec2 f = fract(p);
+  ivec2 i = ivec2(floor(p));
+  float d00 = texelFetch(tDepth, clamp(i, ivec2(0), top), 0).x;
+  float d10 = texelFetch(tDepth, clamp(i + ivec2(1, 0), ivec2(0), top), 0).x;
+  float d01 = texelFetch(tDepth, clamp(i + ivec2(0, 1), ivec2(0), top), 0).x;
+  float d11 = texelFetch(tDepth, clamp(i + ivec2(1, 1), ivec2(0), top), 0).x;
+  gl_FragDepth = mix(mix(d00, d10, f.x), mix(d01, d11, f.x), f.y);
+  gl_FragColor = texelFetch(tAux, clamp(ivec2(uv * uARes), ivec2(0), top), 0);
+}`;
+
+// A hero buffer is kept a little larger than its window, so a window that grows or shrinks a few pixels a
+// frame (the camera turning, a paddle swinging) does not rebuild it.
+const roomFor = (room, need) => (need > room || need < room * 0.4 ? Math.ceil((need * 1.2) / 64) * 64 : room);
 
 export function createPost(renderer, camera) {
   // colour: 4x multisampled, resolved by the renderer when the pass ends
@@ -211,8 +289,8 @@ export function createPost(renderer, camera) {
     depthBuffer: true,
     resolveDepthBuffer: false,
     generateMipmaps: false,
-    minFilter: THREE.NearestFilter,
-    magFilter: THREE.NearestFilter,
+    minFilter: THREE.LinearFilter, // the world's own pen reads exact pixels; the hero pass smooths it up to the window
+    magFilter: THREE.LinearFilter,
   });
 
   // ink buffer: view normal.xy, near-water flag + the object's pen-wobble value, ink id
@@ -232,14 +310,35 @@ export function createPost(renderer, camera) {
     magFilter: THREE.LinearFilter,
   });
 
-  const uniforms = {
-    tColor: { value: color.texture },
-    tAux: { value: aux.texture },
-    tDepth: { value: aux.depthTexture },
+  // the finished world, when it is drawn at another size than the window: stretched onto the canvas
+  const sheet = new THREE.WebGLRenderTarget(4, 4, {
+    depthBuffer: false,
+    generateMipmaps: false,
+    minFilter: THREE.LinearFilter,
+    magFilter: THREE.LinearFilter,
+  });
+
+  // the heroes' own buffers: one window's worth, at the window's size
+  const heroColor = new THREE.WebGLRenderTarget(4, 4, {
+    samples: 4,
+    depthBuffer: true,
+    resolveDepthBuffer: false,
+    generateMipmaps: false,
+    minFilter: THREE.NearestFilter,
+    magFilter: THREE.NearestFilter,
+  });
+  const heroAux = new THREE.WebGLRenderTarget(4, 4, {
+    type: THREE.HalfFloatType,
+    depthBuffer: true,
+    generateMipmaps: false,
+    minFilter: THREE.NearestFilter,
+    magFilter: THREE.NearestFilter,
+  });
+  heroAux.depthTexture = new THREE.DepthTexture(4, 4);
+
+  // what both pens share: the pen's settings, the paper, the palette
+  const shared = {
     tNoise: GU.tNoise,
-    uRes: { value: new THREE.Vector2(4, 4) },
-    uARes: { value: new THREE.Vector2(4, 4) },
-    uS: { value: 2 },
     uSc: GU.uSc,
     uLineW: { value: 1.3 },
     uWobble: { value: 1.5 }, // pixels (at 1080p) a line may sit off the true edge
@@ -260,6 +359,30 @@ export function createPost(renderer, camera) {
     uFoam: GU.uFoam, // the time-of-day palette
     uMist: GU.uFogColor,
   };
+  const uniforms = {
+    ...shared,
+    tColor: { value: color.texture },
+    tAux: { value: aux.texture },
+    tDepth: { value: aux.depthTexture },
+    uRes: { value: new THREE.Vector2(4, 4) },
+    uARes: { value: new THREE.Vector2(4, 4) },
+    uPx: { value: new THREE.Vector2(0.25, 0.25) },
+    uS: { value: 2 },
+  };
+  const heroUniforms = {
+    ...shared,
+    tColor: { value: color.texture },
+    tHero: { value: heroColor.texture },
+    tAux: { value: heroAux.texture },
+    tDepth: { value: heroAux.depthTexture },
+    uRes: { value: new THREE.Vector2(4, 4) },
+    uARes: { value: new THREE.Vector2(4, 4) },
+    uPx: { value: new THREE.Vector2(0.25, 0.25) },
+    uS: { value: 2 },
+    uRect: { value: new THREE.Vector4(0, 0, 1, 1) },
+    uFill: { value: new THREE.Vector2(1, 1) },
+    uRectPx: { value: new THREE.Vector2() },
+  };
   const material = new THREE.ShaderMaterial({
     uniforms,
     vertexShader: 'varying vec2 vUv; void main(){ vUv = position.xy * .5 + .5; gl_Position = vec4(position.xy, 0., 1.); }',
@@ -267,89 +390,285 @@ export function createPost(renderer, camera) {
     depthTest: false,
     depthWrite: false,
   });
+  const heroMaterial = new THREE.ShaderMaterial({
+    uniforms: heroUniforms,
+    defines: { HERO: 1 },
+    vertexShader: 'uniform vec4 uRect; varying vec2 vUv; void main(){ vUv = uRect.xy + (position.xy * .5 + .5) * uRect.zw; gl_Position = vec4(vUv * 2. - 1., 0., 1.); }',
+    fragmentShader: COMPOSITE,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const prefillUniforms = {
+    tAux: { value: aux.texture },
+    tDepth: { value: aux.depthTexture },
+    uARes: uniforms.uARes,
+    uRect: heroUniforms.uRect,
+  };
+  const prefillMaterial = new THREE.ShaderMaterial({
+    uniforms: prefillUniforms,
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = position.xy * .5 + .5; gl_Position = vec4(position.xy, 0., 1.); }',
+    fragmentShader: PREFILL,
+    depthTest: true,
+    depthFunc: THREE.AlwaysDepth,
+    depthWrite: true,
+  });
+  const blitMaterial = new THREE.ShaderMaterial({
+    uniforms: { tSheet: { value: sheet.texture } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = position.xy * .5 + .5; gl_Position = vec4(position.xy, 0., 1.); }',
+    fragmentShader: 'uniform sampler2D tSheet; varying vec2 vUv; void main(){ gl_FragColor = vec4(texture2D(tSheet, vUv).rgb, 1.); }',
+    depthTest: false,
+    depthWrite: false,
+  });
+
   const tri = new THREE.BufferGeometry();
   tri.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
-  const quad = new THREE.Mesh(tri, material);
-  quad.frustumCulled = false;
-  const postScene = new THREE.Scene();
-  postScene.add(quad);
+  const square = new THREE.BufferGeometry();
+  square.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, 1, 1, 0, -1, 1, 0], 3));
+  const sceneOf = (geometry, shader) => {
+    const mesh = new THREE.Mesh(geometry, shader);
+    mesh.frustumCulled = false;
+    const scene = new THREE.Scene();
+    scene.add(mesh);
+    return scene;
+  };
+  const postScene = sceneOf(tri, material);
+  const blitScene = sceneOf(tri, blitMaterial);
+  const heroScene = sceneOf(square, heroMaterial);
+  // The prefill rides in the heroes' own group, drawn before them, and shows only during the hero pass.
+  const prefill = new THREE.Mesh(tri, prefillMaterial);
+  prefill.frustumCulled = false;
+  prefill.renderOrder = -1;
+  prefill.visible = false;
   const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
-  const state = { w: 4, h: 4, inkScale: 2, reflScale: 1, inkW: 4, inkH: 4 };
+  // w, h: the world's drawing size. sheetW, sheetH: the window's (the canvas). hero*: the hero buffers and the last frame's windows.
+  const state = {
+    w: 4, h: 4, inkScale: 2, reflScale: 1, inkW: 4, inkH: 4,
+    sheetW: 4, sheetH: 4, fine: 1,
+    heroRoomW: 0, heroRoomH: 0, heroInkScale: 2, heroWindows: [], heroFine: 0, heroDrawnW: 0, heroDrawnH: 0,
+  };
+  const bench = { draws: 1, pass: '', discard: false };
+  const clearColour = new THREE.Color();
+  // ?bench: a pass drawn again over itself is dropped by the driver unless something reads it first. This reads it.
+  const keepTarget = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: false });
+  const keepMaterial = new THREE.ShaderMaterial({
+    uniforms: { tKeep: { value: null } },
+    vertexShader: 'void main(){ gl_Position = vec4(position.xy, 0., 1.); }',
+    fragmentShader: 'uniform sampler2D tKeep; void main(){ gl_FragColor = texture2D(tKeep, vec2(.5)); }',
+    depthTest: false,
+    depthWrite: false,
+  });
+  const keepScene = sceneOf(tri, keepMaterial);
+  const keep = (target) => {
+    keepMaterial.uniforms.tKeep.value = target.texture;
+    renderer.setRenderTarget(keepTarget);
+    renderer.render(keepScene, postCam);
+    renderer.setRenderTarget(target);
+  };
+
+  // The hero buffers are shared by every window of the frame: make them fit the widest and the tallest.
+  function fitHeroBuffers(windows) {
+    const w = Math.max(...windows.map((win) => win.w));
+    const h = Math.max(...windows.map((win) => win.h));
+    const s = Math.max(1, Math.min(2, Math.sqrt(HERO_INK_TEXEL_BUDGET / (w * h))));
+    const roomW = roomFor(state.heroRoomW, w);
+    const roomH = roomFor(state.heroRoomH, h);
+    if (roomW === state.heroRoomW && roomH === state.heroRoomH && s === state.heroInkScale) return;
+    Object.assign(state, { heroRoomW: roomW, heroRoomH: roomH, heroInkScale: s });
+    heroColor.setSize(roomW, roomH);
+    heroAux.setSize(Math.round(roomW * s), Math.round(roomH * s));
+  }
+
+  // One hero window: the heroes at the window's size, the world's ink and depth under them, then the pen.
+  function drawHeroWindow(heroes, cam, win) {
+    const { x, y, w, h } = win;
+    const { sheetW, sheetH } = state;
+    const s = state.heroInkScale;
+    const inkW = Math.round(w * s);
+    const inkH = Math.round(h * s);
+    heroColor.viewport.set(0, 0, w, h);
+    heroColor.scissor.set(0, 0, w, h);
+    heroColor.scissorTest = true;
+    heroAux.viewport.set(0, 0, inkW, inkH);
+    heroAux.scissor.set(0, 0, inkW, inkH);
+    heroAux.scissorTest = true;
+
+    const u = heroUniforms;
+    u.uRes.value.set(sheetW, sheetH);
+    u.uARes.value.set(heroAux.width, heroAux.height);
+    u.uFill.value.set(inkW / heroAux.width, inkH / heroAux.height);
+    u.uPx.value.set(inkW / heroAux.width / w, inkH / heroAux.height / h);
+    u.uS.value = inkH / h;
+    u.uRect.value.set(x / sheetW, y / sheetH, w / sheetW, h / sheetH);
+    u.uRectPx.value.set(x, y);
+
+    // the camera looks through the window alone, at the window's own pixels
+    cam.setViewOffset(sheetW, sheetH, x, sheetH - y - h, w, h);
+    prefill.visible = true;
+
+    GU.uPass.value = 0;
+    prefillMaterial.colorWrite = false;
+    renderer.setRenderTarget(heroColor);
+    renderer.clear();
+    renderer.render(heroes, cam);
+
+    GU.uPass.value = 1;
+    GU.uHero.value = 1;
+    prefillMaterial.colorWrite = true;
+    renderer.setRenderTarget(heroAux);
+    renderer.clear();
+    renderer.render(heroes, cam);
+    GU.uPass.value = 0;
+    GU.uHero.value = 0;
+
+    prefill.visible = false;
+    cam.clearViewOffset();
+
+    renderer.setRenderTarget(null);
+    renderer.render(heroScene, postCam);
+    // what was really drawn for this window, for the probe: the hero colour buffer's own pixels
+    state.heroDrawnW = heroColor.viewport.z;
+    state.heroDrawnH = heroColor.viewport.w;
+  }
 
   return {
     uniforms,
-    pen: uniforms, // the pen's own settings (uLineW, uWobble, uBoil) live with the composite
+    pen: shared, // the pen's own settings (uLineW, uWobble, uBoil) are shared by the world's pen and the heroes'
     reflection: refl.texture,
     resolution: uniforms.uRes.value,
     state,
-    // w, h: drawing size. reflScale: reflection size against the drawing. inkMax: most ink texels per pixel, each way.
-    setSize(w, h, reflScale = 1, inkMax = 2) {
+    bench,
+    // w, h: the world's drawing size. reflScale: reflection size against the drawing. inkMax: most ink texels per pixel, each way.
+    // sheetW, sheetH: the window's size in pixels (the canvas). fine: the world's fine strokes, 0 or 1.
+    setSize(w, h, reflScale = 1, inkMax = 2, sheetW = w, sheetH = h, fine = 1) {
       const s = Math.max(1, Math.min(inkMax, Math.sqrt(INK_TEXEL_BUDGET / (w * h))));
       const iw = Math.round(w * s);
       const ih = Math.round(h * s);
-      Object.assign(state, { w, h, inkScale: ih / h, reflScale, inkW: iw, inkH: ih });
+      Object.assign(state, { w, h, inkScale: ih / h, reflScale, inkW: iw, inkH: ih, sheetW, sheetH, fine });
       color.setSize(w, h);
       aux.setSize(iw, ih);
       refl.setSize(Math.max(2, Math.round(w * reflScale)), Math.max(2, Math.round(h * reflScale)));
+      if (w !== sheetW || h !== sheetH) sheet.setSize(w, h);
       uniforms.uRes.value.set(w, h);
       uniforms.uARes.value.set(iw, ih);
+      uniforms.uPx.value.set(1 / w, 1 / h);
       uniforms.uS.value = ih / h;
     },
     // share the water's drift, so the foam's dry-brush breaks ride on the water
     linkWater(driftUniform) {
+      shared.uDrift = driftUniform;
       uniforms.uDrift = driftUniform;
+      heroUniforms.uDrift = driftUniform;
     },
     // overlay: an optional scene of world-anchored marks, drawn over the finished sheet.
     // reflect: false skips the mirrored pass (water detail "low").
     // onPass(pass): called before each scene pass (2 reflection, 0 colour, 1 ink), so the caller can thin out what the mirror sees.
-    render(scene, cam, water, overlay = null, reflect = true, onPass = null) {
-      uniforms.uNear.value = cam.near;
-      uniforms.uFar.value = cam.far;
+    // heroes: the group holding the crew and the canoe (a child of the scene), or null to leave them in the world.
+    // heroWindows: where they are on the window, in pixels from the bottom left: [{ x, y, w, h }].
+    render(scene, cam, water, overlay = null, reflect = true, onPass = null, heroes = null, heroWindows = []) {
+      shared.uNear.value = cam.near;
+      shared.uFar.value = cam.far;
+      // ?bench=N draws every pass N times; &benchpass=<name> only that pass. The slope against N is the pass's true cost.
+      const times = (name) => (bench.pass === '' || bench.pass === name ? bench.draws : 1);
+      // pen widths and stroke sizes are in pixels of whatever is being drawn: the world's size here, the window's for the heroes
+      const tangent = 2 * Math.tan((cam.fov * Math.PI) / 360);
+      GU.uSc.value = state.h / 1080;
+      GU.uPxK.value = tangent / state.h;
+      GU.uFine.value = state.fine;
+      if (heroes && prefill.parent !== heroes) heroes.add(prefill);
+
       if (reflect) {
-        // mirrored world below the waterline
+        // mirrored world below the waterline (the heroes are in it: they reflect)
         GU.uFlip.value = -1;
         GU.uPass.value = 2;
         if (onPass) onPass(2);
         water.visible = false;
         scene.scale.y = -1;
+        wearMaterials(scene, 'mirror');
         renderer.setRenderTarget(refl);
-        renderer.clear();
-        renderer.render(scene, cam);
+        for (let draw = times('reflection'); draw > 0; draw -= 1) {
+          renderer.clear();
+          renderer.render(scene, cam);
+          if (draw > 1) keep(refl);
+        }
         scene.scale.y = 1;
         water.visible = true;
         GU.uFlip.value = 1;
+        if (!bench.discard) wearMaterials(scene, 'plain');
       }
 
+      // the world, without the heroes
+      if (heroes) heroes.visible = false;
       GU.uPass.value = 0;
       if (onPass) onPass(0);
       renderer.setRenderTarget(color);
-      renderer.clear();
-      renderer.render(scene, cam);
+      for (let draw = times('colour'); draw > 0; draw -= 1) {
+        renderer.clear();
+        renderer.render(scene, cam);
+        if (draw > 1) keep(color);
+      }
 
       GU.uPass.value = 1;
       renderer.setRenderTarget(aux);
-      renderer.clear();
-      renderer.render(scene, cam);
+      for (let draw = times('ink'); draw > 0; draw -= 1) {
+        renderer.clear();
+        renderer.render(scene, cam);
+        if (draw > 1) keep(aux);
+      }
       GU.uPass.value = 0;
+      if (heroes) heroes.visible = true;
 
       // the composite rebuilds each pixel's place on the water from the camera, for the foam breaks
       const e = cam.matrixWorld.elements;
       const ty = Math.tan((cam.fov * Math.PI) / 360);
       const tx = ty * cam.aspect;
-      uniforms.uCamPos.value.setFromMatrixPosition(cam.matrixWorld);
-      uniforms.uRay.value.set(e[0] * tx, e[4] * ty, -e[8], e[1] * tx, e[5] * ty, -e[9], e[2] * tx, e[6] * ty, -e[10]);
+      shared.uCamPos.value.setFromMatrixPosition(cam.matrixWorld);
+      shared.uRay.value.set(e[0] * tx, e[4] * ty, -e[8], e[1] * tx, e[5] * ty, -e[9], e[2] * tx, e[6] * ty, -e[10]);
 
-      renderer.setRenderTarget(null);
+      // the world's pen: straight onto the canvas at the window's size, or onto its own sheet, then stretched
+      const stretched = state.w !== state.sheetW || state.h !== state.sheetH;
+      for (let draw = times('composite'); draw > 1; draw -= 1) {
+        if (sheet.width !== state.w || sheet.height !== state.h) sheet.setSize(state.w, state.h);
+        renderer.setRenderTarget(sheet);
+        renderer.render(postScene, postCam);
+        keep(sheet);
+      }
+      renderer.setRenderTarget(stretched ? sheet : null);
       renderer.render(postScene, postCam);
-      if (overlay) renderer.render(overlay, cam);
+      if (stretched) {
+        renderer.setRenderTarget(null);
+        renderer.render(blitScene, postCam);
+      }
+
+      // the heroes, at the window's size, with every stroke
+      state.heroWindows = heroes ? heroWindows : [];
+      state.heroFine = heroes ? 1 : 0;
+      state.heroDrawnW = 0;
+      state.heroDrawnH = 0;
+      if (heroes && heroWindows.length > 0) {
+        GU.uSc.value = state.sheetH / 1080;
+        GU.uPxK.value = tangent / state.sheetH;
+        GU.uFine.value = 1;
+        renderer.getClearColor(clearColour);
+        const clearAlpha = renderer.getClearAlpha();
+        renderer.setClearColor(0x000000, 0);
+        fitHeroBuffers(heroWindows);
+        for (let draw = times('hero'); draw > 0; draw -= 1) for (const win of heroWindows) drawHeroWindow(heroes, cam, win);
+        renderer.setClearColor(clearColour, clearAlpha);
+        GU.uSc.value = state.h / 1080;
+        GU.uPxK.value = tangent / state.h;
+        GU.uFine.value = state.fine;
+      }
+
+      if (overlay) {
+        renderer.setRenderTarget(null);
+        renderer.render(overlay, cam);
+      }
     },
     dispose() {
-      color.dispose();
-      aux.dispose();
-      refl.dispose();
-      tri.dispose();
-      material.dispose();
+      prefill.removeFromParent();
+      for (const target of [color, aux, refl, sheet, heroColor, heroAux, keepTarget]) target.dispose();
+      for (const item of [tri, square, material, heroMaterial, prefillMaterial, blitMaterial, keepMaterial]) item.dispose();
     },
   };
 }

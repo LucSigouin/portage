@@ -81,6 +81,7 @@ export const GU = {
   uFlip: { value: 1 }, // -1 while the mirrored reflection pass renders
   uPass: { value: 0 }, // 0 colour, 1 ink buffer (normal, id, line wobble), 2 reflection colour (no fine pen work)
   uFine: { value: 1 }, // fine strokes and hatching; the frame-rate ladder turns them off before it touches resolution
+  uHero: { value: 0 }, // 1 while the hero pass fills its ink buffer: hero texels are marked, so the pen knows what a hero touches
   uHatch: { value: 1 },
   uPxK: { value: 0.00086 }, // metres per pixel per metre of distance (set on resize)
   uSc: { value: 1 }, // drawing height / 1080: pen widths scale with the sheet
@@ -170,7 +171,7 @@ flat in vec4 vInfo;
 flat in float vSpent;
 layout(location = 0) out vec4 o0;
 uniform vec3 uLightDir, uPaper, uShadowTint, uFogColor, uLight;
-uniform float uFogDensity, uFlip, uTime, uFine, uHatch, uPxK, uSc;
+uniform float uFogDensity, uFlip, uTime, uFine, uHatch, uPxK, uSc, uHero;
 uniform int uPass;
 ${NOISE}
 ${DETAIL}
@@ -183,7 +184,12 @@ uniform vec2 uBeds;   // bedding spacing, joint spacing (metres)
 #endif
 const vec3 INK = ${glsl(PAL.ink)};
 void main(){
+#ifdef MIRROR
+  // the mirrored pass keeps only what stands above the water. Only the mirror's twin of each material has this
+  // line: a shader that can discard is shaded before the graphics card knows what hides it, so the colour and
+  // ink passes go without it and shade each pixel once.
   if (uFlip < 0. && vWorld.y > 0.) discard;
+#endif
   vec3 P = vec3(vWorld.x, vWorld.y * uFlip, vWorld.z);
   vec3 O = vObj;                       // every texture below rides on the object, not the world or the screen
   vec3 gn = normalize(vN);
@@ -218,7 +224,8 @@ void main(){
     vec2 wq = O.xz + O.y * vec2(1.21, .87);
     float wv = mix(vnoise(wq * f0 + 7.), vnoise(wq * f0 * .5 + 7.), lw - l0);
     // b: near-water flag in the top half, the pen-wobble value in the bottom
-    o0 = vec4(vn.xy * .5 + .5, nearWater * .5 + wv * .45, id);
+    // (a hero's normal.x is stored 2 higher: a mark the pen reads, see post.js. Normals only ever meet as differences.)
+    o0 = vec4(vn.x * .5 + .5 + uHero * 2., vn.y * .5 + .5, nearWater * .5 + wv * .45, id);
     return;
   }
 
@@ -323,7 +330,7 @@ void main(){
   c = mix(c, mix(base, uPaper, .2), bHi);
   // pen hatching in the shadow tone, cut through the object so it stays put when the camera turns
   float hatch = (1. - bLo) * (1. - glow) * uHatch * fine * (1. - smoothstep(25., 150., dist));
-  if (uHatch * fine > 0.) c = mix(c, INK, hatchLines(hc, hg, dot(O, HATCH_ALONG), uSc) * hatch * .42);
+  if (hatch > 0.) c = mix(c, INK, hatchLines(hc, hg, dot(O, HATCH_ALONG), uSc) * hatch * .42);   // (no hatching in the light or far off: nothing to work out)
   // pigment: slow blooms, then granulation at two sizes, each fading before it would turn to noise
   float bloom = slow.g;
   float gran1 = vnoise(O.xz * 7. + O.y * 5.);
@@ -338,14 +345,29 @@ void main(){
   o0 = vec4(c, 1.);
 }`;
 
+// Each material has a twin for the mirrored pass (userData.mirror, and userData.plain back): the same shader
+// and the same uniforms, plus the line that cuts everything off at the waterline.
 function make(defines, extra) {
-  return new THREE.ShaderMaterial({
+  const uniforms = extra ? { ...GU, ...extra } : GU;
+  const [plain, mirror] = [defines, { ...defines, MIRROR: 1 }].map((variant) => new THREE.ShaderMaterial({
     glslVersion: THREE.GLSL3,
     vertexShader: VERT,
     fragmentShader: FRAG,
-    uniforms: extra ? { ...GU, ...extra } : GU,
-    defines,
+    uniforms,
+    defines: variant,
     side: THREE.DoubleSide,
+  }));
+  plain.userData.mirror = mirror;
+  mirror.userData.plain = plain;
+  plain.addEventListener('dispose', () => mirror.dispose());
+  return plain;
+}
+
+// Put every mesh under `root` in its mirror material ('mirror') or back in its own ('plain').
+export function wearMaterials(root, which) {
+  root.traverse((object) => {
+    const twin = object.material?.userData[which];
+    if (twin) object.material = twin;
   });
 }
 
