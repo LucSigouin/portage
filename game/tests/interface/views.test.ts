@@ -15,7 +15,7 @@ import { applyDebugParameters } from '../../src/client/debug/index.ts';
 import { SHOT_NAMES, parseDebugParameters } from '../../src/client/debug/parameters.ts';
 import { collectIntents, collectText, h } from '../../src/interface/dom.ts';
 import type { ViewNode } from '../../src/interface/dom.ts';
-import { toolIcon } from '../../src/interface/icons.ts';
+import { itemIcon } from '../../src/interface/icons.ts';
 import {
   confirmView, debugView, hintView, hotbarView, lobbyView, notesView, panelView, promptView, toastsView, vitalsView,
 } from '../../src/interface/views.ts';
@@ -236,7 +236,7 @@ describe('the Ink & Wash views', () => {
 
   it('has an icon for every tool on the belt', () => {
     for (const toolId of ['bailing_can', 'stone_knife', 'hatchet', 'pry_bar', 'saw', 'hammer', 'fishing_rod', 'wrench'] as const) {
-      expect(toolIcon(toolId)).toContain('<svg');
+      expect(itemIcon(toolId)).toContain('<svg');
     }
   });
 });

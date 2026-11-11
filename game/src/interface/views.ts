@@ -13,9 +13,14 @@ import type {
 } from '../client/contracts.ts';
 import { control, h } from './dom.ts';
 import type { ViewChild, ViewNode } from './dom.ts';
-import { ICON, SEAL, logotype, toolIcon, waterGauge } from './icons.ts';
+import type { ItemId } from '../data/index.ts';
+import { ICON, SEAL, itemIcon, logotype, waterGauge } from './icons.ts';
 
 const icon = (markup: string, className = ''): ViewNode => h('i.iw-i', { class: className, html: markup, 'aria-hidden': 'true' });
+
+/** The drawing of an item, set before its name wherever the model names one. `data-item` says which. */
+const itemIconView = (itemId: ItemId, className = ''): ViewNode =>
+  h('i.iw-i.iw-item-ico', { class: className, html: itemIcon(itemId), 'aria-hidden': 'true', 'data-item': itemId });
 
 const classes = (...names: (string | false | null | undefined)[]): string => names.filter(Boolean).join(' ');
 
@@ -56,7 +61,8 @@ function objectivesView(objectives: ObjectiveRowModel[]): ViewNode {
 }
 
 const costsView = (costs: CostRowModel[]): ViewNode => h('div.iw-costs', null, costs.map((cost, index) =>
-  h('span.iw-cost', { key: index, class: cost.enough ? '' : 'iw-short' }, cost.name, ' ', h('b', null, `${cost.have}/${cost.need}`))));
+  h('span.iw-cost', { key: index, class: cost.enough ? '' : 'iw-short' },
+    itemIconView(cost.itemId), cost.name, ' ', h('b', null, `${cost.have}/${cost.need}`))));
 
 // --- Lobby -------------------------------------------------------------------------
 
@@ -117,21 +123,22 @@ export function promptView(prompt: PromptModel): ViewNode[] {
 }
 
 export function hotbarView(hotbar: HotbarSlotModel[]): ViewNode[] {
-  return [h('div.iw-hotbar', { key: 'hotbar' }, hotbar.map((slot) => (slot.intent && slot.toolId
+  return [h('div.iw-hotbar', { key: 'hotbar' }, hotbar.map((slot) => (slot.intent && slot.itemId
     // The number keys pick these; they stay out of the Tab order so Tab stays the game's.
     ? control(h('button.iw-slot.iw-paper', {
       key: slot.number, type: 'button', tabindex: -1, class: slot.selected ? 'iw-selected' : '', title: slot.name,
       'aria-label': `${slot.keyLabel}: ${slot.name}`, 'aria-pressed': String(slot.selected),
     },
     h('span.iw-n', null, slot.keyLabel),
-    icon(toolIcon(slot.toolId)),
+    itemIconView(slot.itemId),
     slot.selected ? h('span.iw-nm', null, slot.name) : null,
     slot.selected ? h('i.iw-underline') : null), slot.intent)
     : h('div.iw-slot.iw-empty', { key: slot.number }, h('span.iw-n', null, slot.keyLabel)))))];
 }
 
 export const toastsView = (toasts: ToastModel[]): ViewNode[] => toasts.map((toast) =>
-  h('div.iw-toast', { key: toast.id, class: `iw-toast-${toast.tone}`, role: 'status' }, h('i.iw-dab'), h('span', null, toast.text)));
+  h('div.iw-toast', { key: toast.id, class: `iw-toast-${toast.tone}`, role: 'status' }, h('i.iw-dab'),
+    toast.itemId ? itemIconView(toast.itemId) : null, h('span', null, toast.text)));
 
 export function debugView(debug: DebugModel): ViewNode[] {
   const lines = debug.showFrameRate
@@ -252,6 +259,7 @@ function itemRowsView(slots: ItemSlotModel[]): ViewNode[] {
     const occurrence = seen.get(slot.itemId) ?? 0;
     seen.set(slot.itemId, occurrence + 1);
     return h('li.iw-item', { key: `${slot.itemId}-${occurrence}` },
+      itemIconView(slot.itemId),
       h('div.iw-entry-text', null,
         h('b', null, slot.name), ' ', h('span.iw-count', null, `× ${slot.count}`),
         h('small', null, slot.description)),
@@ -262,7 +270,11 @@ function itemRowsView(slots: ItemSlotModel[]): ViewNode[] {
 function inventoryView(panel: Extract<PanelModel, { id: 'inventory' }>): ViewNode[] {
   return sheet(panel, 'wide', panel.stationsText, h('div.iw-body', { key: 'body' },
     panel.pendingRewards ? h('div.iw-reward', { key: 'reward' },
-      h('span', null, panel.pendingRewards.text), buttonView(panel.pendingRewards.claim, 'button.iw-btn.iw-go')) : null,
+      h('div.iw-reward-text', null,
+        h('span', null, panel.pendingRewards.text),
+        h('div.iw-costs', null, panel.pendingRewards.items.map((item, index) =>
+          h('span.iw-cost', { key: index }, itemIconView(item.itemId), item.name, ' ', h('b', null, `× ${item.count}`))))),
+      buttonView(panel.pendingRewards.claim, 'button.iw-btn.iw-go')) : null,
     h('div.iw-columns', { key: 'columns' },
       h('section', null,
         h('h3', null, panel.backpack.label),
@@ -275,20 +287,21 @@ function inventoryView(panel: Extract<PanelModel, { id: 'inventory' }>): ViewNod
         h('h3', null, 'Tool belt'),
         panel.tools.length > 0 ? h('div.iw-belt', null, panel.tools.map((tool) => control(h('button.iw-slot.iw-paper.iw-tool', {
           key: tool.toolId, type: 'button', class: tool.selected ? 'iw-selected' : '', 'aria-pressed': String(tool.selected),
-        }, icon(toolIcon(tool.toolId)), h('span.iw-tool-name', null, tool.name), tool.selected ? h('i.iw-underline') : null), tool.intent)))
+        }, itemIconView(tool.itemId), h('span.iw-tool-name', null, tool.name), tool.selected ? h('i.iw-underline') : null), tool.intent)))
           : h('p.iw-soft', null, 'No tools')),
       h('section', null,
         h('div.iw-pack-actions', null, buttonView(panel.stow, 'button.iw-btn'), buttonView(panel.fillWater, 'button.iw-btn')),
         panel.keyItems.length > 0 ? [
           h('h3.iw-next', { key: 'key-items-heading' }, 'Key items'),
           h('ul.iw-key-items', { key: 'key-items' }, panel.keyItems.map((item, index) =>
-            h('li', { key: index }, item.name, ' ', h('span.iw-count', null, `× ${item.count}`)))),
+            h('li', { key: index }, itemIconView(item.itemId), item.name, ' ', h('span.iw-count', null, `× ${item.count}`)))),
         ] : null))));
 }
 
 function recipeView(recipe: RecipeRowModel): ViewNode {
   return h('li.iw-entry', { key: recipe.recipeId, class: recipe.known ? '' : 'iw-unknown' },
     h('div.iw-entry-text', null,
+      recipe.itemId ? itemIconView(recipe.itemId, 'iw-lead') : null,
       h('b', null, recipe.name), ' ', h('span.iw-count', null, recipe.outputText),
       recipe.known ? null : h('small.iw-kind', null, 'not learned'),
       h('small', null, recipe.description),

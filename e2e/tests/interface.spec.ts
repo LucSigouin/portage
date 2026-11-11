@@ -7,6 +7,7 @@
  * - a settings change and a key rebind made by keyboard work end to end and survive a reload;
  * - a slider drag and the keyboard focus survive frames that redraw the panel (the DOM is diffed, not rebuilt);
  * - with the inventory open the interface adds under half a millisecond a frame, and the whole frame's work stays under 6 ms;
+ * - every row that names an item shows that item's icon, sharp and inside its card at every size;
  * - nothing on screen moves by itself, and opening a panel moves nothing else.
  *
  * Needs the dev server on http://localhost:5220, or PORTAGE_URL.
@@ -698,6 +699,137 @@ test('with the inventory open, the interface adds under half a millisecond and t
   expect(median(work)).toBeLessThan(6);
   expect(interfaceOnly.median).toBeLessThan(0.5);
   expect(median(rates)).toBeGreaterThanOrEqual(55);
+  expect(problems).toEqual([]);
+});
+
+// --- Item icons --------------------------------------------------------------------
+
+/**
+ * Run in the page: every row of the model that names an item, against the icons drawn for them.
+ * A row names an item with `itemId`; the icon beside it carries the same id as `data-item`.
+ */
+function itemIconProblems(): { problems: string[]; named: number; smallest: number } {
+  const problems: string[] = [];
+  const model = (window as any).portage.app.lastModel;
+  const named: string[] = [];
+  const walk = (value: unknown): void => {
+    if (Array.isArray(value)) value.forEach(walk);
+    else if (value !== null && typeof value === 'object') {
+      for (const [key, entry] of Object.entries(value)) {
+        // An intent may carry an item id too: that is what a button does, not a row that names an item.
+        if (key === 'itemId') { if (entry !== null) named.push(entry as string); } else if (key !== 'intent') walk(entry);
+      }
+    }
+  };
+  const panel = model.panel ? structuredClone(model.panel) : null;
+  // What is already bolted on does not show its bill of materials.
+  if (panel?.id === 'canoe_builder') for (const row of [panel.hull, ...panel.attachments]) if (row?.built) delete row.costs;
+  walk({ hotbar: model.hud?.hotbar, toasts: model.toasts, panel });
+
+  const icons = [...document.querySelectorAll<HTMLElement>('.iw [data-item]')];
+  const drawn = icons.map((icon) => icon.dataset.item!);
+  if (JSON.stringify([...drawn].sort()) !== JSON.stringify([...named].sort())) {
+    problems.push(`the model names ${JSON.stringify([...named].sort())} but the page draws ${JSON.stringify([...drawn].sort())}`);
+  }
+
+  const drawingOf = new Map<string, string>();
+  let smallest = Infinity;
+  for (const icon of icons) {
+    const id = icon.dataset.item!;
+    const picture = icon.querySelector('svg.iw-ico');
+    if (!picture) {
+      problems.push(`${id}: no drawing`);
+      continue;
+    }
+    // One drawing per item, the same wherever it appears.
+    const known = drawingOf.get(id);
+    if (known !== undefined && known !== icon.innerHTML) problems.push(`${id}: drawn two different ways`);
+    drawingOf.set(id, icon.innerHTML);
+
+    const box = picture.getBoundingClientRect();
+    smallest = Math.min(smallest, box.width);
+    if (Math.abs(box.width - box.height) > 0.5) problems.push(`${id}: not square (${box.width} x ${box.height})`);
+    if (box.width < 15) problems.push(`${id}: too small to read (${box.width.toFixed(1)} px)`);
+    // Sharp at any size: live vector strokes, never a picture of them, never blurred or faded.
+    if (picture.querySelector('image, foreignObject, animate, animateTransform, set')) problems.push(`${id}: holds a raster or an animation`);
+    for (let element: Element | null = picture; element && !element.matches('.iw'); element = element.parentElement) {
+      const style = getComputedStyle(element);
+      if (style.filter !== 'none') problems.push(`${id}: drawn through a filter on ${element.tagName.toLowerCase()}.${element.className}`);
+      if (style.animationName !== 'none') problems.push(`${id}: animated on ${element.tagName.toLowerCase()}.${element.className}`);
+    }
+    const pen = picture.querySelector('.iw-pen');
+    const stroke = pen ? Number.parseFloat(getComputedStyle(pen).strokeWidth) : 0;
+    if (stroke !== 1.5) problems.push(`${id}: pen weight ${stroke}`);
+
+    // Inside its card, and not under the edge of the screen.
+    const card = icon.closest('.iw-panel, .iw-toast, .iw-slot');
+    const cardBox = card?.getBoundingClientRect();
+    const scroller = icon.closest('.iw-body');
+    if (!cardBox) problems.push(`${id}: not on a card`);
+    else if (box.left < cardBox.left - 0.5 || box.right > cardBox.right + 0.5 || (!scroller && (box.top < cardBox.top - 0.5 || box.bottom > cardBox.bottom + 0.5))) {
+      problems.push(`${id}: spills out of its card`);
+    }
+    if (box.left < 0 || box.right > window.innerWidth) problems.push(`${id}: off the screen`);
+
+    // The icon comes first, the words stay: the item's name follows it in the same row.
+    const row = icon.closest('.iw-cost, .iw-item, .iw-toast, .iw-key-items li, .iw-entry-text, .iw-slot')!;
+    const words = (row.textContent ?? '').trim();
+    const label = row.getAttribute('aria-label') ?? '';
+    if (words === '' && label === '') problems.push(`${id}: an icon with no words beside it`);
+    const range = document.createRange();
+    const texts = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+    for (let node = texts.nextNode(); node; node = texts.nextNode()) {
+      if (!(node.textContent ?? '').trim() || node.parentElement!.closest('.iw-n, .iw-nm, .iw-tool-name, svg')) continue;
+      range.selectNodeContents(node);
+      const first = range.getClientRects()[0];
+      if (first && first.left < box.right - 1 && first.top < box.bottom && first.bottom > box.top) problems.push(`${id}: its words run under the icon`);
+      break;
+    }
+  }
+  // Different items never share a drawing.
+  const seen = new Map<string, string>();
+  for (const [id, drawing] of drawingOf) {
+    const other = seen.get(drawing);
+    if (other) problems.push(`${id} and ${other} are the same drawing`);
+    seen.set(drawing, id);
+  }
+  return { problems, named: named.length, smallest };
+}
+
+test('every row that names an item shows its icon: hotbar, inventory, crafting, builder and loot notes, at every size', async ({ page }) => {
+  const problems = watch(page);
+  const views = ['play', 'inventory', 'crafting', 'builder', 'upgraded'].map((name) => SHOTS.find((shot) => shot.name === name)!);
+  for (const size of [{ width: 1280, height: 720 }, { width: 1920, height: 1080 }, { width: 2560, height: 1440 }, { width: 3840, height: 2160 }]) {
+    await page.setViewportSize(size);
+    for (const view of views) {
+      await show(page, view);
+      const result = await page.evaluate(itemIconProblems);
+      expect(result.problems, `${view.name} at ${size.width}x${size.height}`).toEqual([]);
+      expect(result.named, `${view.name}: rows that name an item`).toBeGreaterThan(0);
+      // At 4K the smallest icon is still drawn from its strokes, three times the size it has at 720p.
+      if (size.width === 3840) expect(result.smallest, `${view.name}: smallest icon at 4K`).toBeGreaterThanOrEqual(45);
+      expect(await page.evaluate(() => document.getAnimations().filter((animation) => animation.playState === 'running').length)).toBe(0);
+    }
+  }
+
+  // A loot note: drop a stack on the island and the note that reports it carries the item's icon.
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await show(page, { name: 'island, live', query: '?shot=island&live', shows: '.iw-prompt' });
+  const send = (intent: unknown): Promise<void> => page.evaluate((value) => (window as any).portage.session.handleIntent(value), intent);
+  await send({ type: 'open_panel', panel: 'inventory' });
+  await frames(page, 3);
+  const dropped = await session<{ itemId: string; intent: unknown }>(page, `(() => {
+    const slot = portage.app.lastModel.panel.backpack.slots.find((entry) => entry.itemId !== null);
+    return { itemId: slot.itemId, intent: slot.buttons.find((button) => button.label === 'Drop').intent };
+  })()`);
+  await send(dropped.intent);
+  await frames(page, 3);
+  const accept = await session<unknown>(page, 'portage.app.lastModel.confirm ? portage.app.lastModel.confirm.accept.intent : null');
+  if (accept) await send(accept);
+  await frames(page, 3);
+  await expect(page.locator(`.iw-toast [data-item="${dropped.itemId}"] svg.iw-ico`)).toBeVisible();
+  const withNote = await page.evaluate(itemIconProblems);
+  expect(withNote.problems, 'a loot note over the inventory').toEqual([]);
   expect(problems).toEqual([]);
 });
 
