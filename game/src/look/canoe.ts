@@ -175,6 +175,7 @@ export class CanoeView {
         halfBeam: dimensions.beam / 2,
         gunwaleY: dimensions.depth - dimensions.draft,
         mount: transform.position,
+        rotation: transform.rotation,
       });
       const holder = new THREE.Group();
       holder.position.set(...transform.position);
