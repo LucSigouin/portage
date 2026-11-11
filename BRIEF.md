@@ -18,7 +18,8 @@ Working name. Browser survival-crafting game. Source of truth for every worker.
 
 - **Co-op, up to 4 players.** The rules are shaped for 4 players now. The networking comes after the solo game is finished. Solo is co-op with one player.
   - One shared canoe with a crew of up to four. Anyone aboard can paddle, bail, fish or craft. On an island everyone walks off on their own.
-  - Each player has their own hunger, thirst, energy, backpack and tool belt. The canoe, its cargo, the quests and the world are shared.
+  - Each player has their own hunger, thirst, energy and backpack. The canoe, its cargo, the quests and the world are shared.
+  - Tools belong to the crew. Once a tool is found or made, everyone can use it (Luc, 2026-11-11: "once the tool is found or created everyone can use it").
   - A player at 0 energy wakes alone at the respawn point. A capsize takes everyone aboard.
   - Later: the host's browser runs the game, a small relay on Cloudflare passes messages, friends join by a link on sigouin.net.
 - **The player never goes blurry and never loses drawn detail**, at any zoom and any window size. This holds for every crew member, and (Claude's call) for the canoe they sit in. Everything else may shed detail when frames run long.
