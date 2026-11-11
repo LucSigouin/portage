@@ -344,14 +344,16 @@ test('the ladder climbs back after a slow spell, and never changes twice within 
   expect((await probe(page)).ladder.changes.length).toBe(changes.length);
 });
 
-for (const [shot, windowsAtLeast] of [['island', 1], ['play', 1]] as const) {
-  test(`the whole crew is drawn (${shot}, a made-up crew of four)`, async ({ page }) => {
+// A crew of three ashore stands far enough apart for two hero windows in one frame: both are drawn through the same buffers.
+for (const [shot, crew, windowsAtLeast] of [['island', 4, 1], ['island', 3, 2], ['play', 4, 1]] as const) {
+  test(`the whole crew is drawn (${shot}, a made-up crew of ${crew})`, async ({ page }) => {
     const problems = watchConsole(page);
-    await open(page, `shot=${shot}&fakecrew=4`);
+    await open(page, `shot=${shot}&fakecrew=${crew}&rung=8&hold=1`);
     const look = await probe(page);
-    console.log(`${shot}, crew of four: ${look.hero.crew} figures, hero windows ${look.hero.windows.map((window) => `${window.w}×${window.h}`).join(' ')}`);
-    expect(look.hero.crew).toBe(4);
+    console.log(`${shot}, crew of ${crew}: ${look.hero.crew} figures, hero windows ${look.hero.windows.map((window) => `${window.w}×${window.h}`).join(' ')}`);
+    expect(look.hero.crew).toBe(crew);
     expect(look.hero.windows.length).toBeGreaterThanOrEqual(windowsAtLeast);
+    expect(look.hero.pixelsPerCanvasPixel).toBe(1);
     expect(problems).toEqual([]);
   });
 }
