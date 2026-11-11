@@ -6,18 +6,24 @@ import { THIN } from './geo.js';
 import { PAL } from './palette.js';
 import { KIND } from './detail.js';
 
-function boughGeo(r, h, n, rand, lx = 0, lz = 0) {
-  const pos = [0, h, 0];
+// `coarse` keeps every random draw and every second point of each ring (the long tips of the outer one):
+// the same bough with half the triangles, for trees a few hundred metres off.
+function boughGeo(r, h, n, rand, lx = 0, lz = 0, coarse = false) {
+  const inner = [];
+  const outer = [];
   for (let k = 0; k < n; k++) {
     const a = (k / n) * Math.PI * 2 + rand() * 0.3;
     const rr = r * 0.5 * (0.85 + rand() * 0.3);
-    pos.push(Math.cos(a) * rr + lx * 0.4, h * 0.42, Math.sin(a) * rr + lz * 0.4);
+    if (!coarse || k % 2 === 1) inner.push(Math.cos(a) * rr + lx * 0.4, h * 0.42, Math.sin(a) * rr + lz * 0.4);
   }
   for (let k = 0; k < n; k++) {
     const a = ((k + 0.5) / n) * Math.PI * 2 + rand() * 0.3;
     const rr = r * (k % 2 ? 1.18 : 0.66) * (0.86 + rand() * 0.3);
-    pos.push(Math.cos(a) * rr + lx, (k % 2 ? -0.2 : 0.12) * h + (rand() - 0.5) * h * 0.18, Math.sin(a) * rr + lz);
+    const drop = (k % 2 ? -0.2 : 0.12) * h + (rand() - 0.5) * h * 0.18;
+    if (!coarse || k % 2 === 1) outer.push(Math.cos(a) * rr + lx, coarse ? drop * 0.5 : drop, Math.sin(a) * rr + lz);
   }
+  n = inner.length / 3;
+  const pos = [0, h, 0, ...inner, ...outer];
   const idx = [];
   for (let k = 0; k < n; k++) {
     const k1 = (k + 1) % n;
@@ -34,7 +40,7 @@ function boughGeo(r, h, n, rand, lx = 0, lz = 0) {
 
 const WIND = -1; // boughs, flags and smoke lean toward -x
 
-export function spruce(b, x, y, z, H, rand) {
+export function spruce(b, x, y, z, H, rand, coarse = false) {
   b.cyl(0.03, 0.1 + H * 0.007, H, PAL.bark, { pos: [x, y + H / 2, z], kind: KIND.BARK }, 6);
   const k = Math.round(6 + H * 0.35);
   const y0 = H * 0.2;
@@ -46,24 +52,25 @@ export function spruce(b, x, y, z, H, rand) {
     const hh = ((H - y0) / k) * 2.0;
     const yy = y + y0 + f * (H - y0) * 0.98 - hh * 0.35;
     const colr = [PAL.pine, PAL.pineDark, PAL.pine, '#567264'][i % 4];
-    b.add(boughGeo(r, hh, 12 + (i % 2), rand, WIND * 0.14 * r, 0), colr, { pos: [x + lean * f, yy, z], rot: [0, rand() * 6.28, 0], kind: KIND.NEEDLE });
+    b.add(boughGeo(r, hh, 12 + (i % 2), rand, WIND * 0.14 * r, 0, coarse), colr, { pos: [x + lean * f, yy, z], rot: [0, rand() * 6.28, 0], kind: KIND.NEEDLE });
   }
 }
 
-export function whitePine(b, x, y, z, H, rand) {
+export function whitePine(b, x, y, z, H, rand, coarse = false) {
   const lx = WIND * (0.7 + rand() * 0.5);
   const pt = (f) => [x + lx * f * f, y - 0.4 + (H + 0.4) * f, z + Math.sin(f * 3) * 0.15];
   let prev = pt(0);
   for (let i = 1; i <= 6; i++) {
     const p = pt(i / 6);
-    b.beam(prev, p, 0.16 - (i - 1) * 0.022, PAL.bark, { r2: 0.16 - i * 0.022, id: 0.07, kind: KIND.BARK }, 7);
+    b.beam(prev, p, 0.16 - (i - 1) * 0.022, PAL.bark, { r2: 0.16 - i * 0.022, id: 0.07, kind: KIND.BARK }, coarse ? 5 : 7);
     prev = p;
   }
   // dead stubs low on the trunk
   for (let i = 0; i < 3; i++) {
     const p = pt(0.2 + i * 0.09);
     const s = i % 2 ? 1 : -1;
-    b.beam(p, [p[0] + s * (0.5 + rand() * 0.5), p[1] + 0.25, p[2] + (rand() - 0.5) * 0.6], 0.035, PAL.bark, { r2: 0.012, id: 0.07, kind: KIND.BARK }, 5);
+    const stub = [p[0] + s * (0.5 + rand() * 0.5), p[1] + 0.25, p[2] + (rand() - 0.5) * 0.6];
+    b.beam(p, stub, 0.035, PAL.bark, { r2: 0.012, id: 0.07, kind: KIND.BARK }, 5);
   }
   const tone = [PAL.pineDark, PAL.pine, '#567264', PAL.pine];
   const n = 8;
@@ -77,21 +84,22 @@ export function whitePine(b, x, y, z, H, rand) {
     const cz = p[2] + (rand() - 0.5) * 1.2 * taper;
     const r = (1.25 + rand() * 0.6) * taper + 0.25;
     b.beam(p, [cx, p[1] + 0.12, cz], 0.04, PAL.bark, { r2: 0.015, id: 0.07, kind: KIND.BARK }, 5);
-    b.add(boughGeo(r, 0.62, 9, rand, WIND * 0.3 * r, 0), tone[i % 4], { pos: [cx, p[1] - 0.12, cz], rot: [(rand() - 0.5) * 0.25, rand() * 6.28, (rand() - 0.5) * 0.25], scale: [1.25, 0.8, 0.9], kind: KIND.NEEDLE });
+    b.add(boughGeo(r, 0.62, 9, rand, WIND * 0.3 * r, 0, coarse), tone[i % 4], { pos: [cx, p[1] - 0.12, cz], rot: [(rand() - 0.5) * 0.25, rand() * 6.28, (rand() - 0.5) * 0.25], scale: [1.25, 0.8, 0.9], kind: KIND.NEEDLE });
   }
   const top = pt(1);
   b.add(boughGeo(0.75, 1.1, 8, rand, WIND * 0.25, 0), PAL.pine, { pos: [top[0], top[1] - 0.45, top[2]], kind: KIND.NEEDLE });
 }
 
-export function birch(b, x, y, z, H, rand) {
+export function birch(b, x, y, z, H, rand, coarse = false) {
   const lx = (rand() - 0.5) * 1.4;
   const lz = (rand() - 0.5) * 0.9;
   const pt = (f) => [x + lx * f * f, y - 0.3 + (H + 0.3) * f, z + lz * f];
   const pts = [pt(0), pt(0.35), pt(0.7), pt(1)];
-  const tid = b.tube(pts, 0.085, PAL.birch, { steps: 10, flat: true, kind: KIND.BIRCH }, 6);
+  const tid = b.tube(pts, 0.085, PAL.birch, { steps: coarse ? 5 : 10, flat: true, kind: KIND.BIRCH }, coarse ? 5 : 6);
   for (let i = 0; i < 6; i++) {
     const p = pt(0.07 + i * 0.12 + rand() * 0.04);
-    b.cyl(0.091, 0.091, 0.035 + rand() * 0.03, '#4c4741', { pos: p, id: tid, flat: true, kind: KIND.PLAIN }, 6);
+    const band = 0.035 + rand() * 0.03;
+    if (!coarse || i % 2 === 0) b.cyl(0.091, 0.091, band, '#4c4741', { pos: p, id: tid, flat: true, kind: KIND.PLAIN }, coarse ? 5 : 6);
   }
   const leaf = [PAL.ochre, PAL.ochreLight, '#c9ac45', PAL.ochre, '#dcb95a', PAL.ochreLight, '#bfa94c'];
   for (let i = 0; i < 7; i++) {
@@ -100,10 +108,11 @@ export function birch(b, x, y, z, H, rand) {
     const a = rand() * 6.28;
     const rr = 0.35 + rand() * 0.75;
     const r = 0.62 + rand() * 0.5;
-    b.sphere(r, leaf[i], { pos: [p[0] + Math.cos(a) * rr, p[1] + (rand() - 0.3) * 0.5, p[2] + Math.sin(a) * rr], scale: [1.25, 0.8, 1.1], rot: [0, rand() * 3, 0], kind: KIND.LEAF }, 9);
+    b.sphere(r, leaf[i], { pos: [p[0] + Math.cos(a) * rr, p[1] + (rand() - 0.3) * 0.5, p[2] + Math.sin(a) * rr], scale: [1.25, 0.8, 1.1], rot: [0, rand() * 3, 0], kind: KIND.LEAF }, coarse ? 6 : 9);
   }
   // a couple of bare twigs
   const m = pt(0.6);
+  if (coarse) return;
   b.beam(m, [m[0] + 0.7, m[1] + 0.8, m[2] + 0.2], 0.03, PAL.birch, { r2: 0.012, id: tid, kind: KIND.BIRCH }, 5);
   b.beam(m, [m[0] - 0.6, m[1] + 0.9, m[2] - 0.3], 0.03, PAL.birch, { r2: 0.012, id: tid, kind: KIND.BIRCH }, 5);
 }
@@ -122,7 +131,8 @@ export function snag(b, x, z, H, rand) {
 }
 
 // A drowned cottage roof, sunk and tilted. Built round the origin; b.root places it.
-export function cabinRoof(b) {
+// `plain` leaves out the single shakes and the trim: the same roof, for far off.
+export function cabinRoof(b, plain = false) {
   b.base = new THREE.Matrix4().compose(
     new THREE.Vector3(0, -0.5, 0),
     new THREE.Quaternion().setFromEuler(new THREE.Euler(0.05, 0, 0.1, 'YXZ')),
@@ -141,7 +151,7 @@ export function cabinRoof(b) {
       const w = (s1 - s0) * slope;
       const x = sd * 2.5 * (1 - sm);
       const y = -0.1 + 2.3 * sm + 0.03 + (c % 2) * 0.012;
-      const split = (c + (sd > 0 ? 1 : 0)) % 3 === 1;
+      const split = !plain && (c + (sd > 0 ? 1 : 0)) % 3 === 1;
       if (!split) {
         b.box(w, 0.06, 5.5 + (c % 2) * 0.12, shingle[(c + (sd > 0 ? 2 : 0)) % 5], { pos: [x, y, 0], rot: [0, 0, -sd * ang], kind: KIND.SHINGLE });
       } else {
@@ -154,6 +164,7 @@ export function cabinRoof(b) {
         }
       }
     }
+    if (plain) continue;
     // moss creeping over the shakes
     b.box(0.7, 0.05, 1.1, PAL.moss, { pos: [sd * 0.75, 1.62, sd * 1.4], rot: [0, 0.2, -sd * ang] });
     b.box(0.5, 0.05, 0.7, PAL.mossDeep, { pos: [sd * 1.5, 0.95, -sd * 1.9], rot: [0, -0.3, -sd * ang] });
@@ -163,11 +174,17 @@ export function cabinRoof(b) {
   for (const ez of [-2.62, 2.62]) {
     const tones = ['#8a6f55', '#7c644d', '#927659'];
     let q = 0;
-    for (let y = -0.35; y < 2.0; y += 0.27) {
+    for (let y = -0.35; y < 2.0; y += plain ? 0.81 : 0.27) {
       const hw = 2.3 * (1 - (y + 0.22) / 2.3);
       if (hw < 0.12) break;
-      b.box(hw * 2, 0.25, 0.14, tones[q++ % 3], { pos: [0, y + 0.125, ez] });
+      // the south gable's lower boards are stove in: the way into the attic
+      if (ez > 0 && y < 0.7) {
+        if (!plain) for (const sd of [-1, 1]) b.box(hw - 0.75, 0.25, 0.14, tones[q++ % 3], { pos: [sd * (hw + 0.75) / 2, y + 0.125, ez] });
+        continue;
+      }
+      b.box(hw * 2, plain ? 0.79 : 0.25, 0.14, tones[q++ % 3], { pos: [0, y + (plain ? 0.395 : 0.125), ez] });
     }
+    if (plain) continue;
     b.box(0.62, 0.62, 0.06, PAL.cream, { pos: [0, 0.95, ez + Math.sign(ez) * 0.08], kind: KIND.PAINT });
     b.box(0.46, 0.46, 0.08, '#3d4048', { pos: [0, 0.95, ez + Math.sign(ez) * 0.1], flat: true, kind: KIND.PLAIN });
     b.box(0.05, 0.46, 0.1, PAL.cream, { pos: [0, 0.95, ez + Math.sign(ez) * 0.11], kind: KIND.PAINT });
@@ -183,7 +200,8 @@ export function cabinRoof(b) {
 
 
 // The church steeple, nave ridge barely above the water. Built round the origin; b.root places it.
-export function steeple(b) {
+// `bare` leaves the drowned nave's roof out: landmarks.ts builds a nave on the church hill's own ground.
+export function steeple(b, bare = false) {
   const WALL = { kind: KIND.SIDING, seed: 0.9 }; // clapboard courses, wide enough to read from the canoe
   b.box(4.4, 9, 4.4, '#ebe4d2', { pos: [0, 2.2, 0], ...WALL });
   b.box(5.0, 0.4, 5.0, '#d9d0bb', { pos: [0, 6.9, 0], kind: KIND.PLAIN });
@@ -206,7 +224,7 @@ export function steeple(b) {
   b.box(0.2, 2.2, 0.2, PAL.iron, { pos: [0, 21, 0] });
   b.box(1.1, 0.2, 0.2, PAL.iron, { pos: [0, 21.3, 0] });
   // nave roof
-  for (const sd of [-1, 1]) b.box(5.2, 0.3, 16, '#7d8b92', { pos: [sd * 1.9, 0.2, -11], rot: [0, 0, -sd * 0.72] });
+  if (!bare) for (const sd of [-1, 1]) b.box(5.2, 0.3, 16, '#7d8b92', { pos: [sd * 1.9, 0.2, -11], rot: [0, 0, -sd * 0.72] });
 }
 
 // A hydro pylon. Lattice steel is drawn as bare pen lines (never outlined): at a distance an outline

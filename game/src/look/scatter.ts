@@ -29,9 +29,24 @@ export interface Placement {
 
 /** Ground kept clear round each landmark, metres. */
 export const LANDMARK_CLEARANCE: Record<LandmarkKind, number> = {
-  lean_to: 3.5, campfire: 3, stump_bench: 2, cabin_roof: 5.5, birch_grove: 0, orchard_rows: 10, farmhouse: 7.5, boathouse: 8, dock: 5,
-  steeple: 6, silo: 5, pylon: 5, scrap_stack: 5.5, crane_arm: 3, reed_bed: 0, truss_span: 6, quarry_cut: 4, fire_tower: 4, dam_wall: 6,
-  gatehouse: 5, radio_tower: 5, keeper_hut: 4.5, bedroll: 2, forge_hearth: 3,
+  lean_to: 4, campfire: 3.2, stump_bench: 3, cabin_roof: 5.5, birch_grove: 0, orchard_rows: 11.5, farmhouse: 9, boathouse: 8.5, dock: 4,
+  steeple: 6.5, silo: 5.5, pylon: 5.5, scrap_stack: 6.5, crane_arm: 4.5, reed_bed: 0, truss_span: 6, quarry_cut: 6, fire_tower: 5, dam_wall: 8,
+  gatehouse: 5, radio_tower: 5, keeper_hut: 5, bedroll: 2, forge_hearth: 4,
+};
+
+/**
+ * Landmarks that are longer than a circle: more ground kept clear, as circles [x, z, radius] in the
+ * landmark's own frame (x to its right, -z its front). The nave, the dock, the boathouse's slip, the
+ * crane's boom, a truss span, the quarry's benches and the dam's wall.
+ */
+export const LANDMARK_FOOTPRINT: Partial<Record<LandmarkKind, [number, number, number][]>> = {
+  steeple: [[0, -5, 6], [0, -11, 6]],
+  dock: Array.from({ length: 8 }, (_, index): [number, number, number] => [0, 4 + index * 4, 3]),
+  boathouse: [[-3.6, 7, 3], [-3.6, 12, 3], [-6.5, 0, 3]],
+  crane_arm: [[0, -4, 3], [0, -8, 3]],
+  truss_span: Array.from({ length: 11 }, (_, index): [number, number, number] => [0, -40 + index * 8, 6]),
+  quarry_cut: [-20, -10, 0, 10, 20].flatMap((x): [number, number, number][] => [[x, -13, 7], [x, -5, 7], [x, 3, 7]]),
+  dam_wall: Array.from({ length: 29 }, (_, index): [number, number, number] => [2, -140 + index * 10, 10]),
 };
 
 const MAXIMUM_TREES = 260;
@@ -77,6 +92,14 @@ export function keepOutCircles(island: IslandDefinition): Circle[] {
     if (radius <= 0) continue;
     const spot = spotPosition(island, landmark.spot);
     circles.push({ x: spot.x, z: spot.z, radius });
+  }
+  for (const landmark of island.landmarks) {
+    const spot = spotPosition(island, landmark.spot);
+    // The world view's turn: a landmark's own x and z, on the island.
+    const turn = -(landmark.bearing + island.rotation);
+    for (const [x, z, radius] of LANDMARK_FOOTPRINT[landmark.kind] ?? []) {
+      circles.push({ x: spot.x + x * Math.cos(turn) + z * Math.sin(turn), z: spot.z - x * Math.sin(turn) + z * Math.cos(turn), radius });
+    }
   }
   for (const node of NODES_BY_ISLAND[island.id] ?? []) circles.push({ x: node.position.x, z: node.position.z, radius: 2.4 });
   for (const npcId of NPC_IDS) {
