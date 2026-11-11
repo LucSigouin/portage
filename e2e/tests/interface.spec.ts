@@ -401,6 +401,35 @@ test('every control on every menu, panel and dialog is reached and pressed by ke
   expect(problems).toEqual([]);
 });
 
+test('the compass strip moves in whole degrees while the model carries fractions', async ({ page }) => {
+  const problems = watch(page);
+  await show(page, { name: 'play', query: '?at=quest7', shows: '.iw-vitals' });
+  // Swing the camera a little: the heading is now some fraction of a degree.
+  await page.mouse.move(640, 400);
+  await page.mouse.down();
+  await page.mouse.move(700, 400, { steps: 6 });
+  await page.mouse.up();
+  await frames(page, 4);
+  const compass = await page.evaluate(() => {
+    const scope = window as unknown as { portage: { app: any } };
+    const model = scope.portage.app.lastModel.hud.compass;
+    const track = document.querySelector<HTMLElement>('.iw-track')!;
+    return {
+      modelHeading: model.headingDegrees as number,
+      drawnHeading: Number(track.style.getPropertyValue('--heading')),
+      drawnMarks: [...document.querySelectorAll<HTMLElement>('.iw-mark')].map((mark) => Number(mark.style.getPropertyValue('--at'))),
+    };
+  });
+  // The model is fine-grained, for a strip that will one day slide on a transform...
+  expect(Number.isInteger(compass.modelHeading)).toBe(false);
+  // ...and this strip, which restyles every tick when it moves, still moves a whole degree at a time.
+  // Writing fractions here redrew the compass every frame and cost the look its 55 frames a second.
+  expect(Number.isInteger(compass.drawnHeading)).toBe(true);
+  expect(Math.abs(compass.drawnHeading - compass.modelHeading)).toBeLessThanOrEqual(0.5);
+  for (const at of compass.drawnMarks) expect(Number.isInteger(at)).toBe(true);
+  expect(problems).toEqual([]);
+});
+
 test('Tab stays the game\'s key in play, Esc stays the session\'s, and the hotbar answers its number keys', async ({ page }) => {
   const problems = watch(page);
   await show(page, { name: 'play', query: '?at=quest7', shows: '.iw-vitals' });

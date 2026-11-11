@@ -71,9 +71,13 @@ class CompassStrip {
   }
 
   update(compass: CompassModel): void {
-    if (compass.headingDegrees !== this.heading) {
-      this.heading = compass.headingDegrees;
-      this.track.style.setProperty('--heading', String(compass.headingDegrees));
+    // The strip moves in whole degrees. The model carries fractions, for a strip that slides on a
+    // transform; this one restyles every tick and letter when `--heading` changes, and a change every
+    // frame cost frames (the look's 55 fps test went red). Round here until the compass is drawn that way.
+    const heading = Math.round(compass.headingDegrees) % 360;
+    if (heading !== this.heading) {
+      this.heading = heading;
+      this.track.style.setProperty('--heading', String(heading));
     }
 
     // The cardinal points ride on the track: they only need drawing when the model's set changes.
@@ -105,12 +109,14 @@ class CompassStrip {
         entry = { root, text: element('iw-mark-chip', root, 'span'), position: '', label: '' };
         this.markElements.set(mark.id, entry);
       }
-      const beyond = Math.abs(mark.relativeDegrees) > COMPASS_PIN;
-      const side = !beyond ? '' : mark.relativeDegrees < 0 ? 'left' : 'right';
-      const position = `${Math.max(-COMPASS_PIN, Math.min(COMPASS_PIN, mark.relativeDegrees))}|${side}`;
+      // Whole degrees here too, for the same reason.
+      const relative = Math.round(mark.relativeDegrees);
+      const beyond = Math.abs(relative) > COMPASS_PIN;
+      const side = !beyond ? '' : relative < 0 ? 'left' : 'right';
+      const position = `${Math.max(-COMPASS_PIN, Math.min(COMPASS_PIN, relative))}|${side}`;
       if (position !== entry.position) {
         entry.position = position;
-        entry.root.style.setProperty('--at', String(Math.max(-COMPASS_PIN, Math.min(COMPASS_PIN, mark.relativeDegrees))));
+        entry.root.style.setProperty('--at', String(Math.max(-COMPASS_PIN, Math.min(COMPASS_PIN, relative))));
         entry.root.classList.toggle('iw-off-left', side === 'left');
         entry.root.classList.toggle('iw-off-right', side === 'right');
       }
