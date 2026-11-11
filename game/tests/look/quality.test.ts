@@ -135,10 +135,12 @@ describe('quality ladder', () => {
       run(ladder, 400, frameSecondsAt);
       expect(ladder.changes.length).toBeGreaterThan(1);
       for (let index = 1; index < ladder.changes.length; index += 1) {
-        expect(ladder.changes[index].at - ladder.changes[index - 1].at).toBeGreaterThanOrEqual(LADDER_REST_SECONDS);
+        // Ten, written out: Luc's rule, not whatever the constant happens to say.
+        expect(ladder.changes[index].at - ladder.changes[index - 1].at).toBeGreaterThanOrEqual(10);
       }
     }
-    expect(CLIMB_AFTER_SECONDS).toBeGreaterThanOrEqual(LADDER_REST_SECONDS);
+    expect(LADDER_REST_SECONDS).toBeGreaterThanOrEqual(10);
+    expect(CLIMB_AFTER_SECONDS).toBeGreaterThanOrEqual(10);
   });
 
   it('does not pump: a rung that runs long twice is left alone for the session', () => {
