@@ -11,7 +11,7 @@
   ],
   "name": "Portage",
   "pitch": "A browser survival-crafting game. The valley flooded. You have a leaky canoe, and you bolt what you build onto it.",
-  "updated": "2026-11-11, late afternoon",
+  "updated": "2026-11-11, evening",
   "status": {
     "done": [
       "Rules engine. Runs with no screen. 179 tests pass. A bot finishes the whole main quest.",
@@ -24,16 +24,17 @@
       "The rules handle up to 4 players sharing one canoe, and tools belong to the whole crew. Solo plays the identical game. F is the action key, the lantern is on L, scavenging takes one press.",
       "Item icons: a drawn icon beside every item name, 54 in all.",
       "The crew is drawn properly: each player in their own seat and their own colours, paddling, bailing, sleeping and walking for themselves. A far-away player keeps a fine outline. 629 tests pass, plus 58 browser tests.",
-      "Live on the web at https://sigouin.net/portage/ . Anyone with the link can play; search engines are asked not to list it."
+      "Live on the web at https://sigouin.net/portage/ . Anyone with the link can play; search engines are asked not to list it.",
+      "The canoe: four hull tiers you can tell apart, all 19 attachments drawn for this hull, and the three survivors as their own figures.",
+      "The valley: every landmark and scavenge node drawn, all 15 islands told apart by outline, 21% fewer triangles. 658 tests pass, plus 69 browser tests."
     ],
-    "running": [
-      "The canoe: four hull tiers you can tell apart, all 19 attachments, the three survivors (worker Skye).",
-      "The valley: every landmark, all 15 islands recognisable, every scavenge node (worker Rubble)."
-    ],
+    "running": [],
     "waiting": [
+      "Luc: say go to publish the canoe and the valley to sigouin.net/portage. The live copy is still the earlier build.",
+      { "text": "Luc: the starting canoe is now weathered grey, not red, so the rebuilt hull reads as a step up. Keep or bring the red back?", "href": "game/?shot=play" },
+      { "text": "Luc: look over the fully fitted canoe.", "href": "game/?shot=upgraded&live=1" },
+      { "text": "Luc: look over the islands. Paddle up to one and watch for the detail changing.", "href": "game/?at=quest8" },
       { "text": "Luc: look over the 54 item icons in the crafting panel.", "href": "game/?shot=crafting" },
-      { "text": "Luc: zoom out on an island and check the player stays sharp and fine-lined on your screen.", "href": "game/?shot=island&live=1" },
-      { "text": "Luc: see a crew of four in the canoe.", "href": "game/?crew=4" },
       "Luc: invite the guys to the private GitHub repo (github.com/LucSigouin/portage, Settings, Collaborators).",
       "Next: a crew list in the HUD, weather and night, a speed pass, then co-op networking."
     ]
