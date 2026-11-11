@@ -11,7 +11,7 @@
   ],
   "name": "Portage",
   "pitch": "A browser survival-crafting game. The valley flooded. You have a leaky canoe, and you bolt what you build onto it.",
-  "updated": "2026-11-11, late morning",
+  "updated": "2026-11-11, midday",
   "status": {
     "done": [
       "Rules engine. Runs with no screen. 179 tests pass. A bot finishes the whole main quest.",
@@ -21,10 +21,13 @@
       "Luc picked B2 on 2026-11-11. The game gets built in that look.",
       "Step 1 of 3: the real game now draws in B2, with the Ink & Wash lobby, menus and HUD on real game data. 477 tests pass, plus 31 browser tests that press real keys. The bot finishes the main quest in the new look."
     ],
-    "running": [],
+    "running": [
+      "Bug fix: the player and the canoe stay sharp at every zoom and window size, and the zoomed-out view gets faster (worker Skye). Luc saw the player go blurry when zooming out.",
+      "Co-op shape: the rules handle up to 4 players sharing one canoe. F becomes the action key, scavenging takes one press (worker Rex). Solo plays the same.",
+      "Next: item icons and the canoe content, then the islands and weather, then co-op networking on sigouin.net."
+    ],
     "waiting": [
-      { "text": "Luc: play the first 10 minutes in B2 and say whether anything moves in a way that bothers you.", "href": "game/?at=quest1" },
-      "Then step 2: the content (4 hulls, 19 attachments, 15 islands, 3 survivors). Then step 3: storms, night, lantern light and finish."
+      "Luc: a GitHub repo for the project. Private with the guys invited, or public?"
     ]
   },
   "addresses": [
