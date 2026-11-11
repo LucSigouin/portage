@@ -18,7 +18,10 @@ export const cargoRackPart: AttachmentBuilder = (context) => {
   const b = partBuilder(context, 104);
   const hull = hullOf(context);
   const [, y, z] = context.mount;
-  const [z0, z1] = [z - 0.5, z + 0.5];
+  // the shelves stop short of the stern paddler's feet
+  const [z0, z1] = [z - 0.5, Math.min(z + 0.5, hull.seat(0) - 0.72)];
+  /** A place along the shelves: 0 at their forward end, 1 at their aft end. */
+  const along = (share: number): number => z0 + (z1 - z0) * share;
   for (const side of [-1, 1]) {
     const outer = (at: number): number => hull.halfBeam(at) - 0.07;
     for (const [inset, tone] of [[0.1, PAL.woodLight], [0.035, PAL.wood]] as const) {
@@ -31,17 +34,17 @@ export const cargoRackPart: AttachmentBuilder = (context) => {
   }
   // port shelf, all of it under the paddling hand: a folded blanket, two tins, a flat crate
   const port = (at: number): number => -(hull.halfBeam(at) - 0.135);
-  b.box(0.1, 0.045, 0.36, PAL.cream, { pos: [port(z - 0.24), y + 0.031, z - 0.24], kind: KIND.CLOTH });
-  for (const strap of [-0.11, 0.11]) b.box(0.104, 0.049, 0.035, PAL.rust, { pos: [port(z - 0.24), y + 0.031, z - 0.24 + strap], kind: KIND.CLOTH });
-  for (const [at, colour] of [[0.07, PAL.tin], [0.17, PAL.ochre]] as const) b.cyl(0.04, 0.04, 0.06, colour, { pos: [port(z + at), y + 0.04, z + at], kind: KIND.METAL }, 8);
-  b.box(0.11, 0.08, 0.2, '#c9914b', { pos: [port(z + 0.36), y + 0.05, z + 0.36], kind: KIND.WOOD, axis: 2 });
-  b.box(0.115, 0.02, 0.205, PAL.rustDark, { pos: [port(z + 0.36), y + 0.07, z + 0.36] });
+  b.box(0.1, 0.045, 0.3, PAL.cream, { pos: [port(along(0.24)), y + 0.031, along(0.24)], kind: KIND.CLOTH });
+  for (const strap of [-0.09, 0.09]) b.box(0.104, 0.049, 0.035, PAL.rust, { pos: [port(along(0.24)), y + 0.031, along(0.24) + strap], kind: KIND.CLOTH });
+  for (const [share, colour] of [[0.55, PAL.tin], [0.66, PAL.ochre]] as const) b.cyl(0.04, 0.04, 0.06, colour, { pos: [port(along(share)), y + 0.04, along(share)], kind: KIND.METAL }, 8);
+  b.box(0.11, 0.08, 0.18, '#c9914b', { pos: [port(along(0.87)), y + 0.05, along(0.87)], kind: KIND.WOOD, axis: 2 });
+  b.box(0.115, 0.02, 0.185, PAL.rustDark, { pos: [port(along(0.87)), y + 0.07, along(0.87)] });
   // starboard shelf lies low, under the bailing arm: a folded tarp, a flat coil, a bundle of stakes
   const starboard = (at: number): number => hull.halfBeam(at) - 0.135;
-  b.box(0.12, 0.05, 0.3, PAL.canvasSage, { pos: [starboard(z - 0.26), y + 0.035, z - 0.26], kind: KIND.CLOTH });
-  b.box(0.125, 0.012, 0.03, PAL.woodDark, { pos: [starboard(z - 0.26), y + 0.062, z - 0.26] });
-  for (const [radius, lift] of [[0.05, 0.02], [0.036, 0.036]] as const) b.torus(radius, 0.014, ROPE, { pos: [starboard(z + 0.08), y + lift, z + 0.08], rot: [Math.PI / 2, 0, 0], kind: KIND.ROPE }, 12);
-  for (let stake = 0; stake < 3; stake += 1) b.beam([starboard(z + 0.2) - 0.03 + stake * 0.03, y + 0.03, z + 0.2], [starboard(z + 0.46) - 0.03 + stake * 0.03, y + 0.03, z + 0.46], 0.013, BAMBOO, {}, 5);
+  b.box(0.12, 0.05, 0.26, PAL.canvasSage, { pos: [starboard(along(0.22)), y + 0.035, along(0.22)], kind: KIND.CLOTH });
+  b.box(0.125, 0.012, 0.03, PAL.woodDark, { pos: [starboard(along(0.22)), y + 0.062, along(0.22)] });
+  for (const [radius, lift] of [[0.05, 0.02], [0.036, 0.036]] as const) b.torus(radius, 0.014, ROPE, { pos: [starboard(along(0.55)), y + lift, along(0.55)], rot: [Math.PI / 2, 0, 0], kind: KIND.ROPE }, 12);
+  for (let stake = 0; stake < 3; stake += 1) b.beam([starboard(along(0.68)) - 0.03 + stake * 0.03, y + 0.03, along(0.68)], [starboard(along(0.96)) - 0.03 + stake * 0.03, y + 0.03, along(0.96)], 0.013, BAMBOO, {}, 5);
   // the stack behind the thwart, as deep as the room before the first kneeler's knees
   const depth = clamp(hull.seat(2) - 0.36 + 0.06 - 0.14, 0.14, 0.2);
   const stack = -0.04 + depth / 2;
@@ -91,8 +94,10 @@ export const mapTablePart: AttachmentBuilder = (context) => {
   const hull = hullOf(context);
   const [, y] = context.mount;
   // it sits between the kneeler's back and the stern paddler's knees
-  const from = hull.seat(2) + 0.25;
-  const depth = clamp(hull.seat(0) - 0.66 - from, 0.24, 0.34);
+  // On the short hulls there is not room for both: the stern paddler, who is always aboard, comes first.
+  const end = hull.seat(0) - 0.64;
+  const from = Math.min(Math.max(hull.seat(2) + 0.25, end - 0.34), end - 0.24);
+  const depth = end - from;
   const z = from + depth / 2;
   const half = hull.halfBeam(z) + 0.03;
   b.box(half * 2, 0.028, depth, PAL.woodLight, { pos: [0, y, z], kind: KIND.WOOD, axis: 0 });
@@ -180,7 +185,7 @@ export const fishingRigPart: AttachmentBuilder = (context) => {
 export const canopyPart: AttachmentBuilder = (context) => {
   const hull = hullOf(context);
   const top = context.mount[1] + 1.0;
-  const hoops = [(hull.seat(2) + 0.22 + hull.seat(0) - 0.62) / 2, hull.seat(0) + 0.31];
+  const hoops = [Math.min((hull.seat(2) + 0.22 + hull.seat(0) - 0.62) / 2, hull.seat(0) - 0.76), hull.seat(0) + 0.31];
   const at = (z: number, angle: number, swell = 0): Triple => {
     const base = hull.gunwale(z) + 0.02;
     return [Math.cos(angle) * (hull.halfBeam(z) + 0.012 + swell), base + Math.sin(angle) * (top - base + swell), z];

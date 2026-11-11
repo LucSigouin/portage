@@ -239,10 +239,10 @@ describe('the fully fitted long canoe with a crew of four', () => {
   interface Hit { pose: Pose; seat: number; part: AttachmentId; limb: string }
 
   /** Every place a crew member's body is inside a piece, over a few seconds of that pose. `paddles` checks the paddles instead. */
-  function hits(tier: number, poses: Pose[], paddles = false): Hit[] {
+  function hits(tier: number, poses: Pose[], paddles = false, crew = 4): Hit[] {
     const found = new Map<string, Hit>();
     for (const pose of poses) {
-      const state = fitted(tier);
+      const state = fitted(tier, crew);
       for (const player of state.players) {
         player.paddling = pose === 'paddle';
         player.bailing = pose === 'bail';
@@ -295,6 +295,17 @@ describe('the fully fitted long canoe with a crew of four', () => {
   it('lets the two seated paddlers swing their paddles clear of every piece', () => {
     const inTheWay = hits(3, ['paddle', 'rest'], true).filter((hit) => hit.seat <= 1);
     expect(told(inTheWay)).toEqual([]);
+  });
+
+  it('on the ribbed hull, the lone paddler fits round everything it can carry', () => {
+    expect(told(hits(2, ['rest', 'paddle', 'bail', 'sleep'], false, 1))).toEqual([]);
+    expect(told(hits(2, ['rest', 'paddle'], true, 1))).toEqual([]);
+  });
+
+  it('on the ribbed hull, a bow paddler fits too, but for the firebox the rules mount on the bow seat', () => {
+    // Tier 2: the bow seat is at z = -1.269 and the firebox mount at z = -1.25. In the report.
+    const found = hits(2, ['rest', 'paddle', 'bail', 'sleep'], false, 2);
+    expect([...new Set(found.map((hit) => `seat ${hit.seat} in ${hit.part}`))].sort()).toEqual(['seat 1 in firebox']);
   });
 
   it('knows the one thing the drawing cannot solve: the kneelers\' paddles cross the outrigger decks', () => {

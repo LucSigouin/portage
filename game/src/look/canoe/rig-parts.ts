@@ -50,8 +50,9 @@ export const mastSailPart: AttachmentBuilder = (context) => {
   for (let turn = 0; turn < 3; turn += 1) b.torus(0.075 - turn * 0.011, 0.012, ROPE, { pos: [0.095 + turn * 0.011, 0.9 - turn * 0.011, z + 0.02], rot: [0, Math.PI / 2, 0.2 * turn], kind: KIND.ROPE }, 12);
   rig(b, [0.055, 1.02, z + 0.02], [0.04, top - 0.25, z + 0.03], 0.007);
   for (const side of [-1, 1]) rig(b, [0, throat + 0.28, z], [side * hull.halfBeam(z + 0.13), hull.gunwale(z + 0.13) + 0.04, z + 0.13]);
-  const stay = hull.bow * 0.8;
-  rig(b, [0, top - 0.22, z], [0, hull.gunwale(stay) + 0.05, stay]);
+  // the forestay comes down to the stem head, a hand to port of the lantern pole
+  const stay = hull.bow * 0.975;
+  rig(b, [0, top - 0.22, z], [-0.06, hull.gunwale(stay) + 0.06, stay]);
 
   // up: the gaff hoisted, the sail set
   const up = partBuilder(context, 122);
@@ -277,7 +278,8 @@ export const rainCatcherPart: AttachmentBuilder = (context) => {
   const b = partBuilder(context, 111);
   const hull = hullOf(context);
   const [x, y, z] = context.mount;
-  const [z0, z1] = [z - 0.22, z + 0.3];
+  // on the short hulls the frame starts behind the stern paddler's back
+  const [z0, z1] = [Math.max(z - 0.22, hull.seat(0) + 0.3), z + 0.3];
   const mid = (z0 + z1) / 2;
   // the frame leans out over the quarter: two long poles off the rail, two short ones off the deck
   const corners: Triple[] = [[x - 0.32, y + 0.3, z0], [x + 0.3, y + 0.14, z0], [x - 0.3, y + 0.34, z1], [x + 0.3, y + 0.18, z1]];
