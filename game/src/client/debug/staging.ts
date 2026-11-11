@@ -73,6 +73,7 @@ export function gameAtQuest(seed: number, number: number): GameState {
 
 function teleport(state: GameState, islandId: IslandId, x: number, z: number): void {
   state.players[0].mode = 'foot';
+  state.players[0].seat = null;
   state.players[0].islandId = islandId;
   state.players[0].position = { x, y: terrainHeight(x, z), z };
 }
@@ -95,6 +96,8 @@ function beachAt(state: GameState, islandId: IslandId): void {
 /** Put the canoe afloat with the player aboard. */
 function floatAt(state: GameState, x: number, z: number, heading: number): void {
   state.players[0].mode = 'canoe';
+  // The stern seat is the paddler's. Without it a staged crew would hand it to the next player.
+  state.players[0].seat = 0;
   state.players[0].islandId = null;
   state.players[0].position = { x, y: 0, z };
   state.players[0].heading = heading;
