@@ -129,12 +129,12 @@ test('E lands at the beach, WASD walks, E boards again', async ({ page }) => {
   await page.keyboard.down('KeyW');
   await expect.poll(async () => (await read(page)).beached, { timeout: 30_000 }).toBe(true);
   await page.keyboard.up('KeyW');
-  await expect(page.locator('.gb-prompt')).toContainText('Land');
+  await expect(page.locator('.iw-prompt')).toContainText('Land');
 
   await tap(page, 'KeyE');
   const ashore = await read(page);
   expect(ashore.mode).toBe('foot');
-  await expect(page.locator('.gb-toasts')).toContainText('Ashore on Home Knoll');
+  await expect(page.locator('.iw-toasts')).toContainText('Ashore on Home Knoll');
 
   await hold(page, 'KeyW', 800);
   const walked = await read(page);
@@ -143,7 +143,7 @@ test('E lands at the beach, WASD walks, E boards again', async ({ page }) => {
 
   // Walk back to the hull and board.
   await hold(page, 'KeyS', 800);
-  await expect(page.locator('.gb-prompt')).toContainText('Board the canoe');
+  await expect(page.locator('.iw-prompt')).toContainText('Board the canoe');
   await tap(page, 'KeyE');
   expect((await read(page)).mode).toBe('canoe');
 });
@@ -153,7 +153,7 @@ test('every panel key opens its panel and pauses; Esc closes, then pauses', asyn
   for (const [code, panel] of [['Tab', 'inventory'], ['KeyC', 'crafting'], ['KeyJ', 'quest_log'], ['KeyM', 'map']] as const) {
     await tap(page, code);
     expect(await read(page)).toMatchObject({ panels: [panel], paused: true });
-    await expect(page.locator(`.gb-panel-${panel}`)).toBeVisible();
+    await expect(page.locator(`.iw-panel-${panel}`)).toBeVisible();
     await tap(page, code); // the same key closes it
     expect((await read(page)).panels).toEqual([]);
   }
@@ -168,7 +168,7 @@ test('every panel key opens its panel and pauses; Esc closes, then pauses', asyn
   // The builder needs the canoe beached: afloat it is refused, with a reason.
   await tap(page, 'KeyB');
   expect((await read(page)).panels).toEqual([]);
-  await expect(page.locator('.gb-toasts')).toContainText('Beach the canoe to work on it.');
+  await expect(page.locator('.iw-toasts')).toContainText('Beach the canoe to work on it.');
 
   // Esc with nothing open is the pause menu; the game stops while it is up.
   await tap(page, 'Escape');
@@ -186,26 +186,26 @@ test('the canoe builder opens on B once the canoe is on the beach', async ({ pag
   expect(await read(page)).toMatchObject({ mode: 'foot', beached: true });
   await tap(page, 'KeyB');
   expect((await read(page)).panels).toEqual(['canoe_builder']);
-  await expect(page.locator('.gb-panel-canoe_builder')).toContainText('Hull: Patched canoe');
+  await expect(page.locator('.iw-panel-canoe_builder')).toContainText('Hull: Patched canoe');
 });
 
 test('a key rebound in the settings drives the canoe, and survives a reload', async ({ page }) => {
   await open(page, '');
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByRole('button', { name: 'Controls' }).click();
-  const paddleRow = page.locator('.gb-bindings tr', { hasText: 'Paddle' }).first();
+  const paddleRow = page.locator('.iw-bindings tr', { hasText: 'Paddle' }).first();
   await paddleRow.getByRole('button', { name: 'W', exact: true }).click();
-  await expect(page.locator('.gb-notice')).toContainText('Press a key for Paddle');
+  await expect(page.locator('.iw-notice')).toContainText('Press a key for Paddle');
   await tap(page, 'KeyI');
-  await expect(page.locator('.gb-notice')).toContainText('Paddle is now I.');
+  await expect(page.locator('.iw-notice')).toContainText('Paddle is now I.');
   await expect(paddleRow.getByRole('button', { name: 'I', exact: true })).toBeVisible();
   expect((await read(page)).paddleKeys).toEqual(['KeyI', 'ArrowUp']);
 
   // A second rebind onto a key another action owns reports the conflict.
-  const bailRow = page.locator('.gb-bindings tr', { hasText: 'Bail (hold)' });
+  const bailRow = page.locator('.iw-bindings tr', { hasText: 'Bail (hold)' });
   await bailRow.getByRole('button', { name: 'R', exact: true }).click();
   await tap(page, 'KeyF');
-  await expect(page.locator('.gb-notice')).toContainText('Bail (hold) is now F. Lantern lost that key.');
+  await expect(page.locator('.iw-notice')).toContainText('Bail (hold) is now F. Lantern lost that key.');
 
   await page.reload();
   await page.waitForFunction(() => (window as unknown as { portage?: unknown }).portage !== undefined);

@@ -1,0 +1,1894 @@
+/* Ink & Wash: the interface theme. Paper cards, pen lines, watercolour dabs.
+   Carried over from the approved B2 study and extended to every panel of the game.
+
+   Everything is sized in rem. The root font size tracks the window, so the
+   interface keeps the same proportions at 720p, 1080p, 1440p and 4K, and the
+   interface-size setting multiplies it.
+
+   Nothing here moves by itself. The pen wobble is a fixed filter, the paper
+   tooth a fixed tile, and text always sits straight: a card's tilt is on its
+   sheet (the pseudo-elements), never on its words. */
+html.iw-document {
+  --iw-scale: 1;
+  font-size: calc(clamp(8px, 0.62vw + 0.78vh, 42px) * var(--iw-scale));
+}
+
+.iw {
+  --iw-paper: #f3ebd9;
+  --iw-paper-deep: #e8dec8;
+  --iw-paper-bright: #fbf5e6;
+  --iw-chart: #e2dccb;
+  --iw-ink: #2a2b33;
+  --iw-ink-soft: #5b5f6b;
+  --iw-ink-faint: rgba(42, 43, 51, 0.26);
+  --iw-rust: #b5553a;
+  /* Rust dark enough to carry paper-coloured words. */
+  --iw-rust-fill: #a4492f;
+  --iw-rust-deep: #8b3f2e;
+  --iw-ochre: #d5a542;
+  --iw-ochre-deep: #7d5a10;
+  --iw-sage: #93a88a;
+  --iw-sage-deep: #3f6b46;
+  --iw-water: #7f9eab;
+  --iw-serif: 'IM Fell English', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --iw-hand: 'Kalam', 'Bradley Hand', 'Segoe Print', cursive;
+  --iw-tex: none;
+  --iw-page-edge: none;
+  /* One degree of the compass, as a share of the strip's width. */
+  --iw-degree: calc(100cqw / 180);
+
+  overflow: hidden;
+  font: 1rem / 1.3 var(--iw-serif);
+  color: var(--iw-ink);
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.iw *,
+.iw *::before,
+.iw *::after {
+  box-sizing: border-box;
+}
+.iw [hidden] {
+  display: none !important;
+}
+/* Resets, written with :where() so that any class below outranks them. */
+.iw :where(h1, h2, h3, p, ul, dl, dd, dt) {
+  margin: 0;
+  padding: 0;
+  font-weight: 400;
+}
+.iw :where(ul) {
+  list-style: none;
+}
+.iw :where(small) {
+  font-size: inherit;
+}
+.iw :where(button) {
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.iw button:disabled {
+  cursor: default;
+}
+
+/* Focus: always a visible ring, in rust, on anything the keyboard is on. */
+.iw :focus {
+  outline: none;
+}
+.iw :focus-visible,
+.iw.iw-by-keys :focus {
+  outline: 0.15rem solid var(--iw-rust-deep);
+  outline-offset: 0.14rem;
+  border-radius: 0.3rem;
+}
+
+/* ---------- drawn primitives ---------- */
+.iw-i {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  font-style: normal;
+}
+.iw-ico {
+  display: block;
+  width: 1.5rem;
+  height: 1.5rem;
+  overflow: visible;
+}
+.iw-ico .iw-wash {
+  opacity: 0.62;
+}
+.iw-ico .iw-pen,
+.iw-gauge .iw-pen {
+  fill: none;
+  stroke: var(--iw-ink);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.iw-ico .iw-dot {
+  fill: var(--iw-ink);
+}
+.iw-tick,
+.iw-caret,
+.iw-cross,
+.iw-trend {
+  display: block;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* A sheet of paper with a pen border that wavers. The sheet and its border are
+   pseudo-elements, so a card can sit a little crooked while its words stay level. */
+.iw-paper {
+  --tilt: 0deg;
+  position: relative;
+  isolation: isolate;
+  border-radius: 0.5rem 0.28rem 0.6rem 0.24rem;
+}
+.iw-paper::before,
+.iw-paper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  transform: rotate(var(--tilt));
+  pointer-events: none;
+}
+.iw-paper::before {
+  z-index: -1;
+  background-color: var(--iw-paper);
+  background-image: var(--iw-tex);
+  background-size: 256px 256px;
+  box-shadow: 0.1rem 0.2rem 0 rgba(42, 43, 51, 0.2), 0 0.7rem 1.8rem rgba(42, 43, 51, 0.14);
+}
+.iw-paper::after {
+  border: 0.115rem solid var(--iw-ink);
+  filter: url(#iw-rough);
+}
+.iw-tape {
+  position: absolute;
+  z-index: 1;
+  width: 3.6rem;
+  height: 1.05rem;
+  background: rgba(213, 165, 66, 0.5);
+  border-left: 1px dashed rgba(42, 43, 51, 0.25);
+  border-right: 1px dashed rgba(42, 43, 51, 0.25);
+  box-shadow: 0 0.05rem 0.1rem rgba(42, 43, 51, 0.12);
+}
+.iw .iw-key {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  padding: 0.12rem 0.42rem 0;
+  font-family: var(--iw-hand);
+  font-weight: 700;
+  font-size: 1rem;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--iw-ink);
+  background: var(--iw-paper);
+  border: 0.1rem solid var(--iw-ink);
+  border-bottom-width: 0.22rem;
+  border-radius: 0.36rem 0.3rem 0.4rem 0.28rem;
+}
+
+/* Tones, each dark enough for small handwriting on paper. */
+.iw-tone-info {
+  color: var(--iw-ink-soft);
+}
+.iw-tone-good {
+  color: var(--iw-sage-deep);
+}
+.iw-tone-warning {
+  color: var(--iw-ochre-deep);
+}
+.iw-tone-danger {
+  color: var(--iw-rust-deep);
+}
+
+/* ---------- the parts of the screen ---------- */
+.iw-lobby,
+.iw-hud,
+.iw-veil,
+.iw-confirm {
+  position: absolute;
+  inset: 0;
+}
+.iw-part {
+  display: contents;
+}
+
+/* ---------- HUD ---------- */
+.iw-vitals {
+  --tilt: -0.6deg;
+  position: absolute;
+  left: 1.6rem;
+  top: 1.5rem;
+  width: 15.6rem;
+  padding: 0.75rem 0.95rem 0.7rem;
+}
+.iw-vitals .iw-tape {
+  top: -0.5rem;
+  left: 1.2rem;
+  transform: rotate(-4deg);
+}
+.iw-meter {
+  display: grid;
+  grid-template-columns: 1.5rem 3.5rem 1fr 1.8rem;
+  align-items: center;
+  gap: 0.45rem;
+  height: 1.78rem;
+}
+.iw-meter .iw-lab {
+  font-family: var(--iw-hand);
+  font-size: 0.98rem;
+  line-height: 1;
+  padding-top: 0.2rem;
+}
+.iw-meter .iw-val {
+  font-family: var(--iw-hand);
+  font-weight: 700;
+  font-size: 0.92rem;
+  text-align: right;
+  padding-top: 0.2rem;
+  color: var(--iw-ink-soft);
+}
+.iw-bar {
+  position: relative;
+  height: 0.66rem;
+}
+.iw-bar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 0.09rem solid var(--iw-ink);
+  border-radius: 0.3rem 0.18rem 0.34rem 0.2rem;
+  filter: url(#iw-rough-small);
+}
+.iw-bar i {
+  position: absolute;
+  left: 0.12rem;
+  top: 0.12rem;
+  bottom: 0.12rem;
+  width: calc((100% - 0.24rem) * var(--v));
+  background-color: var(--c);
+  background-image: repeating-linear-gradient(118deg, transparent 0 0.2rem, rgba(42, 43, 51, 0.3) 0.2rem 0.26rem);
+  border-radius: 0.16rem 0.3rem 0.1rem 0.22rem;
+  opacity: 0.9;
+}
+/* The most energy there is to have while starving or parched: a pen tick on the bar. */
+.iw-bar u {
+  position: absolute;
+  top: -0.14rem;
+  bottom: -0.14rem;
+  left: calc(0.12rem + (100% - 0.24rem) * var(--v));
+  width: 0.14rem;
+  background: var(--iw-ink);
+  border-radius: 0.1rem;
+}
+.iw-bar-hunger {
+  --c: var(--iw-rust);
+}
+.iw-bar-thirst {
+  --c: var(--iw-water);
+}
+.iw-bar-energy {
+  --c: var(--iw-ochre);
+}
+/* Patterned meters: each fill is told apart by its marks, not its colour. */
+.iw-bar.iw-stripes i {
+  background-image: repeating-linear-gradient(45deg, transparent 0 0.2rem, rgba(42, 43, 51, 0.72) 0.2rem 0.34rem);
+}
+.iw-bar.iw-dots i {
+  background-image: radial-gradient(rgba(42, 43, 51, 0.78) 34%, transparent 38%);
+  background-size: 0.4rem 0.4rem;
+}
+.iw-bar.iw-waves i {
+  background-image: repeating-linear-gradient(90deg, transparent 0 0.26rem, rgba(42, 43, 51, 0.72) 0.26rem 0.38rem);
+}
+.iw-meter.iw-low .iw-val,
+.iw-meter.iw-low .iw-lab {
+  color: var(--iw-rust-deep);
+}
+.iw-bilge {
+  display: grid;
+  grid-template-columns: 4.6rem 1fr;
+  align-items: center;
+  gap: 0.7rem;
+  margin-top: 0.45rem;
+  padding-top: 0.5rem;
+  border-top: 0.09rem dashed var(--iw-ink-faint);
+}
+.iw-gauge {
+  display: block;
+  width: 4.6rem;
+  height: 1.68rem;
+  overflow: visible;
+}
+.iw-gauge .iw-pen {
+  stroke-width: 1.4;
+}
+.iw-bilge-text {
+  font-family: var(--iw-hand);
+  line-height: 1.1;
+}
+.iw-bilge-text b {
+  display: block;
+  font-size: 0.98rem;
+}
+.iw-bilge-text span {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.84rem;
+  color: var(--iw-ink-soft);
+}
+.iw-bilge.iw-low .iw-bilge-text,
+.iw-bilge.iw-low .iw-bilge-text span {
+  color: var(--iw-rust-deep);
+}
+.iw-trend {
+  width: 0.7rem;
+  height: 0.7rem;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+.iw-canoe-lines {
+  margin-top: 0.45rem;
+  padding-top: 0.4rem;
+  border-top: 0.09rem dashed var(--iw-ink-faint);
+  font-family: var(--iw-hand);
+  font-size: 0.88rem;
+  line-height: 1.3;
+}
+
+.iw-compass {
+  position: absolute;
+  top: 1.35rem;
+  left: 50%;
+  width: min(30rem, 100vw - 39rem);
+  height: 2.5rem;
+  transform: translateX(-50%);
+  container-type: inline-size;
+}
+.iw-strip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background-color: var(--iw-paper);
+  background-image: var(--iw-tex);
+  border-radius: 0.3rem;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 13%, #000 87%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 13%, #000 87%, transparent);
+  border-top: 0.1rem solid var(--iw-ink);
+  border-bottom: 0.1rem solid var(--iw-ink);
+}
+.iw-track {
+  --heading: 0;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  transform: translateX(calc(var(--iw-degree) * var(--heading) * -1));
+  will-change: transform;
+}
+.iw-tk {
+  position: absolute;
+  bottom: 0;
+  left: calc(var(--iw-degree) * var(--at));
+  width: 0.08rem;
+  height: 0.42rem;
+  background: var(--iw-ink);
+  opacity: 0.55;
+}
+.iw-tk.iw-big {
+  height: 0.7rem;
+  opacity: 0.9;
+}
+.iw-lb {
+  position: absolute;
+  top: 0.2rem;
+  left: calc(var(--iw-degree) * var(--at));
+  transform: translateX(-50%);
+  font-family: var(--iw-serif);
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.iw-marks {
+  position: absolute;
+  inset: 0;
+}
+.iw-mark {
+  --at: 0;
+  position: absolute;
+  left: calc(50% + var(--iw-degree) * var(--at));
+  bottom: 0.02rem;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+}
+.iw-mark .iw-ico {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+.iw-mark-chip {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  padding: 0.14rem 0.5rem 0.02rem;
+  font-family: var(--iw-hand);
+  font-size: 0.84rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  background: var(--iw-paper);
+  border: 0.09rem solid var(--iw-ink);
+  border-radius: 0.5rem 0.3rem 0.55rem 0.3rem;
+}
+.iw-mark-canoe .iw-mark-chip,
+.iw-mark-respawn .iw-mark-chip {
+  top: calc(100% + 2.1rem);
+}
+/* Behind you: pinned to the end of the strip, with the way to turn. */
+.iw-mark.iw-off-left .iw-mark-chip::before {
+  content: '\2039\00a0';
+}
+.iw-mark.iw-off-right .iw-mark-chip::after {
+  content: '\00a0\203a';
+}
+.iw-needle {
+  position: absolute;
+  left: 50%;
+  top: -0.42rem;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  border-left: 0.42rem solid transparent;
+  border-right: 0.42rem solid transparent;
+  border-top: 0.7rem solid var(--iw-rust);
+  filter: drop-shadow(0 0.06rem 0 var(--iw-ink));
+}
+
+.iw-notes {
+  --tilt: 0.9deg;
+  position: absolute;
+  right: 1.7rem;
+  top: 1.6rem;
+  width: 17.6rem;
+  padding: 0.85rem 1rem 0.75rem;
+}
+.iw-notes .iw-tape {
+  top: -0.5rem;
+  right: 1.4rem;
+  transform: rotate(5deg);
+}
+.iw-over {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.1rem 0.6rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--iw-ink-soft);
+}
+.iw-over .iw-ico {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+.iw-weather {
+  margin-top: 0.1rem;
+  font-family: var(--iw-hand);
+  font-size: 0.88rem;
+  color: var(--iw-ink-soft);
+}
+.iw-weather.iw-tone-danger {
+  color: var(--iw-rust-deep);
+  font-weight: 700;
+}
+.iw-tracker {
+  margin-top: 0.4rem;
+  padding-top: 0.35rem;
+  border-top: 0.09rem dashed var(--iw-ink-faint);
+}
+.iw-tracker h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0.08rem 0 0.3rem;
+  font-style: italic;
+  font-size: 1.42rem;
+  line-height: 1.1;
+}
+.iw-kind {
+  font-family: var(--iw-hand);
+  font-style: normal;
+  font-size: 0.8rem;
+  letter-spacing: 0;
+  color: var(--iw-ink-soft);
+  white-space: nowrap;
+}
+.iw-ready .iw-tick,
+.iw-stamp .iw-tick {
+  width: 1.15rem;
+  height: 1.15rem;
+  stroke: var(--iw-rust);
+  stroke-width: 3;
+}
+.iw-objectives li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-family: var(--iw-hand);
+  font-size: 1rem;
+  line-height: 1.3;
+  padding: 0.12rem 0;
+}
+.iw-objectives li.iw-done .iw-objective-text {
+  color: var(--iw-ink-soft);
+  text-decoration: line-through;
+  text-decoration-color: var(--iw-rust);
+}
+.iw-pips {
+  display: flex;
+  gap: 0.2rem;
+  align-items: center;
+}
+.iw-pips i {
+  width: 0.62rem;
+  height: 0.62rem;
+  border: 0.09rem solid var(--iw-ink);
+  border-radius: 50% 45% 55% 48%;
+}
+.iw-pips i.iw-box {
+  border-radius: 0.14rem 0.1rem 0.16rem 0.08rem;
+}
+.iw-pips i.iw-filled {
+  background: var(--iw-rust);
+}
+.iw-pips b {
+  margin-left: 0.3rem;
+  font-size: 0.9rem;
+  color: var(--iw-ink-soft);
+  white-space: nowrap;
+}
+
+.iw-hotbar {
+  position: absolute;
+  left: 50%;
+  bottom: 1.5rem;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-end;
+}
+.iw .iw-slot {
+  position: relative;
+  width: 3.7rem;
+  height: 3.7rem;
+  display: grid;
+  place-items: center;
+}
+.iw-hotbar .iw-slot:nth-child(odd) {
+  --tilt: -1.2deg;
+}
+.iw-hotbar .iw-slot:nth-child(even) {
+  --tilt: 1deg;
+}
+.iw-slot .iw-ico {
+  width: 2.3rem;
+  height: 2.3rem;
+}
+.iw-slot .iw-n {
+  position: absolute;
+  left: 0.36rem;
+  top: 0.12rem;
+  font-family: var(--iw-hand);
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--iw-ink-soft);
+}
+.iw-slot.iw-empty {
+  border: 0.09rem dashed var(--iw-ink-soft);
+  border-radius: 0.5rem 0.28rem 0.6rem 0.24rem;
+  background: var(--iw-paper-deep);
+}
+.iw-hotbar .iw-slot.iw-selected {
+  --tilt: -1.5deg;
+  transform: translateY(-0.5rem);
+}
+.iw-slot.iw-selected::before {
+  background-color: var(--iw-paper-bright);
+}
+.iw-underline {
+  position: absolute;
+  left: 0.4rem;
+  right: 0.4rem;
+  bottom: -0.6rem;
+  height: 0.3rem;
+  background: var(--iw-rust);
+  border-radius: 60% 40% 70% 30% / 100% 60% 80% 50%;
+  filter: url(#iw-rough-small);
+}
+.iw-slot .iw-nm {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 0.3rem;
+  padding: 0.1rem 0.5rem 0;
+  font-family: var(--iw-hand);
+  font-size: 0.86rem;
+  white-space: nowrap;
+  background: var(--iw-paper);
+  border-radius: 0.5rem;
+}
+
+.iw-prompt {
+  --tilt: -0.6deg;
+  position: absolute;
+  left: 50%;
+  bottom: 9.8rem;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.45rem 1.1rem 0.45rem 0.6rem;
+  font-size: 1.3rem;
+  font-style: italic;
+  white-space: nowrap;
+}
+.iw .iw-prompt .iw-key {
+  font-style: normal;
+  font-size: 1.1rem;
+  min-width: 2rem;
+  height: 2rem;
+  background: var(--iw-ochre);
+}
+.iw-prompt .iw-mode {
+  margin-right: -0.2rem;
+  font-family: var(--iw-hand);
+  font-style: normal;
+  font-size: 0.9rem;
+  color: var(--iw-ink-soft);
+}
+.iw-prompt-blocked {
+  color: var(--iw-rust-deep);
+}
+.iw .iw-prompt-blocked .iw-key {
+  background: var(--iw-paper);
+  border-style: dashed;
+  border-bottom-width: 0.1rem;
+}
+/* Holding: a pen line under the words that inks in from the left. */
+.iw-hold {
+  position: absolute;
+  left: 0.9rem;
+  right: 0.9rem;
+  bottom: 0.22rem;
+  height: 0.16rem;
+  background: var(--iw-ink-faint);
+  border-radius: 0.1rem;
+}
+.iw-hold i {
+  display: block;
+  height: 100%;
+  width: calc(100% * var(--v));
+  background: var(--iw-rust);
+  border-radius: inherit;
+}
+.iw-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 7.5rem;
+  transform: translateX(-50%);
+  max-width: 34rem;
+  padding: 0.22rem 0.8rem 0.08rem;
+  font-family: var(--iw-hand);
+  font-size: 0.95rem;
+  text-align: center;
+  background: var(--iw-paper);
+  border: 0.09rem dashed var(--iw-ink-soft);
+  border-radius: 0.5rem 0.3rem 0.55rem 0.3rem;
+}
+
+/* ---------- toasts: slips of paper down the left edge ---------- */
+.iw-toasts {
+  position: absolute;
+  left: 1.6rem;
+  bottom: 1.5rem;
+  width: 22rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+.iw-toast {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.28rem 0.8rem 0.14rem 0.6rem;
+  font-family: var(--iw-hand);
+  font-size: 0.98rem;
+  line-height: 1.25;
+  background-color: var(--iw-paper);
+  background-image: var(--iw-tex);
+  border: 0.09rem solid var(--iw-ink);
+  border-radius: 0.5rem 0.3rem 0.55rem 0.3rem;
+  box-shadow: 0.08rem 0.14rem 0 rgba(42, 43, 51, 0.2);
+}
+.iw-dab {
+  flex: none;
+  width: 0.62rem;
+  height: 0.62rem;
+  background: var(--iw-water);
+  border: 0.09rem solid var(--iw-ink);
+  border-radius: 50% 45% 55% 48%;
+}
+.iw-toast-good .iw-dab {
+  background: var(--iw-sage);
+}
+.iw-toast-warning .iw-dab {
+  background: var(--iw-ochre);
+}
+.iw-toast-danger .iw-dab {
+  background: var(--iw-rust);
+}
+.iw-toast-danger {
+  color: var(--iw-rust-deep);
+}
+
+.iw-debug {
+  position: absolute;
+  right: 1.6rem;
+  bottom: 1.4rem;
+  padding: 0.2rem 0.6rem 0.05rem;
+  font-family: var(--iw-hand);
+  font-weight: 700;
+  font-size: 0.86rem;
+  line-height: 1.3;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  background: var(--iw-paper);
+  border: 0.09rem solid var(--iw-ink);
+  border-radius: 0.4rem 0.3rem 0.45rem 0.3rem;
+}
+
+/* ---------- lobby ---------- */
+.iw-lobby {
+  isolation: isolate;
+}
+/* The page the title is written on: paper down the left, torn along its right edge. */
+.iw-lobby::before,
+.iw-lobby::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  /* Wide enough for the menu and its notes at any interface size. */
+  width: max(41vw, 6.2vw + 33rem);
+  background-color: var(--iw-paper);
+  background-image: var(--iw-tex);
+  background-size: 256px 256px;
+  clip-path: var(--iw-page-edge);
+}
+.iw-lobby::after {
+  z-index: -2;
+  width: max(42.2vw, 7.4vw + 33rem);
+  opacity: 0.55;
+}
+.iw-lobby-col {
+  position: absolute;
+  left: 6.2vw;
+  top: 50%;
+  width: 29vw;
+  min-width: 21rem;
+  transform: translateY(-53%);
+}
+.iw-lobby.iw-dim .iw-lobby-col {
+  opacity: 0.14;
+}
+.iw-logo {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  margin-left: -0.3rem;
+}
+.iw-logo-word {
+  font-family: var(--iw-serif);
+  font-style: italic;
+  font-size: 150px;
+  letter-spacing: -2px;
+  fill: var(--iw-ink);
+}
+.iw-logo-paddle {
+  fill: var(--iw-rust);
+}
+.iw-logo-ripple {
+  fill: none;
+  stroke: var(--iw-water);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.iw-logo-row {
+  position: relative;
+}
+.iw-seal {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.iw-logo-row .iw-seal-holder {
+  position: absolute;
+  right: 0.4rem;
+  top: 0.5rem;
+  width: 3rem;
+  height: 3rem;
+  transform: rotate(4deg);
+  filter: url(#iw-rough-small);
+  opacity: 0.92;
+}
+.iw-tagline {
+  margin: 0.5rem 0 0 0.25rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  text-wrap: balance;
+  color: var(--iw-ink-soft);
+}
+.iw-menu {
+  margin: 2.3rem 0 0 0.1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+.iw .iw-mi {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  padding: 0.24rem 0.5rem 0.24rem 2rem;
+  font-family: var(--iw-serif);
+  font-size: 1.9rem;
+  line-height: 1.15;
+  color: var(--iw-ink);
+  text-align: left;
+  white-space: nowrap;
+  transition: transform 0.18s ease;
+}
+.iw-mi .iw-n {
+  font-family: var(--iw-hand);
+  font-size: 0.92rem;
+  color: var(--iw-ink-soft);
+}
+.iw-mi:disabled {
+  color: var(--iw-ink-soft);
+}
+.iw-mi::before {
+  /* paddle-blade marker */
+  content: '';
+  position: absolute;
+  left: 0.2rem;
+  top: 50%;
+  width: 1.25rem;
+  height: 0.5rem;
+  background: var(--iw-rust);
+  border-radius: 60% 90% 90% 60% / 80% 100% 100% 80%;
+  transform: translateY(-40%) scaleX(0);
+  transform-origin: left;
+  transition: transform 0.2s ease;
+  filter: url(#iw-rough-small);
+}
+.iw-mi::after {
+  content: '';
+  position: absolute;
+  left: 2rem;
+  right: 0.3rem;
+  bottom: 0.08rem;
+  height: 0.16rem;
+  background: var(--iw-ink);
+  border-radius: 40% 60% 50% 50% / 100% 100% 60% 60%;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s ease;
+  filter: url(#iw-rough-small);
+}
+.iw-mi:enabled:hover,
+.iw-mi:focus-visible,
+.iw.iw-by-keys .iw-mi:focus {
+  transform: translateX(0.35rem);
+  outline: none;
+}
+.iw-mi:enabled:hover::before,
+.iw-mi:focus-visible::before,
+.iw.iw-by-keys .iw-mi:focus::before {
+  transform: translateY(-40%) scaleX(1);
+}
+.iw-mi:enabled:hover::after,
+.iw-mi:focus-visible::after,
+.iw.iw-by-keys .iw-mi:focus::after {
+  transform: scaleX(1);
+}
+
+/* ---------- panels ---------- */
+.iw-veil,
+.iw-confirm {
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  background: rgba(243, 235, 217, 0.34);
+}
+.iw-confirm {
+  background: rgba(42, 43, 51, 0.3);
+}
+/* A conversation leaves the valley in view: no wash, and the card sits low. */
+.iw-veil.iw-veil-clear {
+  place-items: end center;
+  padding-bottom: 8.4rem;
+  background: none;
+  pointer-events: none;
+}
+.iw-panel {
+  --tilt: -0.25deg;
+  width: min(60rem, 92vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem 2rem 1.3rem;
+  pointer-events: auto;
+}
+.iw-panel.iw-mid {
+  width: min(46rem, 92vw);
+}
+.iw-panel.iw-narrow {
+  --tilt: 0.4deg;
+  width: min(25rem, 88vw);
+  padding: 1.7rem 2rem 1.4rem;
+  align-items: center;
+  text-align: center;
+}
+.iw-panel .iw-tape.iw-a {
+  top: -0.5rem;
+  left: 2.6rem;
+  transform: rotate(-3deg);
+}
+.iw-panel .iw-tape.iw-b {
+  top: -0.5rem;
+  right: 3rem;
+  transform: rotate(4deg);
+}
+.iw-panel > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex: none;
+}
+.iw-panel h2 {
+  font-style: italic;
+  font-size: 2.3rem;
+  line-height: 1;
+}
+.iw-sub {
+  font-family: var(--iw-hand);
+  font-size: 0.92rem;
+  color: var(--iw-ink-soft);
+}
+.iw-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 0.9rem;
+  padding: 0.2rem 0.5rem 0.3rem 0.3rem;
+  overflow: hidden auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--iw-ink-soft) transparent;
+}
+.iw-panel > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+  margin-top: 1rem;
+  gap: 1rem;
+}
+.iw-body h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 1rem 0 0.2rem;
+  padding-bottom: 0.2rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--iw-ink-soft);
+  border-bottom: 0.09rem solid var(--iw-ink-faint);
+}
+.iw-body section:first-child > h3,
+.iw-body > h3:first-child {
+  margin-top: 0;
+}
+.iw-body h3 .iw-kind {
+  text-transform: none;
+}
+
+.iw .iw-btn {
+  position: relative;
+  padding: 0.42rem 1.4rem 0.36rem;
+  font-size: 1.12rem;
+  line-height: 1.2;
+  border: 0.115rem solid var(--iw-ink);
+  border-radius: 0.6rem 0.4rem 0.7rem 0.36rem;
+  background: var(--iw-paper);
+  transition: transform 0.15s;
+}
+.iw-btn:enabled:hover {
+  transform: translateY(-0.08rem);
+  background: var(--iw-paper-bright);
+}
+.iw .iw-btn.iw-go {
+  background: var(--iw-rust-fill);
+  color: var(--iw-paper);
+  box-shadow: 0.1rem 0.16rem 0 var(--iw-ink);
+}
+.iw .iw-btn.iw-quiet {
+  padding-left: 0.3rem;
+  padding-right: 0.3rem;
+  border-color: transparent;
+  background: none;
+  color: var(--iw-ink-soft);
+  text-decoration: underline wavy var(--iw-ink-faint);
+  text-underline-offset: 0.25rem;
+}
+.iw .iw-btn.iw-small {
+  padding: 0.24rem 0.7rem 0.16rem;
+  font-size: 0.98rem;
+  border-width: 0.09rem;
+}
+.iw .iw-btn:disabled {
+  color: var(--iw-ink-soft);
+  border-style: dashed;
+  border-color: var(--iw-ink-soft);
+  background: none;
+  box-shadow: none;
+}
+.iw-btn .iw-note {
+  display: block;
+  font-family: var(--iw-hand);
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+/* settings */
+.iw-tabs {
+  display: flex;
+  flex: none;
+  gap: 0.3rem;
+  margin: 1.1rem 0 0;
+  padding: 0 0.4rem;
+  border-bottom: 0.115rem solid var(--iw-ink);
+}
+.iw .iw-tab {
+  position: relative;
+  padding: 0.42rem 1.05rem 0.3rem;
+  font-size: 1.08rem;
+  color: var(--iw-ink-soft);
+  background: var(--iw-paper-deep);
+  border: 0.1rem solid var(--iw-ink-faint);
+  border-bottom: 0;
+  border-radius: 0.55rem 0.45rem 0 0;
+  transform: translateY(0.1rem);
+}
+.iw .iw-tab.iw-on {
+  color: var(--iw-ink);
+  background: var(--iw-paper);
+  border-color: var(--iw-ink);
+  border-width: 0.115rem;
+  padding-bottom: 0.45rem;
+  transform: translateY(0.115rem);
+}
+.iw-tab.iw-on::after {
+  content: '';
+  position: absolute;
+  left: 0.9rem;
+  right: 0.9rem;
+  bottom: 0.3rem;
+  height: 0.14rem;
+  background: var(--iw-rust);
+  border-radius: 50%;
+}
+/* The settings sheet hangs from a fixed top edge: its tabs stay under the pointer
+   from one tab to the next, and only its foot moves with the length of the page. */
+.iw-panel-settings {
+  align-self: start;
+  margin-top: 7vh;
+  max-height: 86vh;
+}
+.iw-panel-settings .iw-body {
+  margin-top: 0;
+  padding-top: 0.7rem;
+  min-height: 14rem;
+}
+.iw-rows {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 2.6rem;
+}
+.iw-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 1rem;
+  min-height: 3.35rem;
+  padding: 0.3rem 0;
+  border-bottom: 0.09rem dashed var(--iw-ink-faint);
+}
+.iw-row .iw-l {
+  font-size: 1.1rem;
+  line-height: 1.15;
+}
+
+/* slider: a pen line with a bead on it */
+.iw-sl {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.iw-sl output {
+  min-width: 2.9rem;
+  text-align: right;
+  font-family: var(--iw-hand);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.iw-sl input {
+  --v: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10rem;
+  height: 1.5rem;
+  margin: 0;
+  background: transparent;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.iw-sl input::-webkit-slider-runnable-track {
+  height: 0.5rem;
+  border: 0.09rem solid var(--iw-ink);
+  border-radius: 0.3rem 0.5rem 0.25rem 0.45rem;
+  background: linear-gradient(90deg, var(--iw-water) calc(var(--v) * 100%), transparent 0);
+}
+.iw-sl input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: -0.42rem;
+  border: 0.115rem solid var(--iw-ink);
+  border-radius: 52% 48% 55% 45%;
+  background: var(--iw-rust);
+  box-shadow: 0.06rem 0.1rem 0 rgba(42, 43, 51, 0.35);
+}
+.iw-sl input::-moz-range-track {
+  height: 0.5rem;
+  border: 0.09rem solid var(--iw-ink);
+  border-radius: 0.3rem;
+  background: linear-gradient(90deg, var(--iw-water) calc(var(--v) * 100%), transparent 0);
+}
+.iw-sl input::-moz-range-thumb {
+  width: 1rem;
+  height: 1rem;
+  border: 0.115rem solid var(--iw-ink);
+  border-radius: 50%;
+  background: var(--iw-rust);
+}
+
+/* toggle: a ticked box. The real checkbox lies over the drawn one, unseen, so it is the thing clicked. */
+.iw-tg {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--iw-hand);
+  font-size: 0.95rem;
+  color: var(--iw-ink-soft);
+}
+.iw-tg input {
+  position: absolute;
+  inset: -0.3rem;
+  z-index: 1;
+  width: calc(100% + 0.6rem);
+  height: calc(100% + 0.6rem);
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.iw-tg .iw-box {
+  position: relative;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 0.115rem solid var(--iw-ink);
+  border-radius: 0.3rem 0.2rem 0.34rem 0.18rem;
+  background: var(--iw-paper);
+}
+.iw-tg input:focus-visible + .iw-box,
+.iw.iw-by-keys .iw-tg input:focus + .iw-box {
+  outline: 0.15rem solid var(--iw-rust-deep);
+  outline-offset: 0.14rem;
+}
+.iw-tg .iw-tick {
+  position: absolute;
+  left: 0.02rem;
+  top: -0.42rem;
+  width: 1.9rem;
+  height: 1.9rem;
+  stroke: var(--iw-rust);
+  stroke-width: 3;
+  stroke-dasharray: 34;
+  stroke-dashoffset: 34;
+  transition: stroke-dashoffset 0.22s ease;
+}
+.iw-tg input:checked + .iw-box .iw-tick {
+  stroke-dashoffset: 0;
+}
+.iw-tg output {
+  min-width: 1.6rem;
+}
+
+/* picker: an underlined field */
+.iw-dd {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+.iw-dd select {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 12.4rem;
+  max-width: 100%;
+  margin: 0;
+  padding: 0.34rem 2rem 0.26rem 0.7rem;
+  font-family: var(--iw-serif);
+  font-size: 1.02rem;
+  color: var(--iw-ink);
+  background: var(--iw-paper-deep);
+  border: 0.1rem solid var(--iw-ink);
+  border-radius: 0.4rem 0.3rem 0.45rem 0.26rem;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.iw-dd .iw-i {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.iw-caret {
+  width: 0.85rem;
+  height: 0.85rem;
+  stroke: var(--iw-ink);
+  stroke-width: 1.8;
+}
+
+/* key bindings: two columns of rows, read down then across */
+.iw-notice {
+  margin: 0.9rem 0 0.3rem;
+  min-height: 1.4rem;
+  font-family: var(--iw-hand);
+  font-size: 0.98rem;
+  color: var(--iw-rust-deep);
+}
+.iw-bindings,
+.iw-bindings tbody {
+  display: grid;
+  width: 100%;
+}
+.iw-bindings tbody {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(var(--iw-rows), auto);
+  grid-auto-flow: column;
+  column-gap: 2.6rem;
+}
+.iw-bindings tr {
+  display: grid;
+  grid-template-columns: 1fr 7.7rem 7.7rem;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.7rem;
+  padding: 0.2rem 0;
+  border-bottom: 0.09rem dashed var(--iw-ink-faint);
+}
+.iw-bindings th {
+  font-weight: 400;
+  font-size: 1.05rem;
+  line-height: 1.15;
+  text-align: left;
+}
+.iw-bindings th small {
+  margin-left: 0.5rem;
+  font-family: var(--iw-hand);
+  font-size: 0.8rem;
+  color: var(--iw-ink-soft);
+}
+.iw-bindings tr.iw-unbound th {
+  color: var(--iw-rust-deep);
+}
+.iw-bindings td {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0;
+}
+.iw .iw-bind {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: auto;
+  min-height: 1.9rem;
+  font-size: 0.9rem;
+  /* A long key name takes a second line sooner than it leaves its cap. */
+  white-space: normal;
+  cursor: pointer;
+}
+.iw .iw-bind.iw-listen {
+  background: var(--iw-ochre);
+}
+.iw .iw-bind.iw-none {
+  font-weight: 400;
+  color: var(--iw-ink-soft);
+  border-style: dashed;
+  border-bottom-width: 0.1rem;
+}
+.iw .iw-clear {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.3rem;
+  height: 1.5rem;
+}
+.iw-cross {
+  width: 0.72rem;
+  height: 0.72rem;
+  stroke: var(--iw-ink-soft);
+  stroke-width: 1.6;
+}
+.iw-clear:hover .iw-cross {
+  stroke: var(--iw-rust-deep);
+}
+
+/* how to play */
+.iw-howto {
+  columns: 2;
+  column-gap: 2.6rem;
+}
+.iw-howto section {
+  break-inside: avoid;
+  padding-bottom: 0.5rem;
+}
+.iw-howto h3 {
+  margin-top: 0;
+}
+.iw-howto p {
+  margin: 0.18rem 0 0;
+  font-family: var(--iw-hand);
+  font-size: 0.98rem;
+  line-height: 1.33;
+}
+.iw-keys {
+  margin-top: 0.35rem;
+}
+.iw-keys > div {
+  display: grid;
+  grid-template-columns: 11.5rem 1fr;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.12rem 0;
+  font-size: 1.02rem;
+  line-height: 1.2;
+}
+.iw-keys dt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+}
+.iw-ks {
+  display: inline-flex;
+  gap: 0.18rem;
+}
+.iw .iw-keys .iw-key {
+  min-width: 1.6rem;
+  height: 1.6rem;
+  font-size: 0.86rem;
+}
+
+/* credits */
+.iw-credits {
+  text-align: center;
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+.iw-credits .iw-seal-holder {
+  width: 2.4rem;
+  height: 2.4rem;
+  margin: 0.4rem auto 0.6rem;
+}
+.iw-credits .iw-credit-title {
+  font-style: italic;
+  font-size: 2rem;
+  line-height: 1.2;
+}
+.iw-credits .iw-gap {
+  height: 0.9rem;
+}
+
+/* pause, confirm */
+.iw-panel.iw-narrow .iw-seal-holder {
+  width: 2.2rem;
+  height: 2.2rem;
+  margin-bottom: 0.4rem;
+}
+.iw-pause-note,
+.iw-confirm-message {
+  margin: 0.4rem 0 1rem;
+  font-family: var(--iw-hand);
+  font-size: 0.98rem;
+  line-height: 1.35;
+  color: var(--iw-ink-soft);
+}
+.iw-confirm-message {
+  color: var(--iw-ink);
+  font-size: 1.05rem;
+}
+.iw-panel.iw-narrow .iw-menu {
+  margin: 0;
+  align-items: stretch;
+  width: 100%;
+}
+.iw-panel.iw-narrow .iw-mi {
+  justify-content: center;
+  padding: 0.3rem 0.4rem;
+  font-size: 1.5rem;
+  white-space: normal;
+}
+.iw-panel.iw-narrow .iw-mi::before {
+  display: none;
+}
+.iw-panel.iw-narrow .iw-mi::after {
+  left: 22%;
+  right: 22%;
+  transform-origin: center;
+}
+.iw-panel.iw-narrow .iw-mi:enabled:hover,
+.iw-panel.iw-narrow .iw-mi:focus-visible,
+.iw.iw-by-keys .iw-panel.iw-narrow .iw-mi:focus {
+  transform: none;
+}
+.iw-foot {
+  margin-top: 0.8rem;
+}
+.iw-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.9rem;
+}
+
+/* save slots */
+.iw-save {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 1.2rem;
+  padding: 0.9rem 0.2rem;
+  border-bottom: 0.09rem dashed var(--iw-ink-faint);
+}
+.iw-save h3,
+.iw-body .iw-save h3 {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-style: italic;
+  font-size: 1.5rem;
+  line-height: 1.15;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--iw-ink);
+}
+.iw-save p {
+  font-family: var(--iw-hand);
+  font-size: 0.95rem;
+  line-height: 1.35;
+  color: var(--iw-ink-soft);
+}
+.iw-save .iw-save-summary {
+  color: var(--iw-ink);
+}
+.iw-save.iw-blank .iw-save-summary {
+  color: var(--iw-ink-soft);
+}
+.iw-save.iw-corrupt .iw-save-summary {
+  color: var(--iw-rust-deep);
+}
+
+/* lists of things: inventory rows, recipes, canoe parts, quests */
+.iw-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.4rem;
+}
+.iw-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 2.6rem;
+}
+.iw-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 2.6rem;
+}
+.iw-grid.iw-single {
+  grid-template-columns: 1fr;
+}
+.iw-entry,
+.iw-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.5rem 0 0.45rem;
+  border-bottom: 0.09rem dashed var(--iw-ink-faint);
+}
+.iw-item {
+  min-height: 2.6rem;
+  padding: 0.12rem 0 0.08rem;
+}
+.iw-item .iw-entry-text > small {
+  margin-top: 0;
+  line-height: 1.15;
+}
+.iw-entry-text {
+  min-width: 0;
+  font-size: 1.1rem;
+  line-height: 1.2;
+}
+.iw-entry-text b {
+  font-weight: 400;
+}
+.iw-entry-text > small {
+  display: block;
+  margin-top: 0.1rem;
+  font-family: var(--iw-hand);
+  font-size: 0.84rem;
+  line-height: 1.25;
+  color: var(--iw-ink-soft);
+}
+.iw-entry-text > small.iw-kind {
+  display: inline;
+  margin-left: 0.4rem;
+}
+.iw-count,
+.iw-giver {
+  font-family: var(--iw-hand);
+  font-size: 0.92rem;
+  color: var(--iw-ink-soft);
+  white-space: nowrap;
+}
+.iw-count {
+  font-weight: 700;
+}
+.iw-giver {
+  margin-left: 0.5rem;
+}
+.iw-item.iw-blank {
+  min-height: 1.6rem;
+  font-family: var(--iw-hand);
+  font-size: 0.86rem;
+  color: var(--iw-ink-soft);
+}
+.iw-out-of-reach .iw-entry-text b,
+.iw-entry.iw-unknown .iw-entry-text b,
+.iw-entry.iw-built .iw-entry-text b {
+  color: var(--iw-ink-soft);
+}
+.iw-entry.iw-unknown .iw-entry-text b {
+  font-style: italic;
+}
+.iw-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: 0.5rem;
+  font-family: var(--iw-hand);
+  font-size: 0.88rem;
+  color: var(--iw-rust-deep);
+}
+.iw-entry .iw-objectives {
+  margin-top: 0.25rem;
+}
+.iw-entry .iw-objectives li {
+  font-size: 0.92rem;
+}
+.iw-tracked-flag {
+  margin-right: 0.3rem;
+  vertical-align: -0.2rem;
+}
+.iw-tracked-flag .iw-ico {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+.iw-costs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.35rem;
+  margin-top: 0.3rem;
+}
+.iw-cost {
+  padding: 0.1rem 0.45rem 0;
+  font-family: var(--iw-hand);
+  font-size: 0.84rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  border: 0.08rem solid var(--iw-ink-soft);
+  border-radius: 0.4rem 0.28rem 0.45rem 0.25rem;
+}
+.iw-cost.iw-short {
+  color: var(--iw-rust-deep);
+  border-color: var(--iw-rust-deep);
+  border-style: dashed;
+}
+.iw-missing,
+.iw-blocked {
+  margin-top: 0.25rem;
+  font-family: var(--iw-hand);
+  font-size: 0.86rem;
+  line-height: 1.25;
+  color: var(--iw-rust-deep);
+}
+.iw-blocked {
+  margin: 0 0 0.6rem;
+  padding: 0.4rem 0.8rem 0.25rem;
+  font-size: 1rem;
+  border: 0.09rem dashed var(--iw-rust-deep);
+  border-radius: 0.5rem 0.3rem 0.55rem 0.3rem;
+}
+.iw-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 1.6rem;
+  font-family: var(--iw-hand);
+  font-size: 0.98rem;
+  line-height: 1.4;
+}
+.iw-stats li::before {
+  content: '\2013\00a0';
+  color: var(--iw-ink-soft);
+}
+.iw-pack-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding-top: 0.2rem;
+}
+.iw-pack-actions .iw-btn {
+  padding: 0.3rem 0.9rem 0.24rem;
+  font-size: 1rem;
+  text-align: left;
+}
+.iw-reward {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+  padding: 0.5rem 0.9rem;
+  font-family: var(--iw-hand);
+  font-size: 1rem;
+  border: 0.09rem dashed var(--iw-rust-deep);
+  border-radius: 0.5rem 0.3rem 0.55rem 0.3rem;
+}
+.iw-belt-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 2.6rem;
+  margin-top: 0.9rem;
+}
+.iw-belt-row h3 {
+  margin-top: 0;
+}
+.iw-belt-row h3.iw-next {
+  margin-top: 0.9rem;
+}
+.iw-belt-row {
+  align-items: start;
+}
+.iw-belt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 0.7rem;
+  padding: 0.7rem 0.3rem 0.9rem;
+}
+.iw .iw-slot.iw-tool {
+  width: 5.6rem;
+  height: 4.6rem;
+  padding-bottom: 1.1rem;
+}
+.iw-tool .iw-tool-name {
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  bottom: 0.3rem;
+  font-family: var(--iw-hand);
+  font-size: 0.8rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+.iw-key-items {
+  padding-top: 0.5rem;
+  font-family: var(--iw-hand);
+  font-size: 0.98rem;
+  line-height: 1.5;
+}
+.iw-soft {
+  padding-top: 0.5rem;
+  font-family: var(--iw-hand);
+  font-size: 0.95rem;
+  color: var(--iw-ink-soft);
+}
+
+/* the map: a chart pinned in the notebook */
+.iw-map-body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1.6rem;
+  align-items: start;
+}
+.iw-chart {
+  position: relative;
+  height: min(35rem, 90vh - 12.5rem);
+  aspect-ratio: 5 / 6;
+  overflow: hidden;
+  background-color: var(--iw-chart);
+  background-image: var(--iw-tex);
+  border: 0.115rem solid var(--iw-ink);
+  border-radius: 0.3rem 0.5rem 0.25rem 0.45rem;
+}
+.iw-chart.iw-full-chart {
+  box-shadow: inset 0 0 0 0.3rem var(--iw-chart), inset 0 0 0 0.38rem var(--iw-ink-faint);
+}
+.iw-water-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  border-top: 0.09rem dashed var(--iw-ink-soft);
+}
+.iw-water-band small {
+  font-family: var(--iw-hand);
+  font-size: 0.8rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.iw-island {
+  position: absolute;
+  min-width: 0.7rem;
+  min-height: 0.6rem;
+  transform: translate(-50%, -50%) rotate(var(--turn));
+  background: var(--iw-sage);
+  border: 0.1rem solid var(--iw-ink);
+  border-radius: 58% 42% 55% 45% / 48% 60% 40% 52%;
+}
+.iw-island-name {
+  position: absolute;
+  transform: translateX(-50%);
+  margin-top: 0.15rem;
+  font-family: var(--iw-hand);
+  font-size: 0.8rem;
+  line-height: 1.05;
+  text-align: center;
+  white-space: nowrap;
+}
+.iw-island-name small {
+  display: block;
+  font-size: 0.72rem;
+}
+.iw-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+.iw-marker .iw-ico {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+/* Marks that share a spot fan out around it, so none hides another. */
+.iw-marker-player {
+  z-index: 2;
+}
+.iw-marker-canoe {
+  transform: translate(-50%, 30%);
+}
+.iw-marker-respawn {
+  transform: translate(40%, -110%);
+}
+.iw-marker-quest {
+  z-index: 1;
+  transform: translate(-15%, -95%);
+}
+.iw-marker-survivor {
+  transform: translate(-130%, -60%);
+}
+.iw-legend {
+  padding-top: 0.2rem;
+  font-family: var(--iw-hand);
+  font-size: 0.98rem;
+}
+.iw-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.2rem 0;
+}
+.iw-legend .iw-ico {
+  width: 1.3rem;
+  height: 1.3rem;
+}
+
+/* a conversation */
+.iw-panel-dialogue {
+  --tilt: 0.3deg;
+  width: min(46rem, 92vw);
+  padding: 1.2rem 1.8rem 1.1rem;
+}
+.iw-panel-dialogue h2 {
+  font-size: 1.9rem;
+}
+.iw-speech {
+  margin-top: 0.6rem;
+  font-size: 1.2rem;
+  line-height: 1.4;
+}
+.iw-menu.iw-answers {
+  margin: 0.7rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 0.09rem dashed var(--iw-ink-faint);
+  align-items: stretch;
+}
+.iw-answers .iw-mi {
+  font-size: 1.2rem;
+  font-style: italic;
+  white-space: normal;
+}
+
+/* For anyone who has asked their system for less motion: the few short transitions go too. */
+@media (prefers-reduced-motion: reduce) {
+  .iw *,
+  .iw *::before,
+  .iw *::after {
+    transition: none !important;
+  }
+}

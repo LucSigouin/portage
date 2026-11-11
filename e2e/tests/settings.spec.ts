@@ -21,7 +21,7 @@ const settings = (page: Page): Promise<any> => page.evaluate(() =>
   JSON.parse(JSON.stringify((window as unknown as { portage: { session: any } }).portage.session.settings)));
 
 const fontSize = (page: Page): Promise<number> =>
-  page.evaluate(() => Number.parseFloat(getComputedStyle(document.querySelector('.gb')!).fontSize));
+  page.evaluate(() => Number.parseFloat(getComputedStyle(document.querySelector('.iw')!).fontSize));
 
 /** The frame rate the loop measured, once its readout has settled. */
 async function measuredRate(page: Page): Promise<number> {
@@ -38,7 +38,7 @@ test('sliders, checkboxes and pickers change the game and persist', async ({ pag
   // Audio: a slider.
   await page.locator('[data-setting="audio.master"]').fill('0.35');
   expect((await settings(page)).audio.master).toBe(0.35);
-  await expect(page.locator('.gb-row', { hasText: 'Master volume' }).locator('output')).toHaveText('35%');
+  await expect(page.locator('.iw-row', { hasText: 'Master volume' }).locator('output')).toHaveText('35%');
 
   // Accessibility: the interface grows, and the meters get patterns.
   await page.getByRole('button', { name: 'Accessibility' }).click();
@@ -60,7 +60,7 @@ test('sliders, checkboxes and pickers change the game and persist', async ({ pag
   await page.locator('[data-setting="graphics.fpsCap"]').selectOption({ label: '60 fps' });
   await page.locator('[data-setting="graphics.qualityPreset"]').selectOption({ label: 'Low' });
   expect((await settings(page)).graphics).toMatchObject({ qualityPreset: 'low', renderScale: 0.75, shadows: 'off', waterDetail: 'low' });
-  await expect(page.locator('.gb-row', { hasText: 'Render scale' }).locator('output')).toHaveText('75%');
+  await expect(page.locator('.iw-row', { hasText: 'Render scale' }).locator('output')).toHaveText('75%');
 
   // Everything is still there after a reload, and the game shows it.
   await page.reload();
@@ -71,6 +71,6 @@ test('sliders, checkboxes and pickers change the game and persist', async ({ pag
   expect(reloaded.graphics).toMatchObject({ qualityPreset: 'low', showFps: true, fpsCap: 60 });
   await page.getByRole('button', { name: 'New Game' }).click();
   await page.getByRole('button', { name: 'New game here' }).first().click();
-  await expect(page.locator('.gb-meter .gb-bar.gb-stripes')).toHaveCount(1);
-  await expect(page.locator('.gb-debug')).toContainText('fps');
+  await expect(page.locator('.iw-meter .iw-bar.iw-stripes')).toHaveCount(1);
+  await expect(page.locator('.iw-debug')).toContainText('fps');
 });
