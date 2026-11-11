@@ -2,6 +2,10 @@
  * The ground: one mesh per island and one for the valley walls, every vertex
  * at the rules engine's `terrainHeight`. B2's terrain shader draws the rock,
  * moss and sand on it from the island's region preset.
+ *
+ * An island's ground also carries its dressing (world/dressing.ts) as children,
+ * and watches the eye for it: the small dressing and the landmarks' strokes are
+ * only drawn from near by (world/distance.ts).
  */
 import * as THREE from 'three';
 import { TUNING, VALLEY_NORTH_SHORE_Z, VALLEY_SOUTH_SHORE_Z, spotPosition } from '../data/index.ts';
@@ -10,9 +14,14 @@ import { terrainHeight, valleyHalfWidth } from '../sim/index.ts';
 import { terrainMaterialFor } from './b2/palette.js';
 import { PRESETS, presetIdFor } from './presets.ts';
 import type { PresetId } from './presets.ts';
+import { CLOSE_DRESSING, FINE_GROUND, FINE_LANDMARKS, clearDistance, eyeHook, watchDistance, within } from './world/distance.ts';
+import type { Watcher } from './world/distance.ts';
+import { disposeDressing, dressIsland } from './world/dressing.ts';
 
 /** Metres between terrain vertices on an island. The sim's ground is smooth: the detail is drawn by the shader. */
-const ISLAND_CELL = 2;
+const ISLAND_CELL = 3;
+/** The same from far off, where a 3 m cell is a pixel or two. */
+const FAR_ISLAND_CELL = 7;
 /** Ground deeper than this is under opaque water and is not built. */
 const DEEPEST_DRAWN = -1.6;
 /** Islands are meshed this far past their shoreline, in radii: where the shelf passes `DEEPEST_DRAWN`. */
@@ -32,6 +41,32 @@ export function terrainMaterial(presetId: PresetId): THREE.ShaderMaterial {
 export function disposeTerrainMaterials(): void {
   for (const material of materials.values()) material.dispose();
   materials.clear();
+  clearDistance();
+  disposeDressing();
+}
+
+/**
+ * What an island does as the eye moves: shows its small dressing only from near by, and gives each
+ * landmark standing on it (the ground mesh's siblings) every stroke from near by, its outline from far off.
+ */
+export function islandWatcher(island: IslandDefinition, ground: THREE.Object3D, close: THREE.Object3D): Watcher {
+  const reach = Math.max(island.radiusX, island.radiusZ);
+  let fine = true;
+  let fineGround = true;
+  return (eye) => {
+    const distance = Math.max(0, Math.hypot(island.center.x - eye.x, island.center.z - eye.z) - reach);
+    close.visible = within(close.visible, distance, CLOSE_DRESSING);
+    fineGround = within(fineGround, distance, FINE_GROUND);
+    const detail = ground.userData.detail as { fine: THREE.BufferGeometry; coarse: THREE.BufferGeometry } | undefined;
+    if (detail && ground instanceof THREE.Mesh) ground.geometry = fineGround ? detail.fine : detail.coarse;
+    fine = within(fine, distance, FINE_LANDMARKS);
+    for (const sibling of ground.parent?.children ?? []) {
+      if (!(sibling instanceof THREE.Mesh)) continue;
+      const { far, full } = sibling.geometry.userData as { far?: THREE.BufferGeometry; full?: THREE.BufferGeometry };
+      if (fine && full) sibling.geometry = full;
+      else if (!fine && far) sibling.geometry = far;
+    }
+  };
 }
 
 const smoothstep = (edge0: number, edge1: number, value: number): number => {
@@ -88,14 +123,14 @@ function heightField(
   return mesh;
 }
 
-/** One island's ground, with sand round its landing. */
-export function buildIslandTerrain(island: IslandDefinition): THREE.Mesh {
+/** One island's ground at a cell size, with sand round its landing. */
+function islandGround(island: IslandDefinition, cell: number): THREE.Mesh {
   const presetId = presetIdFor(island);
   const reach = 1 + Math.min(SHELF_DRAWN, TUNING.world.shelfWidth);
   const extentU = island.radiusX * reach;
   const extentV = island.radiusZ * reach;
-  const countU = Math.min(220, Math.ceil((extentU * 2) / ISLAND_CELL));
-  const countV = Math.min(220, Math.ceil((extentV * 2) / ISLAND_CELL));
+  const countU = Math.min(220, Math.ceil((extentU * 2) / cell));
+  const countV = Math.min(220, Math.ceil((extentV * 2) / cell));
   const cosine = Math.cos(island.rotation);
   const sine = Math.sin(island.rotation);
   const landing = spotPosition(island, island.landing);
@@ -111,6 +146,21 @@ export function buildIslandTerrain(island: IslandDefinition): THREE.Mesh {
     (x, z) => smoothstep(beachRadius, beachRadius * 0.45, Math.hypot(x - landing.x, z - landing.z)),
     terrainMaterial(presetId),
   );
+}
+
+/**
+ * One island's ground. It carries a coarse copy of itself for far off (`userData.detail`), its dressing
+ * as children, and it watches the eye for all three.
+ */
+export function buildIslandTerrain(island: IslandDefinition): THREE.Mesh {
+  const ground = islandGround(island, ISLAND_CELL);
+  ground.userData.detail = { fine: ground.geometry, coarse: islandGround(island, FAR_ISLAND_CELL).geometry };
+  const dressing = dressIsland(island);
+  ground.add(dressing.always, dressing.close);
+  ground.userData.dressing = dressing.counts;
+  eyeHook(ground);
+  watchDistance(islandWatcher(island, ground, dressing.close));
+  return ground;
 }
 
 /**
@@ -143,6 +193,7 @@ export function buildValleyTerrain(): THREE.Group {
       return { x: -halfWidth + (indexU / columns) * halfWidth * 2, z: shoreZ + direction * offset };
     }, noBeach, material));
   }
+  for (const strip of group.children) eyeHook(strip as THREE.Mesh);
   group.matrixAutoUpdate = false;
   return group;
 }

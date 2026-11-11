@@ -70,7 +70,7 @@ export function whitePine(b, x, y, z, H, rand, coarse = false) {
     const p = pt(0.2 + i * 0.09);
     const s = i % 2 ? 1 : -1;
     const stub = [p[0] + s * (0.5 + rand() * 0.5), p[1] + 0.25, p[2] + (rand() - 0.5) * 0.6];
-    if (!coarse) b.beam(p, stub, 0.035, PAL.bark, { r2: 0.012, id: 0.07, kind: KIND.BARK }, 5);
+    b.beam(p, stub, 0.035, PAL.bark, { r2: 0.012, id: 0.07, kind: KIND.BARK }, 5);
   }
   const tone = [PAL.pineDark, PAL.pine, '#567264', PAL.pine];
   const n = 8;
@@ -83,7 +83,7 @@ export function whitePine(b, x, y, z, H, rand, coarse = false) {
     const cx = p[0] + s * reach * 0.55 + WIND * (0.35 + rand() * 0.5) * taper;
     const cz = p[2] + (rand() - 0.5) * 1.2 * taper;
     const r = (1.25 + rand() * 0.6) * taper + 0.25;
-    if (!coarse) b.beam(p, [cx, p[1] + 0.12, cz], 0.04, PAL.bark, { r2: 0.015, id: 0.07, kind: KIND.BARK }, 5);
+    b.beam(p, [cx, p[1] + 0.12, cz], 0.04, PAL.bark, { r2: 0.015, id: 0.07, kind: KIND.BARK }, 5);
     b.add(boughGeo(r, 0.62, 9, rand, WIND * 0.3 * r, 0, coarse), tone[i % 4], { pos: [cx, p[1] - 0.12, cz], rot: [(rand() - 0.5) * 0.25, rand() * 6.28, (rand() - 0.5) * 0.25], scale: [1.25, 0.8, 0.9], kind: KIND.NEEDLE });
   }
   const top = pt(1);

@@ -16,17 +16,20 @@ import { PAL, inkMaterial } from './b2/palette.js';
 import { VALLEY_NORTH_SHORE_Z, VALLEY_SOUTH_SHORE_Z } from '../data/index.ts';
 import { terrainHeight, valleyHalfWidth } from '../sim/index.ts';
 import { VARIANTS, seededRandom } from './scatter.ts';
+import { FINE_TREES, watchDistance, within } from './world/distance.ts';
+import type { Watcher } from './world/distance.ts';
 import type { FloraKind, Placement } from './scatter.ts';
 
-type PropBuilder = (builder: Builder, variant: number, random: () => number) => void;
+/** `coarse` asks a tree for the same tree with about half the triangles. */
+type PropBuilder = (builder: Builder, variant: number, random: () => number, coarse?: boolean) => void;
 
 const BLADE = { id: THIN, glow: 0.45, flat: true, kind: KIND.PLAIN } as const;
 
 /** One variant of each kind, built round the origin with its foot at y = 0. */
 export const PROP_BUILDERS: Record<FloraKind, PropBuilder> = {
-  spruce: (builder, variant, random) => spruce(builder, 0, 0, 0, 5.5 + variant * 1.5, random),
-  pine: (builder, variant, random) => whitePine(builder, 0, 0, 0, 11 + variant * 2, random),
-  birch: (builder, variant, random) => birch(builder, 0, 0, 0, 5.6 + variant * 0.8, random),
+  spruce: (builder, variant, random, coarse) => spruce(builder, 0, 0, 0, 5.5 + variant * 1.5, random, coarse),
+  pine: (builder, variant, random, coarse) => whitePine(builder, 0, 0, 0, 11 + variant * 2, random, coarse),
+  birch: (builder, variant, random, coarse) => birch(builder, 0, 0, 0, 5.6 + variant * 0.8, random, coarse),
   scrub: (builder, variant, random) => {
     const radius = 0.5 + variant * 0.25 + random() * 0.15;
     builder.sphere(radius, variant ? PAL.sage : PAL.sageDeep, { pos: [0, radius * 0.35, 0], scale: [1.35, 0.7, 1.1], kind: KIND.LEAF }, 8);
@@ -85,20 +88,38 @@ const FAR_BUILDERS: Partial<Record<FloraKind, (builder: Builder) => void>> = {
 };
 
 let library: Record<FloraKind, THREE.BufferGeometry[]> | null = null;
+let coarseLibrary: Record<FloraKind, THREE.BufferGeometry[]> | null = null;
 let farLibrary: Partial<Record<FloraKind, THREE.BufferGeometry>> | null = null;
 
-function propLibrary(): Record<FloraKind, THREE.BufferGeometry[]> {
-  if (library) return library;
+const TREES: FloraKind[] = ['spruce', 'pine', 'birch'];
+
+function buildLibrary(coarse: boolean): Record<FloraKind, THREE.BufferGeometry[]> {
   const built = {} as Record<FloraKind, THREE.BufferGeometry[]>;
   (Object.keys(PROP_BUILDERS) as FloraKind[]).forEach((kind, kindIndex) => {
-    built[kind] = Array.from({ length: VARIANTS[kind] }, (_, variant) => {
+    built[kind] = coarse && !TREES.includes(kind) ? [] : Array.from({ length: VARIANTS[kind] }, (_, variant) => {
+      // The same seeds both times: a coarse tree is the fine one with fewer points, not another tree.
       const builder = new Builder(300 + kindIndex * 17 + variant);
-      PROP_BUILDERS[kind](builder, variant, seededRandom(9000 + kindIndex * 31 + variant));
+      PROP_BUILDERS[kind](builder, variant, seededRandom(9000 + kindIndex * 31 + variant), coarse);
       return builder.geometry();
     });
   });
-  library = built;
   return built;
+}
+
+function propLibrary(): Record<FloraKind, THREE.BufferGeometry[]> {
+  library ??= buildLibrary(false);
+  return library;
+}
+
+/** The trees again with about half the triangles, for the middle distance. */
+export function coarsePropLibrary(): Record<FloraKind, THREE.BufferGeometry[]> {
+  coarseLibrary ??= buildLibrary(true);
+  return coarseLibrary;
+}
+
+/** The full prop library, for the tests. */
+export function finePropLibrary(): Record<FloraKind, THREE.BufferGeometry[]> {
+  return propLibrary();
 }
 
 function farPropLibrary(): Partial<Record<FloraKind, THREE.BufferGeometry>> {
@@ -114,13 +135,23 @@ function farPropLibrary(): Partial<Record<FloraKind, THREE.BufferGeometry>> {
 }
 
 export function disposePropLibrary(): void {
-  for (const geometries of Object.values(library ?? {})) for (const geometry of geometries) geometry.dispose();
+  for (const geometries of [...Object.values(library ?? {}), ...Object.values(coarseLibrary ?? {})]) for (const geometry of geometries) geometry.dispose();
   for (const geometry of Object.values(farLibrary ?? {})) geometry.dispose();
   library = null;
+  coarseLibrary = null;
   farLibrary = null;
 }
 
 const SHARED_ATTRIBUTES = ['position', 'normal', 'aColor', 'aInfo', 'aTex'];
+
+/** A geometry that draws `source`'s vertices with another mesh's per-instance attribute. */
+function sharing(source: THREE.BufferGeometry, perInstance: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry();
+  for (const name of SHARED_ATTRIBUTES) geometry.setAttribute(name, source.getAttribute(name));
+  geometry.boundingSphere = source.boundingSphere;
+  geometry.setAttribute('aInst', perInstance);
+  return geometry;
+}
 const matrix = new THREE.Matrix4();
 const position = new THREE.Vector3();
 const quaternion = new THREE.Quaternion();
@@ -169,7 +200,17 @@ export interface IslandProps {
   counts: Record<FloraKind, number>;
 }
 
-const TREES: FloraKind[] = ['spruce', 'pine', 'birch'];
+/** The trees of one island: every bough from near by, half the triangles from the middle distance. */
+export function treeWatcher(trees: readonly THREE.InstancedMesh[], center: { x: number; z: number }, reach: number): Watcher {
+  let fine = true;
+  return (eye) => {
+    fine = within(fine, Math.max(0, Math.hypot(center.x - eye.x, center.z - eye.z) - reach), FINE_TREES);
+    for (const tree of trees) {
+      const detail = tree.userData.detail as { fine: THREE.BufferGeometry; coarse: THREE.BufferGeometry };
+      tree.geometry = fine ? detail.fine : detail.coarse;
+    }
+  };
+}
 
 /** Turn one island's placements into instanced meshes. */
 export function buildIslandProps(placements: readonly Placement[], seed: number): IslandProps {
@@ -178,7 +219,9 @@ export function buildIslandProps(placements: readonly Placement[], seed: number)
   const detail = new THREE.Group();
   const counts = { spruce: 0, pine: 0, birch: 0, scrub: 0, boulder: 0, reed: 0, sedge: 0 };
   const geometries = propLibrary();
+  const coarse = coarsePropLibrary();
   const farGeometries = farPropLibrary();
+  const trees: THREE.InstancedMesh[] = [];
   (Object.keys(VARIANTS) as FloraKind[]).forEach((kind, kindIndex) => {
     const ofKind = placements.filter((placement) => placement.kind === kind);
     counts[kind] = ofKind.length;
@@ -186,7 +229,12 @@ export function buildIslandProps(placements: readonly Placement[], seed: number)
     const tree = TREES.includes(kind);
     for (let variant = 0; variant < VARIANTS[kind]; variant += 1) {
       const ofVariant = ofKind.filter((placement) => placement.variant === variant);
-      if (ofVariant.length > 0) (tree ? near : detail).add(instancedMesh(geometries[kind][variant], ofVariant, seed + kindIndex * 97 + variant));
+      if (ofVariant.length === 0) continue;
+      const mesh = instancedMesh(geometries[kind][variant], ofVariant, seed + kindIndex * 97 + variant);
+      (tree ? near : detail).add(mesh);
+      if (!tree) continue;
+      mesh.userData.detail = { fine: mesh.geometry, coarse: sharing(coarse[kind][variant], mesh.geometry.getAttribute('aInst')) };
+      trees.push(mesh);
     }
     const farGeometry = farGeometries[kind];
     // Far trees are one size of mesh: carry each variant's height in its scale.
@@ -195,6 +243,13 @@ export function buildIslandProps(placements: readonly Placement[], seed: number)
     }
   });
   for (const group of [near, far, detail]) group.matrixAutoUpdate = false;
+  if (trees.length > 0) {
+    // The island as its trees see it: the middle of them, and how far out they stand.
+    const xs = placements.map((placement) => placement.x);
+    const zs = placements.map((placement) => placement.z);
+    const center = { x: (Math.min(...xs) + Math.max(...xs)) / 2, z: (Math.min(...zs) + Math.max(...zs)) / 2 };
+    watchDistance(treeWatcher(trees, center, Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)) / 2));
+  }
   return { near, far, detail, counts };
 }
 

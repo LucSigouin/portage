@@ -27,7 +27,7 @@ export const TONE = {
   brick: '#a9624d', craneYellow: '#c79a34', towerRed: '#a8503e', tyre: '#3a3b44',
   reed: '#8c9c68', reedPale: '#a3a56c', cattail: '#6b4f3a', smoke: '#d6d7cf',
   cutStone: '#d6cdc0', cutStonePink: '#d3bcb0', cutStoneGrey: '#c4bdb4',
-  apple: '#c64732', berry: '#d8402a', leaf: '#7d9a72', fog: '#dcdfd6',
+  apple: '#c64732', berry: '#d8402a', leaf: '#7d9a72', fog: '#cfd5d1',
 } as const;
 
 /** A bare pen line: wires, lattice, rungs. Never outlined. */
