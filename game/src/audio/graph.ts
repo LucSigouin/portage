@@ -156,16 +156,25 @@ export interface SmoothedParameter {
   readonly target: number;
 }
 
+/**
+ * The most a parameter may be set to. The output device decides it: a headset in call mode runs at 24 kHz,
+ * so no filter can sit above 12 kHz there, and the browser warns about anything higher.
+ */
+export function withinRange(parameter: AudioParam, value: number): number {
+  const ceiling = parameter.maxValue;
+  return Number.isFinite(ceiling) ? Math.min(value, ceiling) : value;
+}
+
 export function createSmoothedParameter(
   context: BaseAudioContext, parameter: AudioParam, initial: number, defaultTimeConstant: number,
 ): SmoothedParameter {
   let current = initial;
-  parameter.value = initial;
+  parameter.value = withinRange(parameter, initial);
   return {
     set(target: number, timeConstant = defaultTimeConstant): void {
       if (!Number.isFinite(target) || Math.abs(target - current) < 1e-5) return;
       current = target;
-      parameter.setTargetAtTime(target, context.currentTime, Math.max(timeConstant, 0.001));
+      parameter.setTargetAtTime(withinRange(parameter, target), context.currentTime, Math.max(timeConstant, 0.001));
     },
     get target(): number {
       return current;
@@ -266,7 +275,7 @@ export function createAudioGraph(context: AudioContext, random: () => number): A
     filter(type: BiquadFilterType, frequency: number, quality = 0.707): BiquadFilterNode {
       const node = track(context.createBiquadFilter());
       node.type = type;
-      node.frequency.value = frequency;
+      node.frequency.value = withinRange(node.frequency, frequency);
       node.Q.value = quality;
       return node;
     },
