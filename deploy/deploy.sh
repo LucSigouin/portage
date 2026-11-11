@@ -5,8 +5,8 @@
 #
 #   bash deploy/deploy.sh --yes
 #
-# Needs Luc's go each time, and a shell that is signed in to Cloudflare (Luc's own shell has the token;
-# if a deploy says the login expired, run deploy/login.sh). Roll back: delete sigouin-net/site/portage
+# Needs Luc's go each time, and wrangler's browser login to Cloudflare. If the upload says a token is
+# needed, the login has expired: run deploy/login.sh, approve in the browser, then run this again. Roll back: delete sigouin-net/site/portage
 # and run sigouin-net/deploy/deploy.sh, or pick the previous deployment in the Cloudflare Pages dashboard.
 set -euo pipefail
 
