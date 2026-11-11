@@ -250,7 +250,16 @@
             { "title": "Report: audio engine", "href": "docs/report-audio-engine.html", "see": "How the sound is made in code, and what is still unheard.", "from": "../scratch/portage/zuma-report.md" },
             { "title": "Report: step 1, the look", "href": "docs/report-step1-look.html", "see": "B2 moved into the real game: what was checked, what each check caught when broken, and what is still a stand-in.", "from": "../scratch/portage/step1-look-report.md" },
             { "title": "Report: step 1, menus and HUD", "href": "docs/report-step1-ui.html", "see": "The Ink & Wash interface on real game data: every screen, keyboard use, contrast, and the gaps left for later.", "from": "../scratch/portage/step1-ui-report.md" },
-            { "title": "Guide: how the look is built", "href": "docs/look-guide.html", "see": "For workers: where each drawn thing lives and how to add an attachment, landmark or survivor.", "from": "game/LOOK.md" }
+            { "title": "Guide: how the look is built", "href": "docs/look-guide.html", "see": "For workers: where each drawn thing lives and how to add an attachment, landmark or survivor.", "from": "game/LOOK.md" },
+            { "title": "Report: the sharp player", "href": "docs/report-sharp.html", "see": "Why the player went blurry when zooming out, the fix, and what it did not fix (speed).", "from": "../scratch/portage/sharp-report.md" },
+            { "title": "Report: rules for a crew of four", "href": "docs/report-crew.html", "see": "Up to 4 players in one canoe, the F key, one-press scavenging, and the proof that solo did not change.", "from": "../scratch/portage/crew-report.md" },
+            { "title": "Report: tools belong to the crew", "href": "docs/report-tools.html", "see": "Luc's call that a found tool works for everyone, and how it was checked.", "from": "../scratch/portage/tools-report.md" },
+            { "title": "Report: item icons", "href": "docs/report-icons.html", "see": "The 54 icons, where they show, and the ones the worker doubts.", "from": "../scratch/portage/icons-report.md" },
+            { "title": "Report: the crew drawn properly", "href": "docs/report-crewfit.html", "see": "Seats, colours, paddling, bailing, sleeping, walking, and the finer pen on a far-away player.", "from": "../scratch/portage/crewfit-report.md" },
+            { "title": "Report: the canoe", "href": "docs/report-canoe.html", "see": "Four hull tiers, 19 attachments, three survivors, and the collisions left with a crew of four.", "from": "../scratch/portage/canoe-report.md" },
+            { "title": "Report: the valley", "href": "docs/report-world.html", "see": "Every landmark and scavenge node, 15 islands told apart, and what each view costs to draw.", "from": "../scratch/portage/world-report.md" },
+            { "title": "Guide: how the canoe is drawn", "href": "docs/look-canoe.html", "see": "For workers: hulls, attachments, seats and the checks that guard them.", "from": "game/LOOK-canoe.md" },
+            { "title": "Guide: how the valley is drawn", "href": "docs/look-world.html", "see": "For workers: landmarks, nodes, island dressing and detail by distance.", "from": "game/LOOK-world.md" }
           ]
         }
       ]
