@@ -50,7 +50,7 @@ describe('talking to survivors', () => {
     beside(state, 'tink');
     dispatch(state, { type: 'talk', npcId: 'tink' });
     dispatch(state, { type: 'choose_dialogue_option', optionIndex: 0 });
-    expect(state.players[0].tools).toContain('wrench');
+    expect(state.tools).toContain('wrench');
     expect(state.flags.tink_gave_wrench).toBe(true);
   });
 

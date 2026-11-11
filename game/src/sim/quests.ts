@@ -42,7 +42,7 @@ function measuredProgress(state: GameState, objective: ObjectiveDefinition): num
     case 'deliver':
       return Math.min(objective.count, countHeld(state, objective.itemId));
     case 'have_tool':
-      return state.players.some((player) => player.tools.includes(objective.toolId)) ? 1 : 0;
+      return state.tools.includes(objective.toolId) ? 1 : 0;
     case 'hull':
       return state.canoe.hullTier >= objective.tier ? 1 : 0;
     case 'attachment':

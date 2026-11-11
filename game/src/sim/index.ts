@@ -20,9 +20,10 @@
  *
  * A game has one to four players (`state.players`, in id order; `createGame`
  * takes `crew`, `addPlayer` seats one more). Solo is a crew of one. Each
- * player has their own position, mode, seat, meters, backpack, tool belt,
- * selected tool, scavenge, conversation and bed. The canoe, its cargo and
- * attachments, the key items, the quests, the world, the clock and the
+ * player has their own position, mode, seat, meters, backpack, tool in hand,
+ * conversation and bed. The canoe, its cargo and attachments, the tool belt
+ * (`state.tools`: a tool one player finds or makes is everyone's), the key
+ * items, the quests, the world, the clock and the
  * weather are shared.
  *
  * - `step(state, input, dt)`: `input` is one `StepInput` (player 0) or a list

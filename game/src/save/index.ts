@@ -39,13 +39,13 @@ export type SaveMigration = (envelope: { version: number; savedAt: number; state
  * Version 1 was the solo game: one `player` on the state, holding the key
  * items, with the conversation beside it. Version 2 is the crew: `players`
  * (the old player becomes player 0, in the stern seat when aboard), key items
- * held by the crew, the conversation on the player having it, and no scavenge
- * in progress (it takes one press now).
+ * and tools held by the crew, the conversation on the player having it, and no
+ * scavenge in progress (it takes one press now).
  */
 function migrateSoloToCrew(envelope: { version: number; savedAt: number; state: unknown }): { version: number; savedAt: number; state: unknown } {
   const state = { ...(envelope.state as Record<string, unknown>) };
   // The hold-to-scavenge state went with the hold: scavenging takes one press.
-  const { keyItems, harvest: _harvest, interactWasHeld: _interactWasHeld, ...solo } = { ...(state.player as Record<string, unknown>) };
+  const { keyItems, tools, harvest: _harvest, interactWasHeld: _interactWasHeld, ...solo } = { ...(state.player as Record<string, unknown>) };
   state.players = [{
     ...solo,
     id: 0,
@@ -56,6 +56,7 @@ function migrateSoloToCrew(envelope: { version: number; savedAt: number; state: 
     dialogue: state.dialogue ?? null,
   }];
   state.keyItems = keyItems ?? {};
+  state.tools = tools ?? [];
   delete state.player;
   delete state.dialogue;
   return { version: 2, savedAt: envelope.savedAt, state };
@@ -80,6 +81,7 @@ function looksLikeState(value: unknown): value is GameState {
   const candidate = value as Record<string, unknown>;
   return typeof candidate.seed === 'number' && typeof candidate.time === 'number'
     && Array.isArray(candidate.players) && candidate.players.length > 0
+    && Array.isArray(candidate.tools)
     && typeof candidate.canoe === 'object' && candidate.canoe !== null
     && typeof candidate.quests === 'object' && candidate.quests !== null
     && Array.isArray(candidate.events);

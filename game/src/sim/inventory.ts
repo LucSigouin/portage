@@ -93,8 +93,9 @@ export function hasAttachment(state: GameState, attachmentId: keyof typeof ATTAC
   return state.canoe.attachments.includes(attachmentId);
 }
 
-export function hasTool(player: PlayerState, toolId: ToolId): boolean {
-  return player.tools.includes(toolId);
+/** True when the crew has the tool. Every player may use it. */
+export function hasTool(state: GameState, toolId: ToolId): boolean {
+  return state.tools.includes(toolId);
 }
 
 /** Cargo slots of the current hull plus attachment bonuses. */
@@ -142,21 +143,21 @@ export function cargoAccessible(state: GameState, player: PlayerState): boolean 
 }
 
 /**
- * Everything the crew owns of an item: any belt, the key items, every
+ * Everything the crew owns of an item: the tool belt, the key items, every
  * backpack and the cargo. Quests count this, so anyone's haul counts.
  */
 export function countHeld(state: GameState, itemId: ItemId): number {
   const category = ITEMS[itemId].category;
-  if (category === 'tool') return state.players.some((player) => player.tools.includes(itemId as ToolId)) ? 1 : 0;
+  if (category === 'tool') return hasTool(state, itemId as ToolId) ? 1 : 0;
   if (!isStackable(itemId)) return state.keyItems[itemId] ?? 0;
   let total = countInStacks(state.canoe.cargo, itemId);
   for (const player of state.players) total += countInStacks(player.backpack, itemId);
   return total;
 }
 
-/** What one player can use right now: their belt, the key items, their backpack and the cargo in reach. */
+/** What one player can use right now: the crew's tools, the key items, their backpack and the cargo in reach. */
 export function countAccessible(state: GameState, player: PlayerState, itemId: ItemId): number {
-  if (ITEMS[itemId].category === 'tool') return player.tools.includes(itemId as ToolId) ? 1 : 0;
+  if (ITEMS[itemId].category === 'tool') return hasTool(state, itemId as ToolId) ? 1 : 0;
   if (!isStackable(itemId)) return state.keyItems[itemId] ?? 0;
   const inBackpack = countInStacks(player.backpack, itemId);
   return cargoAccessible(state, player) ? inBackpack + countInStacks(state.canoe.cargo, itemId) : inBackpack;
@@ -169,7 +170,7 @@ function containerOrder(state: GameState, player: PlayerState): Container[] {
 }
 
 /**
- * Give items to a player. Tools go on their belt, key items to the crew's
+ * Give items to a player. Tools go on the crew's belt, key items to the crew's
  * key items, the rest into their backpack and the cargo (cargo first when
  * aboard). Returns the stacks that did not fit.
  */
@@ -179,8 +180,8 @@ export function grantItems(state: GameState, player: PlayerState, items: ItemAmo
     if (count <= 0) continue;
     const category = ITEMS[itemId].category;
     if (category === 'tool') {
-      if (!player.tools.includes(itemId as ToolId)) {
-        player.tools.push(itemId as ToolId);
+      if (!hasTool(state, itemId as ToolId)) {
+        state.tools.push(itemId as ToolId);
         emit(state, { type: 'item_gained', itemId, count: 1, container: 'belt' }, player);
       }
       continue;

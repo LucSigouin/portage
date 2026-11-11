@@ -105,7 +105,7 @@ describe('old saves', () => {
       expect(state.version).toBe(SAVE_VERSION);
       expect(state.players).toHaveLength(1);
       const player = state.players[0];
-      const { keyItems, harvest, interactWasHeld, ...solo } = old.player;
+      const { keyItems, tools, harvest, interactWasHeld, ...solo } = old.player;
       // Every field the old player had is still on player 0, untouched...
       expect(player).toMatchObject(solo);
       // ...except the hold-to-scavenge state, which went with the hold.
@@ -117,8 +117,11 @@ describe('old saves', () => {
       expect(Object.keys(player).sort()).toEqual(Object.keys(newGame().players[0]).sort());
       expect(player).toMatchObject({ id: 0, paddling: false, bailing: false, asleep: false, dialogue: old.dialogue });
       expect(player.seat).toBe(old.player.mode === 'canoe' ? 0 : null);
-      // The key items moved to the crew. Nothing of the old shape is left behind.
+      // The key items and the tools moved to the crew. Nothing of the old shape is left behind.
       expect(state.keyItems).toEqual(keyItems);
+      expect(state.tools).toEqual(tools);
+      expect(tools).toContain('bailing_can');
+      expect(Object.keys(player)).not.toContain('tools');
       expect('player' in state).toBe(false);
       expect('dialogue' in state).toBe(false);
       // Everything shared is exactly as it was saved.
@@ -155,7 +158,7 @@ describe('old saves', () => {
     storage.setItem(`${SAVE_KEY_PREFIX}0`, fixture('ashore'));
     const store = createSaveStore(storage, () => 1000);
     const loaded = store.load(0);
-    expect(loaded.ok && loaded.state.players[0].tools).toEqual(['bailing_can', 'stone_knife', 'hatchet']);
+    expect(loaded.ok && loaded.state.tools).toEqual(['bailing_can', 'stone_knife', 'hatchet']);
     expect(store.list()[0]).toMatchObject({ empty: false, corrupt: false, mainQuestId: 'ribs_and_rails' });
   });
 });
@@ -170,7 +173,8 @@ describe('crew saves', () => {
     expect(dispatch(state, { type: 'disembark' }, 2).ok).toBe(true);
     expect(dispatch(state, { type: 'disembark' }, 0).ok).toBe(true);
     state.players[2].backpack.push({ itemId: 'driftwood', count: 5 });
-    state.players[3].tools.push('hatchet');
+    state.tools.push('hatchet');
+    state.players[1].selectedTool = 'hatchet';
     state.players[3].selectedTool = 'hatchet';
     state.keyItems.lens = 1;
     for (let index = 0; index < 120; index += 1) step(state, [{ ...NEUTRAL_INPUT, moveX: 1 }, undefined, { ...NEUTRAL_INPUT, moveY: 1 }], FIXED_STEP);
@@ -184,6 +188,9 @@ describe('crew saves', () => {
     expect(loaded.state).toEqual(state);
     expect(hashState(loaded.state)).toBe(hashState(state));
     expect(loaded.state.players.map((player) => player.id)).toEqual([0, 1, 2, 3]);
+    // One belt for the crew, and each player's own tool in hand.
+    expect(loaded.state.tools).toEqual(['bailing_can', 'hatchet']);
+    expect(loaded.state.players.map((player) => player.selectedTool)).toEqual([null, 'hatchet', null, 'hatchet']);
     // The loaded game carries on exactly as the one that never stopped.
     for (let index = 0; index < 600; index += 1) {
       step(state, inputs, FIXED_STEP);
@@ -198,6 +205,13 @@ describe('crew saves', () => {
     expect(deserialize(JSON.stringify(broken))).toEqual({ ok: false, reason: 'corrupt' });
     delete broken.state.players;
     expect(deserialize(JSON.stringify(broken))).toEqual({ ok: false, reason: 'corrupt' });
+  });
+
+  it('refuses a save with no crew tool belt, such as one from before the tools were shared', () => {
+    const old = JSON.parse(serialize(newGame(3, { crew: 2 }), 1));
+    for (const player of old.state.players) player.tools = old.state.tools;
+    delete old.state.tools;
+    expect(deserialize(JSON.stringify(old))).toEqual({ ok: false, reason: 'corrupt' });
   });
 });
 

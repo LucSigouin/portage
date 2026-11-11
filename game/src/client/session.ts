@@ -396,7 +396,7 @@ export class Session {
       mode: player.mode,
       interactable: selectInteractable(game, this.localPlayerId),
       sailRaised: game.canoe.sailRaised,
-      tools: player.tools,
+      tools: game.tools,
       selectedTool: player.selectedTool,
     };
   }

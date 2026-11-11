@@ -62,7 +62,7 @@ describe('capsize', () => {
     });
 
     // Tools, attachments and quest items are never lost. Neither is the backpack.
-    expect(state.players[0].tools).toEqual(['bailing_can', 'hammer']);
+    expect(state.tools).toEqual(['bailing_can', 'hammer']);
     expect(state.keyItems).toEqual({ lens: 1 });
     expect(state.canoe.attachments).toEqual(['cargo_rack']);
     expect(state.canoe.hullTier).toBe(2);

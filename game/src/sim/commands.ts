@@ -169,7 +169,7 @@ export function dispatch(state: GameState, command: Command, playerId: PlayerId 
       return consume(state, player, command.itemId, true);
     case 'fill_water': {
       if (!Number.isInteger(command.count) || command.count < 1) return failure('invalid_amount');
-      if (!hasTool(player, 'bailing_can')) {
+      if (!hasTool(state, 'bailing_can')) {
         const missing = emptyMissing();
         missing.tools.push('bailing_can');
         return failure('missing_requirements', missing);
@@ -303,7 +303,7 @@ export function dispatch(state: GameState, command: Command, playerId: PlayerId 
       return success();
     }
     case 'select_tool':
-      if (command.toolId !== null && !hasTool(player, command.toolId)) return failure('tool_not_owned');
+      if (command.toolId !== null && !hasTool(state, command.toolId)) return failure('tool_not_owned');
       player.selectedTool = command.toolId;
       return success();
     case 'set_sail': {

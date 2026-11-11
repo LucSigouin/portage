@@ -28,8 +28,8 @@ export function accessibleStations(state: GameState, player: PlayerState): Stati
   return stations;
 }
 
-function toolsShort(player: PlayerState, tools: ToolId[]): ToolId[] {
-  return tools.filter((toolId) => !hasTool(player, toolId));
+function toolsShort(state: GameState, tools: ToolId[]): ToolId[] {
+  return tools.filter((toolId) => !hasTool(state, toolId));
 }
 
 /** What crafting a recipe `times` over still needs. Empty when it can be made. */
@@ -38,7 +38,7 @@ export function recipeMissing(state: GameState, player: PlayerState, recipeId: R
   const missing = emptyMissing();
   if (recipe.requiresFlag && !state.flags[recipe.requiresFlag]) missing.flag = recipe.requiresFlag;
   if (!accessibleStations(state, player).includes(recipe.station)) missing.station = recipe.station;
-  missing.tools = toolsShort(player, recipe.tools);
+  missing.tools = toolsShort(state, recipe.tools);
   missing.items = itemsShort(state, player, recipe.inputs, times);
   return missing;
 }
@@ -82,7 +82,7 @@ export function hullUpgradeMissing(state: GameState, player: PlayerState): Missi
   const next = HULL_TIERS[state.canoe.hullTier + 1];
   if (!next) return null;
   const missing = emptyMissing();
-  missing.tools = toolsShort(player, next.tools);
+  missing.tools = toolsShort(state, next.tools);
   missing.items = itemsShort(state, player, next.cost);
   return missing;
 }
@@ -107,7 +107,7 @@ export function attachmentMissing(state: GameState, player: PlayerState, attachm
   const missing = emptyMissing();
   if (state.canoe.hullTier < definition.minimumHullTier) missing.hullTier = definition.minimumHullTier;
   missing.attachments = definition.requiresAttachments.filter((required) => !state.canoe.attachments.includes(required));
-  missing.tools = toolsShort(player, definition.tools);
+  missing.tools = toolsShort(state, definition.tools);
   missing.items = itemsShort(state, player, definition.cost);
   return missing;
 }

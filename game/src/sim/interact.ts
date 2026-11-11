@@ -48,18 +48,18 @@ export function actionReady(state: GameState, nodeId: NodeId, actionIndex: numbe
 }
 
 /** What a node action still needs: tool, attachment or quest progress. */
-function actionMissing(state: GameState, player: PlayerState, definition: NodeDefinition, actionIndex: number): Missing {
+function actionMissing(state: GameState, definition: NodeDefinition, actionIndex: number): Missing {
   const action = definition.actions[actionIndex];
   const missing = emptyMissing();
-  if (action.tool && !hasTool(player, action.tool)) missing.tools.push(action.tool);
+  if (action.tool && !hasTool(state, action.tool)) missing.tools.push(action.tool);
   if (action.attachment && !hasAttachment(state, action.attachment)) missing.attachments.push(action.attachment);
   return missing;
 }
 
-function actionAllowed(state: GameState, player: PlayerState, definition: NodeDefinition, actionIndex: number): boolean {
+function actionAllowed(state: GameState, definition: NodeDefinition, actionIndex: number): boolean {
   const action = definition.actions[actionIndex];
   if (action.questGate && !questGateOpen(state, action.questGate, definition.id)) return false;
-  return !hasMissing(actionMissing(state, player, definition, actionIndex));
+  return !hasMissing(actionMissing(state, definition, actionIndex));
 }
 
 /**
@@ -79,9 +79,9 @@ export function chooseNodeAction(
   if (ready.length === 0) return null;
   const selectedTool = player.selectedTool;
   const selected = ready.find((index) => selectedTool !== null && definition.actions[index].tool === selectedTool
-    && actionAllowed(state, player, definition, index));
+    && actionAllowed(state, definition, index));
   if (selected !== undefined) return { actionIndex: selected, allowed: true };
-  const allowed = ready.find((index) => actionAllowed(state, player, definition, index));
+  const allowed = ready.find((index) => actionAllowed(state, definition, index));
   if (allowed !== undefined) return { actionIndex: allowed, allowed: true };
   return { actionIndex: ready[0], allowed: false };
 }
@@ -97,7 +97,7 @@ function nodeInteractable(state: GameState, player: PlayerState, definition: Nod
     };
   }
   const action = definition.actions[choice.actionIndex];
-  const missing = actionMissing(state, player, definition, choice.actionIndex);
+  const missing = actionMissing(state, definition, choice.actionIndex);
   let prompt = `${action.verb}: ${definition.name}`;
   if (!choice.allowed) {
     if (missing.tools.length > 0) prompt = `${definition.name} needs ${ITEMS[missing.tools[0]].name.toLowerCase()}`;

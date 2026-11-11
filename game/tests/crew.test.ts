@@ -3,7 +3,7 @@
  * covered by the rest of the suite, which runs unchanged on a crew of one.
  */
 import { describe, expect, it } from 'vitest';
-import { HULL_TIERS, ISLANDS_BY_ID, TUNING, spotPosition } from '../src/data/index.ts';
+import { HULL_TIERS, ISLANDS_BY_ID, NODES_BY_ID, NPCS, TUNING, spotPosition } from '../src/data/index.ts';
 import type { IslandId } from '../src/data/index.ts';
 import {
   FIXED_STEP, MAXIMUM_PLAYERS, NEUTRAL_INPUT, addPlayer, createGame, dispatch, drainEvents, eventsFor, hashState,
@@ -52,6 +52,12 @@ function putAshore(player: PlayerState, islandId: IslandId, x: number, z: number
   player.position = { x, y: terrainHeight(x, z), z };
 }
 
+/** Stand one player beside a node, off the canoe. */
+function putAtNode(player: PlayerState, nodeId: string): void {
+  const node = NODES_BY_ID[nodeId];
+  putAshore(player, node.islandId, node.position.x + 0.5, node.position.z);
+}
+
 /** The canoe beached at Home Knoll with the whole crew standing at the camp fire, fed and rested. */
 function crewAtCamp(crew: number): GameState {
   const state = newGame(7, { crew });
@@ -68,7 +74,7 @@ function crewAtCamp(crew: number): GameState {
 }
 
 describe('a crew of up to four', () => {
-  it('starts with one to four players, in id order, each in their own seat with their own kit', () => {
+  it('starts with one to four players, in id order, each in their own seat with their own backpack, and one tool belt for the crew', () => {
     expect(createGame(7).players).toHaveLength(1);
     for (const crew of [2, 3, 4]) {
       const state = createGame(7, { crew });
@@ -76,12 +82,14 @@ describe('a crew of up to four', () => {
       expect(state.players.map((player) => player.seat)).toEqual(Array.from({ length: crew }, (_, seat) => seat));
       expect(playersAboard(state)).toHaveLength(crew);
       for (const player of state.players) {
-        expect(player).toMatchObject({ mode: 'canoe', hunger: 80, thirst: 75, energy: 90, tools: ['bailing_can'], backpack: [] });
+        expect(player).toMatchObject({ mode: 'canoe', hunger: 80, thirst: 75, energy: 90, selectedTool: null, backpack: [] });
         expect(player.position).toEqual(state.canoe.position);
+        expect(Object.keys(player)).not.toContain('tools');
       }
+      // One bailing can for the crew, however many are aboard.
+      expect(state.tools).toEqual(['bailing_can']);
       // Separate objects: one player's backpack is not another's.
       expect(state.players[0].backpack).not.toBe(state.players[1].backpack);
-      expect(state.players[0].tools).not.toBe(state.players[1].tools);
     }
     expect(createGame(7, { crew: 9 }).players).toHaveLength(MAXIMUM_PLAYERS);
     expect(createGame(7, { crew: 0 }).players).toHaveLength(1);
@@ -393,13 +401,13 @@ describe('quests are the crew\'s', () => {
     expect(state.players[0].mode).toBe('canoe');
   });
 
-  it('counts what anyone holds or wears, and takes a delivery from whoever has it', () => {
+  it('counts what anyone holds and the crew\'s tools, and takes a delivery from whoever has it', () => {
     const state = crewAtCamp(3);
     state.quests.bail_out.status = 'completed';
     state.quests.first_haul.status = 'active';
     state.players[1].backpack.push({ itemId: 'driftwood', count: 3 });
     state.players[2].backpack.push({ itemId: 'fiber', count: 4 });
-    state.players[2].tools.push('stone_knife');
+    state.tools.push('stone_knife');
     runCrew(state, [], 1);
     expect(state.quests.first_haul.status).toBe('completed');
     // Key items are the crew's: one find shows in every inventory.
@@ -409,10 +417,12 @@ describe('quests are the crew\'s', () => {
     }
   });
 
-  it('keeps each tool belt and each conversation to its own player', () => {
+  it('keeps the tool in hand and each conversation to its own player', () => {
     const state = crewAtCamp(2);
-    state.players[1].tools.push('hatchet');
+    // Nobody can take a tool the crew does not have.
     expect(dispatch(state, { type: 'select_tool', toolId: 'hatchet' }, 0)).toMatchObject({ ok: false, reason: 'tool_not_owned' });
+    expect(dispatch(state, { type: 'select_tool', toolId: 'hatchet' }, 1)).toMatchObject({ ok: false, reason: 'tool_not_owned' });
+    state.tools.push('hatchet');
     expect(dispatch(state, { type: 'select_tool', toolId: 'hatchet' }, 1).ok).toBe(true);
     expect(state.players.map((player) => player.selectedTool)).toEqual([null, 'hatchet']);
     // A talk holds only the player having it.
@@ -423,6 +433,104 @@ describe('quests are the crew\'s', () => {
     expect(state.players[1].position.x).not.toBe(before.x + 0.8);
     expect(dispatch(state, { type: 'eat', itemId: 'berries' }, 0)).toMatchObject({ ok: false, reason: 'in_dialogue' });
     expect(dispatch(state, { type: 'eat', itemId: 'berries' }, 1)).toMatchObject({ ok: false, reason: 'item_not_held' });
+  });
+});
+
+describe('tools are the crew\'s', () => {
+  it('lets another player use a tool the moment one player makes it, an island away', () => {
+    const state = crewAtCamp(2);
+    const [maker, peeler] = state.players;
+    maker.backpack.push({ itemId: 'stone', count: 2 }, { itemId: 'driftwood', count: 1 }, { itemId: 'fiber', count: 2 });
+    putAtNode(peeler, 'birch_islet.birch.1');
+    expect(dispatch(state, { type: 'scavenge' }, 1)).toMatchObject({ ok: false, reason: 'missing_requirements', missing: { tools: ['stone_knife'] } });
+    drainEvents(state);
+    expect(dispatch(state, { type: 'craft', recipeId: 'stone_knife' }, 0).ok).toBe(true);
+    // The knife is the crew's: on nobody's person, in everybody's reach.
+    expect(state.tools).toEqual(['bailing_can', 'stone_knife']);
+    expect(drainEvents(state).find((event) => event.type === 'item_gained' && event.container === 'belt'))
+      .toMatchObject({ itemId: 'stone_knife', playerId: 0 });
+    for (const player of state.players) expect(selectInventory(state, player.id).tools).toEqual(['bailing_can', 'stone_knife']);
+    expect(selectInteractable(state, 1)).toMatchObject({ available: true, prompt: 'Peel: Birch' });
+    expect(dispatch(state, { type: 'scavenge' }, 1).ok).toBe(true);
+    expect(countIn(peeler.backpack, 'birch_bark')).toBeGreaterThanOrEqual(2);
+  });
+
+  it('lets another player use a tool the moment one player finds it', () => {
+    const state = crewAtCamp(2);
+    const [finder, opener] = state.players;
+    putAtNode(finder, 'the_boathouse.tool_rack');
+    putAtNode(opener, 'the_boathouse.locker');
+    expect(selectInteractable(state, 1)).toMatchObject({ nodeId: 'the_boathouse.locker', available: false, missing: { tools: ['pry_bar'] } });
+    expect(dispatch(state, { type: 'scavenge' }, 0).ok).toBe(true);
+    expect(state.tools).toEqual(['bailing_can', 'pry_bar']);
+    expect(selectInteractable(state, 1)).toMatchObject({ nodeId: 'the_boathouse.locker', available: true });
+    expect(dispatch(state, { type: 'scavenge' }, 1).ok).toBe(true);
+    expect(state.keyItems.saw_blade).toBe(1);
+  });
+
+  it('puts a tool one player is given on the crew\'s belt', () => {
+    const state = crewAtCamp(2);
+    const spot = spotPosition(ISLANDS_BY_ID[NPCS.tink.islandId], NPCS.tink.spot);
+    putAshore(state.players[1], NPCS.tink.islandId, spot.x + 1.5, spot.z);
+    expect(dispatch(state, { type: 'talk', npcId: 'tink' }, 1).ok).toBe(true);
+    expect(dispatch(state, { type: 'choose_dialogue_option', optionIndex: 0 }, 1).ok).toBe(true);
+    expect(state.tools).toEqual(['bailing_can', 'wrench']);
+    expect(dispatch(state, { type: 'select_tool', toolId: 'wrench' }, 0).ok).toBe(true);
+  });
+
+  it('lets two players hold the same tool in hand and work with it, each putting it away on their own', () => {
+    const state = crewAtCamp(2);
+    state.tools.push('hatchet');
+    putAtNode(state.players[0], 'home_knoll.spruce.1');
+    putAtNode(state.players[1], 'home_knoll.spruce.2');
+    for (const player of state.players) expect(dispatch(state, { type: 'select_tool', toolId: 'hatchet' }, player.id).ok).toBe(true);
+    expect(state.players.map((player) => player.selectedTool)).toEqual(['hatchet', 'hatchet']);
+    for (const player of state.players) {
+      expect(selectInteractable(state, player.id)).toMatchObject({ prompt: 'Chop: Spruce', actionIndex: 1 });
+      expect(dispatch(state, { type: 'scavenge' }, player.id).ok).toBe(true);
+      expect(countIn(player.backpack, 'log')).toBeGreaterThan(0);
+    }
+    expect(dispatch(state, { type: 'select_tool', toolId: null }, 0).ok).toBe(true);
+    expect(state.players.map((player) => player.selectedTool)).toEqual([null, 'hatchet']);
+    expect(state.tools).toEqual(['bailing_can', 'hatchet']);
+  });
+
+  it('reads the crew\'s tools for crafting, building and the bailing can, whoever asks', () => {
+    // Crafting: player 1 at the camp bench, with a log and no saw in the crew.
+    const camp = crewAtCamp(2);
+    camp.players[1].backpack.push({ itemId: 'log', count: 1 });
+    expect(dispatch(camp, { type: 'craft', recipeId: 'plank' }, 1)).toMatchObject({ ok: false, reason: 'missing_requirements', missing: { tools: ['saw'] } });
+    camp.tools.push('saw');
+    expect(dispatch(camp, { type: 'craft', recipeId: 'plank' }, 1).ok).toBe(true);
+    expect(countIn(camp.players[1].backpack, 'plank')).toBeGreaterThan(0);
+
+    // Building: player 1 aboard the beached canoe, the cost in the cargo, no hammer in the crew.
+    const yard = newGame(7, { crew: 2 });
+    yard.canoe.hullTier = 1;
+    standOn(yard, 'home_knoll');
+    yard.canoe.cargo.push({ itemId: 'plank', count: 8 }, { itemId: 'nails', count: 6 }, { itemId: 'rope', count: 2 });
+    expect(dispatch(yard, { type: 'upgrade_hull' }, 1)).toMatchObject({ ok: false, reason: 'missing_requirements', missing: { tools: ['hammer'] } });
+    yard.tools.push('hammer');
+    expect(dispatch(yard, { type: 'upgrade_hull' }, 1).ok).toBe(true);
+    expect(yard.canoe.hullTier).toBe(2);
+
+    // The bailing can: one for the crew, and scooping water needs it whoever scoops.
+    const afloat = crewAfloat(2);
+    expect(dispatch(afloat, { type: 'fill_water', count: 1 }, 1).ok).toBe(true);
+    afloat.tools = [];
+    for (const player of afloat.players) {
+      expect(dispatch(afloat, { type: 'fill_water', count: 1 }, player.id))
+        .toMatchObject({ ok: false, reason: 'missing_requirements', missing: { tools: ['bailing_can'] } });
+    }
+  });
+
+  it('gives a late joiner the crew\'s tools at once, and no second bailing can', () => {
+    const state = createGame(7);
+    state.tools.push('hatchet');
+    const joined = addPlayer(state)!;
+    expect(state.tools).toEqual(['bailing_can', 'hatchet']);
+    expect(Object.keys(joined)).not.toContain('tools');
+    expect(dispatch(state, { type: 'select_tool', toolId: 'hatchet' }, joined.id).ok).toBe(true);
   });
 });
 
@@ -492,7 +600,8 @@ describe('failing in a crew', () => {
     const landing = islandLanding('birch_islet').shore;
     putAshore(state.players[1], 'birch_islet', landing.x, landing.z);
     state.players[1].backpack.push({ itemId: 'driftwood', count: 9 }, { itemId: 'berries', count: 1 }, { itemId: 'fiber', count: 20 });
-    state.players[1].tools.push('hatchet');
+    state.tools.push('hatchet');
+    state.players[1].selectedTool = 'hatchet';
     return state;
   }
 
@@ -510,9 +619,10 @@ describe('failing in a crew', () => {
     const berth = landingBerth('home_knoll', state.canoe.hullTier);
     expect(Math.hypot(tired.position.x - berth.x, tired.position.z - berth.z)).toBeLessThan(8);
     expect(terrainHeight(tired.position.x, tired.position.z)).toBeGreaterThanOrEqual(-TUNING.foot.disembarkDepth);
-    // Half of each stack, rounded in the player's favour. The tool belt is untouched.
+    // Half of each stack, rounded in the player's favour. No tool is lost, and the one in hand stays there.
     expect(tired.backpack).toEqual([{ itemId: 'driftwood', count: 5 }, { itemId: 'berries', count: 1 }, { itemId: 'fiber', count: 10 }]);
-    expect(tired.tools).toEqual(['bailing_can', 'hatchet']);
+    expect(state.tools).toEqual(['bailing_can', 'hatchet']);
+    expect(tired.selectedTool).toBe('hatchet');
     // The canoe, its cargo, the clock and the other player carry on untouched.
     expect(state.canoe).toEqual(control.canoe);
     expect(state.time).toBe(control.time);
@@ -556,8 +666,10 @@ describe('failing in a crew', () => {
     expect(state.canoe.lastBeached.islandId).toBe('home_knoll');
     expect(countIn(state.canoe.cargo, 'plank')).toBe(10);
     expect(state.time).toBeCloseTo(timeBefore + FIXED_STEP + TUNING.time.failSkipHours * HOUR, 6);
-    // The player on Birch Islet keeps their place, their backpack and their belt.
+    // The player on Birch Islet keeps their place, their backpack and their tool in hand. The crew keeps every tool.
     expect(JSON.stringify({ ...ashore, thirst: 0, hunger: 0, energy: 0 })).toBe(ashoreBefore);
+    expect(state.tools).toEqual(['bailing_can', 'hatchet']);
+    expect(ashore.selectedTool).toBe('hatchet');
   });
 
   it('capsizes everyone aboard under the solo rule and leaves the player ashore alone', () => {
@@ -576,6 +688,9 @@ describe('failing in a crew', () => {
     first.backpack.push({ itemId: 'berries', count: 6 });
     first.hunger = 91;
     second.thirst = 12;
+    state.tools.push('hammer', 'hatchet');
+    first.selectedTool = 'hammer';
+    ashore.selectedTool = 'hatchet';
     const ashoreBefore = { ...ashore.position };
     const timeBefore = state.time;
     drainEvents(state);
@@ -603,6 +718,9 @@ describe('failing in a crew', () => {
     expect(ashore).toMatchObject({ mode: 'foot', islandId: 'birch_islet' });
     expect(countIn(ashore.backpack, 'driftwood')).toBe(9);
     expect(ashore.energy).toBeGreaterThan(80);
+    // A capsize loses no tool, and takes none out of anyone's hand.
+    expect(state.tools).toEqual(['bailing_can', 'hammer', 'hatchet']);
+    expect(state.players.map((player) => player.selectedTool)).toEqual(['hammer', null, 'hatchet']);
   });
 
   it('does not capsize an empty canoe', () => {

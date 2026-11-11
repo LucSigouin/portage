@@ -466,7 +466,7 @@ export function selectInventory(state: GameState, playerId: PlayerId = 0): Inven
     cargo: state.canoe.cargo,
     cargoSlots: cargoSlots(state),
     cargoAccessible: cargoAccessible(state, player),
-    tools: player.tools,
+    tools: state.tools,
     selectedTool: player.selectedTool,
     keyItems: (Object.entries(state.keyItems) as [ItemId, number][]).map(([itemId, count]) => ({ itemId, count })),
     pendingRewards: state.pendingRewards,

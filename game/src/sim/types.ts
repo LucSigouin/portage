@@ -79,8 +79,7 @@ export interface PlayerState {
   thirst: number;
   energy: number;
   backpack: ItemStack[];
-  /** Tool belt. Takes no slot, never lost. */
-  tools: ToolId[];
+  /** The tool in this player's hand, picked from the crew's tools (`GameState.tools`). */
   selectedTool: ToolId | null;
   /** Island the player stands on, when on foot. */
   islandId: IslandId | null;
@@ -196,6 +195,8 @@ export interface GameState {
   nodes: Record<NodeId, NodeState>;
   quests: Record<QuestId, QuestState>;
   trackedQuestId: QuestId | null;
+  /** The crew's tool belt: a tool anyone finds, makes or is given is everyone's at once. Takes no slot, never lost. */
+  tools: ToolId[];
   /** Unique finds and quest items, held by the crew as one. Take no slot, never lost. */
   keyItems: Partial<Record<ItemId, number>>;
   flags: Partial<Record<FlagId, boolean>>;

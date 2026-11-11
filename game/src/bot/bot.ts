@@ -165,7 +165,7 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
   const canoe = state.canoe;
   const here = (): IslandId | null => (player.mode === 'foot' ? player.islandId : null);
   const held = (itemId: ItemId): number => {
-    if (ITEMS[itemId].category === 'tool') return player.tools.includes(itemId as ToolId) ? 1 : 0;
+    if (ITEMS[itemId].category === 'tool') return state.tools.includes(itemId as ToolId) ? 1 : 0;
     if (!isStackable(itemId)) return state.keyItems[itemId] ?? 0;
     let total = 0;
     for (const stack of player.backpack) if (stack.itemId === itemId) total += stack.count;

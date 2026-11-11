@@ -82,11 +82,11 @@ export function teleportToCamp(state: GameState, islandId: IslandId): void {
   teleport(state, islandId, position.x + 1, position.z);
 }
 
-/** Hand the player items: tools to the belt, key items to key items, the rest to the backpack. */
+/** Hand player 0 items: tools to the crew's belt, key items to key items, the rest to the backpack. */
 export function give(state: GameState, itemId: ItemId, count = 1, container: 'backpack' | 'cargo' = 'backpack'): void {
   if (!isStackable(itemId)) {
     if (['bailing_can', 'stone_knife', 'hatchet', 'pry_bar', 'saw', 'hammer', 'fishing_rod', 'wrench'].includes(itemId)) {
-      if (!state.players[0].tools.includes(itemId as ToolId)) state.players[0].tools.push(itemId as ToolId);
+      if (!state.tools.includes(itemId as ToolId)) state.tools.push(itemId as ToolId);
     } else {
       state.keyItems[itemId] = (state.keyItems[itemId] ?? 0) + count;
     }

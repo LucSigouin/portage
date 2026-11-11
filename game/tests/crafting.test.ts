@@ -11,7 +11,7 @@ describe('crafting', () => {
     give(state, 'fiber', 2);
     const result = dispatch(state, { type: 'craft', recipeId: 'stone_knife' });
     expect(result).toMatchObject({ ok: true, gained: [{ itemId: 'stone_knife', count: 1 }] });
-    expect(state.players[0].tools).toContain('stone_knife');
+    expect(state.tools).toContain('stone_knife');
     expect(countIn(state.players[0].backpack, 'stone')).toBe(1);
     expect(countIn(state.players[0].backpack, 'driftwood')).toBe(1);
     expect(countIn(state.players[0].backpack, 'fiber')).toBe(0);

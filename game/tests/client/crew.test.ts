@@ -77,8 +77,8 @@ describe('the session plays one local player', () => {
     expect(session.dispatch({ type: 'eat', itemId: 'berries' }).ok).toBe(true);
     expect(second.hunger).toBeGreaterThan(30);
     expect(first.hunger).toBe(30);
-    // The snapshot the keys resolve against is the local player's: on foot, with their belt.
-    second.tools.push('hatchet');
+    // The snapshot the keys resolve against is the local player's: on foot, with the crew's belt.
+    session.game!.tools.push('hatchet');
     first.mode = 'canoe';
     expect(session.inputSnapshot()).toMatchObject({ mode: 'foot', tools: ['bailing_can', 'hatchet'] });
     session.keyDown('Digit2');
@@ -131,15 +131,23 @@ describe('view-models are the local player\'s', () => {
     const [first, , third] = state.players;
     first.hunger = 90;
     third.hunger = 12;
-    third.tools.push('hatchet');
+    state.tools.push('hatchet');
     third.selectedTool = 'hatchet';
     third.backpack.push({ itemId: 'berries', count: 3 });
     const mine = buildHudModel(state, settings, 0);
     const theirs = buildHudModel(state, settings, 0, 2);
     expect(mine.meters[0]).toMatchObject({ id: 'hunger', value: 90, low: false });
     expect(theirs.meters[0]).toMatchObject({ id: 'hunger', value: 12, low: true });
-    expect(mine.hotbar.map((slot) => slot.toolId)).toEqual(['bailing_can', null, null, null, null]);
+    // The hotbar and the inventory belt show the crew's tools to everyone; the tool in hand is each player's own.
+    for (const playerId of [0, 1, 2]) {
+      expect(buildHudModel(state, settings, 0, playerId).hotbar.map((slot) => slot.toolId), `hotbar ${playerId}`)
+        .toEqual(['bailing_can', 'hatchet', null, null, null]);
+      expect(buildInventoryPanel(state, playerId).tools.map((tool) => tool.toolId), `belt ${playerId}`).toEqual(['bailing_can', 'hatchet']);
+    }
+    expect(mine.hotbar[1]).toMatchObject({ toolId: 'hatchet', selected: false });
     expect(theirs.hotbar[1]).toMatchObject({ toolId: 'hatchet', selected: true });
+    expect(buildInventoryPanel(state, 0).tools.map((tool) => tool.selected)).toEqual([false, false]);
+    expect(buildInventoryPanel(state, 2).tools.map((tool) => tool.selected)).toEqual([false, true]);
     expect(buildInventoryPanel(state).backpack.label).toContain('Backpack 0 /');
     expect(buildInventoryPanel(state, 2).backpack.label).toContain('Backpack 1 /');
     const model = buildInterfaceModel({

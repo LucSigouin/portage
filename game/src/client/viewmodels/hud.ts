@@ -58,7 +58,9 @@ function buildWaterGauge(state: GameState, playerId: PlayerId): WaterGaugeModel 
 }
 
 function buildHotbar(state: GameState, settings: Settings, playerId: PlayerId): HotbarSlotModel[] {
-  const { tools, selectedTool } = playerOf(state, playerId);
+  // The crew's tools, the same for everyone; the tool in hand is this player's own.
+  const tools = state.tools;
+  const { selectedTool } = playerOf(state, playerId);
   return HOTBAR_ACTIONS.map((action, index) => {
     const toolId = tools[index] ?? null;
     const selected = toolId !== null && toolId === selectedTool;
