@@ -24,7 +24,7 @@
       "The rules handle up to 4 players sharing one canoe, and tools belong to the whole crew. Solo plays the identical game. F is the action key, the lantern is on L, scavenging takes one press.",
       "Item icons: a drawn icon beside every item name, 54 in all.",
       "The crew is drawn properly: each player in their own seat and their own colours, paddling, bailing, sleeping and walking for themselves. A far-away player keeps a fine outline. 629 tests pass, plus 58 browser tests.",
-      { "text": "Live on the web: sigouin.net/portage. Anyone with the link can play; search engines are asked not to list it.", "href": "https://sigouin.net/portage/" }
+      "Live on the web at https://sigouin.net/portage/ . Anyone with the link can play; search engines are asked not to list it."
     ],
     "running": [
       "The canoe: four hull tiers you can tell apart, all 19 attachments, the three survivors (worker Skye).",
