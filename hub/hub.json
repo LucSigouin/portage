@@ -11,20 +11,21 @@
   ],
   "name": "Portage",
   "pitch": "A browser survival-crafting game. The valley flooded. You have a leaky canoe, and you bolt what you build onto it.",
-  "updated": "2026-11-11, morning",
+  "updated": "2026-11-11, late morning",
   "status": {
     "done": [
       "Rules engine. Runs with no screen. 179 tests pass. A bot finishes the whole main quest.",
-      "Playable greybox with sound: the real game in placeholder graphics. 367 tests pass, plus 10 browser tests that press real keys.",
+      "Playable game with sound, first in placeholder graphics (greybox).",
       "Three art looks built and reviewed. A Cutbank 50, B Ink & Wash 50, C Blue Hour 45, each out of 60. The reviewer picks B.",
       "B2 built: look B drawn at the screen's full size, with clean pen lines and more drawn detail. Same menus, lobby and HUD.",
-      "Luc picked B2 on 2026-11-11. The game gets built in that look."
+      "Luc picked B2 on 2026-11-11. The game gets built in that look.",
+      "Step 1 of 3: the real game now draws in B2, with the Ink & Wash lobby, menus and HUD on real game data. 477 tests pass, plus 31 browser tests that press real keys. The bot finishes the main quest in the new look."
     ],
-    "running": [
-      "Step 1 of 3: look B2 wired into the real game (worker Rex), and the menus and HUD on real game data (worker Ryder). Ends with the first 10 minutes playable in B2.",
-      "Next: step 2, the content (4 hulls, 19 attachments, 15 islands). Then step 3, weather, night and finish."
-    ],
-    "waiting": []
+    "running": [],
+    "waiting": [
+      { "text": "Luc: play the first 10 minutes in B2 and say whether anything moves in a way that bothers you.", "href": "game/?at=quest1" },
+      "Then step 2: the content (4 hulls, 19 attachments, 15 islands, 3 survivors). Then step 3: storms, night, lantern light and finish."
+    ]
   },
   "addresses": [
     { "label": "Tailscale (Luc's private device network, never changes)", "url": "http://100.110.210.9:5230/" },
@@ -34,7 +35,7 @@
   "sections": [
     {
       "title": "Play",
-      "note": "The real game in placeholder graphics (greybox). Rules, quests, menus and sound are in. The final look is not. Needs a keyboard and mouse: no phone controls yet.",
+      "note": "The real game in the B2 look, with the Ink & Wash menus and HUD. Rules, quests and sound are in. Still simple stand-ins until step 2: landmarks (steeple, pylons, bridge), the three survivors and three attachments. Storm marks and lantern light come in step 3. Needs a keyboard and mouse: no phone controls yet.",
       "groups": [
         {
           "links": [
@@ -121,7 +122,7 @@
     },
     {
       "title": "Looks",
-      "note": "Three competing art styles for the same scene, and a second version of B. Luc picks one. Pictures open that view, held still. Free play lets you paddle, and needs a keyboard and mouse.",
+      "note": "Three competing art styles for the same scene, and a second version of B. Luc picked B2 on 2026-11-11, and the game is built in it. These pages are the reference studies. Pictures open that view, held still. Free play lets you paddle, and needs a keyboard and mouse.",
       "groups": [
         {
           "title": "B against B2",
@@ -177,7 +178,7 @@
         },
         {
           "title": "B2 · Ink & Wash, sharp",
-          "note": "B redrawn at the screen's full size, with more pen work inside the washes. Not scored by the reviewer yet.",
+          "note": "Luc's pick. B redrawn at the screen's full size, with more pen work inside the washes.",
           "links": [
             {
               "title": "Free play in look B2",
@@ -233,7 +234,10 @@
             { "title": "Design brief", "href": "docs/brief.html", "see": "The design every worker builds from: rules, world, canoe, quests, screens.", "from": "BRIEF.md" },
             { "title": "Report: rules engine", "href": "docs/report-rules-engine.html", "see": "What was built, the test counts, and the bot's run to the Beacon.", "from": "../scratch/portage/skye-report.md" },
             { "title": "Report: client core and greybox", "href": "docs/report-client-greybox.html", "see": "The playable game in placeholder graphics: input, camera, panels, saves.", "from": "../scratch/portage/rocky-report.md" },
-            { "title": "Report: audio engine", "href": "docs/report-audio-engine.html", "see": "How the sound is made in code, and what is still unheard.", "from": "../scratch/portage/zuma-report.md" }
+            { "title": "Report: audio engine", "href": "docs/report-audio-engine.html", "see": "How the sound is made in code, and what is still unheard.", "from": "../scratch/portage/zuma-report.md" },
+            { "title": "Report: step 1, the look", "href": "docs/report-step1-look.html", "see": "B2 moved into the real game: what was checked, what each check caught when broken, and what is still a stand-in.", "from": "../scratch/portage/step1-look-report.md" },
+            { "title": "Report: step 1, menus and HUD", "href": "docs/report-step1-ui.html", "see": "The Ink & Wash interface on real game data: every screen, keyboard use, contrast, and the gaps left for later.", "from": "../scratch/portage/step1-ui-report.md" },
+            { "title": "Guide: how the look is built", "href": "docs/look-guide.html", "see": "For workers: where each drawn thing lives and how to add an attachment, landmark or survivor.", "from": "game/LOOK.md" }
           ]
         }
       ]
