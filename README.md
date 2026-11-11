@@ -15,14 +15,11 @@ Done:
 - The whole main quest is playable, 12 quests from "Bail out" to "The Beacon". A test bot plays it to the end.
 - The Ink & Wash look, with the lobby, menus and HUD.
 - Sound, made in code.
+- The player, the crew and the canoe stay sharp at every zoom and window size.
+- Rules for up to 4 players sharing one canoe. Tools belong to the whole crew. Add `?crew=4` to the address to see a crew (the other three stand idle).
+- F is the action key, the lantern is on L, and scavenging takes one press.
 
-Being built now:
-
-- The player and canoe stay sharp at every zoom and window size.
-- Rules for up to 4 players sharing one canoe. The networking comes after the solo game is finished.
-- F as the action key, and scavenging in one press.
-
-Next: item icons, the canoe content (4 hulls, 19 attachments), the 15 islands, weather and night, then co-op you join by a link.
+Next: item icons and a crew list in the HUD, the canoe content (4 hulls, 19 attachments), the 15 islands, weather and night, then co-op you join by a link.
 
 ## Run it
 

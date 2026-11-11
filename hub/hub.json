@@ -11,7 +11,7 @@
   ],
   "name": "Portage",
   "pitch": "A browser survival-crafting game. The valley flooded. You have a leaky canoe, and you bolt what you build onto it.",
-  "updated": "2026-11-11, midday",
+  "updated": "2026-11-11, afternoon",
   "status": {
     "done": [
       "Rules engine. Runs with no screen. 179 tests pass. A bot finishes the whole main quest.",
@@ -19,15 +19,16 @@
       "Three art looks built and reviewed. A Cutbank 50, B Ink & Wash 50, C Blue Hour 45, each out of 60. The reviewer picks B.",
       "B2 built: look B drawn at the screen's full size, with clean pen lines and more drawn detail. Same menus, lobby and HUD.",
       "Luc picked B2 on 2026-11-11. The game gets built in that look.",
-      "Step 1 of 3: the real game now draws in B2, with the Ink & Wash lobby, menus and HUD on real game data. 477 tests pass, plus 31 browser tests that press real keys. The bot finishes the main quest in the new look."
+      "Step 1 of 3: the real game now draws in B2, with the Ink & Wash lobby, menus and HUD on real game data. 477 tests pass, plus 31 browser tests that press real keys. The bot finishes the main quest in the new look.",
+      "The player, the crew and the canoe stay sharp at every zoom and window size, and picture quality climbs back after a slow spell. Luc had seen the player go blurry when zooming out.",
+      "The rules handle up to 4 players sharing one canoe, and tools belong to the whole crew. Solo plays the identical game. F is the action key, the lantern is on L, scavenging takes one press. 590 tests pass, plus 48 browser tests."
     ],
-    "running": [
-      "Bug fix: the player and the canoe stay sharp at every zoom and window size, and the zoomed-out view gets faster (worker Skye). Luc saw the player go blurry when zooming out.",
-      "Co-op shape: the rules handle up to 4 players sharing one canoe. F becomes the action key, scavenging takes one press (worker Rex). Solo plays the same.",
-      "Next: item icons and the canoe content, then the islands and weather, then co-op networking on sigouin.net."
-    ],
+    "running": [],
     "waiting": [
-      "Luc: invite the guys to the private GitHub repo (github.com/LucSigouin/portage, Settings, Collaborators)."
+      { "text": "Luc: zoom out on an island and check the player stays sharp on your screen.", "href": "game/?shot=island&live=1" },
+      { "text": "Luc: see a crew of four in the canoe.", "href": "game/?crew=4" },
+      "Luc: invite the guys to the private GitHub repo (github.com/LucSigouin/portage, Settings, Collaborators).",
+      "Next: item icons and a crew list in the HUD, crewmates seated and paddling properly, then the canoe and island content, weather and night, and co-op networking on sigouin.net."
     ]
   },
   "addresses": [
@@ -50,7 +51,8 @@
                 "W, S, A, D: paddle and walk",
                 "Shift: power stroke",
                 "R: bail (hold)",
-                "E: land or interact",
+                "F: land, interact, scavenge",
+                "L: lantern",
                 "Tab: inventory",
                 "C: craft",
                 "B: canoe builder",
