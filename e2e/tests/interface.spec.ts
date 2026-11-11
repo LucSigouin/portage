@@ -1184,15 +1184,23 @@ test('alone, the HUD is the HUD it was: no crew card or mark, and its cards the 
     return shots;
   };
   for (const shot of ['play', 'island']) {
-    const alone = await pictures(`?shot=${shot}`, false);
-    expect(await page.locator('.iw-crew, .iw-mate, .iw-toque, .iw-mark-crew, .iw-marker-crew').count(), `${shot}: alone`).toBe(0);
-    const hud = await session<{ crew: unknown[]; marks: string[] }>(page,
-      '({ crew: portage.app.lastModel.hud.crew, marks: portage.app.lastModel.hud.compass.marks.map((mark) => mark.kind) })');
-    expect(hud.crew).toEqual([]);
-    expect(hud.marks).not.toContain('crew');
-    // With a crew of four beside you, the same cards are the same pixels once the crew card is taken away.
-    const crewed = await pictures(`?shot=${shot}&crew=4`, true);
-    CARDS.forEach((selector, index) => expect(alone[index]!.equals(crewed[index]!), `${shot}: ${selector} differs with a crew`).toBe(true));
+    // The pen borders are drawn through a filter, and about one load in thirty the graphics chip rasters one a hair
+    // differently (a few hundred edge pixels, by at most 18 of 255), crew or no crew. A real change shows on every
+    // load. So compare up to three pairs of loads, and ask that one pair matches to the pixel.
+    let differing: string[] = [];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const alone = await pictures(`?shot=${shot}`, false);
+      expect(await page.locator('.iw-crew, .iw-mate, .iw-toque, .iw-mark-crew, .iw-marker-crew').count(), `${shot}: alone`).toBe(0);
+      const hud = await session<{ crew: unknown[]; marks: string[] }>(page,
+        '({ crew: portage.app.lastModel.hud.crew, marks: portage.app.lastModel.hud.compass.marks.map((mark) => mark.kind) })');
+      expect(hud.crew).toEqual([]);
+      expect(hud.marks).not.toContain('crew');
+      // With a crew of four beside you, the same cards are the same pixels once the crew card is taken away.
+      const crewed = await pictures(`?shot=${shot}&crew=4`, true);
+      differing = CARDS.filter((_, index) => !alone[index]!.equals(crewed[index]!));
+      if (differing.length === 0) break;
+    }
+    expect(differing, `${shot}: cards that differ with a crew, on three loads running`).toEqual([]);
   }
   expect(problems).toEqual([]);
 });
