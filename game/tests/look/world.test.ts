@@ -95,7 +95,7 @@ describe('landmarks', () => {
     expect(ashore.length).toBeGreaterThanOrEqual(6);
     expect(afloat.length).toBeGreaterThanOrEqual(4);
     // Ashore it lies on the rules' ground. Over the water it stands clear of it.
-    for (const top of ashore) expect(top.y - top.ground).toBeGreaterThan(0.2), expect(top.y - top.ground).toBeLessThan(1.1);
+    for (const top of ashore) expect(top.y - top.ground).toBeGreaterThan(0.25), expect(top.y - top.ground).toBeLessThan(0.6);
     for (const top of afloat) expect(top.y).toBeGreaterThan(0.5), expect(top.y).toBeLessThan(1.7);
   });
 
