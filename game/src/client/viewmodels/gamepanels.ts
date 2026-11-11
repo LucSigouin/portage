@@ -7,7 +7,7 @@ import {
   selectBuildOptions, selectCanoeStats, selectCraftableRecipes, selectDialogue, selectInventory, selectMap,
   selectQuestLog,
 } from '../../sim/index.ts';
-import type { Command, Container, GameState, InventoryView, ItemStack, Missing, QuestView } from '../../sim/index.ts';
+import type { Command, Container, GameState, InventoryView, ItemStack, Missing, PlayerId, QuestView } from '../../sim/index.ts';
 import type { InterfaceIntent } from '../intents.ts';
 import { cardinalName, countedName, distanceText, itemName, needsText } from './format.ts';
 import { objectiveRows } from './hud.ts';
@@ -27,7 +27,7 @@ const button = (label: string, intent: InterfaceIntent, enabled = true, note: st
 /** How many of an item the player can use right now: backpack, plus cargo when it is in reach. */
 function countInReach(inventory: InventoryView, state: GameState, itemId: ItemId): number {
   if (ITEMS[itemId].category === 'tool') return inventory.tools.includes(itemId as never) ? 1 : 0;
-  if (!isStackable(itemId)) return state.player.keyItems[itemId] ?? 0;
+  if (!isStackable(itemId)) return state.keyItems[itemId] ?? 0;
   const count = (stacks: ItemStack[]): number =>
     stacks.filter((stack) => stack.itemId === itemId).reduce((sum, stack) => sum + stack.count, 0);
   return count(inventory.backpack) + (inventory.cargoAccessible ? count(inventory.cargo) : 0);
@@ -36,7 +36,7 @@ function countInReach(inventory: InventoryView, state: GameState, itemId: ItemId
 function costRows(costs: readonly ItemAmount[], inventory: InventoryView, state: GameState): CostRowModel[] {
   return costs.map(({ itemId, count }) => {
     const have = countInReach(inventory, state, itemId);
-    return { name: itemName(itemId), have, need: count, enough: have >= count };
+    return { itemId, name: itemName(itemId), have, need: count, enough: have >= count };
   });
 }
 
@@ -68,8 +68,8 @@ function itemSlots(stacks: ItemStack[], capacity: number, container: Container, 
   return slots;
 }
 
-export function buildInventoryPanel(state: GameState): PanelBody<'inventory'> {
-  const inventory = selectInventory(state);
+export function buildInventoryPanel(state: GameState, playerId: PlayerId = 0): PanelBody<'inventory'> {
+  const inventory = selectInventory(state, playerId);
   const rewards = inventory.pendingRewards;
   return {
     id: 'inventory',
@@ -83,10 +83,10 @@ export function buildInventoryPanel(state: GameState): PanelBody<'inventory'> {
       accessible: inventory.cargoAccessible,
     },
     tools: inventory.tools.map((toolId) => ({
-      toolId, name: ITEMS[toolId].name, selected: toolId === inventory.selectedTool,
+      toolId, itemId: toolId, name: ITEMS[toolId].name, selected: toolId === inventory.selectedTool,
       intent: command({ type: 'select_tool', toolId: toolId === inventory.selectedTool ? null : toolId }),
     })),
-    keyItems: inventory.keyItems.map(({ itemId, count }) => ({ name: itemName(itemId), count })),
+    keyItems: inventory.keyItems.map(({ itemId, count }) => ({ itemId, name: itemName(itemId), count })),
     stow: button(
       'Stow backpack in the canoe', command({ type: 'stow_backpack' }),
       inventory.cargoAccessible && inventory.backpack.length > 0,
@@ -98,6 +98,7 @@ export function buildInventoryPanel(state: GameState): PanelBody<'inventory'> {
     ),
     pendingRewards: rewards.length === 0 ? null : {
       text: `Waiting for room: ${rewards.map((stack) => countedName(stack.itemId, stack.count)).join(', ')}`,
+      items: rewards.map((stack) => ({ itemId: stack.itemId, name: itemName(stack.itemId), count: stack.count })),
       claim: button('Claim', command({ type: 'claim_rewards' })),
     },
     stationsText: `In reach: ${inventory.stations.map((station) => STATIONS[station].name.toLowerCase()).join(', ')}`,
@@ -108,9 +109,9 @@ export function buildInventoryPanel(state: GameState): PanelBody<'inventory'> {
 
 const STATION_ORDER: readonly StationId[] = ['hands', 'fire', 'bench', 'smoker', 'forge'];
 
-export function buildCraftingPanel(state: GameState): PanelBody<'crafting'> {
-  const inventory = selectInventory(state);
-  const availability = selectCraftableRecipes(state);
+export function buildCraftingPanel(state: GameState, playerId: PlayerId = 0): PanelBody<'crafting'> {
+  const inventory = selectInventory(state, playerId);
+  const availability = selectCraftableRecipes(state, playerId);
   return {
     id: 'crafting',
     stations: STATION_ORDER.map((stationId) => ({
@@ -123,6 +124,7 @@ export function buildCraftingPanel(state: GameState): PanelBody<'crafting'> {
           const missingText = entry.known ? needsText(entry.missing) : 'A survivor teaches this';
           return {
             recipeId: recipe.id,
+            itemId: entry.known ? recipe.output.itemId : null,
             name: entry.known ? recipe.name : 'Unknown recipe',
             description: entry.known ? recipe.description : '',
             outputText: entry.known ? countedName(recipe.output.itemId, recipe.output.count) : '',
@@ -130,7 +132,7 @@ export function buildCraftingPanel(state: GameState): PanelBody<'crafting'> {
             inputs: entry.known ? [
               ...costRows(recipe.inputs, inventory, state),
               ...recipe.tools.map((toolId) => ({
-                name: `${itemName(toolId)} (tool)`, have: inventory.tools.includes(toolId) ? 1 : 0, need: 1,
+                itemId: toolId, name: `${itemName(toolId)} (tool)`, have: inventory.tools.includes(toolId) ? 1 : 0, need: 1,
                 enough: inventory.tools.includes(toolId),
               })),
             ] : [],
@@ -163,18 +165,20 @@ function buildRow(
   intent: InterfaceIntent,
   blockedText: string,
   state: GameState,
+  inventory: InventoryView,
 ): BuildRowModel {
   const missingText = built ? '' : needsText(missing);
   return {
     id, name, description, built,
-    costs: built ? [] : costRows(costs, selectInventory(state), state),
+    costs: built ? [] : costRows(costs, inventory, state),
     missingText,
     build: built ? null : button('Build', intent, buildable, missingText || blockedText || null),
   };
 }
 
-export function buildCanoeBuilderPanel(state: GameState): PanelBody<'canoe_builder'> {
-  const options = selectBuildOptions(state);
+export function buildCanoeBuilderPanel(state: GameState, playerId: PlayerId = 0): PanelBody<'canoe_builder'> {
+  const options = selectBuildOptions(state, playerId);
+  const inventory = selectInventory(state, playerId);
   const stats = selectCanoeStats(state);
   const blockedText = options.blockedReason ? BUILD_BLOCKED_TEXT[options.blockedReason] : '';
   const nextHull = options.hull ? HULL_TIERS[options.hull.tier] : null;
@@ -192,14 +196,14 @@ export function buildCanoeBuilderPanel(state: GameState): PanelBody<'canoe_build
     hull: options.hull && nextHull
       ? buildRow('hull', `Hull: ${nextHull.name}`, nextHull.description,
         [...nextHull.cost, ...nextHull.tools.map((toolId) => ({ itemId: toolId as ItemId, count: 1 }))],
-        false, options.hull.buildable, options.hull.missing, command({ type: 'upgrade_hull' }), blockedText, state)
+        false, options.hull.buildable, options.hull.missing, command({ type: 'upgrade_hull' }), blockedText, state, inventory)
       : null,
     attachments: options.attachments.map((entry) => {
       const definition = ATTACHMENTS[entry.attachmentId];
       return buildRow(entry.attachmentId, definition.name, definition.description,
         [...definition.cost, ...definition.tools.map((toolId) => ({ itemId: toolId as ItemId, count: 1 }))],
         entry.built, entry.buildable, entry.missing,
-        command({ type: 'build_attachment', attachmentId: entry.attachmentId }), blockedText, state);
+        command({ type: 'build_attachment', attachmentId: entry.attachmentId }), blockedText, state, inventory);
     }),
   };
 }
@@ -252,8 +256,8 @@ export const MAP_BOUNDS = {
 const mapLeft = (x: number): number => (x - MAP_BOUNDS.minimumX) / (MAP_BOUNDS.maximumX - MAP_BOUNDS.minimumX);
 const mapTop = (z: number): number => (z - MAP_BOUNDS.minimumZ) / (MAP_BOUNDS.maximumZ - MAP_BOUNDS.minimumZ);
 
-export function buildMapPanel(state: GameState): PanelBody<'map'> {
-  const map = selectMap(state);
+export function buildMapPanel(state: GameState, playerId: PlayerId = 0): PanelBody<'map'> {
+  const map = selectMap(state, playerId);
   const width = MAP_BOUNDS.maximumX - MAP_BOUNDS.minimumX;
   const height = MAP_BOUNDS.maximumZ - MAP_BOUNDS.minimumZ;
   const islands: MapIslandModel[] = map.islands.filter((island) => island.discovered).map((island) => ({
@@ -290,8 +294,8 @@ export function buildMapPanel(state: GameState): PanelBody<'map'> {
 
 // --- Dialogue --------------------------------------------------------------------
 
-export function buildDialoguePanel(state: GameState): PanelBody<'dialogue'> | null {
-  const dialogue = selectDialogue(state);
+export function buildDialoguePanel(state: GameState, playerId: PlayerId = 0): PanelBody<'dialogue'> | null {
+  const dialogue = selectDialogue(state, playerId);
   if (!dialogue) return null;
   return {
     id: 'dialogue',

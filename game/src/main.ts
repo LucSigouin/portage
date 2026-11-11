@@ -14,6 +14,7 @@ import type { AudioEngine } from './client/contracts.ts';
 import { parseDebugParameters } from './client/debug/parameters.ts';
 import { createGameInterface } from './interface/index.ts';
 import { createWorldView } from './look/index.ts';
+import { setLocalPlayerId } from './look/crew.ts';
 import { createFrameLoop } from './client/loop.ts';
 import type { FrameLoop } from './client/loop.ts';
 import type { SessionStorage } from './client/session.ts';
@@ -68,6 +69,8 @@ function boot(): void {
     forceFrameRate: parameters.showFrameRate,
   });
   const session = app.session;
+  // The look draws its camera, prompts and marks for the player this screen plays.
+  setLocalPlayerId(session.localPlayerId);
 
   worldView.mount(worldElement);
   gameInterface.mount(interfaceElement, (intent) => session.handleIntent(intent));

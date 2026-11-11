@@ -46,8 +46,10 @@ test('sliders, checkboxes and pickers change the game and persist', async ({ pag
   // The UI picks the new scale up on its next frame.
   await expect.poll(() => fontSize(page)).toBeCloseTo(before * 1.5, 1);
   await page.locator('[data-setting="accessibility.patternedMeters"]').check();
-  await page.locator('[data-setting="accessibility.scavengeMode"]').selectOption({ label: 'Press once to start, again to stop' });
-  expect((await settings(page)).accessibility).toMatchObject({ uiScale: 1.5, patternedMeters: true, scavengeMode: 'toggle' });
+  // Scavenging takes one press now: the hold-or-toggle picker is gone.
+  await expect(page.locator('[data-setting="accessibility.scavengeMode"]')).toHaveCount(0);
+  await expect(page.locator('.iw-panel-settings')).not.toContainText(/scaveng/i);
+  expect((await settings(page)).accessibility).toEqual({ uiScale: 1.5, reduceCameraMotion: false, patternedMeters: true });
 
   // Graphics: the frame-rate cap is real, and a preset sets the detail options.
   await page.getByRole('button', { name: 'Graphics' }).click();
@@ -67,7 +69,7 @@ test('sliders, checkboxes and pickers change the game and persist', async ({ pag
   await ready(page);
   const reloaded = await settings(page);
   expect(reloaded.audio.master).toBe(0.35);
-  expect(reloaded.accessibility).toMatchObject({ uiScale: 1.5, patternedMeters: true, scavengeMode: 'toggle' });
+  expect(reloaded.accessibility).toEqual({ uiScale: 1.5, reduceCameraMotion: false, patternedMeters: true });
   expect(reloaded.graphics).toMatchObject({ qualityPreset: 'low', showFps: true, fpsCap: 60 });
   await page.getByRole('button', { name: 'New Game' }).click();
   await page.getByRole('button', { name: 'New game here' }).first().click();

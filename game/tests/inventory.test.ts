@@ -57,7 +57,7 @@ describe('moving things', () => {
     give(state, 'fiber', 4);
     const result = dispatch(state, { type: 'stow_backpack' });
     expect(result.ok).toBe(true);
-    expect(countIn(state.player.backpack, 'driftwood') + countIn(state.player.backpack, 'fiber')).toBe(0);
+    expect(countIn(state.players[0].backpack, 'driftwood') + countIn(state.players[0].backpack, 'fiber')).toBe(0);
     expect(countIn(state.canoe.cargo, 'driftwood')).toBe(7);
     expect(countIn(state.canoe.cargo, 'fiber')).toBe(4);
   });
@@ -72,7 +72,7 @@ describe('moving things', () => {
     give(state, 'fiber', 3);
     expect(dispatch(state, { type: 'stow_backpack' }).ok).toBe(true);
     expect(countIn(state.canoe.cargo, 'clay')).toBe(5);
-    expect(countIn(state.player.backpack, 'fiber')).toBe(3);
+    expect(countIn(state.players[0].backpack, 'fiber')).toBe(3);
   });
 
   it('transfers stacks both ways and refuses what it cannot do', () => {
@@ -82,13 +82,13 @@ describe('moving things', () => {
     expect(dispatch(state, { type: 'transfer', from: 'backpack', itemId: 'nails', count: 5 }))
       .toMatchObject({ ok: true, gained: [{ itemId: 'nails', count: 5 }] });
     expect(dispatch(state, { type: 'transfer', from: 'cargo', itemId: 'nails', count: 2 }).ok).toBe(true);
-    expect(countIn(state.player.backpack, 'nails')).toBe(9);
+    expect(countIn(state.players[0].backpack, 'nails')).toBe(9);
     expect(countIn(state.canoe.cargo, 'nails')).toBe(3);
     expect(dispatch(state, { type: 'transfer', from: 'cargo', itemId: 'rope', count: 1 })).toMatchObject({ ok: false, reason: 'item_not_held' });
     expect(dispatch(state, { type: 'transfer', from: 'cargo', itemId: 'nails', count: 0 })).toMatchObject({ ok: false, reason: 'invalid_amount' });
     expect(dispatch(state, { type: 'transfer', from: 'cargo', itemId: 'hammer', count: 1 })).toMatchObject({ ok: false, reason: 'unknown_id' });
     expect(dispatch(state, { type: 'discard', from: 'backpack', itemId: 'nails', count: 4 })).toMatchObject({ ok: true });
-    expect(countIn(state.player.backpack, 'nails')).toBe(5);
+    expect(countIn(state.players[0].backpack, 'nails')).toBe(5);
   });
 });
 

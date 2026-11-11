@@ -113,9 +113,7 @@ export function hintView(hint: string): ViewNode[] {
 export function promptView(prompt: PromptModel): ViewNode[] {
   return [h('div.iw-prompt.iw-paper', { key: 'prompt', class: `iw-prompt-${prompt.mode}` },
     h('span.iw-key', null, prompt.keyLabel),
-    prompt.mode === 'hold' ? h('span.iw-mode', null, prompt.mode) : null,
-    h('span.iw-prompt-text', null, prompt.text),
-    prompt.mode === 'hold' ? h('span.iw-hold', null, h('i', { style: `--v:${prompt.progress.toFixed(3)}` })) : null)];
+    h('span.iw-prompt-text', null, prompt.text))];
 }
 
 export function hotbarView(hotbar: HotbarSlotModel[]): ViewNode[] {

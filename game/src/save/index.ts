@@ -35,7 +35,34 @@ export interface SaveEnvelope {
 export type SaveMigration = (envelope: { version: number; savedAt: number; state: unknown }) =>
   { version: number; savedAt: number; state: unknown };
 
-export const SAVE_MIGRATIONS: Record<number, SaveMigration> = {};
+/**
+ * Version 1 was the solo game: one `player` on the state, holding the key
+ * items, with the conversation beside it. Version 2 is the crew: `players`
+ * (the old player becomes player 0, in the stern seat when aboard), key items
+ * and tools held by the crew, the conversation on the player having it, and no
+ * scavenge in progress (it takes one press now).
+ */
+function migrateSoloToCrew(envelope: { version: number; savedAt: number; state: unknown }): { version: number; savedAt: number; state: unknown } {
+  const state = { ...(envelope.state as Record<string, unknown>) };
+  // The hold-to-scavenge state went with the hold: scavenging takes one press.
+  const { keyItems, tools, harvest: _harvest, interactWasHeld: _interactWasHeld, ...solo } = { ...(state.player as Record<string, unknown>) };
+  state.players = [{
+    ...solo,
+    id: 0,
+    seat: solo.mode === 'canoe' ? 0 : null,
+    paddling: false,
+    bailing: false,
+    asleep: false,
+    dialogue: state.dialogue ?? null,
+  }];
+  state.keyItems = keyItems ?? {};
+  state.tools = tools ?? [];
+  delete state.player;
+  delete state.dialogue;
+  return { version: 2, savedAt: envelope.savedAt, state };
+}
+
+export const SAVE_MIGRATIONS: Record<number, SaveMigration> = { 1: migrateSoloToCrew };
 
 export type LoadFailure = 'empty' | 'corrupt' | 'from_newer_version' | 'no_migration';
 
@@ -53,7 +80,8 @@ function looksLikeState(value: unknown): value is GameState {
   if (typeof value !== 'object' || value === null) return false;
   const candidate = value as Record<string, unknown>;
   return typeof candidate.seed === 'number' && typeof candidate.time === 'number'
-    && typeof candidate.player === 'object' && candidate.player !== null
+    && Array.isArray(candidate.players) && candidate.players.length > 0
+    && Array.isArray(candidate.tools)
     && typeof candidate.canoe === 'object' && candidate.canoe !== null
     && typeof candidate.quests === 'object' && candidate.quests !== null
     && Array.isArray(candidate.events);

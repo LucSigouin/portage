@@ -12,7 +12,7 @@ import {
 } from '../../data/index.ts';
 import type { IslandId, ItemId, QuestId, WeatherKind } from '../../data/index.ts';
 import {
-  FIXED_STEP, NEUTRAL_INPUT, createGame, dispatch, drainEvents, landingBerth, step, terrainHeight,
+  FIXED_STEP, NEUTRAL_INPUT, addPlayer, createGame, dispatch, drainEvents, landingBerth, step, terrainHeight,
 } from '../../sim/index.ts';
 import type { GameState, StepInput } from '../../sim/index.ts';
 import type { OpenablePanelId } from '../intents.ts';
@@ -39,6 +39,32 @@ export function gameAfterQuest(seed: number, questId: QuestId | null): GameState
   return report.state;
 }
 
+/**
+ * Fill a staged game up to `crew` players. The extra ones are idle stand-ins
+ * beside player 0: in the canoe when player 0 is aboard, standing in a row
+ * next to them when they are ashore.
+ */
+export function addIdleCrew(state: GameState, crew: number): GameState {
+  const lead = state.players[0];
+  while (state.players.length < crew) {
+    const extra = addPlayer(state);
+    if (!extra) break;
+    if (lead.mode !== 'foot') continue;
+    // A step to the lead's right for each one, wherever the ground allows.
+    const side = lead.heading + Math.PI / 2;
+    const reach = 0.9 * (state.players.length - 1);
+    const x = lead.position.x + Math.sin(side) * reach;
+    const z = lead.position.z - Math.cos(side) * reach;
+    const dry = terrainHeight(x, z) >= 0;
+    extra.mode = 'foot';
+    extra.seat = null;
+    extra.islandId = lead.islandId;
+    extra.heading = lead.heading;
+    extra.position = dry ? { x, y: terrainHeight(x, z), z } : { ...lead.position };
+  }
+  return state;
+}
+
 /** The game at the start of main quest `number` (1 to 12). */
 export function gameAtQuest(seed: number, number: number): GameState {
   const previous = MAIN_QUESTS.find((quest) => quest.order === number - 1);
@@ -46,10 +72,9 @@ export function gameAtQuest(seed: number, number: number): GameState {
 }
 
 function teleport(state: GameState, islandId: IslandId, x: number, z: number): void {
-  state.player.mode = 'foot';
-  state.player.islandId = islandId;
-  state.player.harvest = null;
-  state.player.position = { x, y: terrainHeight(x, z), z };
+  state.players[0].mode = 'foot';
+  state.players[0].islandId = islandId;
+  state.players[0].position = { x, y: terrainHeight(x, z), z };
 }
 
 /** Beach the canoe on an island's landing and stand the player at its bow. */
@@ -63,17 +88,16 @@ function beachAt(state: GameState, islandId: IslandId): void {
   state.canoe.waterLevel = 0;
   state.canoe.lastBeached = { ...berth, islandId };
   teleport(state, islandId, berth.x + Math.sin(berth.heading) * 2.2, berth.z - Math.cos(berth.heading) * 2.2);
-  state.player.heading = berth.heading;
+  state.players[0].heading = berth.heading;
   if (!state.discoveredIslands.includes(islandId)) state.discoveredIslands.push(islandId);
 }
 
 /** Put the canoe afloat with the player aboard. */
 function floatAt(state: GameState, x: number, z: number, heading: number): void {
-  state.player.mode = 'canoe';
-  state.player.islandId = null;
-  state.player.harvest = null;
-  state.player.position = { x, y: 0, z };
-  state.player.heading = heading;
+  state.players[0].mode = 'canoe';
+  state.players[0].islandId = null;
+  state.players[0].position = { x, y: 0, z };
+  state.players[0].heading = heading;
   state.canoe.position = { x, y: 0, z };
   state.canoe.heading = heading;
   state.canoe.speed = 0;
@@ -82,7 +106,7 @@ function floatAt(state: GameState, x: number, z: number, heading: number): void 
 
 function give(state: GameState, itemId: ItemId, count: number, container: 'backpack' | 'cargo'): void {
   if (!isStackable(itemId)) return;
-  const stacks = container === 'backpack' ? state.player.backpack : state.canoe.cargo;
+  const stacks = container === 'backpack' ? state.players[0].backpack : state.canoe.cargo;
   const existing = stacks.find((stack) => stack.itemId === itemId);
   if (existing) existing.count = Math.min(TUNING.inventory.stackSize, existing.count + count);
   else stacks.push({ itemId, count });
@@ -182,7 +206,7 @@ export function stageShot(name: ShotName, seed: number = BOT_SEED): StagedShot {
       setWeather(state, 'clear');
       const odile = spotPosition(ISLANDS_BY_ID.orchard_hill, NPCS.odile.spot);
       teleport(state, 'orchard_hill', odile.x + 1.6, odile.z + 1);
-      state.player.heading = Math.atan2(-1.6, 1);
+      state.players[0].heading = Math.atan2(-1.6, 1);
       dispatch(state, { type: 'talk', npcId: 'odile' });
       drainEvents(state);
       return game(state, null, { pitch: 0.3, distance: 5.5 });

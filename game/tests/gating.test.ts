@@ -13,7 +13,7 @@ function canoeAt(x: number, z: number, heading: number, ...attachments: Paramete
   state.weather.secondsRemaining = 99999;
   state.weather.windSpeed = 0;
   state.weather.windTarget = 0;
-  state.player.energy = 100;
+  state.players[0].energy = 100;
   return state;
 }
 
@@ -105,8 +105,8 @@ describe('rough water gates the regions', () => {
     state.canoe.beached = true;
     teleport(state, 'truss_bridge', 0, -300);
     run(state, { moveY: 1 }, 60);
-    expect(regionAt(state.player.position.x, state.player.position.z).id).toBe('narrows');
-    expect(state.player.regionId).toBe('narrows');
+    expect(regionAt(state.players[0].position.x, state.players[0].position.z).id).toBe('narrows');
+    expect(state.players[0].regionId).toBe('narrows');
     expect(state.canoe.waterLevel).toBe(0);
     expect(state.statistics.fails).toBe(0);
   });
@@ -141,7 +141,7 @@ describe('the fog wall', () => {
     const events = run(state, { paddle: 1 }, 200);
     expect(events.some((event) => event.type === 'fog_turned_back')).toBe(false);
     expect(state.canoe.position.z).toBeLessThan(fogEdge - 300);
-    expect(state.player.regionId).toBe('fog');
+    expect(state.players[0].regionId).toBe('fog');
     expect(selectCanoeStats(state).canCrossFog).toBe(true);
   });
 

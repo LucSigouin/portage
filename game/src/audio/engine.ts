@@ -15,7 +15,8 @@
  * reverb tail down with the sound that made it.
  */
 import { createDefaultSettings } from '../settings/index.ts';
-import type { GameEvent, GameState } from '../sim/index.ts';
+import { playerOf } from '../sim/index.ts';
+import type { GameEvent, GameState, PlayerId } from '../sim/index.ts';
 import { CUES, resolveEventCue } from './cues.ts';
 import type { CueName, CueRequest } from './cues.ts';
 import type { AudioGraph } from './graph.ts';
@@ -45,7 +46,8 @@ export interface AudioEngine {
   unlock(): Promise<void>;
   setVolumes(volumes: AudioVolumes): void;
   handleEvents(events: readonly GameEvent[]): void;
-  update(state: GameState, frameSeconds: number): void;
+  /** `playerId` is the player this screen follows: the sound is theirs. Player 0 by default. */
+  update(state: GameState, frameSeconds: number, playerId?: PlayerId): void;
   playInterface(sound: InterfaceSound): void;
   setScene(scene: AudioScene): void;
   suspend(): void;
@@ -443,12 +445,12 @@ export function createEngineCore(options: EngineCoreOptions = {}): AudioEngine &
       }
     },
 
-    update(state: GameState, frameSeconds: number): void {
+    update(state: GameState, frameSeconds: number, playerId: PlayerId = 0): void {
       if (!running) return;
       lastState = state;
       const seconds = Number.isFinite(frameSeconds) ? clamp(frameSeconds, 0, 0.25) : 0;
-      applyLayerInputs(running, deriveLayerInputs(state, deriveMemory, seconds), seconds);
-      setDialogueOpen(running, state.dialogue !== null);
+      applyLayerInputs(running, deriveLayerInputs(state, deriveMemory, seconds, playerId), seconds);
+      setDialogueOpen(running, playerOf(state, playerId).dialogue !== null);
       tick(FRAME_LOOKAHEAD);
     },
 

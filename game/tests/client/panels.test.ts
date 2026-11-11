@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  PANEL_RULES, allowsGameplayInput, createPanelState, pausesSimulation, reducePanels, topPanel,
+  PANEL_RULES, allowsGameplayInput, coversPlayView, createPanelState, pausesSimulation, reducePanels, topPanel,
 } from '../../src/client/panels.ts';
 import type { PanelAction, PanelEffect, PanelId, PanelState } from '../../src/client/panels.ts';
 
@@ -70,10 +70,45 @@ describe('the panel state machine', () => {
     expect(play(game(), [{ type: 'escape' }, { type: 'open', panel: 'how_to_play' }]).state.stack).toEqual(['pause', 'how_to_play']);
   });
 
-  it('refuses panel keys while a menu is open, and game panels in the lobby', () => {
-    const paused = play(game(), [{ type: 'escape' }, { type: 'toggle', panel: 'inventory' }]);
-    expect(paused.state.stack).toEqual(['pause']);
-    expect(paused.effects.at(-1)).toEqual({ type: 'refused', panel: 'inventory', reason: 'menu_open' });
+  it('ignores the panel keys while a menu is open: nothing opens, nothing is said', () => {
+    for (const panel of ['inventory', 'crafting', 'canoe_builder', 'quest_log', 'map'] as const) {
+      const paused = play(game(), [{ type: 'escape' }, { type: 'toggle', panel }]);
+      expect(paused.state.stack).toEqual(['pause']);
+      // The only effect is the pause menu opening: no refusal for the session to voice.
+      expect(paused.effects).toEqual([{ type: 'opened', panel: 'pause' }]);
+      const inSettings = play(game(), [{ type: 'escape' }, { type: 'open', panel: 'settings' }, { type: 'toggle', panel }]);
+      expect(inSettings.state.stack).toEqual(['pause', 'settings']);
+      expect(inSettings.effects.some((effect) => effect.type === 'refused')).toBe(false);
+      const confirming = play(game(), [{ type: 'ask_confirm', action: { type: 'quit_to_lobby' } }, { type: 'toggle', panel }]);
+      expect(confirming.state.stack).toEqual(['confirm']);
+      expect(confirming.effects.some((effect) => effect.type === 'refused')).toBe(false);
+    }
+    // With no menu in the way the same key still opens its panel, and closes it again.
+    expect(play(game(), [{ type: 'toggle', panel: 'inventory' }]).state.stack).toEqual(['inventory']);
+    expect(play(game(), [{ type: 'toggle', panel: 'inventory' }, { type: 'toggle', panel: 'inventory' }]).state.stack).toEqual([]);
+    // A button that asks for a panel it cannot have is still told why.
+    const asked = play(game(), [{ type: 'escape' }, { type: 'open', panel: 'inventory' }]);
+    expect(asked.effects.at(-1)).toEqual({ type: 'refused', panel: 'inventory', reason: 'menu_open' });
+  });
+
+  it('says when a panel covers the play view: any panel or menu, but not a conversation', () => {
+    expect(coversPlayView(game())).toBe(false);
+    expect(coversPlayView(lobby())).toBe(false);
+    for (const panel of ['inventory', 'crafting', 'quest_log', 'map'] as const) {
+      expect(coversPlayView(play(game(), [{ type: 'toggle', panel }]).state), panel).toBe(true);
+    }
+    expect(coversPlayView(play(game(), [{ type: 'escape' }]).state)).toBe(true);
+    expect(coversPlayView(play(game(), [{ type: 'escape' }, { type: 'open', panel: 'settings' }]).state)).toBe(true);
+    expect(coversPlayView(play(lobby(), [{ type: 'open', panel: 'settings' }]).state)).toBe(true);
+    expect(coversPlayView(play(game(), [{ type: 'ask_confirm', action: { type: 'quit_to_lobby' } }]).state)).toBe(true);
+    const talking = play(game(), [{ type: 'sync_dialogue', open: true }]).state;
+    expect(talking.stack).toEqual(['dialogue']);
+    expect(coversPlayView(talking)).toBe(false);
+    // A dialog over a conversation covers it.
+    expect(coversPlayView(play(game(), [{ type: 'sync_dialogue', open: true }, { type: 'ask_confirm', action: { type: 'quit_to_lobby' } }]).state)).toBe(true);
+  });
+
+  it('refuses game panels in the lobby', () => {
     const inLobby = play(lobby(), [{ type: 'toggle', panel: 'inventory' }, { type: 'open', panel: 'pause' }]);
     expect(inLobby.state.stack).toEqual([]);
     expect(inLobby.effects.map((effect) => effect.type)).toEqual(['refused', 'refused']);

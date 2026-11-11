@@ -2,7 +2,7 @@ import { ATTACHMENTS, HULL_TIERS } from '../data/canoe.ts';
 import { TUNING } from '../data/tuning.ts';
 import { WEATHER } from '../data/weather.ts';
 import { emit, hasAttachment } from './inventory.ts';
-import type { GameState, StepInput } from './types.ts';
+import type { GameState, PlayerState, StepInput } from './types.ts';
 import {
   bearingDifference, currentAt, hullGrounding, nearestIsland, regionAt, terrainHeight, waterRoughnessAt,
   waveGradient, waveHeight,
@@ -78,22 +78,51 @@ export function settleCanoe(state: GameState, deltaSeconds: number): void {
   canoe.roll += (Math.atan(acrossSlope) - canoe.roll) * blend;
 }
 
-/** One fixed step of the canoe with the player aboard. */
-export function stepCanoe(state: GameState, input: StepInput, deltaSeconds: number): void {
+/** Someone aboard and what they are doing with their hands this step. */
+export interface CrewMember {
+  player: PlayerState;
+  input: StepInput;
+}
+
+/**
+ * One fixed step of the canoe with `crew` aboard, in id order. It moves for
+ * whoever is in it: every bailer bails at the full rate, the strongest stroke
+ * sets the pace and each other paddler adds a quarter of their own, and the
+ * steering is everyone's added up.
+ */
+export function stepCanoe(state: GameState, crew: readonly CrewMember[], deltaSeconds: number): void {
   const canoe = state.canoe;
-  const player = state.player;
   const tuning = TUNING.canoe;
   const hull = HULL_TIERS[canoe.hullTier];
-  const canExert = player.energy >= TUNING.survival.minimumEnergyToExert;
 
-  // Bailing takes both hands.
-  canoe.bailing = input.bail && canoe.waterLevel > 0 && canExert;
-  if (canoe.bailing) canoe.waterLevel = Math.max(0, canoe.waterLevel - tuning.bailPerSecond * deltaSeconds);
-
-  const paddle = canoe.bailing ? 0 : clamp(input.paddle, -1, 1);
-  const powerStroke = input.powerStroke && paddle > 0 && canExert;
-  player.exerting = canoe.bailing || powerStroke;
-  player.running = false;
+  const strokes: number[] = [];
+  let steer = 0;
+  canoe.bailing = false;
+  for (const { player, input } of crew) {
+    const canExert = player.energy >= TUNING.survival.minimumEnergyToExert;
+    // Bailing takes both hands.
+    player.bailing = input.bail && canoe.waterLevel > 0 && canExert;
+    if (player.bailing) {
+      canoe.bailing = true;
+      canoe.waterLevel = Math.max(0, canoe.waterLevel - tuning.bailPerSecond * deltaSeconds);
+    }
+    const paddle = player.bailing ? 0 : clamp(input.paddle, -1, 1);
+    player.paddling = paddle !== 0;
+    const powerStroke = input.powerStroke && paddle > 0 && canExert;
+    player.exerting = player.bailing || powerStroke;
+    player.running = false;
+    if (paddle !== 0) {
+      strokes.push(paddle >= 0
+        ? paddle * (powerStroke ? tuning.powerStrokeSpeed : tuning.paddleSpeed) * hull.speedMultiplier
+        : paddle * tuning.backPaddleSpeed);
+    }
+    steer += input.steer;
+  }
+  // Strongest stroke first; ties keep id order.
+  strokes.sort((first, second) => Math.abs(second) - Math.abs(first));
+  let paddleSpeed = strokes.length > 0 ? strokes[0] : 0;
+  for (let index = 1; index < strokes.length; index += 1) paddleSpeed += strokes[index] * tuning.extraPaddlerShare;
+  const crewScale = 1 + tuning.extraPaddlerShare * Math.max(0, strokes.length - 1);
 
   // The fog wall: without a light and a signal every heading bends back out.
   const region = regionAt(canoe.position.x, canoe.position.z);
@@ -102,23 +131,22 @@ export function stepCanoe(state: GameState, input: StepInput, deltaSeconds: numb
   canoe.lostInFog = lost;
 
   // Target speed from paddle and sail.
-  let targetSpeed = paddle >= 0
-    ? paddle * (powerStroke ? tuning.powerStrokeSpeed : tuning.paddleSpeed) * hull.speedMultiplier
-    : paddle * tuning.backPaddleSpeed;
+  let targetSpeed = paddleSpeed;
   if (lost) targetSpeed = Math.abs(targetSpeed);
   if (canoe.sailRaised && hasAttachment(state, 'mast_sail')) {
     const factor = sailFactor(canoe.heading, state.weather.windDirection, hasAttachment(state, 'rudder'));
     targetSpeed += factor > 0 ? state.weather.windSpeed * tuning.sailDrivePerWind * factor : -tuning.luffingDragSpeed;
   }
-  targetSpeed = clamp(targetSpeed, -tuning.backPaddleSpeed, tuning.sailMaximumSpeed);
+  // The sail tops out at its own limit. A crew paddling hard may beat it.
+  targetSpeed = clamp(targetSpeed, -tuning.backPaddleSpeed * crewScale, Math.max(tuning.sailMaximumSpeed, Math.abs(paddleSpeed)));
   targetSpeed *= 1 - tuning.waterloggedSpeedLoss * (canoe.waterLevel / tuning.capsizeLevel);
-  const response = paddle !== 0 || canoe.sailRaised ? tuning.thrustResponse : tuning.coastResponse;
+  const response = strokes.length > 0 || canoe.sailRaised ? tuning.thrustResponse : tuning.coastResponse;
   canoe.speed += (targetSpeed - canoe.speed) * Math.min(1, response * deltaSeconds);
 
   // Turning.
   const turnRate = hasAttachment(state, 'rudder') ? tuning.rudderTurnRate : tuning.turnRate;
   const turnShare = tuning.turnAtRestShare + (1 - tuning.turnAtRestShare) * Math.min(1, Math.abs(canoe.speed) / tuning.turnFullSpeed);
-  let turn = clamp(input.steer, -1, 1) * turnRate * turnShare * deltaSeconds;
+  let turn = clamp(steer, -1, 1) * turnRate * turnShare * deltaSeconds;
   if (lost) {
     const backOut = bearingDifference(Math.PI, canoe.heading);
     turn = clamp(backOut, -tuning.fogTurnRate * deltaSeconds, tuning.fogTurnRate * deltaSeconds);
@@ -191,8 +219,10 @@ export function stepCanoe(state: GameState, input: StepInput, deltaSeconds: numb
   }
 
   settleCanoe(state, deltaSeconds);
-  player.position.x = canoe.position.x;
-  player.position.y = canoe.position.y;
-  player.position.z = canoe.position.z;
-  player.heading = canoe.heading;
+  for (const { player } of crew) {
+    player.position.x = canoe.position.x;
+    player.position.y = canoe.position.y;
+    player.position.z = canoe.position.z;
+    player.heading = canoe.heading;
+  }
 }

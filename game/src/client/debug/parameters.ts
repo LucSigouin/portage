@@ -4,6 +4,8 @@
  * - `?bot=1&speed=8`: the headless bot plays the live session.
  * - `?at=quest7`: fast-forward a game to the start of a main quest, then hand over.
  * - `?shot=<name>`: stage a fixed state for a screenshot. Add `&live=1` to let it run.
+ * - `?crew=N` (2 to 4): a new game with N-1 extra players sitting idle beside the local one, to see
+ *   the look and the HUD with a crew. Adds the same idle crew to `?at=`, `?shot=` and `?bot=1`.
  * - `&fps=1`: show the frame-rate readout. `&seed=<n>` picks the game's seed.
  */
 export const SHOT_NAMES = [
@@ -24,6 +26,8 @@ export interface DebugParameters {
   live: boolean;
   showFrameRate: boolean;
   seed: number | null;
+  /** Players in the game, 1 to 4. Above 1 the extra ones are idle stand-ins. */
+  crew: number;
   /** True when a switch replaces the normal game: saves stay untouched. */
   sandbox: boolean;
 }
@@ -44,11 +48,13 @@ export function parseDebugParameters(query: string): DebugParameters {
   const shotText = values.get('shot');
   const shot = SHOT_NAMES.find((name) => name === shotText) ?? null;
   const bot = flag('bot');
+  const crew = Math.max(1, Math.min(4, whole('crew') ?? 1));
   return {
     bot, speed, atQuest, shot,
     live: flag('live'),
     showFrameRate: flag('fps'),
     seed: whole('seed'),
-    sandbox: bot || atQuest !== null || shot !== null,
+    crew,
+    sandbox: bot || atQuest !== null || shot !== null || crew > 1,
   };
 }

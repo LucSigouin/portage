@@ -4,7 +4,13 @@ import type {
 } from '../data/types.ts';
 
 /** Bump when the shape of GameState changes; add a migration in `src/save/`. */
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
+
+/** The crew: one to four players share the canoe. */
+export const MAXIMUM_PLAYERS = 4;
+
+/** 0 to 3. Stable for the life of a player; also their index into a crew's inputs. */
+export type PlayerId = number;
 
 export interface Vector3 {
   x: number;
@@ -17,7 +23,15 @@ export type ItemStack = ItemAmount;
 
 export interface GameOptions {
   difficulty?: Difficulty;
+  /** Players in the canoe at the start, 1 to 4. Default 1. */
+  crew?: number;
 }
+
+/**
+ * The input for one step: a single `StepInput` drives player 0, or a list
+ * indexed by player id drives the crew. A player with no entry holds still.
+ */
+export type CrewInput = StepInput | readonly (StepInput | undefined)[];
 
 /**
  * Per-frame analog intent. Never key codes: the client maps keys, sticks or
@@ -39,8 +53,6 @@ export interface StepInput {
   moveY: number;
   /** On foot: hold to run (costs energy). */
   run: boolean;
-  /** Hold to scavenge the current interactable node. */
-  interactHeld: boolean;
   /** Bearing the camera looks along, radians (0 = north, clockwise). */
   cameraYaw: number;
 }
@@ -56,7 +68,10 @@ export interface NodeState {
 }
 
 export interface PlayerState {
+  id: PlayerId;
   mode: 'canoe' | 'foot';
+  /** Seat in the canoe while aboard, 0 to 3 (see `seatTransformForHull`). null on foot. */
+  seat: number | null;
   position: Vector3;
   /** Bearing the player faces, radians. */
   heading: number;
@@ -64,20 +79,22 @@ export interface PlayerState {
   thirst: number;
   energy: number;
   backpack: ItemStack[];
-  /** Tool belt. Takes no slot, never lost. */
-  tools: ToolId[];
+  /** The tool in this player's hand, picked from the crew's tools (`GameState.tools`). */
   selectedTool: ToolId | null;
-  /** Unique finds and quest items. Take no slot, never lost. */
-  keyItems: Partial<Record<ItemId, number>>;
   /** Island the player stands on, when on foot. */
   islandId: IslandId | null;
   regionId: RegionId;
-  /** Scavenge in progress. */
-  harvest: { nodeId: NodeId; actionIndex: number; progress: number } | null;
   running: boolean;
   /** True while a power stroke, run or bail is draining energy. */
   exerting: boolean;
-  interactWasHeld: boolean;
+  /** True while this player is paddling the canoe, forward or back. */
+  paddling: boolean;
+  /** True while this player is bailing the canoe. */
+  bailing: boolean;
+  /** Lying down at a bed, waiting for the rest of the crew. The night skips once everyone is. */
+  asleep: boolean;
+  /** The conversation this player is in. It holds them still, nobody else. */
+  dialogue: DialogueState | null;
 }
 
 export interface CanoeState {
@@ -101,6 +118,7 @@ export interface CanoeState {
   lastBeached: { x: number; z: number; heading: number; islandId: IslandId };
   sailRaised: boolean;
   lanternLit: boolean;
+  /** True while anyone aboard is bailing. */
   bailing: boolean;
   /** True while the fog is turning the canoe around. */
   lostInFog: boolean;
@@ -169,14 +187,18 @@ export interface GameState {
   time: number;
   /** Seconds actually played (stepped). */
   playedSeconds: number;
-  player: PlayerState;
+  /** The crew, one to four, always in id order. Player 0 is there from the start. */
+  players: PlayerState[];
   canoe: CanoeState;
   weather: WeatherState;
   /** Sparse: only nodes that have been touched. */
   nodes: Record<NodeId, NodeState>;
   quests: Record<QuestId, QuestState>;
   trackedQuestId: QuestId | null;
-  dialogue: DialogueState | null;
+  /** The crew's tool belt: a tool anyone finds, makes or is given is everyone's at once. Takes no slot, never lost. */
+  tools: ToolId[];
+  /** Unique finds and quest items, held by the crew as one. Take no slot, never lost. */
+  keyItems: Partial<Record<ItemId, number>>;
   flags: Partial<Record<FlagId, boolean>>;
   discoveredIslands: IslandId[];
   bottlesFound: BottleId[];
@@ -193,7 +215,7 @@ export interface GameState {
 
 export type Container = 'backpack' | 'cargo';
 
-/** Discrete player actions. Send with `dispatch(state, command)`. */
+/** Discrete actions of one player. Send with `dispatch(state, command, playerId)`. */
 export type Command =
   | { type: 'craft'; recipeId: RecipeId; count?: number }
   | { type: 'upgrade_hull' }
@@ -204,7 +226,11 @@ export type Command =
   | { type: 'eat'; itemId: ItemId }
   | { type: 'drink'; itemId: ItemId }
   | { type: 'fill_water'; count: number }
+  /** Scavenge, or pick up what was left, at the node the interact key points at. One press, done. */
+  | { type: 'scavenge' }
   | { type: 'sleep' }
+  /** Get up again while waiting for the rest of the crew to sleep. */
+  | { type: 'wake' }
   | { type: 'board' }
   | { type: 'disembark' }
   | { type: 'talk'; npcId: NpcId }
@@ -237,6 +263,8 @@ export type FailureReason =
   | 'no_water_in_reach'
   | 'no_bed_in_reach'
   | 'not_tired'
+  | 'too_tired'
+  | 'nothing_in_reach'
   | 'npc_out_of_reach'
   | 'no_dialogue_open'
   | 'invalid_option'
@@ -282,15 +310,21 @@ export type CommandResult = CommandSuccess | CommandFailure;
 
 export type FailCause = 'capsized' | 'exhausted';
 
-/** Things that happened, for sounds, toasts and effects. */
-export type GameEvent =
+/**
+ * Things that happened, for sounds, toasts and effects. An event one player
+ * caused or suffered carries their `playerId`; an event about the canoe, the
+ * quests or the world carries none and is for the whole crew.
+ */
+export type GameEvent = GameEventBody & { playerId?: PlayerId };
+
+type GameEventBody =
   | { type: 'item_gained'; itemId: ItemId; count: number; container: Container | 'belt' | 'key_items' }
   | { type: 'item_lost'; itemId: ItemId; count: number }
   | { type: 'item_left_behind'; nodeId: NodeId; itemId: ItemId; count: number }
   | { type: 'crafted'; recipeId: RecipeId; count: number }
   | { type: 'ate'; itemId: ItemId }
   | { type: 'drank'; itemId: ItemId }
-  | { type: 'harvest_started'; nodeId: NodeId }
+  | { type: 'harvest_started'; nodeId: NodeId; actionIndex?: number }
   | { type: 'harvest_blocked'; nodeId: NodeId; missing: Missing }
   | { type: 'node_depleted'; nodeId: NodeId }
   | { type: 'bottle_found'; bottleId: BottleId }

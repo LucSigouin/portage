@@ -174,3 +174,19 @@ export function attachmentTransformForHull(attachmentId: AttachmentId, hullTier:
   const [x, y, z] = definition.transform.position;
   return { position: [x, y, z + shift], rotation: [...definition.transform.rotation] };
 }
+
+/** Seats along the hull as shares of its length, aft of centre: stern, bow, then the two between. */
+const SEAT_STATIONS = [0.3107, -0.2589, 0.1265, -0.1265];
+
+/**
+ * Where a crew member sits on a given hull tier, in canoe space, facing the
+ * bow. Seat 0 is the stern seat (a paddler who is alone steers from there),
+ * seat 1 the bow seat, seats 2 and 3 kneel between them, aft then forward.
+ * The seats spread with the hull when it grows. `y` is the top of the seat.
+ */
+export function seatTransformForHull(hullTier: number, seat: number): Transform {
+  const hull = HULL_TIERS[Math.max(0, Math.min(HULL_TIERS.length - 1, hullTier))];
+  const station = SEAT_STATIONS[Math.max(0, Math.min(SEAT_STATIONS.length - 1, Math.floor(seat)))];
+  const { length, depth, draft } = hull.dimensions;
+  return { position: [0, 0.75 * depth - draft, station * length], rotation: [0, 0, 0] };
+}

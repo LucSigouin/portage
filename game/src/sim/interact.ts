@@ -1,7 +1,7 @@
 import type { ItemAmount, NodeDefinition, NodeId, NpcId } from '../data/types.ts';
 import { NPCS, NPC_IDS } from '../data/dialogue.ts';
 import { ITEMS } from '../data/items.ts';
-import { LOOT_TABLES, NODES, NODES_BY_ID, NODES_BY_ISLAND } from '../data/nodes.ts';
+import { LOOT_TABLES, NODES, NODES_BY_ISLAND } from '../data/nodes.ts';
 import { TUNING } from '../data/tuning.ts';
 import { ISLANDS_BY_ID, spotPosition } from '../data/world.ts';
 import {
@@ -9,19 +9,17 @@ import {
 } from './inventory.ts';
 import { questGateOpen, updateQuests } from './quests.ts';
 import { nextRandom, randomInteger } from './random.ts';
-import { findStandingSpot } from './world.ts';
-import type { Command, GameState, Missing, NodeState } from './types.ts';
+import { findStandingSpot, terrainHeight } from './world.ts';
+import type { Command, GameState, Missing, NodeState, PlayerState } from './types.ts';
 
 const CANOE_NODES = NODES.filter((definition) => definition.reach === 'canoe');
 
 /** Index used for "pick up what was left behind". */
 export const PICK_UP_ACTION = -1;
-const PICK_UP_SECONDS = 0.5;
 
 /**
- * The thing the interact key would act on right now.
- * - `node`: hold the interact input (`StepInput.interactHeld`) for `holdSeconds`.
- * - everything else: dispatch `command` on key press.
+ * The thing the interact key would act on right now. One press dispatches
+ * the `command` it carries: scavenge a node, talk, board, land, sleep.
  */
 export type Interactable =
   | {
@@ -31,12 +29,10 @@ export type Interactable =
     prompt: string;
     /** Action index in the node definition, or -1 to pick up leftovers. */
     actionIndex: number;
-    holdSeconds: number;
-    /** 0 to 1, how far the current hold has got. */
-    progress: number;
     /** False when a tool, attachment or quest step is missing. */
     available: boolean;
     missing: Missing | null;
+    command: Command;
     distance: number;
   }
   | { kind: 'npc'; npcId: NpcId; name: string; prompt: string; command: Command; distance: number }
@@ -72,12 +68,16 @@ function actionAllowed(state: GameState, definition: NodeDefinition, actionIndex
  * selected tool, then the first action the player can do, then the first one
  * still available (reported with what it is missing).
  */
-export function chooseNodeAction(state: GameState, definition: NodeDefinition): { actionIndex: number; allowed: boolean } | null {
+export function chooseNodeAction(
+  state: GameState,
+  player: PlayerState,
+  definition: NodeDefinition,
+): { actionIndex: number; allowed: boolean } | null {
   const nodeState = state.nodes[definition.id];
   if (nodeState && nodeState.leftover.length > 0) return { actionIndex: PICK_UP_ACTION, allowed: true };
   const ready = definition.actions.map((_, index) => index).filter((index) => actionReady(state, definition.id, index));
   if (ready.length === 0) return null;
-  const selectedTool = state.player.selectedTool;
+  const selectedTool = player.selectedTool;
   const selected = ready.find((index) => selectedTool !== null && definition.actions[index].tool === selectedTool
     && actionAllowed(state, definition, index));
   if (selected !== undefined) return { actionIndex: selected, allowed: true };
@@ -86,16 +86,14 @@ export function chooseNodeAction(state: GameState, definition: NodeDefinition): 
   return { actionIndex: ready[0], allowed: false };
 }
 
-function nodeInteractable(state: GameState, definition: NodeDefinition, distance: number): Interactable | null {
-  const choice = chooseNodeAction(state, definition);
+function nodeInteractable(state: GameState, player: PlayerState, definition: NodeDefinition, distance: number): Interactable | null {
+  const choice = chooseNodeAction(state, player, definition);
   if (!choice) return null;
-  const harvest = state.player.harvest;
-  const holding = harvest !== null && harvest.nodeId === definition.id && harvest.actionIndex === choice.actionIndex;
+  const command: Command = { type: 'scavenge' };
   if (choice.actionIndex === PICK_UP_ACTION) {
     return {
       kind: 'node', nodeId: definition.id, name: definition.name, prompt: `Pick up from ${definition.name}`,
-      actionIndex: PICK_UP_ACTION, holdSeconds: PICK_UP_SECONDS,
-      progress: holding ? harvest.progress / PICK_UP_SECONDS : 0, available: true, missing: null, distance,
+      actionIndex: PICK_UP_ACTION, available: true, missing: null, command, distance,
     };
   }
   const action = definition.actions[choice.actionIndex];
@@ -108,9 +106,8 @@ function nodeInteractable(state: GameState, definition: NodeDefinition, distance
   }
   return {
     kind: 'node', nodeId: definition.id, name: definition.name, prompt,
-    actionIndex: choice.actionIndex, holdSeconds: action.seconds,
-    progress: holding ? harvest.progress / action.seconds : 0,
-    available: choice.allowed, missing: hasMissing(missing) ? missing : null, distance,
+    actionIndex: choice.actionIndex,
+    available: choice.allowed, missing: hasMissing(missing) ? missing : null, command, distance,
   };
 }
 
@@ -126,23 +123,49 @@ export function distanceToHull(state: GameState, x: number, z: number): number {
   return Math.hypot(offsetX - forwardX * alongHull, offsetZ - forwardZ * alongHull);
 }
 
-/** Where the player would step ashore from the canoe, or null. */
-export function disembarkSpot(state: GameState): { x: number; z: number } | null {
-  const canoe = state.canoe;
-  const forwardX = Math.sin(canoe.heading);
-  const forwardZ = -Math.cos(canoe.heading);
+/** Where someone would step ashore from a hull lying at this point and heading, or null. */
+export function shoreSpotBeside(x: number, z: number, heading: number): { x: number; z: number } | null {
+  const forwardX = Math.sin(heading);
+  const forwardZ = -Math.cos(heading);
   const reach = TUNING.canoe.disembarkReach;
   for (const alongHull of [2.2, 0, -2.2]) {
-    const spot = findStandingSpot(canoe.position.x + forwardX * alongHull, canoe.position.z + forwardZ * alongHull, reach);
+    const spot = findStandingSpot(x + forwardX * alongHull, z + forwardZ * alongHull, reach);
     if (spot) return spot;
   }
   return null;
 }
 
-/** The nearest thing the interact key would act on, or null. */
-export function findInteractable(state: GameState): Interactable | null {
-  if (state.dialogue) return null;
-  const player = state.player;
+/** Where a player would step ashore from the canoe, or null. */
+export function disembarkSpot(state: GameState): { x: number; z: number } | null {
+  return shoreSpotBeside(state.canoe.position.x, state.canoe.position.z, state.canoe.heading);
+}
+
+/** Largest distance at which two people on foot count as standing on the same spot, metres. */
+const ELBOW_ROOM = 0.6;
+
+/**
+ * A spot beside `spot` that no other player is standing on, so a crew stepping
+ * ashore does not pile onto one point. Alone, or with the spot free, it is `spot`.
+ */
+export function clearSpot(state: GameState, player: PlayerState, spot: { x: number; z: number }): { x: number; z: number } {
+  const crowded = (x: number, z: number): boolean => state.players.some((other) => other !== player && other.mode === 'foot'
+    && Math.hypot(other.position.x - x, other.position.z - z) < ELBOW_ROOM);
+  if (!crowded(spot.x, spot.z)) return spot;
+  for (let step = 0; step < 8; step += 1) {
+    const angle = state.canoe.heading + (step / 8) * 2 * Math.PI;
+    const x = spot.x + Math.sin(angle) * 0.9;
+    const z = spot.z - Math.cos(angle) * 0.9;
+    if (terrainHeight(x, z) >= -TUNING.foot.disembarkDepth && !crowded(x, z)) return { x, z };
+  }
+  return spot;
+}
+
+/** The nearest thing the interact key would act on for this player, or null. */
+export function findInteractable(state: GameState, player: PlayerState): Interactable | null {
+  if (player.dialogue) return null;
+  if (player.asleep) {
+    return { kind: 'bed', name: 'Camp', prompt: 'Get up (waiting for the crew to sleep)', command: { type: 'wake' }, distance: 0 };
+  }
   let best: Interactable | null = null;
   const consider = (candidate: Interactable | null): void => {
     if (candidate && (!best || candidate.distance < best.distance)) best = candidate;
@@ -151,7 +174,7 @@ export function findInteractable(state: GameState): Interactable | null {
   if (player.mode === 'canoe') {
     for (const definition of CANOE_NODES) {
       const distance = Math.hypot(definition.position.x - state.canoe.position.x, definition.position.z - state.canoe.position.z);
-      if (distance <= TUNING.foot.canoeNodeRange) consider(nodeInteractable(state, definition, distance));
+      if (distance <= TUNING.foot.canoeNodeRange) consider(nodeInteractable(state, player, definition, distance));
     }
     if (!best && disembarkSpot(state)) {
       best = { kind: 'land', name: 'Shore', prompt: 'Land', command: { type: 'disembark' }, distance: 0 };
@@ -163,7 +186,7 @@ export function findInteractable(state: GameState): Interactable | null {
     for (const definition of NODES_BY_ISLAND[player.islandId]) {
       if (definition.reach !== 'foot') continue;
       const distance = Math.hypot(definition.position.x - player.position.x, definition.position.z - player.position.z);
-      if (distance <= TUNING.foot.nodeRange) consider(nodeInteractable(state, definition, distance));
+      if (distance <= TUNING.foot.nodeRange) consider(nodeInteractable(state, player, definition, distance));
     }
     for (const npcId of NPC_IDS) {
       const npc = NPCS[npcId];
@@ -174,7 +197,7 @@ export function findInteractable(state: GameState): Interactable | null {
         consider({ kind: 'npc', npcId, name: npc.name, prompt: `Talk to ${npc.name}`, command: { type: 'talk', npcId }, distance });
       }
     }
-    const camp = campInReach(state);
+    const camp = campInReach(player);
     if (camp?.camp?.sleep) {
       const position = spotPosition(camp, camp.camp.spot);
       const distance = Math.hypot(position.x - player.position.x, position.z - player.position.z);
@@ -220,24 +243,39 @@ function nodeStateFor(state: GameState, definition: NodeDefinition): NodeState {
   return nodeState;
 }
 
-function completeHarvest(state: GameState, definition: NodeDefinition, actionIndex: number): void {
+/** `items` less what is in `leftover`: what actually reached the player. */
+function taken(items: ItemAmount[], leftover: ItemAmount[]): ItemAmount[] {
+  return items
+    .map(({ itemId, count }) => ({ itemId, count: count - leftover.filter((stack) => stack.itemId === itemId).reduce((sum, stack) => sum + stack.count, 0) }))
+    .filter((stack) => stack.count > 0);
+}
+
+/**
+ * Scavenge a node action, or pick up what an earlier one left behind. It
+ * happens at once: the loot is rolled and handed over, the energy is spent
+ * and the action goes on its respawn clock. Returns what the player got.
+ * The caller has checked the tool, the quest gate and the energy.
+ */
+export function completeHarvest(state: GameState, player: PlayerState, definition: NodeDefinition, actionIndex: number): ItemAmount[] {
   const nodeState = nodeStateFor(state, definition);
   if (actionIndex === PICK_UP_ACTION) {
-    nodeState.leftover = grantItems(state, nodeState.leftover);
-    return;
+    const waiting = nodeState.leftover;
+    nodeState.leftover = grantItems(state, player, waiting);
+    return taken(waiting, nodeState.leftover);
   }
   const action = definition.actions[actionIndex];
-  const leftover = grantItems(state, rollLoot(state, action.lootTableId));
+  const loot = rollLoot(state, action.lootTableId);
+  const leftover = grantItems(state, player, loot);
   for (const stack of leftover) {
     nodeState.leftover.push(stack);
-    emit(state, { type: 'item_left_behind', nodeId: definition.id, itemId: stack.itemId, count: stack.count });
+    emit(state, { type: 'item_left_behind', nodeId: definition.id, itemId: stack.itemId, count: stack.count }, player);
   }
   nodeState.readyAt[actionIndex] = action.respawnDays === null
     ? null
     : state.time + action.respawnDays * TUNING.time.daySeconds;
-  state.player.energy = Math.max(0, state.player.energy - action.energyCost);
+  player.energy = Math.max(0, player.energy - action.energyCost);
   state.statistics.nodesHarvested += 1;
-  emit(state, { type: 'node_depleted', nodeId: definition.id });
+  emit(state, { type: 'node_depleted', nodeId: definition.id }, player);
   if (definition.bottleId && !state.bottlesFound.includes(definition.bottleId)) {
     state.bottlesFound.push(definition.bottleId);
     emit(state, { type: 'bottle_found', bottleId: definition.bottleId });
@@ -246,44 +284,6 @@ function completeHarvest(state: GameState, definition: NodeDefinition, actionInd
     state.statistics.cachesHauled += 1;
     emit(state, { type: 'cache_hauled', nodeId: definition.id });
   }
-  updateQuests(state);
-}
-
-/** Advance (or drop) the scavenge hold. Called every fixed step. */
-export function updateHarvest(state: GameState, interactHeld: boolean, deltaSeconds: number): void {
-  const player = state.player;
-  const pressed = interactHeld && !player.interactWasHeld;
-  player.interactWasHeld = interactHeld;
-  if (!interactHeld || state.dialogue) {
-    player.harvest = null;
-    return;
-  }
-  const target = findInteractable(state);
-  if (!target || target.kind !== 'node') {
-    player.harvest = null;
-    return;
-  }
-  if (!target.available) {
-    player.harvest = null;
-    if (pressed && target.missing) emit(state, { type: 'harvest_blocked', nodeId: target.nodeId, missing: target.missing });
-    return;
-  }
-  const definition = NODES_BY_ID[target.nodeId];
-  if (target.actionIndex !== PICK_UP_ACTION) {
-    const energyCost = definition.actions[target.actionIndex].energyCost;
-    if (energyCost > 0 && player.energy < TUNING.survival.minimumEnergyToExert + energyCost) {
-      player.harvest = null;
-      return;
-    }
-  }
-  if (!player.harvest || player.harvest.nodeId !== target.nodeId || player.harvest.actionIndex !== target.actionIndex) {
-    player.harvest = { nodeId: target.nodeId, actionIndex: target.actionIndex, progress: 0 };
-    emit(state, { type: 'harvest_started', nodeId: target.nodeId });
-  }
-  player.harvest.progress += deltaSeconds;
-  if (player.harvest.progress >= target.holdSeconds - 1e-9) {
-    const actionIndex = player.harvest.actionIndex;
-    player.harvest = null;
-    completeHarvest(state, definition, actionIndex);
-  }
+  updateQuests(state, player);
+  return taken(loot, leftover);
 }

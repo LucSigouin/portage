@@ -61,6 +61,8 @@ const FAILURE_TEXT: Record<FailureReason, string> = {
   in_dialogue: 'Finish the conversation first.',
   quest_not_available: 'That quest is not on offer.',
   quest_not_ready: 'Not finished yet.',
+  too_tired: 'Too tired for that. Rest first.',
+  nothing_in_reach: 'Nothing to do here.',
   tool_not_owned: 'You do not have that tool.',
   nothing_to_claim: 'Nothing waiting.',
   invalid_amount: 'That is not an amount.',

@@ -50,7 +50,7 @@ function nearShore(state: GameState): void {
   state.canoe.position = { x: landing.shore.x, y: 0, z: landing.shore.z - 2 };
   state.canoe.heading = landing.bearing;
   state.canoe.speed = 0;
-  state.player.position = { ...state.canoe.position };
+  state.players[0].position = { ...state.canoe.position };
 }
 
 describe('lobby and save slots', () => {
@@ -74,10 +74,10 @@ describe('lobby and save slots', () => {
     for (let elapsed = 0; elapsed < 3600; elapsed += 0.25) session.advance(0.25, 0);
     const backdrop = session.backdrop;
     expect(backdrop.statistics.fails).toBe(0);
-    expect(backdrop.player.mode).toBe('canoe');
+    expect(backdrop.players[0].mode).toBe('canoe');
     expect(backdrop.canoe.beached).toBe(false);
     expect(backdrop.canoe.waterLevel).toBeLessThan(5);
-    expect(backdrop.player.thirst).toBeGreaterThan(30);
+    expect(backdrop.players[0].thirst).toBeGreaterThan(30);
     expect(backdrop.time).toBeCloseTo(start + 3600, 0); // the clock runs on through every reset
   });
 
@@ -183,13 +183,13 @@ describe('autosave', () => {
     const { session, storage } = h;
     session.newGame(0);
     nearShore(session.game!);
-    session.keyDown('KeyE'); // the interact key follows selectInteractable: here it lands
-    session.keyUp('KeyE');
-    expect(session.game!.player.mode).toBe('foot');
-    expect(savedState(storage, 0).player.mode).toBe('canoe'); // not yet: the event is still queued
+    session.keyDown('KeyF'); // the interact key follows selectInteractable: here it lands
+    session.keyUp('KeyF');
+    expect(session.game!.players[0].mode).toBe('foot');
+    expect(savedState(storage, 0).players[0].mode).toBe('canoe'); // not yet: the event is still queued
     const events = session.advance(FIXED_STEP, 0);
     expect(events.map((event) => event.type)).toContain('autosave_requested');
-    expect(savedState(storage, 0).player.mode).toBe('foot');
+    expect(savedState(storage, 0).players[0].mode).toBe('foot');
     expect(h.signals).toContainEqual({ type: 'saved', slot: 0, reason: 'landing' });
   });
 
@@ -229,12 +229,12 @@ describe('settings', () => {
   it('saves every change and loads it back in the next session', () => {
     const h = harness();
     h.session.handleIntent({ type: 'change_setting', setting: 'audio.master', value: 0.3 });
-    h.session.handleIntent({ type: 'change_setting', setting: 'accessibility.scavengeMode', value: 'toggle' });
+    h.session.handleIntent({ type: 'change_setting', setting: 'accessibility.patternedMeters', value: true });
     expect(JSON.parse(h.storage.getItem(SETTINGS_KEY)!).audio.master).toBe(0.3);
     expect(h.signals.filter((signal) => signal.type === 'settings_changed')).toHaveLength(2);
     const next = harness(h.storage);
     expect(next.session.settings.audio.master).toBe(0.3);
-    expect(next.session.settings.accessibility.scavengeMode).toBe('toggle');
+    expect(next.session.settings.accessibility.patternedMeters).toBe(true);
   });
 
   it('applies the difficulty to the running game and to new and loaded ones', () => {
@@ -259,13 +259,13 @@ describe('settings', () => {
     session.handleIntent({ type: 'select_settings_tab', tab: 'controls' });
     session.handleIntent({ type: 'begin_rebind', action: 'paddle', slot: 0 });
     expect(session.input.capture).toEqual({ action: 'paddle', slot: 0 });
-    session.keyDown('KeyE');
-    session.keyUp('KeyE');
+    session.keyDown('KeyF');
+    session.keyUp('KeyF');
     expect(session.input.capture).toBeNull();
-    expect(session.settings.controls.keyBindings.paddle).toEqual(['KeyE', 'ArrowUp']);
+    expect(session.settings.controls.keyBindings.paddle).toEqual(['KeyF', 'ArrowUp']);
     expect(session.settings.controls.keyBindings.interact).toEqual([]);
-    expect(session.bindingNotice).toBe('Paddle is now E. Land / interact (hold to scavenge) lost that key.');
-    expect(JSON.parse(h.storage.getItem(SETTINGS_KEY)!).controls.keyBindings.paddle).toEqual(['KeyE', 'ArrowUp']);
+    expect(session.bindingNotice).toBe('Paddle is now F. Land / interact / scavenge / board lost that key.');
+    expect(JSON.parse(h.storage.getItem(SETTINGS_KEY)!).controls.keyBindings.paddle).toEqual(['KeyF', 'ArrowUp']);
     expect(session.isOpen('settings')).toBe(true); // the captured key did not close or open anything
 
     // Esc cancels a capture without closing the panel.
@@ -278,7 +278,7 @@ describe('settings', () => {
     // The new binding drives the game.
     session.handleIntent({ type: 'close_panel' });
     session.newGame(0);
-    session.keyDown('KeyE');
+    session.keyDown('KeyF');
     frames(session, 2);
     expect(session.game!.canoe.speed).toBeGreaterThan(0.5);
   });
@@ -339,7 +339,7 @@ describe('pausing', () => {
     session.newGame(0);
     const game = session.game!;
     standOn(game, 'orchard_hill');
-    game.dialogue = { npcId: 'odile', nodeId: 'hub' };
+    game.players[0].dialogue = { npcId: 'odile', nodeId: 'hub' };
     session.advance(FIXED_STEP, 0);
     expect(session.isOpen('dialogue')).toBe(true);
     expect(session.paused).toBe(false);
@@ -347,7 +347,7 @@ describe('pausing', () => {
     frames(session, 1);
     expect(game.time).toBeCloseTo(time + 1, 5);
     session.keyDown('Escape');
-    expect(game.dialogue).toBeNull();
+    expect(game.players[0].dialogue).toBeNull();
     session.advance(FIXED_STEP, 0);
     expect(session.isOpen('dialogue')).toBe(false);
   });
@@ -375,7 +375,7 @@ describe('keys and commands', () => {
     session.keyDown('KeyM');
     expect(session.isOpen('map')).toBe(true);
     expect(session.inputSnapshot()).toBeNull();
-    session.keyDown('KeyF'); // would toggle the lantern
+    session.keyDown('KeyL'); // would toggle the lantern
     expect(session.game!.events).toEqual([]);
   });
 

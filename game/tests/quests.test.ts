@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { MAIN_QUESTS, NODE_IDS, NODES_BY_ID } from '../src/data/index.ts';
+import { MAIN_QUESTS, NODE_IDS } from '../src/data/index.ts';
 import {
   dispatch, selectActiveQuests, selectCurrentMainQuest, selectInteractable, selectQuestLog,
 } from '../src/sim/index.ts';
 import type { GameState } from '../src/sim/index.ts';
 import {
-  build, countIn, floatCanoeAt, give, newGame, run, standOn, teleportToCamp, teleportToNode,
+  build, countIn, floatCanoeAt, give, newGame, run, scavenge, standOn, teleportToCamp, teleportToNode,
 } from './support.ts';
 
 const tracked = (state: GameState) => selectActiveQuests(state)[0];
@@ -32,8 +32,8 @@ describe('the main line', () => {
     expect(state.quests.bail_out.status).toBe('completed');
     expect(state.quests.first_haul.status).toBe('active');
     expect(state.trackedQuestId).toBe('first_haul');
-    expect(countIn(state.player.backpack, 'berries')).toBe(4);
-    expect(countIn(state.player.backpack, 'clean_water')).toBe(2);
+    expect(countIn(state.players[0].backpack, 'berries')).toBe(4);
+    expect(countIn(state.players[0].backpack, 'clean_water')).toBe(2);
     expect(state.quests.stop_the_leak.status).toBe('locked');
   });
 
@@ -48,7 +48,7 @@ describe('the main line', () => {
     expect(tracked(state).objectives.map((objective) => objective.progress)).toEqual([3, 4, 0]);
     expect(dispatch(state, { type: 'craft', recipeId: 'stone_knife' }).ok).toBe(true);
     expect(state.quests.first_haul.status).toBe('completed');
-    expect(countIn(state.player.backpack, 'driftwood')).toBe(2);
+    expect(countIn(state.players[0].backpack, 'driftwood')).toBe(2);
     expect(selectCurrentMainQuest(state)).toBe('stop_the_leak');
   });
 
@@ -79,7 +79,7 @@ describe('the main line', () => {
     teleportToNode(state, NODE_IDS.beaconLamp);
     run(state, {}, 0.5);
     expect(selectInteractable(state)).toMatchObject({ kind: 'node', nodeId: NODE_IDS.beaconLamp, available: false });
-    run(state, { interactHeld: true }, 8);
+    expect(dispatch(state, { type: 'scavenge' })).toMatchObject({ ok: false, reason: 'quest_not_ready' });
     expect(state.flags.beacon_lit).toBeUndefined();
 
     // Stock the hull: six stock food and six clean water in the cargo.
@@ -89,7 +89,7 @@ describe('the main line', () => {
     run(state, {}, 0.5);
     expect(state.quests.the_beacon.progress).toEqual([12, 1, 0]);
     expect(selectInteractable(state)).toMatchObject({ available: true, prompt: 'Light: Beacon lamp' });
-    const events = run(state, { interactHeld: true }, NODES_BY_ID[NODE_IDS.beaconLamp].actions[0].seconds + 0.5);
+    const events = scavenge(state);
     expect(events.map((event) => event.type)).toContain('game_completed');
     expect(state.flags.beacon_lit).toBe(true);
     expect(selectCurrentMainQuest(state)).toBeNull();
@@ -108,8 +108,8 @@ describe('side quests', () => {
     expect(state.quests.odile_windfall.status).toBe('available');
     expect(state.quests.odile_something_sweet.status).toBe('locked');
     expect(dispatch(state, { type: 'accept_quest', questId: 'odile_windfall' })).toMatchObject({ ok: false, reason: 'npc_out_of_reach' });
-    state.player.position.x = -250 + 0.18 * 72;
-    state.player.position.z = 705 + 0.22 * 56 + 1;
+    state.players[0].position.x = -250 + 0.18 * 72;
+    state.players[0].position.z = 705 + 0.22 * 56 + 1;
     expect(dispatch(state, { type: 'accept_quest', questId: 'odile_windfall' }).ok).toBe(true);
     expect(dispatch(state, { type: 'accept_quest', questId: 'odile_windfall' })).toMatchObject({ ok: false, reason: 'quest_not_available' });
     expect(dispatch(state, { type: 'turn_in_quest', questId: 'odile_windfall' })).toMatchObject({ ok: false, reason: 'quest_not_ready' });
@@ -124,9 +124,9 @@ describe('side quests', () => {
 
     const result = dispatch(state, { type: 'turn_in_quest', questId: 'odile_windfall' });
     expect(result.ok).toBe(true);
-    expect(countIn(state.player.backpack, 'apple')).toBe(0);
-    expect(countIn(state.player.backpack, 'seeds')).toBe(4);
-    expect(countIn(state.player.backpack, 'glass_jar')).toBe(2);
+    expect(countIn(state.players[0].backpack, 'apple')).toBe(0);
+    expect(countIn(state.players[0].backpack, 'seeds')).toBe(4);
+    expect(countIn(state.players[0].backpack, 'glass_jar')).toBe(2);
     expect(state.quests.odile_windfall.status).toBe('completed');
     expect(state.quests.odile_something_sweet.status).toBe('available');
     expect(state.quests.odile_garden_afloat.status).toBe('available');
@@ -137,7 +137,7 @@ describe('side quests', () => {
     expect(selectQuestLog(state).map((quest) => quest.questId)).not.toContain('ten_bottles');
     standOn(state, 'home_knoll');
     teleportToNode(state, 'home_knoll.bottle');
-    const events = run(state, { interactHeld: true }, 1.5);
+    const events = scavenge(state);
     expect(events).toContainEqual({ type: 'bottle_found', bottleId: 'bottle_01' });
     expect(state.bottlesFound).toEqual(['bottle_01']);
     const entry = selectQuestLog(state).find((quest) => quest.questId === 'ten_bottles')!;
@@ -163,8 +163,8 @@ describe('side quests', () => {
   it('lets the tracker follow any quest', () => {
     const state = newGame();
     standOn(state, 'orchard_hill');
-    state.player.position.x = -250 + 0.18 * 72;
-    state.player.position.z = 705 + 0.22 * 56 + 1;
+    state.players[0].position.x = -250 + 0.18 * 72;
+    state.players[0].position.z = 705 + 0.22 * 56 + 1;
     dispatch(state, { type: 'accept_quest', questId: 'odile_windfall' });
     expect(dispatch(state, { type: 'track_quest', questId: 'odile_windfall' }).ok).toBe(true);
     expect(tracked(state).questId).toBe('odile_windfall');

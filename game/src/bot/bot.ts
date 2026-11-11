@@ -160,12 +160,13 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
 
   // --- Reading the state ----------------------------------------------------
 
-  const player = state.player;
+  // The bot is player 0.
+  const player = state.players[0];
   const canoe = state.canoe;
   const here = (): IslandId | null => (player.mode === 'foot' ? player.islandId : null);
   const held = (itemId: ItemId): number => {
-    if (ITEMS[itemId].category === 'tool') return player.tools.includes(itemId as ToolId) ? 1 : 0;
-    if (!isStackable(itemId)) return player.keyItems[itemId] ?? 0;
+    if (ITEMS[itemId].category === 'tool') return state.tools.includes(itemId as ToolId) ? 1 : 0;
+    if (!isStackable(itemId)) return state.keyItems[itemId] ?? 0;
     let total = 0;
     for (const stack of player.backpack) if (stack.itemId === itemId) total += stack.count;
     for (const stack of canoe.cargo) if (stack.itemId === itemId) total += stack.count;
@@ -305,7 +306,7 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
 
   /** Eat and drink from what is in reach. Instant commands, safe to call any time. */
   const upkeep = (): void => {
-    if (state.dialogue || state.tick - lastUpkeepTick < 30) return;
+    if (player.dialogue || state.tick - lastUpkeepTick < 30) return;
     lastUpkeepTick = state.tick;
     const spare = (itemId: ItemId): number => inReach(itemId) - (reserved.get(itemId) ?? 0);
     if (player.thirst < 50 && spare('clean_water') <= 0 && selectInventory(state).stations.includes('fire')) {
@@ -482,14 +483,13 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
     yield* walkTo(node.position, 1.6);
     if (action.energyCost > 0 && player.energy < action.energyCost + 12) yield* rest(40);
     if (player.selectedTool !== action.tool) must({ type: 'select_tool', toolId: action.tool });
-    const giveUpTick = state.tick + (action.seconds + 6) * 60;
-    while (nodeReady(node, actionIndex)) {
+    if (nodeReady(node, actionIndex)) {
       const target = selectInteractable(state);
       if (!target || target.kind !== 'node' || target.nodeId !== node.id || !target.available || target.actionIndex !== actionIndex) {
         throw new BotStuck(`cannot use ${node.id}: ${JSON.stringify(target)}`);
       }
-      if (state.tick > giveUpTick) throw new BotStuck(`harvest of ${node.id} never finished`);
-      yield { ...NEUTRAL_INPUT, interactHeld: true };
+      // One press and it is done.
+      must({ type: 'scavenge' });
     }
     yield NEUTRAL_INPUT;
     // Loot that did not fit stays on the node: stow, make room, pick it up.
@@ -501,13 +501,9 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
         stow();
         yield* walkTo(node.position, 1.6);
       } else if (!makeRoom()) break;
-      const pickUpUntil = state.tick + 120;
-      while ((state.nodes[node.id]?.leftover.length ?? 0) > 0 && state.tick < pickUpUntil) {
-        const before = state.nodes[node.id].leftover.reduce((sum, stack) => sum + stack.count, 0);
-        yield { ...NEUTRAL_INPUT, interactHeld: true };
-        const after = (state.nodes[node.id]?.leftover ?? []).reduce((sum, stack) => sum + stack.count, 0);
-        if (after === before && state.player.harvest === null) break;
-      }
+      // One press picks up whatever fits now.
+      const target = selectInteractable(state);
+      if (target?.kind === 'node' && target.nodeId === node.id) send({ type: 'scavenge' });
       yield NEUTRAL_INPUT;
     }
   }
@@ -807,8 +803,8 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
     must({ type: 'talk', npcId });
     log(`talk to ${npcId}`);
     const visited = new Set<string>();
-    for (let guard = 0; guard < 30 && state.dialogue; guard += 1) {
-      const nodeId = state.dialogue.nodeId;
+    for (let guard = 0; guard < 30 && player.dialogue; guard += 1) {
+      const nodeId = player.dialogue.nodeId;
       const view = selectDialogue(state)!;
       const options = NPCS[npcId].nodes[nodeId].options;
       // Take what is offered (an option with an effect), otherwise say goodbye.
@@ -826,7 +822,7 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
       must({ type: 'choose_dialogue_option', optionIndex: choice.index });
       yield NEUTRAL_INPUT;
     }
-    if (state.dialogue) must({ type: 'end_dialogue' });
+    if (player.dialogue) must({ type: 'end_dialogue' });
   }
 
   // --- Crafting and building ------------------------------------------------
@@ -1183,7 +1179,7 @@ export function runBot(options: BotOptions): BotReport {
   const difficulty = options.difficulty ?? 'standard';
   const maximumSeconds = options.maximumSeconds ?? 4 * 3600;
   const state = createGame(options.seed, { difficulty });
-  const player = state.player;
+  const player = state.players[0];
   const canoe = state.canoe;
   const log = (line: string): void => options.log?.(`${(state.playedSeconds / 60).toFixed(1).padStart(6)}  ${line}`);
   const driver = createBotDriver(state, { untilQuest: options.untilQuest, log: options.log });

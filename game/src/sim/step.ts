@@ -2,14 +2,14 @@ import type { Difficulty } from '../data/types.ts';
 import { TUNING } from '../data/tuning.ts';
 import { ISLANDS, START } from '../data/world.ts';
 import { stepCanoe } from './canoe.ts';
+import type { CrewMember } from './canoe.ts';
 import { stepOnFoot } from './foot.ts';
-import { updateHarvest } from './interact.ts';
-import { emit } from './inventory.ts';
+import { emit, freeSeat, playersAboard } from './inventory.ts';
 import { createQuestStates, updateQuests } from './quests.ts';
 import { seedToRandomState } from './random.ts';
-import { applyFail, updatePassiveAttachments, updateSurvival } from './survival.ts';
-import { STATE_VERSION } from './types.ts';
-import type { GameEvent, GameOptions, GameState, StepInput } from './types.ts';
+import { applyCapsize, applyExhaustion, updatePassiveAttachments, updateSurvival } from './survival.ts';
+import { MAXIMUM_PLAYERS, STATE_VERSION } from './types.ts';
+import type { CrewInput, GameEvent, GameOptions, GameState, PlayerState, StepInput } from './types.ts';
 import { createWeather, rollNextWeather, updateWeather } from './weather.ts';
 import { islandAt, landingBerth, regionAt, waterRoughnessAt, waveHeight } from './world.ts';
 
@@ -19,12 +19,47 @@ export const FIXED_STEP: number = TUNING.fixedStep;
 /** An input with nothing pressed. Spread it and override what is held. */
 export const NEUTRAL_INPUT: Readonly<StepInput> = Object.freeze({
   paddle: 0, steer: 0, powerStroke: false, bail: false,
-  moveX: 0, moveY: 0, run: false, interactHeld: false, cameraYaw: 0,
+  moveX: 0, moveY: 0, run: false, cameraYaw: 0,
 });
 
 /**
+ * Put one more player in the canoe, in the lowest free seat, with the
+ * starting kit. Returns them, or null when the crew is already four.
+ */
+export function addPlayer(state: GameState): PlayerState | null {
+  if (state.players.length >= MAXIMUM_PLAYERS) return null;
+  let id = 0;
+  while (state.players.some((player) => player.id === id)) id += 1;
+  const canoe = state.canoe;
+  const player: PlayerState = {
+    id,
+    mode: 'canoe',
+    seat: freeSeat(state),
+    position: { ...canoe.position },
+    heading: canoe.heading,
+    hunger: 80,
+    thirst: 75,
+    energy: 90,
+    backpack: [],
+    selectedTool: null,
+    islandId: null,
+    regionId: regionAt(canoe.position.x, canoe.position.z).id,
+    running: false,
+    exerting: false,
+    paddling: false,
+    bailing: false,
+    asleep: false,
+    dialogue: null,
+  };
+  state.players.push(player);
+  state.players.sort((first, second) => first.id - second.id);
+  return player;
+}
+
+/**
  * Start a new game. The valley is the same for everyone; the seed decides
- * loot rolls and weather. Standard difficulty unless `options` says otherwise.
+ * loot rolls and weather. Standard difficulty and a crew of one unless
+ * `options` says otherwise.
  */
 export function createGame(seed: number, options: GameOptions = {}): GameState {
   const difficulty: Difficulty = options.difficulty ?? 'standard';
@@ -39,24 +74,7 @@ export function createGame(seed: number, options: GameOptions = {}): GameState {
     stepAccumulator: 0,
     time: TUNING.time.startHour * TUNING.time.hourSeconds,
     playedSeconds: 0,
-    player: {
-      mode: 'canoe',
-      position: { x: start.x, y: 0, z: start.z },
-      heading: start.heading,
-      hunger: 80,
-      thirst: 75,
-      energy: 90,
-      backpack: [],
-      tools: ['bailing_can'],
-      selectedTool: null,
-      keyItems: {},
-      islandId: null,
-      regionId: regionAt(start.x, start.z).id,
-      harvest: null,
-      running: false,
-      exerting: false,
-      interactWasHeld: false,
-    },
+    players: [],
     canoe: {
       position: { x: start.x, y: 0, z: start.z },
       heading: start.heading,
@@ -82,7 +100,8 @@ export function createGame(seed: number, options: GameOptions = {}): GameState {
     nodes: {},
     quests: createQuestStates(),
     trackedQuestId: 'bail_out',
-    dialogue: null,
+    tools: ['bailing_can'],
+    keyItems: {},
     flags: {},
     discoveredIslands: [START.islandId],
     bottlesFound: [],
@@ -96,18 +115,18 @@ export function createGame(seed: number, options: GameOptions = {}): GameState {
   };
   rollNextWeather(state);
   state.canoe.position.y = waveHeight(start.x, start.z, state.time, waterRoughnessAt(start.x, start.z, 0));
-  state.player.position.y = state.canoe.position.y;
+  const crew = Math.max(1, Math.min(MAXIMUM_PLAYERS, Math.floor(options.crew ?? 1)));
+  for (let count = 0; count < crew; count += 1) addPlayer(state);
   emit(state, { type: 'quest_started', questId: 'bail_out' });
   return state;
 }
 
-/** Region, island underfoot and island discovery. Cheap, run a few times a second. */
-function updateSurroundings(state: GameState): void {
-  const player = state.player;
+/** One player's region, island underfoot and island discovery. Cheap, run a few times a second. */
+function updateSurroundings(state: GameState, player: PlayerState): void {
   const regionId = regionAt(player.position.x, player.position.z).id;
   if (regionId !== player.regionId) {
     player.regionId = regionId;
-    emit(state, { type: 'region_entered', regionId });
+    emit(state, { type: 'region_entered', regionId }, player);
   }
   if (player.mode === 'foot') player.islandId = islandAt(player.position.x, player.position.z);
   if (state.discoveredIslands.length < ISLANDS.length) {
@@ -122,7 +141,11 @@ function updateSurroundings(state: GameState): void {
   }
 }
 
-function fixedStep(state: GameState, input: StepInput): void {
+/**
+ * One fixed step. `inputs` is indexed by player id. Players are stepped in
+ * id order, so the same inputs always give the same state.
+ */
+function fixedStep(state: GameState, inputs: readonly (StepInput | undefined)[]): void {
   const deltaSeconds = FIXED_STEP;
   const timeBefore = state.time;
   state.tick += 1;
@@ -130,38 +153,49 @@ function fixedStep(state: GameState, input: StepInput): void {
   state.playedSeconds += deltaSeconds;
   updateWeather(state, deltaSeconds);
 
-  // A conversation holds the player still.
-  const effective = state.dialogue ? NEUTRAL_INPUT : input;
-  let moving: boolean;
-  if (state.player.mode === 'canoe') {
-    stepCanoe(state, effective, deltaSeconds);
-    moving = effective.paddle !== 0;
-  } else {
-    stepOnFoot(state, effective, deltaSeconds);
-    moving = Math.hypot(effective.moveX, effective.moveY) > 0.01;
+  // A conversation or a bed holds a player still.
+  const crew: CrewMember[] = state.players.map((player) => ({
+    player,
+    input: player.dialogue || player.asleep ? NEUTRAL_INPUT : inputs[player.id] ?? NEUTRAL_INPUT,
+  }));
+  // The canoe is shared: it moves once, for everyone aboard.
+  const aboard = crew.filter((member) => member.player.mode === 'canoe');
+  if (aboard.length > 0) stepCanoe(state, aboard, deltaSeconds);
+  for (const { player, input } of crew) {
+    let moving: boolean;
+    if (player.mode === 'canoe') {
+      moving = input.paddle !== 0;
+    } else {
+      stepOnFoot(state, player, input, deltaSeconds);
+      moving = Math.hypot(input.moveX, input.moveY) > 0.01;
+    }
+    updateSurvival(state, player, { moving }, deltaSeconds);
   }
-  updateHarvest(state, effective.interactHeld, deltaSeconds);
-  updateSurvival(state, { moving }, deltaSeconds);
   updatePassiveAttachments(state, deltaSeconds, timeBefore);
   if (state.tick % 10 === 0) {
-    updateSurroundings(state);
+    for (const player of state.players) updateSurroundings(state, player);
     updateQuests(state);
   }
 
-  if (state.player.mode === 'canoe' && state.canoe.waterLevel >= TUNING.canoe.capsizeLevel) applyFail(state, 'capsized');
-  else if (state.player.energy <= 0) applyFail(state, 'exhausted');
+  // A capsize takes everyone aboard. A player out of energy fails alone.
+  if (state.canoe.waterLevel >= TUNING.canoe.capsizeLevel && playersAboard(state).length > 0) applyCapsize(state);
+  for (const player of state.players) {
+    if (player.energy <= 0) applyExhaustion(state, player);
+  }
 }
 
 /**
- * Advance the simulation by a frame. `deltaSeconds` is real frame time; the
- * simulation runs whole fixed steps of 1/60 s out of it and keeps the rest in
- * `state.stepAccumulator`. Mutates and returns `state`.
+ * Advance the simulation by a frame. `input` is one player's intent (player
+ * 0) or the crew's, indexed by player id. `deltaSeconds` is real frame time;
+ * the simulation runs whole fixed steps of 1/60 s out of it and keeps the
+ * rest in `state.stepAccumulator`. Mutates and returns `state`.
  */
-export function step(state: GameState, input: StepInput, deltaSeconds: number): GameState {
+export function step(state: GameState, input: CrewInput, deltaSeconds: number): GameState {
   if (!(deltaSeconds > 0)) return state;
+  const inputs: readonly (StepInput | undefined)[] = Array.isArray(input) ? input : [input as StepInput];
   state.stepAccumulator += Math.min(deltaSeconds, TUNING.maximumFrameSeconds);
   while (state.stepAccumulator >= FIXED_STEP - 1e-9) {
-    fixedStep(state, input);
+    fixedStep(state, inputs);
     state.stepAccumulator -= FIXED_STEP;
   }
   if (state.stepAccumulator < 0) state.stepAccumulator = 0;

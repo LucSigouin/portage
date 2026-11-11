@@ -31,13 +31,15 @@ function scriptedInput(tick: number, state: GameState): { input: StepInput; comm
   } else if (phase <= 5) {
     const nodes = NODES_BY_ISLAND.home_knoll;
     const target = nodes[Math.floor(tick / 420) % nodes.length].position;
-    const offsetX = target.x - state.player.position.x;
-    const offsetZ = target.z - state.player.position.z;
+    const offsetX = target.x - state.players[0].position.x;
+    const offsetZ = target.z - state.players[0].position.z;
     const range = Math.max(1, Math.hypot(offsetX, offsetZ));
     input = {
       ...NEUTRAL_INPUT, moveX: range > 1.5 ? offsetX / range : 0, moveY: range > 1.5 ? -offsetZ / range : 0,
-      run: noise > 0.7, interactHeld: true,
+      run: noise > 0.7,
     };
+    // A press of the interact key every second: scavenge whatever is in reach.
+    if (tick % 60 === 0) commands.push({ type: 'scavenge' });
   } else {
     input = { ...NEUTRAL_INPUT, paddle: noise > 0.3 ? -1 : 0.5, steer: noise - 0.5, powerStroke: noise > 0.8 };
   }

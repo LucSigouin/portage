@@ -3,12 +3,40 @@ import { ATTACHMENTS, HULL_TIERS } from '../data/canoe.ts';
 import { ITEMS, isStackable } from '../data/items.ts';
 import { TUNING } from '../data/tuning.ts';
 import { ISLANDS_BY_ID, spotPosition } from '../data/world.ts';
-import type { Container, GameEvent, GameState, ItemStack, Missing } from './types.ts';
+import { MAXIMUM_PLAYERS } from './types.ts';
+import type { Container, GameEvent, GameState, ItemStack, Missing, PlayerId, PlayerState } from './types.ts';
 
-/** Queue an event for the client. The oldest are dropped if nobody drains. */
-export function emit(state: GameState, event: GameEvent): void {
-  state.events.push(event);
+/**
+ * Queue an event for the client. Pass the player who caused or suffered it,
+ * so each screen can tell its own events from the rest of the crew's. The
+ * oldest are dropped if nobody drains.
+ */
+export function emit(state: GameState, event: GameEvent, player?: PlayerState): void {
+  state.events.push(player ? { ...event, playerId: player.id } : event);
   if (state.events.length > TUNING.events.maximumQueued) state.events.shift();
+}
+
+/** The player with this id. Falls back to the first player, so a stale id never throws. */
+export function playerOf(state: GameState, playerId: PlayerId = 0): PlayerState {
+  return state.players.find((player) => player.id === playerId) ?? state.players[0];
+}
+
+/** The events one player's screen should hear: their own, and the crew-wide ones. */
+export function eventsFor(events: readonly GameEvent[], playerId: PlayerId): GameEvent[] {
+  return events.filter((event) => event.playerId === undefined || event.playerId === playerId);
+}
+
+/** Everyone in the canoe, in id order. */
+export function playersAboard(state: GameState): PlayerState[] {
+  return state.players.filter((player) => player.mode === 'canoe');
+}
+
+/** The lowest free seat in the canoe. */
+export function freeSeat(state: GameState): number {
+  for (let seat = 0; seat < MAXIMUM_PLAYERS; seat += 1) {
+    if (!state.players.some((player) => player.seat === seat)) return seat;
+  }
+  return 0;
 }
 
 export function emptyMissing(): Missing {
@@ -65,8 +93,9 @@ export function hasAttachment(state: GameState, attachmentId: keyof typeof ATTAC
   return state.canoe.attachments.includes(attachmentId);
 }
 
+/** True when the crew has the tool. Every player may use it. */
 export function hasTool(state: GameState, toolId: ToolId): boolean {
-  return state.player.tools.includes(toolId);
+  return state.tools.includes(toolId);
 }
 
 /** Cargo slots of the current hull plus attachment bonuses. */
@@ -80,87 +109,93 @@ export function slotsOf(state: GameState, container: Container): number {
   return container === 'backpack' ? TUNING.inventory.backpackSlots : cargoSlots(state);
 }
 
-export function stacksOf(state: GameState, container: Container): ItemStack[] {
-  return container === 'backpack' ? state.player.backpack : state.canoe.cargo;
+export function stacksOf(state: GameState, player: PlayerState, container: Container): ItemStack[] {
+  return container === 'backpack' ? player.backpack : state.canoe.cargo;
 }
 
-export function distanceToCanoe(state: GameState): number {
-  return Math.hypot(state.player.position.x - state.canoe.position.x, state.player.position.z - state.canoe.position.z);
+export function distanceToCanoe(state: GameState, player: PlayerState): number {
+  return Math.hypot(player.position.x - state.canoe.position.x, player.position.z - state.canoe.position.z);
 }
 
 /** The island whose camp the player is standing in, or null. */
-export function campInReach(state: GameState): IslandDefinition | null {
-  if (state.player.mode !== 'foot' || !state.player.islandId) return null;
-  const definition = ISLANDS_BY_ID[state.player.islandId];
+export function campInReach(player: PlayerState): IslandDefinition | null {
+  if (player.mode !== 'foot' || !player.islandId) return null;
+  const definition = ISLANDS_BY_ID[player.islandId];
   if (!definition.camp) return null;
   const position = spotPosition(definition, definition.camp.spot);
-  const distance = Math.hypot(state.player.position.x - position.x, state.player.position.z - position.z);
+  const distance = Math.hypot(player.position.x - position.x, player.position.z - position.z);
   return distance <= TUNING.foot.campRange ? definition : null;
 }
 
 /** True when aboard or standing close enough to use what is on the canoe. */
-export function atCanoe(state: GameState): boolean {
-  return state.player.mode === 'canoe' || distanceToCanoe(state) <= TUNING.canoe.accessRange;
+export function atCanoe(state: GameState, player: PlayerState): boolean {
+  return player.mode === 'canoe' || distanceToCanoe(state, player) <= TUNING.canoe.accessRange;
 }
 
 /**
  * True when cargo can be reached: aboard, beside the canoe, or at a camp on
  * the island where the canoe is beached.
  */
-export function cargoAccessible(state: GameState): boolean {
-  if (atCanoe(state)) return true;
-  const camp = campInReach(state);
+export function cargoAccessible(state: GameState, player: PlayerState): boolean {
+  if (atCanoe(state, player)) return true;
+  const camp = campInReach(player);
   return camp !== null && state.canoe.beached && state.canoe.lastBeached.islandId === camp.id;
 }
 
-/** Everything the player owns of an item: belt, key items, backpack and cargo. */
+/**
+ * Everything the crew owns of an item: the tool belt, the key items, every
+ * backpack and the cargo. Quests count this, so anyone's haul counts.
+ */
 export function countHeld(state: GameState, itemId: ItemId): number {
   const category = ITEMS[itemId].category;
-  if (category === 'tool') return state.player.tools.includes(itemId as ToolId) ? 1 : 0;
-  if (!isStackable(itemId)) return state.player.keyItems[itemId] ?? 0;
-  return countInStacks(state.player.backpack, itemId) + countInStacks(state.canoe.cargo, itemId);
+  if (category === 'tool') return hasTool(state, itemId as ToolId) ? 1 : 0;
+  if (!isStackable(itemId)) return state.keyItems[itemId] ?? 0;
+  let total = countInStacks(state.canoe.cargo, itemId);
+  for (const player of state.players) total += countInStacks(player.backpack, itemId);
+  return total;
 }
 
-/** What the player can use right now: as `countHeld`, minus unreachable cargo. */
-export function countAccessible(state: GameState, itemId: ItemId): number {
-  if (!isStackable(itemId)) return countHeld(state, itemId);
-  const inBackpack = countInStacks(state.player.backpack, itemId);
-  return cargoAccessible(state) ? inBackpack + countInStacks(state.canoe.cargo, itemId) : inBackpack;
+/** What one player can use right now: the crew's tools, the key items, their backpack and the cargo in reach. */
+export function countAccessible(state: GameState, player: PlayerState, itemId: ItemId): number {
+  if (ITEMS[itemId].category === 'tool') return hasTool(state, itemId as ToolId) ? 1 : 0;
+  if (!isStackable(itemId)) return state.keyItems[itemId] ?? 0;
+  const inBackpack = countInStacks(player.backpack, itemId);
+  return cargoAccessible(state, player) ? inBackpack + countInStacks(state.canoe.cargo, itemId) : inBackpack;
 }
 
 /** Containers in the order new items go into them. */
-function containerOrder(state: GameState): Container[] {
-  if (state.player.mode === 'canoe') return ['cargo', 'backpack'];
-  return cargoAccessible(state) ? ['backpack', 'cargo'] : ['backpack'];
+function containerOrder(state: GameState, player: PlayerState): Container[] {
+  if (player.mode === 'canoe') return ['cargo', 'backpack'];
+  return cargoAccessible(state, player) ? ['backpack', 'cargo'] : ['backpack'];
 }
 
 /**
- * Give items to the player. Tools go on the belt, key items into key items,
- * the rest into the backpack and cargo (cargo first when aboard). Returns the
- * stacks that did not fit.
+ * Give items to a player. Tools go on the crew's belt, key items to the crew's
+ * key items, the rest into their backpack and the cargo (cargo first when
+ * aboard). Returns the stacks that did not fit.
  */
-export function grantItems(state: GameState, items: ItemAmount[]): ItemStack[] {
+export function grantItems(state: GameState, player: PlayerState, items: ItemAmount[]): ItemStack[] {
   const leftover: ItemStack[] = [];
   for (const { itemId, count } of items) {
     if (count <= 0) continue;
     const category = ITEMS[itemId].category;
     if (category === 'tool') {
-      if (!state.player.tools.includes(itemId as ToolId)) {
-        state.player.tools.push(itemId as ToolId);
-        emit(state, { type: 'item_gained', itemId, count: 1, container: 'belt' });
+      if (!hasTool(state, itemId as ToolId)) {
+        state.tools.push(itemId as ToolId);
+        emit(state, { type: 'item_gained', itemId, count: 1, container: 'belt' }, player);
       }
       continue;
     }
     if (!isStackable(itemId)) {
-      state.player.keyItems[itemId] = (state.player.keyItems[itemId] ?? 0) + count;
-      emit(state, { type: 'item_gained', itemId, count, container: 'key_items' });
+      state.keyItems[itemId] = (state.keyItems[itemId] ?? 0) + count;
+      emit(state, { type: 'item_gained', itemId, count, container: 'key_items' }, player);
       continue;
     }
     let remaining = count;
-    for (const container of containerOrder(state)) {
+    for (const container of containerOrder(state, player)) {
       if (remaining <= 0) break;
-      const after = addToStacks(stacksOf(state, container), slotsOf(state, container), itemId, remaining);
-      if (after < remaining) emit(state, { type: 'item_gained', itemId, count: remaining - after, container });
+      const after = addToStacks(stacksOf(state, player, container), slotsOf(state, container), itemId, remaining);
+      if (after < remaining) emit(state, { type: 'item_gained', itemId, count: remaining - after, container }, player);
       remaining = after;
     }
     if (remaining > 0) leftover.push({ itemId, count: remaining });
@@ -169,25 +204,25 @@ export function grantItems(state: GameState, items: ItemAmount[]): ItemStack[] {
 }
 
 /** Remove items the player can reach. Assumes the caller checked the counts. */
-export function spendItems(state: GameState, items: ItemAmount[]): void {
+export function spendItems(state: GameState, player: PlayerState, items: ItemAmount[]): void {
   for (const { itemId, count } of items) {
     if (!isStackable(itemId)) {
       if (ITEMS[itemId].category === 'tool') continue;
-      const remaining = (state.player.keyItems[itemId] ?? 0) - count;
-      if (remaining > 0) state.player.keyItems[itemId] = remaining;
-      else delete state.player.keyItems[itemId];
+      const remaining = (state.keyItems[itemId] ?? 0) - count;
+      if (remaining > 0) state.keyItems[itemId] = remaining;
+      else delete state.keyItems[itemId];
       continue;
     }
-    const fromBackpack = removeFromStacks(state.player.backpack, itemId, count);
+    const fromBackpack = removeFromStacks(player.backpack, itemId, count);
     if (fromBackpack < count) removeFromStacks(state.canoe.cargo, itemId, count - fromBackpack);
   }
 }
 
-/** Items short of a cost, counting only what can be reached right now. */
-export function itemsShort(state: GameState, cost: ItemAmount[], times = 1): ItemAmount[] {
+/** Items short of a cost, counting only what the player can reach right now. */
+export function itemsShort(state: GameState, player: PlayerState, cost: ItemAmount[], times = 1): ItemAmount[] {
   const short: ItemAmount[] = [];
   for (const { itemId, count } of cost) {
-    const needed = count * times - countAccessible(state, itemId);
+    const needed = count * times - countAccessible(state, player, itemId);
     if (needed > 0) short.push({ itemId, count: needed });
   }
   return short;
@@ -197,17 +232,17 @@ export function itemsShort(state: GameState, cost: ItemAmount[], times = 1): Ite
  * Spend and gain in one go, or do nothing. Fails (returns false) when the
  * gained stacks would not fit once the spent ones are gone.
  */
-export function exchangeItems(state: GameState, spend: ItemAmount[], gain: ItemAmount[]): boolean {
-  const backpackBefore = state.player.backpack.map((stack) => ({ ...stack }));
+export function exchangeItems(state: GameState, player: PlayerState, spend: ItemAmount[], gain: ItemAmount[]): boolean {
+  const backpackBefore = player.backpack.map((stack) => ({ ...stack }));
   const cargoBefore = state.canoe.cargo.map((stack) => ({ ...stack }));
-  const keyItemsBefore = { ...state.player.keyItems };
+  const keyItemsBefore = { ...state.keyItems };
   const eventsBefore = state.events.length;
-  spendItems(state, spend);
-  const leftover = grantItems(state, gain);
+  spendItems(state, player, spend);
+  const leftover = grantItems(state, player, gain);
   if (leftover.length === 0) return true;
-  state.player.backpack = backpackBefore;
+  player.backpack = backpackBefore;
   state.canoe.cargo = cargoBefore;
-  state.player.keyItems = keyItemsBefore;
+  state.keyItems = keyItemsBefore;
   state.events.length = eventsBefore;
   return false;
 }

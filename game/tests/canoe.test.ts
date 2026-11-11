@@ -142,10 +142,10 @@ describe('water in the hull', () => {
   it('bails at 3 points a second, costs energy and stops the paddle', () => {
     const state = calmWater();
     state.canoe.waterLevel = 60;
-    state.player.energy = 80;
+    state.players[0].energy = 80;
     run(state, { bail: true, paddle: 1 }, 10);
     expect(state.canoe.waterLevel).toBeCloseTo(30, 1);
-    expect(state.player.energy).toBeCloseTo(80 - TUNING.survival.bailEnergyPerSecond * 10, 0);
+    expect(state.players[0].energy).toBeCloseTo(80 - TUNING.survival.bailEnergyPerSecond * 10, 0);
     expect(Math.abs(state.canoe.speed)).toBeLessThan(0.05);
     expect(state.canoe.bailing).toBe(true);
   });
@@ -188,15 +188,15 @@ describe('shoreline', () => {
     run(state, { paddle: 1 }, 25);
     expect(selectInteractable(state)).toMatchObject({ kind: 'land', command: { type: 'disembark' } });
     expect(dispatch(state, { type: 'disembark' }).ok).toBe(true);
-    expect(state.player.mode).toBe('foot');
-    expect(state.player.islandId).toBe('home_knoll');
-    expect(terrainHeight(state.player.position.x, state.player.position.z)).toBeGreaterThanOrEqual(-TUNING.foot.disembarkDepth);
+    expect(state.players[0].mode).toBe('foot');
+    expect(state.players[0].islandId).toBe('home_knoll');
+    expect(terrainHeight(state.players[0].position.x, state.players[0].position.z)).toBeGreaterThanOrEqual(-TUNING.foot.disembarkDepth);
     expect(dispatch(state, { type: 'disembark' })).toMatchObject({ ok: false, reason: 'not_aboard' });
     expect(selectInteractable(state)).toMatchObject({ kind: 'board' });
     expect(dispatch(state, { type: 'board' }).ok).toBe(true);
     expect(dispatch(state, { type: 'board' })).toMatchObject({ ok: false, reason: 'already_aboard' });
     standOn(state, 'home_knoll');
-    state.player.position.x += 30;
+    state.players[0].position.x += 30;
     expect(dispatch(state, { type: 'board' })).toMatchObject({ ok: false, reason: 'not_at_canoe' });
   });
 
@@ -215,6 +215,6 @@ describe('shoreline', () => {
     expect(worst).toBeLessThan(0.15);
     expect(Math.abs(state.canoe.pitch)).toBeLessThan(0.5);
     expect(Math.abs(state.canoe.roll)).toBeLessThan(0.5);
-    expect(state.player.position.y).toBe(state.canoe.position.y);
+    expect(state.players[0].position.y).toBe(state.canoe.position.y);
   });
 });

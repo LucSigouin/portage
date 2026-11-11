@@ -2,13 +2,13 @@ import type { IslandId, ItemAmount } from '../data/types.ts';
 import { TUNING } from '../data/tuning.ts';
 import { WEATHER } from '../data/weather.ts';
 import { beachCanoe, settleCanoe } from './canoe.ts';
-import { disembarkSpot } from './interact.ts';
+import { clearSpot, disembarkSpot, shoreSpotBeside } from './interact.ts';
 import {
-  addToStacks, atCanoe, campInReach, cargoSlots, emit, hasAttachment,
+  addToStacks, atCanoe, campInReach, cargoSlots, emit, freeSeat, hasAttachment, playersAboard,
 } from './inventory.ts';
 import { notifySlept, updateQuests } from './quests.ts';
-import type { FailCause, GameState } from './types.ts';
-import { islandAt, landingBerth, regionAt, terrainHeight } from './world.ts';
+import type { FailCause, GameState, ItemStack, PlayerState } from './types.ts';
+import { islandAt, islandLanding, landingBerth, regionAt, terrainHeight } from './world.ts';
 import { updateWeather } from './weather.ts';
 
 const { daySeconds, hourSeconds } = TUNING.time;
@@ -30,22 +30,21 @@ export function secondsUntilDawn(time: number): number {
   return hours * hourSeconds;
 }
 
-/** True when a fire, a lit lantern or the canopy keeps the cold off. */
-export function isSheltered(state: GameState): boolean {
-  if (campInReach(state)) return true;
-  if (!atCanoe(state)) return false;
+/** True when a fire, a lit lantern or the canopy keeps the cold off this player. */
+export function isSheltered(state: GameState, player: PlayerState): boolean {
+  if (campInReach(player)) return true;
+  if (!atCanoe(state, player)) return false;
   return hasAttachment(state, 'canopy') || hasAttachment(state, 'firebox')
     || (hasAttachment(state, 'lantern_mast') && state.canoe.lanternLit);
 }
 
-function warnWhenLow(state: GameState, meter: 'hunger' | 'thirst' | 'energy', before: number, after: number): void {
+function warnWhenLow(state: GameState, player: PlayerState, meter: 'hunger' | 'thirst' | 'energy', before: number, after: number): void {
   const threshold = TUNING.survival.lowMeterWarning;
-  if (before > threshold && after <= threshold) emit(state, { type: 'meter_low', meter });
+  if (before > threshold && after <= threshold) emit(state, { type: 'meter_low', meter }, player);
 }
 
-/** Drain and restore the three meters for one fixed step. */
-export function updateSurvival(state: GameState, input: { moving: boolean }, deltaSeconds: number): void {
-  const player = state.player;
+/** Drain and restore one player's three meters for one fixed step. */
+export function updateSurvival(state: GameState, player: PlayerState, input: { moving: boolean }, deltaSeconds: number): void {
   const tuning = TUNING.survival;
   const scale = TUNING.difficultyDrainScale[state.difficulty];
   const hungerBefore = player.hunger;
@@ -60,12 +59,12 @@ export function updateSurvival(state: GameState, input: { moving: boolean }, del
   let energyRate = 0;
   if (player.exerting) {
     if (player.mode === 'foot') energyRate -= tuning.runEnergyPerSecond;
-    else energyRate -= state.canoe.bailing ? tuning.bailEnergyPerSecond : tuning.powerStrokeEnergyPerSecond;
+    else energyRate -= player.bailing ? tuning.bailEnergyPerSecond : tuning.powerStrokeEnergyPerSecond;
   } else {
-    energyRate += input.moving || player.harvest ? tuning.lightActivityEnergyPerSecond : tuning.restEnergyPerSecond;
+    energyRate += input.moving ? tuning.lightActivityEnergyPerSecond : tuning.restEnergyPerSecond;
   }
-  const sheltered = isSheltered(state);
-  if (sheltered && campInReach(state)) energyRate += tuning.fireWarmthEnergyPerSecond;
+  const sheltered = isSheltered(state, player);
+  if (sheltered && campInReach(player)) energyRate += tuning.fireWarmthEnergyPerSecond;
   if (!sheltered) {
     if (isNight(state.time)) energyRate -= tuning.coldNightEnergyPerSecond * scale;
     energyRate -= tuning.stormEnergyPerSecond * scale * state.weather.stormLevel;
@@ -76,9 +75,9 @@ export function updateSurvival(state: GameState, input: { moving: boolean }, del
   if (starving) energy = Math.min(energy, tuning.starvingEnergyCap);
   player.energy = Math.max(0, Math.min(100, energy));
 
-  warnWhenLow(state, 'hunger', hungerBefore, player.hunger);
-  warnWhenLow(state, 'thirst', thirstBefore, player.thirst);
-  warnWhenLow(state, 'energy', energyBefore, player.energy);
+  warnWhenLow(state, player, 'hunger', hungerBefore, player.hunger);
+  warnWhenLow(state, player, 'thirst', thirstBefore, player.thirst);
+  warnWhenLow(state, player, 'energy', energyBefore, player.energy);
 }
 
 function addToCargo(state: GameState, itemId: ItemAmount['itemId'], count: number): number {
@@ -119,8 +118,11 @@ export function updatePassiveAttachments(state: GameState, deltaSeconds: number,
   }
 }
 
-/** Jump the world clock, keeping weather and passive attachments running. */
-function skipTime(state: GameState, seconds: number, drainMultiplier: number): void {
+/**
+ * Jump the world clock, keeping weather and passive attachments running.
+ * `sleepers` are the players whose hunger and thirst drain through it.
+ */
+function skipTime(state: GameState, seconds: number, drainMultiplier: number, sleepers: readonly PlayerState[]): void {
   const scale = TUNING.difficultyDrainScale[state.difficulty];
   let remaining = seconds;
   while (remaining > 1e-9) {
@@ -131,42 +133,55 @@ function skipTime(state: GameState, seconds: number, drainMultiplier: number): v
     updatePassiveAttachments(state, chunk, timeBefore);
     remaining -= chunk;
   }
-  state.player.hunger = Math.max(0, state.player.hunger - TUNING.survival.hungerPerSecond * scale * drainMultiplier * seconds);
-  state.player.thirst = Math.max(0, state.player.thirst - TUNING.survival.thirstPerSecond * scale * drainMultiplier * seconds);
+  for (const player of sleepers) {
+    player.hunger = Math.max(0, player.hunger - TUNING.survival.hungerPerSecond * scale * drainMultiplier * seconds);
+    player.thirst = Math.max(0, player.thirst - TUNING.survival.thirstPerSecond * scale * drainMultiplier * seconds);
+  }
 }
 
 export type SleepBlock = 'no_bed_in_reach' | 'not_tired';
 
-/** Why the player cannot sleep here and now, or null. */
-export function sleepBlocked(state: GameState): SleepBlock | null {
-  const aboardBed = atCanoe(state) && state.canoe.beached && hasAttachment(state, 'canopy');
-  const camp = campInReach(state);
+/** Why this player cannot sleep here and now, or null. */
+export function sleepBlocked(state: GameState, player: PlayerState): SleepBlock | null {
+  const aboardBed = atCanoe(state, player) && state.canoe.beached && hasAttachment(state, 'canopy');
+  const camp = campInReach(player);
   if (!aboardBed && !camp?.camp?.sleep) return 'no_bed_in_reach';
   const hour = hourOfDay(state.time);
   const bedtime = hour >= TUNING.time.sleepFromHour || hour < TUNING.time.dawnHour;
-  if (!bedtime && state.player.energy > TUNING.time.sleepWhenEnergyAtMost) return 'not_tired';
+  if (!bedtime && player.energy > TUNING.time.sleepWhenEnergyAtMost) return 'not_tired';
   return null;
 }
 
-/** Sleep until dawn: refill energy, set the respawn camp, skip the clock. */
-export function sleep(state: GameState): number {
-  const camp = campInReach(state);
-  if (camp?.camp?.sleep) state.respawnCampIslandId = camp.id;
+/**
+ * A player lies down. The night only skips once the whole crew is asleep:
+ * then everyone sleeps until dawn, energy refills, the respawn camp is set
+ * and the clock jumps. Returns the hours slept, or 0 while still waiting.
+ */
+export function sleep(state: GameState, player: PlayerState): number {
+  player.asleep = true;
+  if (!state.players.every((member) => member.asleep)) return 0;
+
+  for (const member of state.players) {
+    const camp = campInReach(member);
+    if (camp?.camp?.sleep) state.respawnCampIslandId = camp.id;
+  }
   const seconds = secondsUntilDawn(state.time);
-  skipTime(state, seconds, TUNING.survival.sleepDrainMultiplier);
-  const starving = state.player.hunger <= 0 || state.player.thirst <= 0;
-  state.player.energy = starving ? TUNING.survival.starvingEnergyCap : 100;
-  state.player.harvest = null;
+  skipTime(state, seconds, TUNING.survival.sleepDrainMultiplier, state.players);
   const hours = seconds / hourSeconds;
-  emit(state, { type: 'slept', hours, islandId: state.player.islandId });
+  for (const member of state.players) {
+    const starving = member.hunger <= 0 || member.thirst <= 0;
+    member.energy = starving ? TUNING.survival.starvingEnergyCap : 100;
+    member.asleep = false;
+    emit(state, { type: 'slept', hours, islandId: member.islandId }, member);
+  }
   emit(state, { type: 'autosave_requested', reason: 'sleeping' });
   notifySlept(state);
-  updateQuests(state);
+  updateQuests(state, player);
   return hours;
 }
 
 /**
- * Where a fail puts the player: the last camp slept at (Home Knoll by
+ * Where a fail puts a player: the last camp slept at (Home Knoll by
  * default), or with the canopy wherever the canoe was last beached.
  */
 export function respawnPoint(state: GameState): { islandId: IslandId; x: number; z: number; heading: number; mobile: boolean } {
@@ -178,19 +193,10 @@ export function respawnPoint(state: GameState): { islandId: IslandId; x: number;
   return { islandId, ...landingBerth(islandId, state.canoe.hullTier), mobile: false };
 }
 
-/**
- * Fail: wake at the respawn point, canoe beached beside you, six hours later,
- * meters at 50, half of every cargo stack gone. Tools, attachments and key
- * items are untouched.
- */
-export function applyFail(state: GameState, cause: FailCause): void {
-  emit(state, { type: cause });
-  const player = state.player;
-  const canoe = state.canoe;
-  const respawn = respawnPoint(state);
-
+/** Take half of every stack. Returns what went, one entry per item. */
+function loseHalf(stacks: ItemStack[]): ItemAmount[] {
   const lost: ItemAmount[] = [];
-  for (const stack of canoe.cargo) {
+  for (const stack of stacks) {
     const loss = Math.floor(stack.count / 2);
     if (loss > 0) {
       stack.count -= loss;
@@ -199,15 +205,44 @@ export function applyFail(state: GameState, cause: FailCause): void {
       else lost.push({ itemId: stack.itemId, count: loss });
     }
   }
+  return lost;
+}
 
-  skipTime(state, TUNING.time.failSkipHours * hourSeconds, 0);
+/** A failed player comes round: meters at 50, out of any talk or bed. */
+function comeRound(player: PlayerState): void {
   player.hunger = TUNING.survival.failMeterValue;
   player.thirst = TUNING.survival.failMeterValue;
   player.energy = TUNING.survival.failMeterValue;
-  player.harvest = null;
   player.exerting = false;
   player.running = false;
-  state.dialogue = null;
+  player.paddling = false;
+  player.bailing = false;
+  player.asleep = false;
+  player.dialogue = null;
+}
+
+function standAt(player: PlayerState, spot: { x: number; z: number }): void {
+  player.mode = 'foot';
+  player.seat = null;
+  player.position.x = spot.x;
+  player.position.z = spot.z;
+  player.position.y = terrainHeight(spot.x, spot.z);
+  player.islandId = islandAt(spot.x, spot.z);
+}
+
+/**
+ * The canoe is lost and washes ashore with `victims`: they wake at the
+ * respawn point with the canoe beached beside them, six hours later, meters
+ * at 50, half of every cargo stack gone. Tools, attachments and key items
+ * are untouched, and so is anyone not among the victims.
+ */
+function washAshore(state: GameState, cause: FailCause, victims: readonly PlayerState[]): void {
+  const canoe = state.canoe;
+  const respawn = respawnPoint(state);
+  const lost = loseHalf(canoe.cargo);
+
+  skipTime(state, TUNING.time.failSkipHours * hourSeconds, 0, []);
+  for (const victim of victims) comeRound(victim);
 
   canoe.position.x = respawn.x;
   canoe.position.z = respawn.z;
@@ -225,21 +260,53 @@ export function applyFail(state: GameState, cause: FailCause): void {
   settleCanoe(state, 1);
 
   const spot = disembarkSpot(state);
-  if (spot) {
-    player.mode = 'foot';
-    player.position.x = spot.x;
-    player.position.z = spot.z;
-    player.position.y = terrainHeight(spot.x, spot.z);
-    player.islandId = islandAt(spot.x, spot.z);
-  } else {
-    player.mode = 'canoe';
-    player.position.x = canoe.position.x;
-    player.position.y = canoe.position.y;
-    player.position.z = canoe.position.z;
-    player.islandId = null;
+  for (const victim of victims) {
+    if (spot) {
+      standAt(victim, clearSpot(state, victim, spot));
+    } else {
+      if (victim.mode !== 'canoe') victim.seat = freeSeat(state);
+      victim.mode = 'canoe';
+      victim.position.x = canoe.position.x;
+      victim.position.y = canoe.position.y;
+      victim.position.z = canoe.position.z;
+      victim.islandId = null;
+    }
+    victim.regionId = regionAt(victim.position.x, victim.position.z).id;
   }
+  state.statistics.fails += 1;
+  for (const victim of victims) emit(state, { type: 'washed_ashore', cause, islandId: respawn.islandId, lost }, victim);
+  updateQuests(state);
+}
+
+/** The canoe went under: everyone aboard washes ashore with it. */
+export function applyCapsize(state: GameState): void {
+  emit(state, { type: 'capsized' });
+  washAshore(state, 'capsized', playersAboard(state));
+}
+
+/**
+ * A player ran out of energy. In a crew they fail alone: they wake on foot at
+ * the respawn point with meters at 50 and half of every backpack stack gone,
+ * while the canoe, the cargo, the clock and the others carry on.
+ *
+ * Two cases take the canoe along, as a capsize would: a crew of one (the solo
+ * rule), and the last player aboard a canoe that is afloat, which would
+ * otherwise drift off empty and strand the rest.
+ */
+export function applyExhaustion(state: GameState, player: PlayerState): void {
+  emit(state, { type: 'exhausted' }, player);
+  const lastAboardAfloat = player.mode === 'canoe' && !state.canoe.beached && playersAboard(state).length === 1;
+  if (state.players.length === 1 || lastAboardAfloat) {
+    washAshore(state, 'exhausted', [player]);
+    return;
+  }
+  const respawn = respawnPoint(state);
+  const lost = loseHalf(player.backpack);
+  comeRound(player);
+  const spot = shoreSpotBeside(respawn.x, respawn.z, respawn.heading) ?? islandLanding(respawn.islandId).shore;
+  standAt(player, clearSpot(state, player, spot));
   player.regionId = regionAt(player.position.x, player.position.z).id;
   state.statistics.fails += 1;
-  emit(state, { type: 'washed_ashore', cause, islandId: respawn.islandId, lost });
-  updateQuests(state);
+  emit(state, { type: 'washed_ashore', cause: 'exhausted', islandId: respawn.islandId, lost }, player);
+  updateQuests(state, player);
 }

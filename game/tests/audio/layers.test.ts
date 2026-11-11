@@ -34,10 +34,10 @@ function openWaterIn(regionId: RegionId): { x: number; z: number } {
 /** Put the canoe afloat with the player aboard and a dry hull. */
 function floatAt(state: GameState, regionId: RegionId): void {
   const { x, z } = openWaterIn(regionId);
-  state.player.mode = 'canoe';
-  state.player.islandId = null;
-  state.player.regionId = regionId;
-  state.player.position = { x, y: 0, z };
+  state.players[0].mode = 'canoe';
+  state.players[0].islandId = null;
+  state.players[0].regionId = regionId;
+  state.players[0].position = { x, y: 0, z };
   state.canoe.position = { x, y: 0, z };
   state.canoe.heading = 0;
   state.canoe.speed = 0;
@@ -50,9 +50,9 @@ function standAtCamp(state: GameState): void {
   const island = ISLANDS_BY_ID.home_knoll;
   if (!island.camp) throw new Error('Home Knoll has no camp');
   const camp = spotPosition(island, island.camp.spot);
-  state.player.mode = 'foot';
-  state.player.islandId = 'home_knoll';
-  state.player.position = { x: camp.x, y: terrainHeight(camp.x, camp.z), z: camp.z };
+  state.players[0].mode = 'foot';
+  state.players[0].islandId = 'home_knoll';
+  state.players[0].position = { x: camp.x, y: terrainHeight(camp.x, camp.z), z: camp.z };
 }
 
 /** Run frames of the real simulation with the engine listening. */
@@ -308,7 +308,7 @@ describe('layers from the game state', () => {
     expect(settledLayer(rig, 'wash')).toBeLessThan(paddlingWash * 0.3);
 
     // A power stroke is flagged by the state itself and comes faster.
-    state.player.energy = 100;
+    state.players[0].energy = 100;
     play(rig, state, 6, { paddle: 1, powerStroke: true });
     expect(voicesStarted('paddle') - afterLettingGo).toBeGreaterThanOrEqual(5);
     rig.engine.dispose();
@@ -377,7 +377,7 @@ describe('layers from the game state', () => {
       for (let frame = 0; frame < seconds * 60; frame += 1) {
         // The state carries no input: the engine sees only the position move, tick by tick.
         state.tick += 1;
-        state.player.position.x += speed * FIXED_STEP;
+        state.players[0].position.x += speed * FIXED_STEP;
         rig.context.advance(FIXED_STEP);
         rig.engine.update(state, FIXED_STEP);
       }
@@ -394,7 +394,7 @@ describe('layers from the game state', () => {
 
     // Being moved by the game (a respawn) is not a walk.
     state.tick += 1;
-    state.player.position.x += 400;
+    state.players[0].position.x += 400;
     rig.engine.update(state, FIXED_STEP);
     expect(walk(1, 0)).toBe(0);
 
@@ -404,13 +404,13 @@ describe('layers from the game state', () => {
     rig.engine.dispose();
   });
 
-  it('keeps the scavenging rhythm while a node is worked', async () => {
+  it('plays one hit for a one-press scavenge, and no rhythm after it', async () => {
     const rig = await createRig();
     const state = newGame();
     standAtCamp(state);
     const spruce = nodeOfType('spruce');
     const { voicesStarted } = rig.engine.inspector;
-    const hold = (seconds: number): void => {
+    const wait = (seconds: number): void => {
       for (let frame = 0; frame < seconds * 60; frame += 1) {
         state.tick += 1;
         rig.context.advance(FIXED_STEP);
@@ -418,20 +418,12 @@ describe('layers from the game state', () => {
       }
     };
 
-    // The engine reads the held action from the state it was last given, which the game mutates in place.
     rig.engine.update(state, FIXED_STEP);
-    // The event plays the first chop; the layer keeps time after it.
-    state.player.harvest = { nodeId: spruce, actionIndex: 1, progress: 0 };
-    rig.engine.handleEvents([{ type: 'harvest_started', nodeId: spruce }]);
+    rig.engine.handleEvents([{ type: 'harvest_started', nodeId: spruce, actionIndex: 1, playerId: 0 }]);
     expect(voicesStarted('scavenge_chop')).toBe(1);
-    hold(5);
-    expect(voicesStarted('scavenge_chop')).toBeGreaterThanOrEqual(5);
-    expect(voicesStarted('scavenge_chop')).toBeLessThanOrEqual(7);
-
-    state.player.harvest = null;
-    const whenReleased = voicesStarted('scavenge_chop');
-    hold(3);
-    expect(voicesStarted('scavenge_chop')).toBe(whenReleased);
+    // Nothing is held any more, so nothing keeps time: the one chop is all there is.
+    wait(5);
+    expect(voicesStarted('scavenge_chop')).toBe(1);
     rig.engine.dispose();
   });
 });
