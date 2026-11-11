@@ -118,6 +118,10 @@ html.iw-document {
 .iw-ico .iw-dot {
   fill: var(--iw-ink);
 }
+/* Item drawings sit before the item's name. Each place sets the size; the pen and the washes never change. */
+.iw-item-ico {
+  vertical-align: middle;
+}
 .iw-tick,
 .iw-caret,
 .iw-cross,
@@ -704,6 +708,14 @@ html.iw-document {
   border: 0.09rem solid var(--iw-ink);
   border-radius: 0.5rem 0.3rem 0.55rem 0.3rem;
   box-shadow: 0.08rem 0.14rem 0 rgba(42, 43, 51, 0.2);
+}
+.iw-toast .iw-item-ico {
+  align-self: center;
+  margin: -0.14rem -0.1rem 0;
+}
+.iw-toast .iw-item-ico .iw-ico {
+  width: 1.4rem;
+  height: 1.4rem;
 }
 .iw-dab {
   flex: none;
@@ -1534,8 +1546,22 @@ html.iw-document {
   border-bottom: 0.09rem dashed var(--iw-ink-faint);
 }
 .iw-item {
+  grid-template-columns: auto 1fr auto;
+  column-gap: 0.6rem;
   min-height: 2.6rem;
   padding: 0.12rem 0 0.08rem;
+}
+.iw-item .iw-item-ico .iw-ico {
+  width: 1.9rem;
+  height: 1.9rem;
+}
+.iw-entry-text .iw-lead {
+  margin-right: 0.35rem;
+  vertical-align: -0.42rem;
+}
+.iw-entry-text .iw-lead .iw-ico {
+  width: 1.7rem;
+  height: 1.7rem;
 }
 .iw-item .iw-entry-text > small {
   margin-top: 0;
@@ -1618,13 +1644,23 @@ html.iw-document {
   margin-top: 0.3rem;
 }
 .iw-cost {
-  padding: 0.1rem 0.45rem 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.1rem 0.45rem 0 0.3rem;
   font-family: var(--iw-hand);
   font-size: 0.84rem;
   line-height: 1.3;
   white-space: nowrap;
   border: 0.08rem solid var(--iw-ink-soft);
   border-radius: 0.4rem 0.28rem 0.45rem 0.25rem;
+}
+.iw-cost .iw-item-ico {
+  margin-top: -0.1rem;
+}
+.iw-cost .iw-item-ico .iw-ico {
+  width: 1.2rem;
+  height: 1.2rem;
 }
 .iw-cost.iw-short {
   color: var(--iw-rust-deep);
@@ -1682,6 +1718,9 @@ html.iw-document {
   border: 0.09rem dashed var(--iw-rust-deep);
   border-radius: 0.5rem 0.3rem 0.55rem 0.3rem;
 }
+.iw-reward-text {
+  min-width: 0;
+}
 .iw-belt-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1723,6 +1762,16 @@ html.iw-document {
   font-family: var(--iw-hand);
   font-size: 0.98rem;
   line-height: 1.5;
+}
+.iw-key-items li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: pre;
+}
+.iw-key-items .iw-item-ico .iw-ico {
+  width: 1.5rem;
+  height: 1.5rem;
 }
 .iw-soft {
   padding-top: 0.5rem;
