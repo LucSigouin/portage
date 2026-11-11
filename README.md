@@ -4,6 +4,8 @@ A browser survival-crafting game. The valley flooded and stayed flooded. You hav
 
 Working name. Everything on screen is drawn in code: no asset packs, no downloads.
 
+**Play it: https://sigouin.net/portage/** (keyboard and mouse; press F to act, Esc for the menu).
+
 ![The lobby](docs/shots/lobby.jpg)
 ![Paddling to Home Knoll](docs/shots/play.jpg)
 ![On foot on an island](docs/shots/island.jpg)
@@ -33,6 +35,8 @@ npm run dev --prefix game
 ```
 
 Then open http://localhost:5220. Keyboard and mouse only for now. How to Play is in the lobby menu.
+
+Publish: `bash deploy/deploy.sh --yes` builds, tests and uploads to sigouin.net/portage, then checks the live copy. Luc's go is needed each time.
 
 Checks:
 

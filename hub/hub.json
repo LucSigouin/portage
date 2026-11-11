@@ -11,7 +11,7 @@
   ],
   "name": "Portage",
   "pitch": "A browser survival-crafting game. The valley flooded. You have a leaky canoe, and you bolt what you build onto it.",
-  "updated": "2026-11-11, mid-afternoon",
+  "updated": "2026-11-11, late afternoon",
   "status": {
     "done": [
       "Rules engine. Runs with no screen. 179 tests pass. A bot finishes the whole main quest.",
@@ -23,16 +23,19 @@
       "The player, the crew and the canoe stay sharp at every zoom and window size, and picture quality climbs back after a slow spell. Luc had seen the player go blurry when zooming out.",
       "The rules handle up to 4 players sharing one canoe, and tools belong to the whole crew. Solo plays the identical game. F is the action key, the lantern is on L, scavenging takes one press.",
       "Item icons: a drawn icon beside every item name, 54 in all.",
-      "The crew is drawn properly: each player in their own seat and their own colours, paddling, bailing, sleeping and walking for themselves. A far-away player keeps a fine outline. 629 tests pass, plus 58 browser tests."
+      "The crew is drawn properly: each player in their own seat and their own colours, paddling, bailing, sleeping and walking for themselves. A far-away player keeps a fine outline. 629 tests pass, plus 58 browser tests.",
+      { "text": "Live on the web: sigouin.net/portage. Anyone with the link can play; search engines are asked not to list it.", "href": "https://sigouin.net/portage/" }
     ],
-    "running": [],
+    "running": [
+      "The canoe: four hull tiers you can tell apart, all 19 attachments, the three survivors (worker Skye).",
+      "The valley: every landmark, all 15 islands recognisable, every scavenge node (worker Rubble)."
+    ],
     "waiting": [
-      "Luc: publish to sigouin.net/portage by running the deploy line (only your shell is signed in to Cloudflare).",
       { "text": "Luc: look over the 54 item icons in the crafting panel.", "href": "game/?shot=crafting" },
       { "text": "Luc: zoom out on an island and check the player stays sharp and fine-lined on your screen.", "href": "game/?shot=island&live=1" },
       { "text": "Luc: see a crew of four in the canoe.", "href": "game/?crew=4" },
       "Luc: invite the guys to the private GitHub repo (github.com/LucSigouin/portage, Settings, Collaborators).",
-      "Next: the canoe content (4 hulls, 19 attachments) and the 15 islands, a crew list in the HUD, weather and night, then co-op networking."
+      "Next: a crew list in the HUD, weather and night, a speed pass, then co-op networking."
     ]
   },
   "addresses": [
