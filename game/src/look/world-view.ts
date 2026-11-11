@@ -16,6 +16,7 @@ import type { Settings } from '../settings/index.ts';
 import { bearingBetween, regionAt, selectTimeOfDay, terrainHeight, waterRoughnessAt, waveHeight } from '../sim/index.ts';
 import type { GameEvent, GameState } from '../sim/index.ts';
 import type { CameraPose, FrameInfo, StageName, WorldView } from '../client/contracts.ts';
+import { crewOf } from './crew.ts';
 import { KIND } from './b2/detail.js';
 import { Builder, THIN } from './b2/geo.js';
 import { GU, PAL, inkMaterial } from './b2/palette.js';
@@ -369,7 +370,7 @@ export class InkWashWorldView implements WorldView {
   /** The time-of-day palette and the weather's mist. */
   private syncLight(state: GameState, snap: boolean): void {
     const weather = WEATHER[state.weather.kind];
-    const inFog = regionAt(state.player.position.x, state.player.position.z).fogWall;
+    const inFog = regionAt(crewOf(state).local.position.x, crewOf(state).local.position.z).fogWall;
     const overcastGoal = overcastFor(state.weather.kind, state.weather.stormLevel);
     const visibilityGoal = Math.min(THINNEST_MIST, weather.visibility * (inFog ? 0.35 : 1));
     const ease = snap ? 1 : 1 - Math.exp(-this.paintSeconds * 0.8);
@@ -424,7 +425,7 @@ export class InkWashWorldView implements WorldView {
   /** Used-up nodes wash out; floating ones ride the waves; the loot in sight is listed for the marks. */
   private syncNodes(state: GameState): void {
     const refresh = this.frameCount % 12 === 1;
-    const player = state.player.position;
+    const player = crewOf(state).local.position;
     if (refresh) this.ready.length = 0;
     for (const island of this.islands) {
       if (!island.nodes.visible || !island.group.visible) continue;
@@ -465,7 +466,7 @@ export class InkWashWorldView implements WorldView {
     const water = this.water;
     if (!state || !water) return;
     const canoe = state.canoe.position;
-    const player = state.player.position;
+    const player = crewOf(state).local.position;
     const splash = (x: number, z: number): void => {
       water.ring(x, z, 1, 1.5);
       water.ring(x, z, 0.8, 0.8);
@@ -548,7 +549,7 @@ export class InkWashWorldView implements WorldView {
     camera.updateMatrixWorld();
     GU.uPxK.value = (2 * Math.tan((camera.fov * Math.PI) / 360)) / post.resolution.y;
 
-    const subject = state.player.position;
+    const subject = crewOf(state).local.position;
     if (this.cullDue || this.frameCount % 10 === 1) {
       this.cullDue = false;
       this.cull();
@@ -556,7 +557,7 @@ export class InkWashWorldView implements WorldView {
     }
     sky.update(camera);
     water.follow(camera, subject.x, subject.z);
-    marks.update(camera, subject, state.player.mode === 'canoe', this.ready, this.stage === 'game');
+    marks.update(camera, subject, crewOf(state).local.mode === 'canoe', this.ready, this.stage === 'game');
 
     renderer.info.reset();
     water.renderWake(renderer);

@@ -14,6 +14,18 @@ Working name. Browser survival-crafting game. Source of truth for every worker.
 - Runs in the browser, hosted on Luc's site. Needs a proper lobby, menus and settings.
 - Only Fable 5.2 works on this (`claude-fable-5-2`; the CNVS alias `fable` is Fable 5, do not use it).
 
+## Luc's calls (2026-11-11, after playing step 1)
+
+- **Co-op, up to 4 players.** The rules are shaped for 4 players now. The networking comes after the solo game is finished. Solo is co-op with one player.
+  - One shared canoe with a crew of up to four. Anyone aboard can paddle, bail, fish or craft. On an island everyone walks off on their own.
+  - Each player has their own hunger, thirst, energy, backpack and tool belt. The canoe, its cargo, the quests and the world are shared.
+  - A player at 0 energy wakes alone at the respawn point. A capsize takes everyone aboard.
+  - Later: the host's browser runs the game, a small relay on Cloudflare passes messages, friends join by a link on sigouin.net.
+- **The player never goes blurry and never loses drawn detail**, at any zoom and any window size. This holds for every crew member, and (Claude's call) for the canoe they sit in. Everything else may shed detail when frames run long.
+- **Item icons.** Wherever an item is named (inventory, crafting, builder, hotbar, loot notes), it shows a drawn icon beside the words.
+- **F is the main action key**: land, interact, scavenge, board. The lantern moves to L (Claude's call, F used to be the lantern).
+- **Scavenging takes one press.** No holding.
+
 ## Pitch
 
 The valley flooded and stayed flooded. You have a leaky canoe. Paddle between drowned hilltops and rooftops, scavenge on foot, craft, and bolt what you build onto the canoe until it is a floating homestead that can reach the Beacon.
@@ -38,8 +50,8 @@ Paddle, land, scavenge on foot, haul back, craft and cook, bolt on an attachment
 
 | Context | Keys |
 |---|---|
-| Canoe | W paddle, S back-paddle, A/D steer, Shift power stroke, R bail (hold), F lantern, E land / interact |
-| On foot | WASD move (camera-relative), Shift run, E interact (hold to scavenge), E at canoe to board |
+| Canoe | W paddle, S back-paddle, A/D steer, Shift power stroke, R bail (hold), L lantern, F land / interact |
+| On foot | WASD move (camera-relative), Shift run, F interact and scavenge (one press), F at canoe to board |
 | Camera | Mouse drag orbit, wheel zoom, auto-recentre behind heading |
 | Panels | Tab inventory, C craft, B canoe builder (canoe beached), J quest log, M map, 1-5 tool hotbar, Esc pause |
 
@@ -156,7 +168,7 @@ Side quests, about 8: Odile (orchard, jam, planter), Wren (bell rope, flag), Tin
 ## Screens
 
 - Lobby: live scene behind the title. Continue, New Game (3 save slots), Settings, How to Play, Credits.
-- Settings (lobby and pause): Audio (master, music, effects, ambience), Graphics (quality preset, render scale, shadows, water detail, field of view, fps cap, show fps), Controls (rebind every key, mouse sensitivity, invert Y, camera auto-centre), Gameplay (difficulty, autosave interval, hints), Accessibility (UI scale, reduce camera motion, patterned meters, hold or toggle to scavenge).
+- Settings (lobby and pause): Audio (master, music, effects, ambience), Graphics (quality preset, render scale, shadows, water detail, field of view, fps cap, show fps), Controls (rebind every key, mouse sensitivity, invert Y, camera auto-centre), Gameplay (difficulty, autosave interval, hints), Accessibility (UI scale, reduce camera motion, patterned meters).
 - In game: HUD (three meters, water gauge, hotbar, quest tracker, compass, prompts), inventory, crafting, canoe builder, quest log, map, dialogue, pause.
 
 ## Tech
@@ -171,4 +183,4 @@ Side quests, about 8: Odile (orchard, jam, planter), Wren (bell rope, flag), Tin
 
 ## Not in v1
 
-Multiplayer, combat, food spoilage, phone controls, free placement of attachments, building on islands, more than one valley.
+Co-op networking (it follows the finished solo game; the rules are already shaped for 4 players), combat, food spoilage, phone controls, free placement of attachments, building on islands, more than one valley.

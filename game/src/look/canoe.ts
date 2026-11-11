@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { HULL_TIERS } from '../data/index.ts';
 import { attachmentTransformForHull } from '../sim/index.ts';
+import { crewOf } from './crew.ts';
 import type { GameState } from '../sim/index.ts';
 import { buildAttachment } from './attachments.ts';
 import type { AttachmentPiece } from './attachments.ts';
@@ -110,7 +111,7 @@ export class CanoeView {
    */
   sync(state: GameState, seconds: number, time: number, showPlayer: boolean, snap: boolean): StrokeEvent[] {
     const canoe = state.canoe;
-    const player = state.player;
+    const player = crewOf(state).local;
     this.group.position.set(canoe.position.x, canoe.position.y, canoe.position.z);
     this.group.rotation.set(canoe.pitch, -canoe.heading, -canoe.roll);
 
