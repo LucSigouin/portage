@@ -1,19 +1,19 @@
 /**
  * Browser boot. Everything that touches the DOM lives here or in
- * `client/greybox/`: it builds the world view, the UI and the sound, hands
+ * `look/` and `interface/`: it builds the world view, the UI and the sound, hands
  * them to the app, forwards keys and the mouse, and starts the frame loop.
  *
- * To swap in the real look, replace `GreyboxWorldView` and
- * `GreyboxInterface` below with the art round's implementations of the
- * contracts in `client/contracts.ts`.
+ * The look comes from `createWorldView()` in `look/index.ts` and the menus from
+ * `createGameInterface()` in `interface/index.ts`. Both implement the
+ * contracts in `client/contracts.ts`. This file never changes for a new look.
  */
 import { createAudioEngine } from './audio/index.ts';
 import { createApp } from './client/app.ts';
 import { createSilentAudio } from './client/contracts.ts';
 import type { AudioEngine } from './client/contracts.ts';
 import { parseDebugParameters } from './client/debug/parameters.ts';
-import { GreyboxInterface } from './client/greybox/interface.ts';
-import { GreyboxWorldView } from './client/greybox/world-view.ts';
+import { createGameInterface } from './interface/index.ts';
+import { createWorldView } from './look/index.ts';
 import { createFrameLoop } from './client/loop.ts';
 import type { FrameLoop } from './client/loop.ts';
 import type { SessionStorage } from './client/session.ts';
@@ -54,8 +54,8 @@ function boot(): void {
   if (!worldElement || !interfaceElement) throw new Error('index.html is missing #world or #interface');
 
   const parameters = parseDebugParameters(window.location.search);
-  const worldView = new GreyboxWorldView();
-  const gameInterface = new GreyboxInterface();
+  const worldView = createWorldView();
+  const gameInterface = createGameInterface();
   const audio = createAudio();
   let loop: FrameLoop | null = null;
 

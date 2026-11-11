@@ -6,7 +6,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
-const BASE = 'http://localhost:5220';
+const BASE = process.env.PORTAGE_URL ?? 'http://localhost:5220';
 
 test.use({
   viewport: { width: 1280, height: 720 },
