@@ -21,8 +21,31 @@
 //   c. the same pen as step 4 runs on that merged buffer at the window's size, and writes only the pixels
 //      that a hero touches: the hero itself, and its lines and foam. Every other pixel keeps the world.
 // One pen, one line weight (pen widths are in window pixels at both sizes), so there is no seam.
+//
+// A small hero gets a finer pen. The pen's width is in pixels, so on a hero that is small on the window (zoomed
+// far out, or a crewmate a long way off) the full pen is a black blob round an 80-pixel figure. heroPen() says
+// how much of its width the pen keeps, from how much of the world the window's height covers at the hero's
+// depth: all of it up to HERO_PEN.start metres (every normal play distance), then less, smoothly, down to
+// HERO_PEN.floor. It is worked out per pixel from the depth of the nearest hero texel in the pen's reach, so it
+// changes smoothly with zoom and does not depend on which window a hero falls in. Only pen points within the
+// thinned pen's reach of a hero use it; the rest of the window draws the world's own lines at the world's width.
 import * as THREE from 'three';
 import { PAL, GU, NOISE, wearMaterials } from './palette.js';
+
+// start: metres of world across the window's height at the hero's depth, up to which the pen is full (14.3 m away
+// at a 60 degree field of view: past the far end of the long hull in the staged full-canoe view, whose camera
+// is 10.5 m out, and so past everything at the default camera distances of 6 and 8.5 m).
+// fall: how fast it thins past that (half its width at 18 m, the walking camera fully out).
+// floor: the share of its width it never goes under.
+export const HERO_PEN = { start: 16.5, fall: 37, floor: 0.3 };
+
+// The share of its full width the pen keeps on a hero, where the window's height covers `span` metres of world.
+// The shader's heroPen() is this, with the same numbers.
+export function heroPen(span) {
+  const past = Math.max(0, span / HERO_PEN.start - 1);
+  const fallen = HERO_PEN.fall * past * past;
+  return 1 - ((1 - HERO_PEN.floor) * fallen) / (1 + fallen);
+}
 
 const COMPOSITE = /* glsl */ `
 precision highp float;
@@ -32,6 +55,7 @@ uniform vec2 uRes, uARes, uPx;   // sheet size in pixels, ink buffer size in tex
 uniform sampler2D tHero;
 uniform vec4 uRect;              // the hero window on the sheet, in uv: origin, size
 uniform vec2 uFill, uRectPx;     // share of the hero buffers the window fills, and its origin in pixels
+uniform float uSpan, uThin;      // 2 tan(half the field of view); 1 thins the pen on small heroes, 0 never does
 #endif
 uniform float uS, uSc, uLineW, uWobble, uBoil, uBoilTime, uNear, uFar, uTime;
 uniform float uGrain, uPaperLeft, uFrame, uWash;
@@ -58,12 +82,26 @@ float invZ(vec2 uv){
 bool solid(float id){ return id >= .002 && id <= .998; }
 // A hero's texel in the merged ink buffer: its normal is stored 2 higher (see palette.js).
 float heroAt(vec4 t){ return step(1.5, t.x); }
+#ifdef HERO
+// The share of its width the pen keeps on a hero at this depth: heroPen() in post.js, with the same numbers.
+float heroPen(float depth){
+  float past = max(0., uSpan * depth / ${HERO_PEN.start.toFixed(4)} - 1.);
+  float fallen = ${HERO_PEN.fall.toFixed(4)} * past * past;
+  return 1. - uThin * ${(1 - HERO_PEN.floor).toFixed(4)} * fallen / (1. + fallen);   // exactly 1 up to the start
+}
+#endif
 
-// The pen at one point inside a pixel: (ink, foam, hero texels touched). r: pen half-width in ink texels,
-// de: how hard the depth steps across each of the four tap pairs (worked out once per pixel).
-vec3 penAt(vec2 uv, vec2 apx, float r, vec4 de, float inner, float weight, float nearK){
+// The pen at one point inside a pixel: (ink, foam, hero texels touched, the same with the point's own texel).
+// r: pen half-width in ink texels, de: how hard the depth steps across each of the four tap pairs (worked out
+// once per pixel). world 1 (hero pass only): the world's lines alone, as if no hero were there.
+vec4 penAt(vec2 uv, vec2 apx, float r, vec4 de, float inner, float weight, float nearK, float world){
   vec4 aux = textureLod(tAux, inWindow(uv), 0.);
   float hit = 0.;
+  float own = 0.;
+#ifdef HERO
+  own = heroAt(aux);
+  if (world > .5 && own > 0.) return vec4(0., 0., 0., own);
+#endif
   float idc = aux.a;
   bool waterC = idc < .002;
   bool skyC = idc > .998;
@@ -79,6 +117,7 @@ vec3 penAt(vec2 uv, vec2 apx, float r, vec4 de, float inner, float weight, float
     vec4 b = textureLod(tAux, inWindow(uv - oa), 0.);
 #ifdef HERO
     hit += heroAt(a) + heroAt(b);
+    if (world > .5 && heroAt(a) + heroAt(b) > 0.) continue;
 #endif
     for (int k = 0; k < 2; k++) {
       vec4 t = k == 0 ? a : b;
@@ -105,15 +144,16 @@ vec3 penAt(vec2 uv, vec2 apx, float r, vec4 de, float inner, float weight, float
   if (waterC) {
     for (int i = 0; i < 4; i++) {
       vec4 a = textureLod(tAux, inWindow(uv + OFFS[i * 2 + 1] * r * 1.7 * apx), 0.);
-      if (a.a >= .002 && a.b > .48) foam += 1.;
 #ifdef HERO
       hit += heroAt(a);
+      if (world > .5 && heroAt(a) > 0.) continue;
 #endif
+      if (a.a >= .002 && a.b > .48) foam += 1.;
     }
   }
   float eS = smoothstep(.05, .21, inkS / 8.);
   float eI = smoothstep(.08, .3, inkI / 8.) * .64 * inner;
-  return vec3(max(eS, eI), smoothstep(.04, .3, foam / 8.) * mix(.55, 1., nearK), hit);
+  return vec4(max(eS, eI), smoothstep(.04, .3, foam / 8.) * mix(.55, 1., nearK), hit, hit + own);
 }
 
 void main(){
@@ -150,12 +190,18 @@ void main(){
   float wNear = plain ? 0. : wc;
   float sv = aux.b;
   float w4[4];
+#ifdef HERO
+  float heroW = hit > 0. ? wc : 0.;          // the nearest hero texel in the pen's reach, as 1 / its depth
+#endif
   for (int i = 0; i < 4; i++) {
     vec2 uvt = aUv + OFFS[i * 2 + 1] * Rp * apx;
+    vec2 uvb = aUv + OFFS[i * 2] * Rp * .55 * apx;
     vec4 a = textureLod(tAux, inWindow(uvt), 0.);
-    vec4 b = textureLod(tAux, inWindow(aUv + OFFS[i * 2] * Rp * .55 * apx), 0.);
+    vec4 b = textureLod(tAux, inWindow(uvb), 0.);
 #ifdef HERO
     hit += heroAt(a) + heroAt(b);
+    if (heroAt(a) > 0.) heroW = max(heroW, invZ(uvt));
+    if (heroAt(b) > 0.) heroW = max(heroW, invZ(uvb));
 #endif
     if (abs(a.a - aux.a) > .0003 || distance(a.xy, aux.xy) > .16 || abs(b.a - aux.a) > .0003 || distance(b.xy, aux.xy) > .16) busy = true;
     if (plain) {
@@ -178,17 +224,39 @@ void main(){
     float weight = .5 + .5 * sin(s * 8. + 2.);
     // optional line boil (off by default): the whole drawing re-wobbles a few times a second
     if (uBoil > 0.) wob += (vnoise4(q * 13. + floor(uBoilTime * 7.) * 5.3).xy - .5) * 2.4 * uSc * uS;
+#ifdef HERO
+    // A small hero gets a finer pen, and its lines wander less. A pixel out of that pen's reach of every hero
+    // goes round again (world 1) for the world's own lines, drawn as the world draws them.
+    float thin = heroW > 0. ? heroPen(1. / heroW) : 1.;
+    float world = 0.;
+    vec4 pen;
+    float zmin;
+    float nk;
+    for (int turn = 0; turn < 2; turn++) {
+    vec2 uv = aUv + wob * thin * apx;
+#else
+    const float thin = 1.;
+    const float world = 0.;
+    vec4 pen;
+    float zmin;
+    float nk;
+    {
     vec2 uv = aUv + wob * apx;
+#endif
     // depth is read once per pixel: the pen's width here, real depth steps across each tap pair
     // (planar surfaces are linear in 1/z, so this only fires on true steps), and how far the line's owner is
     float wq = invZ(uv);
     float zq = 1. / wq;
-    float nk = 1. - smoothstep(5., 110., zq);
+    nk = 1. - smoothstep(5., 110., zq);
     float r = rBase * mix(.62, 1.3, nk) * (.52 + .74 * weight);
+#ifdef HERO
+    // a thinned pen never goes under one ink texel: under that its taps would land on the texel they started from
+    if (thin < 1.) r = max(r * thin, min(r, 1.));
+#endif
     // far away, seams inside an object fade so it reads as one washed shape with a clean silhouette
     float inner = mix(1., .2, smoothstep(16., 70., zq));
     vec4 de;
-    float zmin = zq;
+    zmin = zq;
     for (int i = 0; i < 4; i++) {
       vec2 oa = OFFS[i] * r * apx;
       float wa = invZ(uv + oa);
@@ -196,14 +264,19 @@ void main(){
       de[i] = smoothstep(.012, .03, abs(wa + wb - 2. * wq) / wq);
       zmin = min(zmin, 1. / max(wa, wb));
     }
-    vec3 pen;
     if (uS > 1.2) {
       // four points inside the pixel, a quarter pixel out from its centre: one per ink texel at 2x
       vec2 h = .25 * uPx;
-      pen = (penAt(uv + h, apx, r, de, inner, weight, nk) + penAt(uv - h, apx, r, de, inner, weight, nk)
-           + penAt(uv + vec2(h.x, -h.y), apx, r, de, inner, weight, nk) + penAt(uv + vec2(-h.x, h.y), apx, r, de, inner, weight, nk)) * .25;
+      pen = (penAt(uv + h, apx, r, de, inner, weight, nk, world) + penAt(uv - h, apx, r, de, inner, weight, nk, world)
+           + penAt(uv + vec2(h.x, -h.y), apx, r, de, inner, weight, nk, world) + penAt(uv + vec2(-h.x, h.y), apx, r, de, inner, weight, nk, world)) * .25;
     } else {
-      pen = penAt(uv, apx, r, de, inner, weight, nk);
+      pen = penAt(uv, apx, r, de, inner, weight, nk, world);
+    }
+#ifdef HERO
+    if (thin >= 1. || pen.w > 0.) break;
+    thin = 1.;
+    world = 1.;
+#endif
     }
     float distFade = mix(1., .3, smoothstep(45., 420., zmin));
     float dry = .8 + .4 * weight;                      // a heavier stroke is a wetter one
@@ -382,6 +455,8 @@ export function createPost(renderer, camera) {
     uRect: { value: new THREE.Vector4(0, 0, 1, 1) },
     uFill: { value: new THREE.Vector2(1, 1) },
     uRectPx: { value: new THREE.Vector2() },
+    uSpan: { value: 1.1547 },
+    uThin: { value: 1 }, // 0 with ?heropen=0: the full pen on every hero, as it was. Only to prove the far-figure test can fail.
   };
   const material = new THREE.ShaderMaterial({
     uniforms,
@@ -534,6 +609,7 @@ export function createPost(renderer, camera) {
   return {
     uniforms,
     pen: shared, // the pen's own settings (uLineW, uWobble, uBoil) are shared by the world's pen and the heroes'
+    heroPen: heroUniforms.uThin, // 1 thins the pen on small heroes
     reflection: refl.texture,
     resolution: uniforms.uRes.value,
     state,
@@ -649,6 +725,7 @@ export function createPost(renderer, camera) {
         GU.uSc.value = state.sheetH / 1080;
         GU.uPxK.value = tangent / state.sheetH;
         GU.uFine.value = 1;
+        heroUniforms.uSpan.value = tangent;
         renderer.getClearColor(clearColour);
         const clearAlpha = renderer.getClearAlpha();
         renderer.setClearColor(0x000000, 0);

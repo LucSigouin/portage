@@ -202,24 +202,30 @@ export function buildBilge(shape) {
   return b.mesh();
 }
 
-// Everything a broke paddler owns.
-export function buildStarterKit(shape) {
+// Everything a broke paddler owns. crewed: someone kneels amidships (seats 2 and 3 of the rules engine), so the
+// loose kit is shoved up against the thwart, out of their way. Left out, it is B2's layout exactly.
+export function buildStarterKit(shape, crewed = false) {
   const b = new Builder(23);
   b.root = new THREE.Matrix4().makeScale(1, shape.HULL.D / 0.4, shape.HULL.k); // B2 laid it out in a 5.6 m hull
+  const tinZ = crewed ? -0.2 : -0.72;
+  const packZ = crewed ? 0.34 : 0.72;
+  const gumZ = crewed ? -0.06 : -0.35;
+  const patchZ = crewed ? 0.02 : 0.2;
+  const cordZ = crewed ? 0.1 : 0.3;
   // bailing tin
-  b.cyl(0.07, 0.065, 0.13, PAL.tin, { pos: [0.16, 0.16, -0.72], rot: [0.5, 0.3, 0.9] }, 9);
+  b.cyl(0.07, 0.065, 0.13, PAL.tin, { pos: [0.16, 0.16, tinZ], rot: [0.5, 0.3, 0.9] }, 9);
   // rope coil in the bow
   b.torus(0.13, 0.03, '#d9c79b', { pos: [0, 0.16, 1.95], rot: [Math.PI / 2, 0, 0], kind: KIND.ROPE }, 14);
   b.torus(0.1, 0.028, '#cdb98a', { pos: [0.01, 0.2, 1.95], rot: [Math.PI / 2, 0, 0.6], kind: KIND.ROPE }, 14);
   b.torus(0.075, 0.026, '#d9c79b', { pos: [0.005, 0.24, 1.955], rot: [Math.PI / 2, 0, 1.4], kind: KIND.ROPE }, 12);
   // pack and bedroll amidships
-  b.box(0.42, 0.3, 0.3, PAL.canvasSage, { pos: [0, 0.27, 0.72], rot: [0, 0.15, 0], kind: KIND.CLOTH });
-  for (const sx of [-0.1, 0.1]) b.box(0.035, 0.31, 0.31, PAL.woodDark, { pos: [sx, 0.27, 0.72 + sx * -0.15], rot: [0, 0.15, 0], kind: KIND.PLAIN }); // pack straps
-  b.box(0.44, 0.05, 0.1, PAL.woodDark, { pos: [0, 0.34, 0.72], rot: [0, 0.15, 0] });
-  b.cyl(0.1, 0.1, 0.5, PAL.cream, { pos: [0, 0.48, 0.72], rot: [0, 0.15, Math.PI / 2] }, 9);
-  for (const sx of [-0.14, 0.14]) b.cyl(0.104, 0.104, 0.04, PAL.rust, { pos: [sx, 0.48, 0.72 + sx * -0.15], rot: [0, 0.15, Math.PI / 2] }, 9);
+  b.box(0.42, 0.3, 0.3, PAL.canvasSage, { pos: [0, 0.27, packZ], rot: [0, 0.15, 0], kind: KIND.CLOTH });
+  for (const sx of [-0.1, 0.1]) b.box(0.035, 0.31, 0.31, PAL.woodDark, { pos: [sx, 0.27, packZ + sx * -0.15], rot: [0, 0.15, 0], kind: KIND.PLAIN }); // pack straps
+  b.box(0.44, 0.05, 0.1, PAL.woodDark, { pos: [0, 0.34, packZ], rot: [0, 0.15, 0] });
+  b.cyl(0.1, 0.1, 0.5, PAL.cream, { pos: [0, 0.48, packZ], rot: [0, 0.15, Math.PI / 2] }, 9);
+  for (const sx of [-0.14, 0.14]) b.cyl(0.104, 0.104, 0.04, PAL.rust, { pos: [sx, 0.48, packZ + sx * -0.15], rot: [0, 0.15, Math.PI / 2] }, 9);
   // spruce-gum tin and a stick, lying about
-  b.cyl(0.045, 0.045, 0.06, PAL.ochre, { pos: [-0.15, 0.13, -0.35] }, 8);
+  b.cyl(0.045, 0.045, 0.06, PAL.ochre, { pos: [-0.15, 0.13, gumZ] }, 8);
   // the painter line trailing off the bow
   b.tube(
     [
@@ -234,8 +240,8 @@ export function buildStarterKit(shape) {
     5
   );
   // a tin patch kit and a twist of spare cord
-  b.box(0.13, 0.05, 0.09, PAL.tin, { pos: [0.14, 0.125, 0.2], rot: [0, 0.5, 0] });
-  b.torus(0.05, 0.013, '#cdb98a', { pos: [-0.17, 0.115, 0.3], rot: [Math.PI / 2, 0, 0.3], kind: KIND.ROPE }, 10);
+  b.box(0.13, 0.05, 0.09, PAL.tin, { pos: [0.14, 0.125, patchZ], rot: [0, 0.5, 0] });
+  b.torus(0.05, 0.013, '#cdb98a', { pos: [-0.17, 0.115, cordZ], rot: [Math.PI / 2, 0, 0.3], kind: KIND.ROPE }, 10);
   return b.mesh();
 }
 
@@ -388,6 +394,25 @@ export function createCrew(outfit) {
   const sFootR = new THREE.Vector3();
   const bladeWorld = new THREE.Vector3();
   const state = { sideS: 1 };
+  // kneeling, bailing and sleeping
+  const kKneeL = new THREE.Vector3();
+  const kKneeR = new THREE.Vector3();
+  const kFootL = new THREE.Vector3();
+  const kFootR = new THREE.Vector3();
+  const scoop = new THREE.Vector3();
+  const toss = new THREE.Vector3();
+  const tinAt = new THREE.Vector3();
+  const brace = new THREE.Vector3();
+  let tin = null; // the bailing tin in hand: built the first time this one bails
+  const bailingTin = () => {
+    if (!tin) {
+      const b = new Builder(31);
+      b.cyl(0.07, 0.065, 0.13, PAL.tin, { pos: [0, 0, 0] }, 9);
+      tin = b.mesh();
+      paddler.root.add(tin);
+    }
+    return tin;
+  };
 
   const smooth = (a, b, x) => {
     const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -398,8 +423,16 @@ export function createCrew(outfit) {
     root: paddler.root,
     paddler,
     // seated: phase 0..1 of one stroke, effort 0..1 (0 = paddle resting across the gunwales), side ±1
+    // more: { kneel: 0|1 (knees on the floor, heels tucked under: the two places between the seats),
+    //         floor: metres from the figure's origin down to the hull floor,
+    //         bail: 0..1 with bailPhase 0..1 (scooping the bilge over the side with a tin, paddle laid down),
+    //         sleep: 0..1 (slumped forward, hands in the lap),
+    //         restSide: -1 lays the resting paddle with its blade out to the right, so a crew's blades alternate }
     // returns { inWater, blade: world position of the blade, pull } for splashes
-    paddle(dt, phase, effort, side) {
+    paddle(dt, phase, effort, side, more = null) {
+      const kneel = more?.kneel ?? 0;
+      const bail = more?.bail ?? 0;
+      const doze = more?.sleep ?? 0;
       state.sideS += (side - state.sideS) * Math.min(1, dt * 5);
       const s = state.sideS;
       const pull = phase < 0.46;
@@ -420,9 +453,10 @@ export function createCrew(outfit) {
       }
       A.set(s * ax, ay, az);
       G.set(s * (0.2 - (pull ? 0.06 * e : 0.06 * (1 - e))), 0.6 + (pull ? 0.03 * Math.sin(q * Math.PI) : -0.1 * Math.sin(q * Math.PI)), 0.3 + az * 0.22);
-      // rest pose: paddle across the gunwales
-      Gi.set(-0.5, 0.14, 0.4);
-      Ai.set(0.95, 0.12, 0.44);
+      // rest pose: paddle across the gunwales, blade out to the figure's left (restSide -1: to its right)
+      const rs = more?.restSide ?? 1;
+      Gi.set(-0.5 * rs, 0.14, 0.4);
+      Ai.set(0.95 * rs, 0.12, 0.44);
       G.lerp(Gi, 1 - effort);
       A.lerp(Ai, 1 - effort);
       const feather = (pull ? 0 : Math.sin(q * Math.PI) * 1.2) * effort + (1 - effort) * 1.5;
@@ -444,45 +478,92 @@ export function createCrew(outfit) {
         handL.copy(G).addScaledVector(_v, 0.78);
       }
       const reach = pull ? 1 - e : e;
+      let lean = 0.1 + effort * (0.06 + 0.16 * reach);
+      let twist = -s * effort * (0.34 * (reach - 0.5));
+      let tilt = -s * effort * 0.05;
+      if (bail > 0) {
+        // dip the tin between the knees, lift it, tip it over the side; the other hand braces on the far gunwale
+        const u = more.bailPhase ?? 0;
+        const up = u < 0.45 ? 1 - smooth(0, 0.35, u) : smooth(0.45, 0.8, u); // 0 in the bilge, 1 over the side
+        scoop.set(-s * 0.02, -0.1, 0.42);
+        toss.set(s * 0.5, 0.2, 0.26);
+        tinAt.lerpVectors(scoop, toss, up);
+        tinAt.y += 0.1 * Math.sin(up * Math.PI);
+        brace.set(-s * 0.4, 0.1, 0.3);
+        (s >= 0 ? handL : handR).lerp(tinAt, bail);
+        (s >= 0 ? handR : handL).lerp(brace, bail);
+        lean += (0.5 - 0.34 * up - lean) * bail;
+        twist += (s * 0.3 * up - twist) * bail;
+        tilt *= 1 - bail;
+      }
+      if (doze > 0) {
+        handL.lerp(_h.set(0.13, 0.1, 0.3), doze);
+        handR.lerp(_h.set(-0.13, 0.1, 0.3), doze);
+        lean += (0.46 - lean) * doze;
+        twist *= 1 - doze;
+        tilt += (0.1 - tilt) * doze;
+      }
+      if (kneel > 0) {
+        // knees down on the floor ahead, heels tucked under: thigh and shin keep their standing lengths
+        const down = Math.max(-0.3, 0.085 - (more.floor ?? 0.3));
+        kKneeL.set(0.15, down, 0.27);
+        kKneeR.set(-0.15, down, 0.27);
+        kFootL.set(0.13, down + 0.02, -0.06);
+        kFootR.set(-0.13, down + 0.02, -0.06);
+      }
       paddler.pose({
         hipY: 0.02,
-        lean: 0.1 + effort * (0.06 + 0.16 * reach),
-        twist: -s * effort * (0.34 * (reach - 0.5)),
-        tilt: -s * effort * 0.05,
+        lean,
+        twist,
+        tilt,
         handL,
         handR,
-        kneeL,
-        kneeR,
-        footL,
-        footR,
+        kneeL: kneel > 0 ? kKneeL : kneeL,
+        kneeR: kneel > 0 ? kKneeR : kneeR,
+        footL: kneel > 0 ? kFootL : footL,
+        footR: kneel > 0 ? kFootR : footR,
       });
+      if (bail > 0.02) {
+        // the tin rides in the hand that holds it, and tips outward at the top of the lift
+        const held = (s >= 0 ? paddler.L : paddler.R).H;
+        const tipped = smooth(0.74, 0.9, more.bailPhase ?? 0) * (1 - smooth(0.94, 1, more.bailPhase ?? 0));
+        const mesh = bailingTin();
+        mesh.visible = true;
+        mesh.position.set(held.x, held.y - 0.04, held.z);
+        mesh.rotation.set(0, 0, -s * 1.9 * tipped * bail);
+      } else if (tin) {
+        tin.visible = false;
+      }
       // blade tip in world space
       bladeWorld.copy(G).addScaledVector(_v, 1.3);
       paddler.root.localToWorld(bladeWorld);
       return { inWater: pull && effort > 0.5, blade: bladeWorld, pull: effort * (pull ? Math.sin(q * Math.PI) : 0) };
     },
     // ashore: paddle carried like a staff. t: seconds (idle breath), stride: radians of the walk cycle, moving 0..1
-    stand(t, stride = 0, moving = 0) {
+    // lying 0..1: stretched out flat with the paddle alongside, for a sleeper (the caller lays the figure down)
+    stand(t, stride = 0, moving = 0, lying = 0) {
+      if (tin) tin.visible = false;
+      const up = 1 - lying;
       const br = Math.sin(t * 1.3) * 0.006 * (1 - moving);
       const swing = Math.sin(stride) * 0.2 * moving;
       const liftL = Math.max(0, Math.cos(stride)) * 0.07 * moving;
       const liftR = Math.max(0, -Math.cos(stride)) * 0.07 * moving;
-      G.set(-0.44, 0.02 + 0.05 * moving, 0.14 - swing * 0.5);
-      A.set(-0.47, 1.5, 0.1 - swing * 0.2);
+      G.set(-0.44, 0.02 + 0.05 * moving, 0.14 * up - 0.1 * lying - swing * 0.5);
+      A.set(-0.47, 1.5, 0.1 * up - 0.12 * lying - swing * 0.2);
       paddler.setPaddle(G, A, 0);
-      handR.set(-0.445, 1.02 + br, 0.13 - swing * 0.4);
-      handL.set(0.27, 0.74 + br, 0.06 - swing * 0.6);
+      handR.set(-0.445 + 0.165 * lying, 1.02 - 0.28 * lying + br, 0.13 * up - 0.08 * lying - swing * 0.4);
+      handL.set(0.27, 0.74 + br, 0.06 * up - 0.08 * lying - swing * 0.6);
       paddler.pose({
         hipY: 0.8 + br - 0.012 * moving * Math.abs(Math.cos(stride)),
-        lean: 0.03 + 0.05 * moving,
-        twist: (0.12 + Math.sin(t * 0.4) * 0.08) * (1 - moving),
+        lean: (0.03 + 0.05 * moving) * up,
+        twist: (0.12 + Math.sin(t * 0.4) * 0.08) * (1 - moving) * up,
         tilt: 0,
         handL,
         handR,
-        kneeL: sKneeL.set(0.1, 0.43 + liftL * 0.5, 0.03 + swing * 0.55 + 0.05 * moving),
-        kneeR: sKneeR.set(-0.1, 0.43 + liftR * 0.5, 0.05 - swing * 0.55 + 0.05 * moving),
-        footL: sFootL.set(0.11, 0.06 + liftL, swing),
-        footR: sFootR.set(-0.12, 0.06 + liftR, 0.06 * (1 - moving) - swing),
+        kneeL: sKneeL.set(0.1, 0.43 + liftL * 0.5, 0.03 * up - 0.07 * lying + swing * 0.55 + 0.05 * moving),
+        kneeR: sKneeR.set(-0.1, 0.43 + liftR * 0.5, 0.05 * up - 0.07 * lying - swing * 0.55 + 0.05 * moving),
+        footL: sFootL.set(0.11, 0.06 + liftL, swing - 0.1 * lying),
+        footR: sFootR.set(-0.12, 0.06 + liftR, 0.06 * (1 - moving) * up - 0.1 * lying - swing),
         footYaw: 0,
       });
     },

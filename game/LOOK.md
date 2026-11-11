@@ -13,7 +13,7 @@
 | `presets.ts`, `scatter.ts`, `props.ts`, `terrain.ts` | Region presets, seeded placement, instanced props, the ground |
 | `nodes.ts`, `landmarks.ts`, `characters.ts`, `attachments.ts` | One registry each. Step 2 adds meshes here |
 | `daylight.ts`, `quality.ts`, `surface.ts`, `marks.ts`, `effects.ts`, `canoe.ts` | Time of day, quality ladder, wave and shore numbers, world marks, puffs, hull and crew |
-| `crew.ts`, `hero-windows.ts` | Who the players are (`crewOf`), and where each hero is on the window |
+| `crew.ts`, `hero-windows.ts` | Who the players are (`crewOf`), what each wears (`outfitOf`), and where each hero is on the window |
 
 ## Heroes: the crew and the canoe never go soft
 
@@ -29,7 +29,25 @@ Luc's rule: the player never goes blurry and never loses drawn detail, at any zo
 - **At rung 0 with the world at full size the picture is the old one.** Only pixels on a hero differ, by sub-pixel rounding (0.1% of the frame).
 - The heroes always get the full pen and fine strokes, whatever the settings or the ladder say.
 - A hero is: `CanoeView.group` (the canoe and all aboard), and each figure ashore. To make something else a hero, put it under the world view's `heroes` group and return it from `CanoeView.heroes()`.
-- The whole crew is drawn (`crewOf(state).others`): seated ahead of the paddler aboard, standing where the state puts them ashore. Seat places are the look's own guess until the rules name them.
+- **A small hero gets a finer pen** (`heroPen` in `b2/post.js`). The pen's width is in pixels, so the full pen round an 80-pixel figure was a black blob. The share of its width the pen keeps comes from how many metres of world the window's height covers at the hero's depth:
+  - all of it up to `HERO_PEN.start` = 16.5 m (14.3 m away at 60 degrees). That is past every normal play distance, and past the long hull's far end in the staged `upgraded` view. Nothing near changes: not one pixel.
+  - then less, smoothly: 0.76 at 16 m, 0.50 at 18 m (the walking camera fully out), settling on `HERO_PEN.floor` = 0.3. Its steepest 3% of zoom moves it by 0.087.
+  - a thinned pen never goes under one ink texel, and its lines wander less (the wobble thins with it).
+  - It is worked out per pixel, from the depth of the nearest hero texel in the pen's reach. So it does not depend on which window a hero is in, and two heroes side by side at one depth get one line weight.
+  - Only pen points within the thinned pen's reach of a hero use it. The rest of the window goes round a second time for the world's own lines at the world's width, with the hero's texels left out.
+  - Raise `start` and the far figure gets heavier. Lower it under 16.5 and the staged near views change.
+
+## The crew
+
+Every player is drawn from their own state by `CanoeView` (`canoe.ts`), the local one the same way as the rest. It reads players through `crewOf` only.
+
+- **Clothes follow the player id**: `outfitOf(id)` is that player's row of `CREW_MARKS` (coat, toque, legs). Player 0 is B2's paddler. A person looks the same on every screen. Figures are kept by player id, and player 0's is made first so its pen seeds are the lone paddler's.
+- **Seats come from the rules**: `seatTransformForHull(tier, player.seat)`, on every hull tier. Seats 0 (stern) and 1 (bow) sit on the cane seats. Seats 2 and 3 kneel between them. A player aboard with no seat (the rules never make one; a staged shot does) takes the first seat nobody holds.
+- **The starter kit makes room**: on the two bare hulls, with someone kneeling amidships, the pack, the tin and the small things are drawn shoved up to the thwart (`buildStarterKit(shape, true)`).
+- **What each one does is their own flag**: `paddling` (a stroke), `bailing` (a tin, bilge to gunwale, the paddle laid down), `asleep` (slumped aboard, laid on their back ashore), else at rest. Each eases in and out. Never the canoe's speed: a drifting canoe shows nobody paddling.
+- **One stroke clock** for the crew, so paddlers are in time. Counted along the hull from the stern, every second one works and rests their paddle on the other side.
+- **Walking is each player's own change in position.** Stepping out of the canoe, or a new state, is not a stride.
+- New pose: add it to `createCrew` in `b2/canoe.js` (`paddle(..., more)` for seated ones, `stand(..., lying)` ashore), drive it from a player flag in `CanoeView.sync`, and report it in `figures()`.
 
 ## The ladder
 
@@ -107,9 +125,15 @@ PORTAGE_URL=http://localhost:5221 npm --prefix e2e test       # browser: bot, ke
 - the heroes at the window's size on rung 8 and at 5120×2160
 - the player as sharp on rung 8 as on rung 0 (edges measured in a crop of the player)
 - the ladder climbing back after a slow spell, never twice within ten seconds
-- the whole crew drawn
+- the whole crew drawn (real players, `?crew=N`), each at their own seat on every hull tier
+- one paddling while three rest, nobody paddling on a drifting canoe, bailing and sleeping and walking by the player who does them
+- the same picture whichever player the screen follows
+- the far figure: thinner pen, less ink, scarf and coat showing, at 1920×1080 and 5120×2160
+- the thin pen leaving the near views alone (0 pixels), and thinning without a jump through a zoom
 
-`PORTAGE_LOOK_BREAK='&hero=0'` (or `&rung=8`, `&boil=1`, `&bench=24`) makes the matching checks fail. Run it when you change them.
+`tests/look/crew.test.ts` checks the same from the figures themselves, with no graphics card: clothes by id, seats against the rules on all four tiers, nobody inside another or the hull, each pose by its flag, and the pen's law.
+
+`PORTAGE_LOOK_BREAK='&hero=0'` (or `&rung=8`, `&boil=1`, `&bench=24`, `&heropen=0`) makes the matching checks fail. Run it when you change them. The crew checks have no switch: break the line in `canoe.ts` they guard (the outfit, the seat, the flag) and watch them fail.
 
 ## Debug switches
 
@@ -121,8 +145,9 @@ PORTAGE_URL=http://localhost:5221 npm --prefix e2e test       # browser: bot, ke
 | `&bench=N` | Draw each frame N times: true cost, and a way to fail the fps test |
 | `&benchpass=<pass>` | With `bench`: only that pass (`reflection`, `colour`, `ink`, `composite`, `hero`) |
 | `&hero=0` | Leave the heroes in the world, as it was. Only to prove the sharpness tests can fail |
-| `&fakecrew=N` | Draw a crew of N (2 to 4). The extra people are made up by the look |
+| `&heropen=0` | The full pen on every hero, however small. Only to prove the far-figure tests can fail |
+| `?crew=N` | The client's switch, not the look's: a real crew of N (2 to 4), the extra players idle |
 | `&stall=N` | Hold every frame N milliseconds: a slow spell, to watch the ladder |
 | `&boil=1` | Line boil on. Only to prove the steadiness test can fail |
-| `window.portage.worldView.probe()` | World and canvas size, ladder rung and history, hero windows, canoe and water heights |
+| `window.portage.worldView.probe()` | World and canvas size, ladder rung and history, hero windows, canoe and water heights. `hero.figures`: each crew figure's seat, place, pose and clothes as drawn. `hero.pen`: the pen's share on the local figure |
 | `window.portage.worldView.bench(n, pass)`, `.stall(ms)` | The same switches, while it runs |
