@@ -232,12 +232,21 @@ test('every panel key opens its panel and pauses; Esc closes, then pauses', asyn
   await tap(page, 'Escape');
   expect(await read(page)).toMatchObject({ panels: ['pause'], paused: true });
   await expect(page.getByRole('button', { name: 'Resume' })).toBeVisible();
-  // Under the pause menu the panel keys are dead: nothing opens, and nothing is said about it.
-  await page.waitForTimeout(8000); // let the earlier toasts fade
-  await expect(page.locator('.iw-toast')).toHaveCount(0);
+  // Under the pause menu the panel keys are dead: nothing opens, and nothing is said or sounded about it.
+  await page.evaluate(() => {
+    const scope = window as unknown as { portage: { session: any }; heard: string[] };
+    scope.heard = [];
+    scope.portage.session.subscribe((signal: any) => {
+      if (signal.type === 'notice') scope.heard.push(`notice: ${signal.text}`);
+      if (signal.type === 'interface_sound') scope.heard.push(`sound: ${signal.sound}`);
+    });
+  });
+  const toastsBefore = await page.locator('.iw-toast').allTextContents();
   for (const code of ['Tab', 'KeyC', 'KeyB', 'KeyJ', 'KeyM']) await tap(page, code);
   expect((await read(page)).panels).toEqual(['pause']);
-  await expect(page.locator('.iw-toast')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as unknown as { heard: string[] }).heard)).toEqual([]);
+  // No new toast: read at once, since a toast would fade if the check waited for it.
+  for (const text of await page.locator('.iw-toast').allTextContents()) expect(toastsBefore).toContain(text);
   const frozen = await read(page);
   await hold(page, 'KeyW', 1000);
   expect((await read(page)).z).toBe(frozen.z);

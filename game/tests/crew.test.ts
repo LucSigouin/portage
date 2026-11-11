@@ -331,6 +331,26 @@ describe('boarding and landing one by one', () => {
     expect(drainEvents(state)).toContainEqual({ type: 'boarded', playerId: 1 });
   });
 
+  it('moves for whoever is aboard, also when player 0 is the one left ashore', () => {
+    const state = beachedCrew();
+    expect(dispatch(state, { type: 'disembark' }, 0).ok).toBe(true);
+    const ashore = { ...state.players[0].position };
+    const beach = { ...state.canoe.position };
+    runCrew(state, [{}, { paddle: -1 }], 12); // only player 1 has a paddle in the water
+    expect(Math.hypot(state.canoe.position.x - beach.x, state.canoe.position.z - beach.z)).toBeGreaterThan(8);
+    expect(state.players[1].position).toEqual(state.canoe.position);
+    expect(state.players[0].position).toEqual(ashore);
+    // Player 0's paddle input does nothing from the shore.
+    const afloat = { ...state.canoe.position };
+    const still = beachedCrew();
+    dispatch(still, { type: 'disembark' }, 0);
+    dispatch(still, { type: 'disembark' }, 1);
+    const empty = { ...still.canoe.position };
+    runCrew(still, [{ paddle: 1 }, { paddle: 1 }], 3);
+    expect(still.canoe.position).toEqual(empty); // nobody aboard: the canoe stays put
+    expect(afloat).not.toEqual(beach);
+  });
+
   it('seats a boarder in the lowest free seat', () => {
     const state = beachedCrew(3);
     dispatch(state, { type: 'disembark' }, 0);
