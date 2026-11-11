@@ -13,4 +13,6 @@ export { NODES, NODES_BY_ID, NODES_BY_ISLAND, NODE_TYPES, NODE_IDS, LOOT_TABLES 
 export { QUESTS, QUEST_IDS, QUEST_LIST, MAIN_QUESTS, SIDE_QUESTS } from './quests.ts';
 export { NPCS, NPC_IDS } from './dialogue.ts';
 export { BOTTLES, BOTTLE_IDS } from './bottles.ts';
+export { CREW_MARKS } from './crew.ts';
+export type { CrewMark } from './crew.ts';
 export { WEATHER, WEATHER_KINDS } from './weather.ts';
