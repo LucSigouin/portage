@@ -18,15 +18,15 @@ describe('scavenging', () => {
       kind: 'node', nodeId: 'home_knoll.driftwood_pile.1', prompt: 'Gather: Driftwood pile', holdSeconds: 2, available: true, progress: 0,
     });
     const early = run(state, { interactHeld: true }, 1);
-    expect(early).toContainEqual({ type: 'harvest_started', nodeId: 'home_knoll.driftwood_pile.1' });
+    expect(early).toContainEqual({ type: 'harvest_started', nodeId: 'home_knoll.driftwood_pile.1', playerId: 0 });
     const halfWay = selectInteractable(state);
     expect(halfWay?.kind === 'node' ? halfWay.progress : -1).toBeCloseTo(0.5, 6);
-    expect(countIn(state.player.backpack, 'driftwood')).toBe(0);
+    expect(countIn(state.players[0].backpack, 'driftwood')).toBe(0);
     const late = run(state, { interactHeld: true }, 1.1);
-    const wood = countIn(state.player.backpack, 'driftwood');
+    const wood = countIn(state.players[0].backpack, 'driftwood');
     expect(wood).toBeGreaterThanOrEqual(3);
     expect(wood).toBeLessThanOrEqual(4);
-    expect(late).toContainEqual({ type: 'node_depleted', nodeId: 'home_knoll.driftwood_pile.1' });
+    expect(late).toContainEqual({ type: 'node_depleted', nodeId: 'home_knoll.driftwood_pile.1', playerId: 0 });
     expect(selectInteractable(state)).toBeNull(); // picked clean
     expect(state.statistics.nodesHarvested).toBe(1);
   });
@@ -38,9 +38,9 @@ describe('scavenging', () => {
     run(state, { interactHeld: true }, 1.5);
     run(state, {}, 0.1);
     run(state, { interactHeld: true }, 1.5);
-    expect(countIn(state.player.backpack, 'driftwood')).toBe(0);
+    expect(countIn(state.players[0].backpack, 'driftwood')).toBe(0);
     run(state, { interactHeld: true }, 0.6);
-    expect(countIn(state.player.backpack, 'driftwood')).toBeGreaterThan(0);
+    expect(countIn(state.players[0].backpack, 'driftwood')).toBeGreaterThan(0);
   });
 
   it('respawns most nodes after their days, and never a unique cache', () => {
@@ -56,7 +56,7 @@ describe('scavenging', () => {
     standOn(state, 'cabin_roofs');
     teleportToNode(state, NODE_IDS.atticChest);
     run(state, { interactHeld: true }, 4.1);
-    expect(state.player.keyItems.hatchet_head).toBe(1);
+    expect(state.keyItems.hatchet_head).toBe(1);
     state.time += 100 * DAY;
     expect(selectInteractable(state)).toBeNull();
     for (const node of NODES) {
@@ -76,11 +76,11 @@ describe('scavenging', () => {
     const events = run(state, { interactHeld: true }, 4);
     expect(events.filter((event) => event.type === 'harvest_blocked')).toHaveLength(1);
     expect(events.find((event) => event.type === 'harvest_blocked')).toMatchObject({ missing: { tools: ['stone_knife'] } });
-    expect(countIn(state.player.backpack, 'birch_bark')).toBe(0);
+    expect(countIn(state.players[0].backpack, 'birch_bark')).toBe(0);
     give(state, 'stone_knife');
     run(state, {}, 0.1);
     run(state, { interactHeld: true }, 3.1);
-    expect(countIn(state.player.backpack, 'birch_bark')).toBeGreaterThanOrEqual(2);
+    expect(countIn(state.players[0].backpack, 'birch_bark')).toBeGreaterThanOrEqual(2);
   });
 
   it('takes gum from a spruce by hand and logs with the hatchet out', () => {
@@ -89,17 +89,17 @@ describe('scavenging', () => {
     teleportToNode(state, 'home_knoll.spruce.1');
     expect(selectInteractable(state)).toMatchObject({ prompt: 'Scrape gum: Spruce', actionIndex: 0 });
     give(state, 'hatchet');
-    state.player.selectedTool = 'hatchet';
-    state.player.energy = 80;
+    state.players[0].selectedTool = 'hatchet';
+    state.players[0].energy = 80;
     expect(selectInteractable(state)).toMatchObject({ prompt: 'Chop: Spruce', actionIndex: 1, holdSeconds: 5 });
     run(state, { interactHeld: true }, 5.1);
-    expect(countIn(state.player.backpack, 'log')).toBe(3);
-    expect(state.player.energy).toBeLessThan(80 - 4); // chopping is work
+    expect(countIn(state.players[0].backpack, 'log')).toBe(3);
+    expect(state.players[0].energy).toBeLessThan(80 - 4); // chopping is work
     // The gum is still there: each action has its own clock.
     expect(selectInteractable(state)).toMatchObject({ prompt: 'Scrape gum: Spruce', actionIndex: 0 });
     run(state, {}, 0.1);
     run(state, { interactHeld: true }, 2.6);
-    expect(countIn(state.player.backpack, 'spruce_gum')).toBeGreaterThanOrEqual(2);
+    expect(countIn(state.players[0].backpack, 'spruce_gum')).toBeGreaterThanOrEqual(2);
     expect(selectInteractable(state)).toBeNull();
   });
 
@@ -108,11 +108,11 @@ describe('scavenging', () => {
     standOn(state, 'home_knoll');
     teleportToNode(state, 'home_knoll.spruce.1');
     give(state, 'hatchet');
-    state.player.selectedTool = 'hatchet';
-    state.player.energy = 8;
+    state.players[0].selectedTool = 'hatchet';
+    state.players[0].energy = 8;
     state.time = 12 * 60;
     run(state, { interactHeld: true }, 5.5);
-    expect(countIn(state.player.backpack, 'log')).toBe(0);
+    expect(countIn(state.players[0].backpack, 'log')).toBe(0);
   });
 
   it('leaves what does not fit on the node, to pick up later', () => {
@@ -124,10 +124,10 @@ describe('scavenging', () => {
     const left = events.find((event) => event.type === 'item_left_behind');
     expect(left).toMatchObject({ nodeId: 'home_knoll.driftwood_pile.3', itemId: 'driftwood' });
     expect(selectInteractable(state)).toMatchObject({ prompt: 'Pick up from Driftwood pile', actionIndex: -1 });
-    state.player.backpack.pop();
+    state.players[0].backpack.pop();
     run(state, {}, 0.1);
     run(state, { interactHeld: true }, 0.6);
-    expect(countIn(state.player.backpack, 'driftwood')).toBeGreaterThanOrEqual(3);
+    expect(countIn(state.players[0].backpack, 'driftwood')).toBeGreaterThanOrEqual(3);
     expect(selectInteractable(state)).toBeNull();
   });
 

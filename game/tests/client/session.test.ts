@@ -50,7 +50,7 @@ function nearShore(state: GameState): void {
   state.canoe.position = { x: landing.shore.x, y: 0, z: landing.shore.z - 2 };
   state.canoe.heading = landing.bearing;
   state.canoe.speed = 0;
-  state.player.position = { ...state.canoe.position };
+  state.players[0].position = { ...state.canoe.position };
 }
 
 describe('lobby and save slots', () => {
@@ -74,10 +74,10 @@ describe('lobby and save slots', () => {
     for (let elapsed = 0; elapsed < 3600; elapsed += 0.25) session.advance(0.25, 0);
     const backdrop = session.backdrop;
     expect(backdrop.statistics.fails).toBe(0);
-    expect(backdrop.player.mode).toBe('canoe');
+    expect(backdrop.players[0].mode).toBe('canoe');
     expect(backdrop.canoe.beached).toBe(false);
     expect(backdrop.canoe.waterLevel).toBeLessThan(5);
-    expect(backdrop.player.thirst).toBeGreaterThan(30);
+    expect(backdrop.players[0].thirst).toBeGreaterThan(30);
     expect(backdrop.time).toBeCloseTo(start + 3600, 0); // the clock runs on through every reset
   });
 
@@ -185,11 +185,11 @@ describe('autosave', () => {
     nearShore(session.game!);
     session.keyDown('KeyE'); // the interact key follows selectInteractable: here it lands
     session.keyUp('KeyE');
-    expect(session.game!.player.mode).toBe('foot');
-    expect(savedState(storage, 0).player.mode).toBe('canoe'); // not yet: the event is still queued
+    expect(session.game!.players[0].mode).toBe('foot');
+    expect(savedState(storage, 0).players[0].mode).toBe('canoe'); // not yet: the event is still queued
     const events = session.advance(FIXED_STEP, 0);
     expect(events.map((event) => event.type)).toContain('autosave_requested');
-    expect(savedState(storage, 0).player.mode).toBe('foot');
+    expect(savedState(storage, 0).players[0].mode).toBe('foot');
     expect(h.signals).toContainEqual({ type: 'saved', slot: 0, reason: 'landing' });
   });
 
@@ -339,7 +339,7 @@ describe('pausing', () => {
     session.newGame(0);
     const game = session.game!;
     standOn(game, 'orchard_hill');
-    game.dialogue = { npcId: 'odile', nodeId: 'hub' };
+    game.players[0].dialogue = { npcId: 'odile', nodeId: 'hub' };
     session.advance(FIXED_STEP, 0);
     expect(session.isOpen('dialogue')).toBe(true);
     expect(session.paused).toBe(false);
@@ -347,7 +347,7 @@ describe('pausing', () => {
     frames(session, 1);
     expect(game.time).toBeCloseTo(time + 1, 5);
     session.keyDown('Escape');
-    expect(game.dialogue).toBeNull();
+    expect(game.players[0].dialogue).toBeNull();
     session.advance(FIXED_STEP, 0);
     expect(session.isOpen('dialogue')).toBe(false);
   });

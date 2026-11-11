@@ -11,6 +11,14 @@ export interface Crew {
   others: readonly PlayerState[];
 }
 
+let localPlayerId = 0;
+
+/** Tell the look which player this screen follows. Player 0 until told otherwise. */
+export function setLocalPlayerId(playerId: number): void {
+  localPlayerId = playerId;
+}
+
 export function crewOf(state: GameState): Crew {
-  return { local: state.player, others: [] };
+  const local = state.players.find((player) => player.id === localPlayerId) ?? state.players[0];
+  return { local, others: state.players.filter((player) => player !== local) };
 }

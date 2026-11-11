@@ -1,5 +1,7 @@
 /**
  * Read-only views of the state for UI and rendering. Selectors never mutate.
+ * Those about a player take a `playerId` (player 0 by default): each screen
+ * asks for its own player.
  */
 import type {
   AttachmentId, IslandId, ItemId, NpcId, QuestId, QuestStatus, RecipeId, RegionId, StationId, ToolId,
@@ -21,17 +23,17 @@ import {
 import { findInteractable } from './interact.ts';
 import type { Interactable } from './interact.ts';
 import {
-  atCanoe, cargoAccessible, cargoSlots, hasAttachment, hasMissing,
+  atCanoe, cargoAccessible, cargoSlots, hasAttachment, hasMissing, playerOf,
 } from './inventory.ts';
 import { objectiveRequired } from './quests.ts';
 import { hourOfDay, isNight, isSheltered, respawnPoint, sleepBlocked } from './survival.ts';
 import type { SleepBlock } from './survival.ts';
-import type { GameState, ItemStack, Missing } from './types.ts';
+import type { GameState, ItemStack, Missing, PlayerId } from './types.ts';
 import { waterRoughnessAt } from './world.ts';
 
 /** The current interactable and its prompt, or null. */
-export function selectInteractable(state: GameState): Interactable | null {
-  return findInteractable(state);
+export function selectInteractable(state: GameState, playerId: PlayerId = 0): Interactable | null {
+  return findInteractable(state, playerOf(state, playerId));
 }
 
 export interface RecipeAvailability {
@@ -46,15 +48,16 @@ export interface RecipeAvailability {
 }
 
 /** Every recipe with whether it can be made and what it is missing. */
-export function selectCraftableRecipes(state: GameState): RecipeAvailability[] {
+export function selectCraftableRecipes(state: GameState, playerId: PlayerId = 0): RecipeAvailability[] {
+  const player = playerOf(state, playerId);
   return RECIPE_IDS.map((recipeId) => {
-    const missing = recipeMissing(state, recipeId);
+    const missing = recipeMissing(state, player, recipeId);
     const flag = RECIPES[recipeId].requiresFlag;
     return {
       recipeId,
       known: flag === null || state.flags[flag] === true,
       craftable: !hasMissing(missing),
-      maximumCount: craftableCount(state, recipeId),
+      maximumCount: craftableCount(state, player, recipeId),
       missing,
     };
   });
@@ -77,10 +80,11 @@ export interface BuildOptions {
 }
 
 /** The canoe builder panel: the next hull and every attachment. */
-export function selectBuildOptions(state: GameState): BuildOptions {
-  const blockedReason = !state.canoe.beached ? 'canoe_not_beached' : !atCanoe(state) ? 'not_at_canoe' : null;
+export function selectBuildOptions(state: GameState, playerId: PlayerId = 0): BuildOptions {
+  const player = playerOf(state, playerId);
+  const blockedReason = !state.canoe.beached ? 'canoe_not_beached' : !atCanoe(state, player) ? 'not_at_canoe' : null;
   const canBuildHere = blockedReason === null;
-  const hullMissing = hullUpgradeMissing(state);
+  const hullMissing = hullUpgradeMissing(state, player);
   return {
     canBuildHere,
     blockedReason,
@@ -89,7 +93,7 @@ export function selectBuildOptions(state: GameState): BuildOptions {
       : null,
     attachments: ATTACHMENT_IDS.map((attachmentId) => {
       const built = state.canoe.attachments.includes(attachmentId);
-      const missing = attachmentMissing(state, attachmentId);
+      const missing = attachmentMissing(state, player, attachmentId);
       return {
         attachmentId, built, missing,
         buildable: canBuildHere && !built && !hasMissing(missing),
@@ -253,15 +257,16 @@ function objectiveIsland(state: GameState, questId: QuestId): IslandId | null {
 }
 
 /** Discovered islands and markers. The radio shows quest markers on islands not yet seen. */
-export function selectMap(state: GameState): MapData {
+export function selectMap(state: GameState, playerId: PlayerId = 0): MapData {
+  const player = playerOf(state, playerId);
   const fullChart = hasAttachment(state, 'map_table');
   const hasRadio = hasAttachment(state, 'radio');
-  const { x, z } = state.player.position;
+  const { x, z } = player.position;
   const discovered = (islandId: IslandId): boolean => fullChart || state.discoveredIslands.includes(islandId);
   const markers: MapMarker[] = [
-    { kind: 'player', label: 'You', position: { x, z }, islandId: state.player.islandId, questId: null },
+    { kind: 'player', label: 'You', position: { x, z }, islandId: player.islandId, questId: null },
   ];
-  if (state.player.mode === 'foot') {
+  if (player.mode === 'foot') {
     markers.push({
       kind: 'canoe', label: 'Canoe', position: { x: state.canoe.position.x, z: state.canoe.position.z },
       islandId: state.canoe.beached ? state.canoe.lastBeached.islandId : null, questId: null,
@@ -333,7 +338,7 @@ export interface TimeOfDay {
   sleepBlocked: SleepBlock | null;
 }
 
-export function selectTimeOfDay(state: GameState): TimeOfDay {
+export function selectTimeOfDay(state: GameState, playerId: PlayerId = 0): TimeOfDay {
   const hour = hourOfDay(state.time);
   const wholeHours = Math.floor(hour);
   const minutes = Math.floor((hour - wholeHours) * 60);
@@ -343,7 +348,7 @@ export function selectTimeOfDay(state: GameState): TimeOfDay {
     clock: `${String(wholeHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`,
     isNight: isNight(state.time),
     dayFraction: hour / 24,
-    sleepBlocked: sleepBlocked(state),
+    sleepBlocked: sleepBlocked(state, playerOf(state, playerId)),
   };
 }
 
@@ -385,15 +390,16 @@ export interface DialogueView {
   options: { index: number; text: string }[];
 }
 
-/** The open conversation, or null. */
-export function selectDialogue(state: GameState): DialogueView | null {
-  if (!state.dialogue) return null;
-  const npc = NPCS[state.dialogue.npcId];
+/** The conversation a player is in, or null. */
+export function selectDialogue(state: GameState, playerId: PlayerId = 0): DialogueView | null {
+  const player = playerOf(state, playerId);
+  if (!player.dialogue) return null;
+  const npc = NPCS[player.dialogue.npcId];
   return {
     npcId: npc.id,
     name: npc.name,
-    text: npc.nodes[state.dialogue.nodeId].text,
-    options: visibleDialogueOptions(state).map((option, index) => ({ index, text: option.text })),
+    text: npc.nodes[player.dialogue.nodeId].text,
+    options: visibleDialogueOptions(state, player).map((option, index) => ({ index, text: option.text })),
   };
 }
 
@@ -413,18 +419,19 @@ export interface InventoryView {
   stackSize: number;
 }
 
-export function selectInventory(state: GameState): InventoryView {
+export function selectInventory(state: GameState, playerId: PlayerId = 0): InventoryView {
+  const player = playerOf(state, playerId);
   return {
-    backpack: state.player.backpack,
+    backpack: player.backpack,
     backpackSlots: TUNING.inventory.backpackSlots,
     cargo: state.canoe.cargo,
     cargoSlots: cargoSlots(state),
-    cargoAccessible: cargoAccessible(state),
-    tools: state.player.tools,
-    selectedTool: state.player.selectedTool,
-    keyItems: (Object.entries(state.player.keyItems) as [ItemId, number][]).map(([itemId, count]) => ({ itemId, count })),
+    cargoAccessible: cargoAccessible(state, player),
+    tools: player.tools,
+    selectedTool: player.selectedTool,
+    keyItems: (Object.entries(state.keyItems) as [ItemId, number][]).map(([itemId, count]) => ({ itemId, count })),
     pendingRewards: state.pendingRewards,
-    stations: accessibleStations(state),
+    stations: accessibleStations(state, player),
     stackSize: TUNING.inventory.stackSize,
   };
 }
@@ -442,14 +449,15 @@ export interface Meters {
   low: { hunger: boolean; thirst: boolean; energy: boolean; swamping: boolean };
 }
 
-export function selectMeters(state: GameState): Meters {
-  const { hunger, thirst, energy } = state.player;
+export function selectMeters(state: GameState, playerId: PlayerId = 0): Meters {
+  const player = playerOf(state, playerId);
+  const { hunger, thirst, energy } = player;
   const threshold = TUNING.survival.lowMeterWarning;
   return {
     hunger, thirst, energy,
     energyCap: hunger <= 0 || thirst <= 0 ? TUNING.survival.starvingEnergyCap : 100,
     waterLevel: state.canoe.waterLevel,
-    sheltered: isSheltered(state),
+    sheltered: isSheltered(state, player),
     low: {
       hunger: hunger <= threshold,
       thirst: thirst <= threshold,

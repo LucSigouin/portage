@@ -18,9 +18,9 @@ function aboutToCapsize() {
   give(state, 'driftwood', 9);
   give(state, 'hammer');
   give(state, 'lens');
-  state.player.hunger = 91;
-  state.player.thirst = 12;
-  state.player.energy = 77;
+  state.players[0].hunger = 91;
+  state.players[0].thirst = 12;
+  state.players[0].energy = 77;
   state.canoe.waterLevel = 97;
   return state;
 }
@@ -35,11 +35,11 @@ describe('capsize', () => {
     expect(types).toContain('washed_ashore');
 
     // Wake at the respawn point: Home Knoll by default...
-    expect(state.player.mode).toBe('foot');
-    expect(state.player.islandId).toBe('home_knoll');
+    expect(state.players[0].mode).toBe('foot');
+    expect(state.players[0].islandId).toBe('home_knoll');
     // ...canoe beached beside you...
     expect(state.canoe.beached).toBe(true);
-    expect(distanceToHull(state, state.player.position.x, state.player.position.z)).toBeLessThan(TUNING.canoe.boardRange);
+    expect(distanceToHull(state, state.players[0].position.x, state.players[0].position.z)).toBeLessThan(TUNING.canoe.boardRange);
     const berth = landingBerth('home_knoll', 2);
     expect(Math.hypot(state.canoe.position.x - berth.x, state.canoe.position.z - berth.z)).toBeLessThan(0.01);
     expect(state.canoe.waterLevel).toBe(0);
@@ -48,7 +48,7 @@ describe('capsize', () => {
     expect(state.time - timeBefore).toBeLessThan(6 * 60 + 1.5);
     expect(state.playedSeconds).toBeLessThan(1.5); // the six hours are skipped, not played
     // ...meters at 50.
-    expect([state.player.hunger, state.player.thirst, state.player.energy]).toEqual([50, 50, 50]);
+    expect([state.players[0].hunger, state.players[0].thirst, state.players[0].energy]).toEqual([50, 50, 50]);
 
     // Lose half of every non-tool stack in the canoe cargo.
     expect(countIn(state.canoe.cargo, 'plank')).toBe(10);
@@ -62,11 +62,11 @@ describe('capsize', () => {
     });
 
     // Tools, attachments and quest items are never lost. Neither is the backpack.
-    expect(state.player.tools).toEqual(['bailing_can', 'hammer']);
-    expect(state.player.keyItems).toEqual({ lens: 1 });
+    expect(state.players[0].tools).toEqual(['bailing_can', 'hammer']);
+    expect(state.keyItems).toEqual({ lens: 1 });
     expect(state.canoe.attachments).toEqual(['cargo_rack']);
     expect(state.canoe.hullTier).toBe(2);
-    expect(countIn(state.player.backpack, 'driftwood')).toBe(9);
+    expect(countIn(state.players[0].backpack, 'driftwood')).toBe(9);
     expect(state.statistics.fails).toBe(1);
   });
 
@@ -85,13 +85,13 @@ describe('exhaustion', () => {
     const state = newGame();
     standOn(state, 'cabin_roofs');
     give(state, 'stone', 10, 'cargo');
-    state.player.hunger = 0;
-    state.player.energy = 1;
+    state.players[0].hunger = 0;
+    state.players[0].energy = 1;
     const events = runUntilFail(state, {}, 10);
     expect(events.map((event) => event.type)).toContain('exhausted');
     expect(events.find((event) => event.type === 'washed_ashore')).toMatchObject({ cause: 'exhausted', islandId: 'home_knoll' });
-    expect(state.player.islandId).toBe('home_knoll');
-    expect([state.player.hunger, state.player.thirst, state.player.energy]).toEqual([50, 50, 50]);
+    expect(state.players[0].islandId).toBe('home_knoll');
+    expect([state.players[0].hunger, state.players[0].thirst, state.players[0].energy]).toEqual([50, 50, 50]);
     expect(countIn(state.canoe.cargo, 'stone')).toBe(5);
   });
 });
@@ -111,7 +111,7 @@ describe('respawn point', () => {
     floatCanoeAt(state, 150, 100);
     state.canoe.waterLevel = 99;
     runUntilFail(state, {}, 5);
-    expect(state.player.islandId).toBe('orchard_hill');
+    expect(state.players[0].islandId).toBe('orchard_hill');
     const berth = landingBerth('orchard_hill', 1);
     expect(Math.hypot(state.canoe.position.x - berth.x, state.canoe.position.z - berth.z)).toBeLessThan(0.01);
   });
@@ -127,7 +127,7 @@ describe('respawn point', () => {
     state.canoe.waterLevel = 99;
     runUntilFail(state, {}, 5);
     expect(state.statistics.fails).toBe(1);
-    expect(state.player.islandId).toBe('silo_twins');
+    expect(state.players[0].islandId).toBe('silo_twins');
     expect(state.canoe.position.x).toBeCloseTo(beachedAt.x, 6);
     expect(state.canoe.position.z).toBeCloseTo(beachedAt.z, 6);
     expect(state.canoe.beached).toBe(true);

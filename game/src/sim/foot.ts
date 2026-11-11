@@ -1,5 +1,5 @@
 import { TUNING } from '../data/tuning.ts';
-import type { GameState, StepInput } from './types.ts';
+import type { GameState, PlayerState, StepInput } from './types.ts';
 import { terrainHeight } from './world.ts';
 
 /**
@@ -15,9 +15,8 @@ export function canWalk(fromX: number, fromZ: number, toX: number, toZ: number):
   return rise / distance <= TUNING.foot.slopeLimit;
 }
 
-/** One fixed step on foot. Movement is relative to the camera bearing. */
-export function stepOnFoot(state: GameState, input: StepInput, deltaSeconds: number): void {
-  const player = state.player;
+/** One fixed step of one player on foot. Movement is relative to their camera bearing. */
+export function stepOnFoot(state: GameState, player: PlayerState, input: StepInput, deltaSeconds: number): void {
   let moveX = input.moveX;
   let moveY = input.moveY;
   const length = Math.hypot(moveX, moveY);

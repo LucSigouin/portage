@@ -18,7 +18,8 @@ import type { Settings, WaterDetail } from '../../settings/index.ts';
 import {
   attachmentTransformForHull, regionAt, selectTimeOfDay, terrainHeight, valleyHalfWidth, waterRoughnessAt, waveHeight,
 } from '../../sim/index.ts';
-import type { GameEvent, GameState } from '../../sim/index.ts';
+import { playerOf } from '../../sim/index.ts';
+import type { GameEvent, GameState, PlayerId } from '../../sim/index.ts';
 import type { CameraPose, FrameInfo, StageName, WorldView } from '../contracts.ts';
 
 type Shape = 'box' | 'cylinder' | 'cone' | 'sphere';
@@ -291,6 +292,8 @@ interface Effect {
 }
 
 export class GreyboxWorldView implements WorldView {
+  /** The player this screen follows. The greybox draws only them. */
+  localPlayerId: PlayerId = 0;
   private renderer: THREE.WebGLRenderer | null = null;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(60, 1, 0.1, 5000);
@@ -541,7 +544,7 @@ export class GreyboxWorldView implements WorldView {
     const ease = 1 - Math.exp(-frame.frameSeconds * 0.8);
     const snap = this.frameCount <= 1 || frame.paused;
     const overcastGoal = state.weather.kind === 'storm' ? Math.max(0.5, OVERCAST.storm * state.weather.stormLevel) : OVERCAST[state.weather.kind];
-    const inFog = regionAt(state.player.position.x, state.player.position.z).fogWall;
+    const inFog = regionAt(playerOf(state, this.localPlayerId).position.x, playerOf(state, this.localPlayerId).position.z).fogWall;
     const visibilityGoal = weather.visibility * (inFog ? 0.35 : 1);
     this.overcast = snap ? overcastGoal : this.overcast + (overcastGoal - this.overcast) * ease;
     this.visibility = snap ? visibilityGoal : this.visibility + (visibilityGoal - this.visibility) * ease;
@@ -558,7 +561,7 @@ export class GreyboxWorldView implements WorldView {
     this.skyLight.intensity = 0.55 + 0.9 * daylight * (1 - 0.3 * this.overcast);
     this.sun.intensity = 1.8 * daylight * (1 - 0.7 * this.overcast);
     const sunAngle = (time.dayFraction - 0.25) * Math.PI * 2;
-    const focus = state.player.position;
+    const focus = playerOf(state, this.localPlayerId).position;
     this.sun.position.set(focus.x + Math.cos(sunAngle) * 200, Math.max(20, Math.sin(sunAngle) * 200), focus.z + 80);
     this.sun.target.position.set(focus.x, 0, focus.z);
   }
@@ -570,8 +573,8 @@ export class GreyboxWorldView implements WorldView {
     const size = offsets.length;
     const cell = this.waterCell;
     // Snap to the grid so the dense vertices do not swim as the player moves.
-    const originX = Math.round(state.player.position.x / cell) * cell;
-    const originZ = Math.round(state.player.position.z / cell) * cell;
+    const originX = Math.round(playerOf(state, this.localPlayerId).position.x / cell) * cell;
+    const originZ = Math.round(playerOf(state, this.localPlayerId).position.z / cell) * cell;
     const attribute = this.water.geometry.getAttribute('position') as THREE.BufferAttribute;
     const positions = attribute.array as Float32Array;
     const shadeAttribute = this.water.geometry.getAttribute('color') as THREE.BufferAttribute;
@@ -661,7 +664,7 @@ export class GreyboxWorldView implements WorldView {
   }
 
   private syncPlayer(state: GameState): void {
-    const player = state.player;
+    const player = playerOf(state, this.localPlayerId);
     this.player.visible = this.stage !== 'lobby';
     if (player.mode === 'canoe') {
       // Seated amidships: half height, riding with the hull.
@@ -702,7 +705,7 @@ export class GreyboxWorldView implements WorldView {
     const state = this.state;
     if (!state) return;
     const canoe = state.canoe.position;
-    const player = state.player.position;
+    const player = playerOf(state, this.localPlayerId).position;
     for (const event of events) {
       switch (event.type) {
         case 'node_depleted': {

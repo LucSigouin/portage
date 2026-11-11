@@ -3,6 +3,7 @@
  * UI and a sound engine, and runs one frame at a time. No DOM in here, so
  * the whole frame can run in a test with fakes; `main.ts` adds the browser.
  */
+import { eventsFor } from '../sim/index.ts';
 import type { GameState } from '../sim/index.ts';
 import { ChaseCamera, lobbyCameraPose, subjectFromState, surfaceFromState } from './camera.ts';
 import type { CameraOptions, CameraPose } from './camera.ts';
@@ -101,7 +102,10 @@ export class App {
       return lobbyCameraPose(state.canoe.position, this.elapsedSeconds, this.cameraOptions(), surface);
     }
     // A frozen game does not swing the camera round: only the mouse moves it.
-    const subject = { ...subjectFromState(state, session.lastInput), ...(session.paused ? { moving: false } : {}) };
+    const subject = {
+      ...subjectFromState(state, session.lastInput, session.localPlayerId),
+      ...(session.paused ? { moving: false } : {}),
+    };
     if (this.snapCamera) {
       this.camera.snapBehind(subject);
       this.snapCamera = false;
@@ -132,13 +136,15 @@ export class App {
     const session = this.session;
     this.elapsedSeconds += frameSeconds;
 
-    // Step, then drain the events once and fan them out.
+    // Step, then drain the events once and fan them out. The sound and the
+    // toasts are the local player's; the world shows what everyone did.
     const events = session.advance(frameSeconds, this.camera.yaw);
     const state = session.activeState;
+    const ownEvents = eventsFor(events, session.localPlayerId);
     this.followScene();
-    this.audio.handleEvents(events);
-    this.audio.update(state, frameSeconds);
-    this.toasts.addAll(toastsFromEvents(events, state));
+    this.audio.handleEvents(ownEvents);
+    this.audio.update(state, frameSeconds, session.localPlayerId);
+    this.toasts.addAll(toastsFromEvents(ownEvents, state));
     this.toasts.update(frameSeconds);
 
     const frame: FrameInfo = {
@@ -160,6 +166,7 @@ export class App {
       panels: session.panels,
       settings: session.settings,
       game: session.game,
+      playerId: session.localPlayerId,
       paused: session.paused,
       cameraYaw: this.camera.yaw,
       toasts: this.toasts.models(),

@@ -11,10 +11,10 @@ describe('crafting', () => {
     give(state, 'fiber', 2);
     const result = dispatch(state, { type: 'craft', recipeId: 'stone_knife' });
     expect(result).toMatchObject({ ok: true, gained: [{ itemId: 'stone_knife', count: 1 }] });
-    expect(state.player.tools).toContain('stone_knife');
-    expect(countIn(state.player.backpack, 'stone')).toBe(1);
-    expect(countIn(state.player.backpack, 'driftwood')).toBe(1);
-    expect(countIn(state.player.backpack, 'fiber')).toBe(0);
+    expect(state.players[0].tools).toContain('stone_knife');
+    expect(countIn(state.players[0].backpack, 'stone')).toBe(1);
+    expect(countIn(state.players[0].backpack, 'driftwood')).toBe(1);
+    expect(countIn(state.players[0].backpack, 'fiber')).toBe(0);
   });
 
   it('says exactly what is missing: items with the count still needed, tools and the station', () => {
@@ -64,8 +64,8 @@ describe('crafting', () => {
     give(state, 'fiber', 4, 'cargo');
     const result = dispatch(state, { type: 'craft', recipeId: 'rope', count: 2 });
     expect(result.ok).toBe(true);
-    expect(countIn(state.player.backpack, 'fiber') + countIn(state.canoe.cargo, 'fiber')).toBe(0);
-    expect(countIn(state.player.backpack, 'rope')).toBe(2);
+    expect(countIn(state.players[0].backpack, 'fiber') + countIn(state.canoe.cargo, 'fiber')).toBe(0);
+    expect(countIn(state.players[0].backpack, 'rope')).toBe(2);
   });
 
   it('keeps sailcloth locked until Wren teaches it', () => {
@@ -87,7 +87,7 @@ describe('crafting', () => {
     for (let slot = 0; slot < 7; slot += 1) give(state, 'stone', 20);
     give(state, 'fiber', 20);
     expect(dispatch(state, { type: 'craft', recipeId: 'rope' })).toMatchObject({ ok: false, reason: 'inventory_full' });
-    expect(countIn(state.player.backpack, 'fiber')).toBe(20);
+    expect(countIn(state.players[0].backpack, 'fiber')).toBe(20);
     expect(dispatch(state, { type: 'craft', recipeId: 'rope', count: 0 })).toMatchObject({ ok: false, reason: 'invalid_amount' });
   });
 });
@@ -145,7 +145,7 @@ describe('the canoe builder', () => {
     expect(dispatch(state, { type: 'build_attachment', attachmentId: 'outrigger_port' }).ok).toBe(true);
     expect(dispatch(state, { type: 'build_attachment', attachmentId: 'outrigger_port' })).toMatchObject({ ok: false, reason: 'already_built' });
     expect(dispatch(state, { type: 'build_attachment', attachmentId: 'workbench' }).ok).toBe(true);
-    expect(countIn(state.player.backpack, 'plank')).toBe(10);
+    expect(countIn(state.players[0].backpack, 'plank')).toBe(10);
     expect(dispatch(state, { type: 'build_attachment', attachmentId: 'radio' })).toMatchObject({ ok: false, missing: { hullTier: 3 } });
     const options = selectBuildOptions(state);
     expect(options.attachments.find((entry) => entry.attachmentId === 'workbench')).toMatchObject({ built: true, buildable: false });
@@ -161,7 +161,7 @@ describe('the canoe builder', () => {
       .toMatchObject({ ok: false, missing: { items: [{ itemId: 'signal_flag', count: 1 }] } });
     give(state, 'signal_flag');
     expect(dispatch(state, { type: 'build_attachment', attachmentId: 'flag' }).ok).toBe(true);
-    expect(state.player.keyItems.signal_flag).toBeUndefined();
+    expect(state.keyItems.signal_flag).toBeUndefined();
     give(state, 'carved_figurehead');
     floatCanoeAt(state, 0, 600);
     expect(dispatch(state, { type: 'build_attachment', attachmentId: 'figurehead' })).toMatchObject({ ok: false, reason: 'canoe_not_beached' });

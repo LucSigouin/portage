@@ -3,7 +3,7 @@ import {
   SAVE_KEY_PREFIX, SAVE_SLOT_COUNT, SAVE_VERSION, createAutosaver, createSaveStore, deserialize, serialize,
 } from '../src/save/index.ts';
 import type { SaveMigration } from '../src/save/index.ts';
-import { dispatch, hashState } from '../src/sim/index.ts';
+import { FIXED_STEP, NEUTRAL_INPUT, dispatch, hashState, step } from '../src/sim/index.ts';
 import { FakeStorage, give, newGame, run, standOn, teleportToCamp } from './support.ts';
 
 /** A game with some history in it. */
@@ -75,6 +75,125 @@ describe('serialize and deserialize', () => {
   });
 });
 
+describe('old saves', () => {
+  // Real version 1 saves, written by the solo build (commit 329521e) before the crew existed:
+  // afloat ten seconds into a new game, ashore fifteen minutes in, and with the Beacon lit.
+  const fixtures = import.meta.glob<string>('./fixtures/save-v1-*.json', { eager: true, query: '?raw', import: 'default' });
+  const fixture = (name: string): string => fixtures[`./fixtures/save-v1-${name}.json`];
+
+  it('has the three real version 1 saves to test with', () => {
+    expect(Object.keys(fixtures).sort()).toEqual([
+      './fixtures/save-v1-afloat.json', './fixtures/save-v1-ashore.json', './fixtures/save-v1-endgame.json',
+    ]);
+    for (const text of Object.values(fixtures)) {
+      const old = JSON.parse(text);
+      expect(old.version).toBe(1);
+      expect(old.state.player).toBeTypeOf('object');
+      expect(old.state.players).toBeUndefined();
+    }
+  });
+
+  it('loads a solo save as a crew of one: the player becomes player 0 and keeps everything', () => {
+    for (const name of ['afloat', 'ashore', 'endgame']) {
+      const old = JSON.parse(fixture(name)).state;
+      const loaded = deserialize(fixture(name));
+      expect(loaded.ok, name).toBe(true);
+      if (!loaded.ok) return;
+      expect(loaded.migratedFrom).toBe(1);
+      expect(loaded.savedAt).toBe(1762819200000);
+      const state = loaded.state;
+      expect(state.version).toBe(SAVE_VERSION);
+      expect(state.players).toHaveLength(1);
+      const player = state.players[0];
+      const { keyItems, ...solo } = old.player;
+      // Every field the old player had is still on player 0, untouched.
+      expect(player).toMatchObject(solo);
+      expect(player).toMatchObject({ id: 0, bailing: false, asleep: false, dialogue: old.dialogue });
+      expect(player.seat).toBe(old.player.mode === 'canoe' ? 0 : null);
+      // The key items moved to the crew. Nothing of the old shape is left behind.
+      expect(state.keyItems).toEqual(keyItems);
+      expect('player' in state).toBe(false);
+      expect('dialogue' in state).toBe(false);
+      // Everything shared is exactly as it was saved.
+      for (const key of ['seed', 'randomState', 'tick', 'time', 'playedSeconds', 'canoe', 'weather', 'nodes', 'quests',
+        'trackedQuestId', 'flags', 'discoveredIslands', 'bottlesFound', 'respawnCampIslandId', 'pendingRewards', 'statistics'] as const) {
+        expect(state[key], `${name} ${key}`).toEqual(old[key]);
+      }
+      // And it saves again as a current save that loads without a migration.
+      const again = deserialize(serialize(state, 7));
+      expect(again.ok && again.migratedFrom).toBeNull();
+      expect(again.ok && again.state).toEqual(state);
+    }
+    expect(JSON.parse(fixture('endgame')).state.player.keyItems).toEqual({ beacon_bearing: 1 });
+    expect(JSON.parse(fixture('ashore')).state.player.backpack.length).toBeGreaterThan(0);
+  });
+
+  it('plays on from a migrated save', () => {
+    const afloat = deserialize(fixture('afloat'));
+    const ashore = deserialize(fixture('ashore'));
+    if (!afloat.ok || !ashore.ok) throw new Error('fixture did not load');
+    const before = { ...afloat.state.canoe.position };
+    run(afloat.state, { paddle: 1 }, 5);
+    expect(Math.hypot(afloat.state.canoe.position.x - before.x, afloat.state.canoe.position.z - before.z)).toBeGreaterThan(5);
+    expect(afloat.state.players[0].position).toEqual(afloat.state.canoe.position);
+    const walker = ashore.state.players[0];
+    const stood = { ...walker.position };
+    run(ashore.state, { moveX: 1, moveY: 1 }, 2);
+    expect(Math.hypot(walker.position.x - stood.x, walker.position.z - stood.z)).toBeGreaterThan(1);
+    expect(ashore.state.players[0].hunger).toBeLessThan(JSON.parse(fixture('ashore')).state.player.hunger);
+  });
+
+  it('opens an old save from a slot, and lists it in the lobby', () => {
+    const storage = new FakeStorage();
+    storage.setItem(`${SAVE_KEY_PREFIX}0`, fixture('ashore'));
+    const store = createSaveStore(storage, () => 1000);
+    const loaded = store.load(0);
+    expect(loaded.ok && loaded.state.players[0].tools).toEqual(['bailing_can', 'stone_knife', 'hatchet']);
+    expect(store.list()[0]).toMatchObject({ empty: false, corrupt: false, mainQuestId: 'ribs_and_rails' });
+  });
+});
+
+describe('crew saves', () => {
+  it('round-trips a game with four players exactly', () => {
+    const state = newGame(11, { crew: 4 });
+    const inputs = [{ bail: true }, { paddle: 1 }, { steer: 0.2 }, { paddle: 1, powerStroke: true }]
+      .map((input) => ({ ...NEUTRAL_INPUT, ...input }));
+    run(state, { bail: true }, 20);
+    run(state, { paddle: 1 }, 32);
+    expect(dispatch(state, { type: 'disembark' }, 2).ok).toBe(true);
+    expect(dispatch(state, { type: 'disembark' }, 0).ok).toBe(true);
+    state.players[2].backpack.push({ itemId: 'driftwood', count: 5 });
+    state.players[3].tools.push('hatchet');
+    state.players[3].selectedTool = 'hatchet';
+    state.keyItems.lens = 1;
+    for (let index = 0; index < 120; index += 1) step(state, [{ ...NEUTRAL_INPUT, moveX: 1 }, undefined, { ...NEUTRAL_INPUT, moveY: 1 }], FIXED_STEP);
+    state.events = [];
+    expect(state.players.map((player) => player.mode)).toEqual(['foot', 'canoe', 'foot', 'canoe']);
+
+    const loaded = deserialize(serialize(state, 99));
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(loaded.migratedFrom).toBeNull();
+    expect(loaded.state).toEqual(state);
+    expect(hashState(loaded.state)).toBe(hashState(state));
+    expect(loaded.state.players.map((player) => player.id)).toEqual([0, 1, 2, 3]);
+    // The loaded game carries on exactly as the one that never stopped.
+    for (let index = 0; index < 600; index += 1) {
+      step(state, inputs, FIXED_STEP);
+      step(loaded.state, inputs, FIXED_STEP);
+    }
+    expect(hashState(loaded.state)).toBe(hashState(state));
+  });
+
+  it('refuses a save with no players in it', () => {
+    const broken = JSON.parse(serialize(newGame(3), 1));
+    broken.state.players = [];
+    expect(deserialize(JSON.stringify(broken))).toEqual({ ok: false, reason: 'corrupt' });
+    delete broken.state.players;
+    expect(deserialize(JSON.stringify(broken))).toEqual({ ok: false, reason: 'corrupt' });
+  });
+});
+
 describe('save store', () => {
   it('keeps three slots in storage', () => {
     const storage = new FakeStorage();
@@ -139,7 +258,7 @@ describe('autosave', () => {
     expect(dispatch(state, { type: 'disembark' }).ok).toBe(true);
     expect(autosaver.update(state, state.events, 1 / 60)).toBe('landing');
     const landed = store.load(0);
-    expect(landed.ok && landed.state.player.mode).toBe('foot');
+    expect(landed.ok && landed.state.players[0].mode).toBe('foot');
 
     standOn(state, 'home_knoll');
     teleportToCamp(state, 'home_knoll');

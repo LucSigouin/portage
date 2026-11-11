@@ -7,8 +7,8 @@
  * looks along (0 = north, clockwise), so it goes straight into
  * `StepInput.cameraYaw`. `pitch` is the camera's elevation above the subject.
  */
-import { bearingDifference, terrainHeight, waterRoughnessAt, waveHeight } from '../sim/index.ts';
-import type { GameState, StepInput, Vector3 } from '../sim/index.ts';
+import { bearingDifference, playerOf, terrainHeight, waterRoughnessAt, waveHeight } from '../sim/index.ts';
+import type { GameState, PlayerId, StepInput, Vector3 } from '../sim/index.ts';
 import type { CameraInput } from './input.ts';
 
 /** Where the camera is, what it looks at, and its vertical field of view in degrees. */
@@ -112,18 +112,19 @@ export function surfaceFromState(state: GameState): CameraSurface {
 }
 
 /**
- * What the camera follows in a game state. `input` is the intent the last
- * step ran with: on foot the state carries no speed, so walking is read from it.
+ * What the camera follows in a game state: the player with `playerId`, or
+ * the canoe when they are aboard. `input` is the intent the last step ran with: on foot the state carries no speed, so walking is read from it.
  */
-export function subjectFromState(state: GameState, input: Pick<StepInput, 'moveX' | 'moveY'>): CameraSubject {
-  if (state.player.mode === 'canoe') {
+export function subjectFromState(state: GameState, input: Pick<StepInput, 'moveX' | 'moveY'>, playerId: PlayerId = 0): CameraSubject {
+  const player = playerOf(state, playerId);
+  if (player.mode === 'canoe') {
     return {
       mode: 'canoe', position: state.canoe.position, heading: state.canoe.heading,
       moving: Math.abs(state.canoe.speed) > 0.3,
     };
   }
   return {
-    mode: 'foot', position: state.player.position, heading: state.player.heading,
+    mode: 'foot', position: player.position, heading: player.heading,
     moving: Math.hypot(input.moveX, input.moveY) > 0.01,
   };
 }

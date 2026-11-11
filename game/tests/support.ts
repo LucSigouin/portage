@@ -32,14 +32,14 @@ export function runUntilFail(state: GameState, input: Partial<StepInput>, maximu
 
 /** Put the canoe afloat at a point, player aboard, hull dry. */
 export function floatCanoeAt(state: GameState, x: number, z: number, heading = 0): void {
-  state.player.mode = 'canoe';
-  state.player.islandId = null;
+  state.players[0].mode = 'canoe';
+  state.players[0].islandId = null;
   state.canoe.position = { x, y: 0, z };
   state.canoe.heading = heading;
   state.canoe.speed = 0;
   state.canoe.beached = false;
   state.canoe.waterLevel = 0;
-  state.player.position = { x, y: 0, z };
+  state.players[0].position = { x, y: 0, z };
 }
 
 /** Beach the canoe at an island's landing and stand the player beside it. */
@@ -53,16 +53,16 @@ export function standOn(state: GameState, islandId: IslandId): void {
   state.canoe.lastBeached = { ...berth, islandId };
   const bowX = berth.x + Math.sin(berth.heading) * 2.2;
   const bowZ = berth.z - Math.cos(berth.heading) * 2.2;
-  state.player.mode = 'foot';
-  state.player.islandId = islandId;
-  state.player.position = { x: bowX, y: terrainHeight(bowX, bowZ), z: bowZ };
+  state.players[0].mode = 'foot';
+  state.players[0].islandId = islandId;
+  state.players[0].position = { x: bowX, y: terrainHeight(bowX, bowZ), z: bowZ };
 }
 
 /** Move the player on foot to a world point on an island. */
 export function teleport(state: GameState, islandId: IslandId, x: number, z: number): void {
-  state.player.mode = 'foot';
-  state.player.islandId = islandId;
-  state.player.position = { x, y: terrainHeight(x, z), z };
+  state.players[0].mode = 'foot';
+  state.players[0].islandId = islandId;
+  state.players[0].position = { x, y: terrainHeight(x, z), z };
 }
 
 export function teleportToNode(state: GameState, nodeId: string): void {
@@ -80,13 +80,13 @@ export function teleportToCamp(state: GameState, islandId: IslandId): void {
 export function give(state: GameState, itemId: ItemId, count = 1, container: 'backpack' | 'cargo' = 'backpack'): void {
   if (!isStackable(itemId)) {
     if (['bailing_can', 'stone_knife', 'hatchet', 'pry_bar', 'saw', 'hammer', 'fishing_rod', 'wrench'].includes(itemId)) {
-      if (!state.player.tools.includes(itemId as ToolId)) state.player.tools.push(itemId as ToolId);
+      if (!state.players[0].tools.includes(itemId as ToolId)) state.players[0].tools.push(itemId as ToolId);
     } else {
-      state.player.keyItems[itemId] = (state.player.keyItems[itemId] ?? 0) + count;
+      state.keyItems[itemId] = (state.keyItems[itemId] ?? 0) + count;
     }
     return;
   }
-  const stacks = container === 'backpack' ? state.player.backpack : state.canoe.cargo;
+  const stacks = container === 'backpack' ? state.players[0].backpack : state.canoe.cargo;
   let remaining = count;
   while (remaining > 0) {
     const size = Math.min(20, remaining);

@@ -16,6 +16,31 @@
  * if (!result.ok) showWhy(result.reason, result.missing);
  * ```
  *
+ * ## The crew
+ *
+ * A game has one to four players (`state.players`, in id order; `createGame`
+ * takes `crew`, `addPlayer` seats one more). Solo is a crew of one. Each
+ * player has their own position, mode, seat, meters, backpack, tool belt,
+ * selected tool, scavenge, conversation and bed. The canoe, its cargo and
+ * attachments, the key items, the quests, the world, the clock and the
+ * weather are shared.
+ *
+ * - `step(state, input, dt)`: `input` is one `StepInput` (player 0) or a list
+ *   indexed by player id. Players are stepped in id order.
+ * - `dispatch(state, command, playerId)`: the command is that player's.
+ * - Selectors about a player take a `playerId`. Both default to player 0.
+ * - An event one player caused carries their `playerId`; `eventsFor(events,
+ *   playerId)` keeps one screen's own events and the crew-wide ones.
+ *
+ * Crew rules: the canoe moves for whoever is aboard. The strongest stroke
+ * sets the pace and every other paddler adds a quarter of their own (four:
+ * 1.75x); steering is everyone's added up, clamped; a power stroke costs the
+ * paddler who makes it; every bailer bails at the full rate. Players board
+ * and land one by one (`seatTransformForHull` says where each sits), and the
+ * canoe may leave someone ashore and fetch them later. Any player's action
+ * counts for a quest. The night skips only when everyone is asleep. A player
+ * at 0 energy fails alone; a capsize fails everyone aboard.
+ *
  * ## Contract
  *
  * - `GameState` is plain JSON. `JSON.stringify(state)` is a save. `step` and
@@ -60,7 +85,7 @@
  * | `transfer` / `discard` | Move a stack between backpack and cargo, or drop it |
  * | `eat` / `drink` | Consume one food or drink |
  * | `fill_water` | Scoop dirty water with the bailing can, at the water |
- * | `sleep` | Sleep to dawn at a camp, or aboard with the canopy |
+ * | `sleep` / `wake` | Lie down at a camp, or aboard with the canopy; the night skips once the whole crew has. Get up again |
  * | `board` / `disembark` | Get in the canoe, or step ashore and pull it up |
  * | `talk`, `choose_dialogue_option`, `end_dialogue` | Conversations |
  * | `accept_quest`, `turn_in_quest`, `track_quest` | Side quests and the tracker |
@@ -101,7 +126,8 @@
  * - `bearingVector`, `bearingBetween`, `bearingDifference`: bearing maths in
  *   the game's convention.
  * - `attachmentTransformForHull(attachmentId, hullTier)`: where an attachment
- *   sits on a given hull, in canoe space.
+ *   sits on a given hull, in canoe space. `seatTransformForHull(hullTier,
+ *   seat)`: where a crew member sits (`player.seat`, 0 to 3).
  *
  * ## Events
  *
@@ -126,7 +152,10 @@
  *   the radio the canoe is turned south until it comes back out
  *   (`state.canoe.lostInFog`, `fog_turned_back` event).
  * - Fail (energy 0 or water level 100): `capsized` or `exhausted`, then
- *   `washed_ashore` with the cargo that was lost. Power strokes, running,
+ *   `washed_ashore` with what was lost. A capsize takes everyone aboard and
+ *   half of every cargo stack. In a crew, exhaustion takes one player and
+ *   half of each of their backpack stacks; alone (or last aboard a floating
+ *   canoe) it takes the canoe too, as a capsize does. Power strokes, running,
  *   chopping and bailing are refused below 5 energy, so effort alone never
  *   causes a fail.
  * - Cargo and aboard stations are in reach when aboard, within 8 m of the
@@ -136,14 +165,15 @@
  */
 
 // --- Core -------------------------------------------------------------------
-export { createGame, step, drainEvents, hashState, FIXED_STEP, NEUTRAL_INPUT } from './step.ts';
+export { createGame, step, drainEvents, hashState, FIXED_STEP, NEUTRAL_INPUT, addPlayer } from './step.ts';
 export { dispatch } from './commands.ts';
+export { playerOf, playersAboard, eventsFor } from './inventory.ts';
 
 // --- State, input, commands, events -----------------------------------------
-export { STATE_VERSION } from './types.ts';
+export { STATE_VERSION, MAXIMUM_PLAYERS } from './types.ts';
 export type {
   GameState, GameOptions, PlayerState, CanoeState, WeatherState, QuestState, NodeState, DialogueState,
-  Statistics, ItemStack, Vector3, StepInput, Command, Container, CommandResult, CommandSuccess,
+  Statistics, ItemStack, Vector3, StepInput, CrewInput, PlayerId, Command, Container, CommandResult, CommandSuccess,
   CommandFailure, FailureReason, Missing, GameEvent, GameEventType, FailCause,
 } from './types.ts';
 
@@ -169,4 +199,4 @@ export {
 export type { Landing } from './world.ts';
 export { WAVE_TABLE } from '../data/world.ts';
 export type { WaveComponent } from '../data/world.ts';
-export { attachmentTransformForHull } from '../data/canoe.ts';
+export { attachmentTransformForHull, seatTransformForHull } from '../data/canoe.ts';

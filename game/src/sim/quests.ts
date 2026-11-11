@@ -2,7 +2,7 @@ import type { ItemId, NodeId, NpcId, ObjectiveDefinition, QuestId } from '../dat
 import { STOCK_FOOD_IDS } from '../data/items.ts';
 import { MAIN_QUESTS, QUESTS, QUEST_LIST } from '../data/quests.ts';
 import { countHeld, countInStacks, emit, grantItems, removeFromStacks } from './inventory.ts';
-import type { GameState, QuestState } from './types.ts';
+import type { GameState, PlayerState, QuestState } from './types.ts';
 
 /** The count at which an objective is done. */
 export function objectiveRequired(objective: ObjectiveDefinition): number {
@@ -29,25 +29,26 @@ export function nodeUsed(state: GameState, nodeId: NodeId): boolean {
 
 /**
  * Progress of an objective read straight from the state, or null for
- * objectives that only advance through events (craft, sleep, talk).
+ * objectives that only advance through events (craft, sleep, talk). Quests
+ * are the crew's: any player standing there, holding it or wearing it counts.
  */
 function measuredProgress(state: GameState, objective: ObjectiveDefinition): number | null {
   switch (objective.type) {
     case 'bail':
       return state.canoe.waterLevel <= objective.waterAtMost ? 1 : 0;
     case 'land':
-      return state.player.mode === 'foot' && state.player.islandId === objective.islandId ? 1 : 0;
+      return state.players.some((player) => player.mode === 'foot' && player.islandId === objective.islandId) ? 1 : 0;
     case 'have_item':
     case 'deliver':
       return Math.min(objective.count, countHeld(state, objective.itemId));
     case 'have_tool':
-      return state.player.tools.includes(objective.toolId) ? 1 : 0;
+      return state.players.some((player) => player.tools.includes(objective.toolId)) ? 1 : 0;
     case 'hull':
       return state.canoe.hullTier >= objective.tier ? 1 : 0;
     case 'attachment':
       return state.canoe.attachments.includes(objective.attachmentId) ? 1 : 0;
     case 'enter_region':
-      return state.player.regionId === objective.regionId ? 1 : 0;
+      return state.players.some((player) => player.regionId === objective.regionId) ? 1 : 0;
     case 'node':
       return nodeUsed(state, objective.nodeId) ? 1 : 0;
     case 'stock': {
@@ -112,17 +113,29 @@ function setProgress(state: GameState, questId: QuestId, index: number, value: n
   }
 }
 
-function completeQuest(state: GameState, questId: QuestId): void {
+/**
+ * Who a quest pays when nobody in particular finished it (the tick found it
+ * done): the first player aboard, or the first player.
+ */
+function defaultActor(state: GameState): PlayerState {
+  return state.players.find((player) => player.mode === 'canoe') ?? state.players[0];
+}
+
+function completeQuest(state: GameState, questId: QuestId, actor: PlayerState): void {
   const definition = QUESTS[questId];
   state.quests[questId].status = 'completed';
   for (const objective of definition.objectives) {
     if (objective.type !== 'deliver') continue;
-    const fromBackpack = removeFromStacks(state.player.backpack, objective.itemId, objective.count);
-    if (fromBackpack < objective.count) removeFromStacks(state.canoe.cargo, objective.itemId, objective.count - fromBackpack);
+    // The delivery comes out of the actor's backpack, then the cargo, then the rest of the crew's backpacks.
+    let remaining = objective.count - removeFromStacks(actor.backpack, objective.itemId, objective.count);
+    if (remaining > 0) remaining -= removeFromStacks(state.canoe.cargo, objective.itemId, remaining);
+    for (const player of state.players) {
+      if (remaining > 0 && player !== actor) remaining -= removeFromStacks(player.backpack, objective.itemId, remaining);
+    }
     emit(state, { type: 'item_lost', itemId: objective.itemId, count: objective.count });
   }
   for (const flag of definition.rewards.flags) state.flags[flag] = true;
-  const leftover = grantItems(state, definition.rewards.items);
+  const leftover = grantItems(state, actor, definition.rewards.items);
   if (leftover.length > 0) {
     state.pendingRewards.push(...leftover);
     emit(state, { type: 'rewards_pending' });
@@ -143,8 +156,12 @@ function completeQuest(state: GameState, questId: QuestId): void {
   }
 }
 
-/** Re-read every quest from the state: unlock, advance, ready and complete. */
-export function updateQuests(state: GameState): void {
+/**
+ * Re-read every quest from the state: unlock, advance, ready and complete.
+ * `actor` is the player whose action called for it; a quest that completes
+ * here pays them.
+ */
+export function updateQuests(state: GameState, actor: PlayerState = defaultActor(state)): void {
   // A completion can unlock or finish the next quest, so loop until settled.
   for (let pass = 0; pass < QUEST_LIST.length; pass += 1) {
     let changed = false;
@@ -165,7 +182,7 @@ export function updateQuests(state: GameState): void {
       });
       const done = objectivesDone(state, definition.id);
       if (done && definition.autoComplete) {
-        completeQuest(state, definition.id);
+        completeQuest(state, definition.id, actor);
         changed = true;
       } else if (done && questState.status === 'active') {
         questState.status = 'ready';
@@ -202,20 +219,20 @@ export function notifyTalked(state: GameState, npcId: NpcId): void {
 }
 
 /** Accept an offered side quest. Returns false when it is not on offer. */
-export function acceptQuest(state: GameState, questId: QuestId): boolean {
+export function acceptQuest(state: GameState, questId: QuestId, actor: PlayerState): boolean {
   if (state.quests[questId].status !== 'available') return false;
   state.quests[questId].status = 'active';
   if (state.trackedQuestId === null) state.trackedQuestId = questId;
   emit(state, { type: 'quest_started', questId });
-  updateQuests(state);
+  updateQuests(state, actor);
   return true;
 }
 
 /** Hand in a ready quest. Returns false when its objectives are not all met. */
-export function turnInQuest(state: GameState, questId: QuestId): boolean {
-  updateQuests(state);
+export function turnInQuest(state: GameState, questId: QuestId, actor: PlayerState): boolean {
+  updateQuests(state, actor);
   if (state.quests[questId].status !== 'ready') return false;
-  completeQuest(state, questId);
-  updateQuests(state);
+  completeQuest(state, questId, actor);
+  updateQuests(state, actor);
   return true;
 }

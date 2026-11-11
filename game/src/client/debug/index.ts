@@ -6,17 +6,19 @@ import { BOT_SEED, createBotDriver } from '../../bot/bot.ts';
 import type { App } from '../app.ts';
 import { subjectFromState } from '../camera.ts';
 import type { DebugParameters } from './parameters.ts';
-import { gameAtQuest, stageShot } from './staging.ts';
+import { addIdleCrew, gameAtQuest, stageShot } from './staging.ts';
 
 export function applyDebugParameters(app: App, parameters: DebugParameters): void {
   const session = app.session;
   const seed = parameters.seed ?? BOT_SEED;
   const lines: string[] = [];
   app.debugSource = () => lines;
+  // New games from the lobby get the same crew.
+  session.crewSize = parameters.crew;
 
   if (parameters.shot) {
     const shot = stageShot(parameters.shot, seed);
-    if (shot.state) session.adoptGame(shot.state);
+    if (shot.state) session.adoptGame(addIdleCrew(shot.state, parameters.crew));
     if (shot.panel) session.handleIntent({ type: 'open_panel', panel: shot.panel });
     if (shot.state) {
       // Run one frame so the camera snaps behind the subject, then place it.
@@ -34,12 +36,16 @@ export function applyDebugParameters(app: App, parameters: DebugParameters): voi
   }
 
   if (parameters.atQuest !== null) {
-    session.adoptGame(gameAtQuest(seed, parameters.atQuest));
+    session.adoptGame(addIdleCrew(gameAtQuest(seed, parameters.atQuest), parameters.crew));
     lines.push(`started at quest ${parameters.atQuest}, seed ${seed}`);
+  } else if (parameters.crew > 1 && !parameters.bot) {
+    // `?crew=N` alone: straight into a new game with the crew aboard.
+    session.adoptGame(addIdleCrew(gameAtQuest(seed, 1), parameters.crew));
   }
+  if (parameters.crew > 1) lines.push(`crew of ${parameters.crew}: ${parameters.crew - 1} idle`);
 
   if (parameters.bot) {
-    if (!session.game) session.adoptGame(gameAtQuest(seed, 1));
+    if (!session.game) session.adoptGame(addIdleCrew(gameAtQuest(seed, 1), parameters.crew));
     const game = session.game;
     if (!game) return;
     let lastAction = 'starting';

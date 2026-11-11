@@ -4,7 +4,7 @@
  */
 import type { SlotSummary } from '../../save/index.ts';
 import type { InputAction, Settings } from '../../settings/index.ts';
-import type { GameState } from '../../sim/index.ts';
+import type { GameState, PlayerId } from '../../sim/index.ts';
 import { topPanel } from '../panels.ts';
 import type { PanelId, PanelState } from '../panels.ts';
 import {
@@ -31,6 +31,8 @@ export interface InterfaceModelInput {
   settings: Settings;
   /** The game being played, or null in the lobby. */
   game: GameState | null;
+  /** The player this screen belongs to: the HUD and the panels are theirs. Player 0 when left out. */
+  playerId?: PlayerId;
   paused: boolean;
   /** Bearing the camera looks along, radians. */
   cameraYaw: number;
@@ -64,6 +66,7 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
     },
   };
   const game = input.game;
+  const playerId = input.playerId ?? 0;
   switch (panel) {
     case 'settings':
       return { ...frame, ...buildSettingsPanel(input.settings, input.panels.settingsTab, input.capture, input.bindingNotice) };
@@ -76,17 +79,17 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
     case 'save_slots':
       return { ...frame, ...buildSaveSlotsPanel(input.slots, input.now, input.currentSlot) };
     case 'inventory':
-      return game ? { ...frame, ...buildInventoryPanel(game) } : null;
+      return game ? { ...frame, ...buildInventoryPanel(game, playerId) } : null;
     case 'crafting':
-      return game ? { ...frame, ...buildCraftingPanel(game) } : null;
+      return game ? { ...frame, ...buildCraftingPanel(game, playerId) } : null;
     case 'canoe_builder':
-      return game ? { ...frame, ...buildCanoeBuilderPanel(game) } : null;
+      return game ? { ...frame, ...buildCanoeBuilderPanel(game, playerId) } : null;
     case 'quest_log':
       return game ? { ...frame, ...buildQuestLogPanel(game) } : null;
     case 'map':
-      return game ? { ...frame, ...buildMapPanel(game) } : null;
+      return game ? { ...frame, ...buildMapPanel(game, playerId) } : null;
     case 'dialogue': {
-      const body = game ? buildDialoguePanel(game) : null;
+      const body = game ? buildDialoguePanel(game, playerId) : null;
       return body ? { ...frame, ...body } : null;
     }
     case 'confirm':
@@ -105,7 +108,7 @@ export function buildInterfaceModel(input: InterfaceModelInput): InterfaceModel 
     patternedMeters: settings.accessibility.patternedMeters,
     paused: input.paused,
     lobby: panels.screen === 'lobby' ? buildLobbyModel(input.slots, input.latestSlot) : null,
-    hud: game ? buildHudModel(game, settings, input.cameraYaw) : null,
+    hud: game ? buildHudModel(game, settings, input.cameraYaw, input.playerId ?? 0) : null,
     toasts: input.toasts,
     panel: beneath ? buildPanelModel(beneath, input) : null,
     openPanels: [...panels.stack],

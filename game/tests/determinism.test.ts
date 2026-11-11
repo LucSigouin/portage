@@ -31,8 +31,8 @@ function scriptedInput(tick: number, state: GameState): { input: StepInput; comm
   } else if (phase <= 5) {
     const nodes = NODES_BY_ISLAND.home_knoll;
     const target = nodes[Math.floor(tick / 420) % nodes.length].position;
-    const offsetX = target.x - state.player.position.x;
-    const offsetZ = target.z - state.player.position.z;
+    const offsetX = target.x - state.players[0].position.x;
+    const offsetZ = target.z - state.players[0].position.z;
     const range = Math.max(1, Math.hypot(offsetX, offsetZ));
     input = {
       ...NEUTRAL_INPUT, moveX: range > 1.5 ? offsetX / range : 0, moveY: range > 1.5 ? -offsetZ / range : 0,

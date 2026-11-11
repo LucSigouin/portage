@@ -43,11 +43,11 @@ async function read(page: Page): Promise<Snapshot> {
     const game = session.game;
     return {
       screen: session.screen,
-      mode: game ? game.player.mode : 'none',
+      mode: game ? game.players[0].mode : 'none',
       x: game ? game.canoe.position.x : 0,
       z: game ? game.canoe.position.z : 0,
-      playerX: game ? game.player.position.x : 0,
-      playerZ: game ? game.player.position.z : 0,
+      playerX: game ? game.players[0].position.x : 0,
+      playerZ: game ? game.players[0].position.z : 0,
       heading: game ? game.canoe.heading : 0,
       speed: game ? game.canoe.speed : 0,
       waterLevel: game ? game.canoe.waterLevel : 0,

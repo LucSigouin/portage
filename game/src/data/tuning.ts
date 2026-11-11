@@ -58,6 +58,8 @@ export const TUNING = {
     paddleSpeed: 2.2,
     powerStrokeSpeed: 3.2,
     backPaddleSpeed: 1.2,
+    /** Every paddler after the strongest adds this share of their own stroke. Four paddlers: 1.75x. */
+    extraPaddlerShare: 0.25,
     sailMaximumSpeed: 5,
     /** Speed closes on its target at this rate per second. */
     thrustResponse: 1.2,

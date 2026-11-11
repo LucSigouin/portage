@@ -66,7 +66,7 @@ describe('map', () => {
     expect(chart.islands.every((island) => island.discovered)).toBe(true);
     expect(chart.markers.filter((marker) => marker.kind === 'survivor').map((marker) => marker.label)).toEqual(['Odile', 'Wren', 'Tink']);
     const steeple = chart.islands.find((island) => island.islandId === 'steeple_rock')!;
-    expect(steeple.distance).toBeCloseTo(Math.hypot(40 - state.player.position.x, 250 - state.player.position.z), 6);
+    expect(steeple.distance).toBeCloseTo(Math.hypot(40 - state.players[0].position.x, 250 - state.players[0].position.z), 6);
     expect(Math.abs(steeple.bearing!)).toBeLessThan(0.1); // almost due north of the start
   });
 });
@@ -75,7 +75,7 @@ describe('hud', () => {
   it('reports meters, shelter and warnings', () => {
     const state = newGame();
     state.canoe.waterLevel = 75;
-    state.player.thirst = 10;
+    state.players[0].thirst = 10;
     expect(selectMeters(state)).toMatchObject({
       hunger: 80, thirst: 10, energy: 90, energyCap: 100, waterLevel: 75, sheltered: false,
       low: { hunger: false, thirst: true, energy: false, swamping: true },

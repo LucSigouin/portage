@@ -10,6 +10,12 @@
  *   reports clicks as typed intents.
  * - `AudioEngine`: the sound. Shipped by `src/audio/`.
  *
+ * The game has a crew of one to four players. This screen plays one of them,
+ * the local player (`Session.localPlayerId`): the keys drive them, the
+ * interface model is built for them, and the sound and the toasts get their
+ * events plus the crew-wide ones. The world view gets every event, and reads
+ * the players through `crewOf(state)` in `look/crew.ts`.
+ *
  * None of them holds game rules or changes game state. To swap the greybox
  * for the real thing, implement the interface and pass it to `createApp` in
  * `src/main.ts`. Nothing else changes.
@@ -17,7 +23,7 @@
  * ## One frame, in order
  *
  * 1. The session steps the simulation (unless paused) and drains its events once.
- * 2. `audio.handleEvents(events)`, then `audio.update(state, frameSeconds)`.
+ * 2. `audio.handleEvents(ownEvents)`, then `audio.update(state, frameSeconds, localPlayerId)`.
  * 3. `worldView.sync(state, frame)`, then `worldView.handleEvents(events)`.
  * 4. `worldView.render(cameraPose)`.
  * 5. `gameInterface.update(model)`.
@@ -108,7 +114,7 @@ export interface GameInterface {
 /**
  * The sound engine: `AudioEngine` from `src/audio/index.ts`, made with
  * `createAudioEngine()`. The app calls, per frame, `handleEvents(events)`
- * then `update(state, frameSeconds)`; `setScene` when the screen, the pause
+ * then `update(state, frameSeconds, localPlayerId)`; `setScene` when the screen, the pause
  * state or the credits change; `setVolumes` at start and on every settings
  * change; `playInterface` for UI sounds; `suspend` and `resume` with the
  * tab's visibility. `unlock()` is called from the first key press or click.

@@ -32,7 +32,7 @@ describe('talking to survivors', () => {
     expect(first.options).toHaveLength(1);
     expect(dispatch(state, { type: 'choose_dialogue_option', optionIndex: 0 }).ok).toBe(true);
     expect(state.flags.wren_taught_sailcloth).toBe(true);
-    expect(countIn(state.player.backpack, 'cloth')).toBe(4);
+    expect(countIn(state.players[0].backpack, 'cloth')).toBe(4);
     expect(selectDialogue(state)!.text).toContain('flat seam');
     dispatch(state, { type: 'choose_dialogue_option', optionIndex: 0 }); // to the hub
     const hub = selectDialogue(state)!;
@@ -42,7 +42,7 @@ describe('talking to survivors', () => {
     // Second visit opens on the hub: no second gift.
     dispatch(state, { type: 'talk', npcId: 'wren' });
     expect(selectDialogue(state)!.text).toContain('Six bells');
-    expect(countIn(state.player.backpack, 'cloth')).toBe(4);
+    expect(countIn(state.players[0].backpack, 'cloth')).toBe(4);
   });
 
   it('has Tink give the wrench', () => {
@@ -50,7 +50,7 @@ describe('talking to survivors', () => {
     beside(state, 'tink');
     dispatch(state, { type: 'talk', npcId: 'tink' });
     dispatch(state, { type: 'choose_dialogue_option', optionIndex: 0 });
-    expect(state.player.tools).toContain('wrench');
+    expect(state.players[0].tools).toContain('wrench');
     expect(state.flags.tink_gave_wrench).toBe(true);
   });
 
@@ -59,7 +59,7 @@ describe('talking to survivors', () => {
     beside(state, 'odile');
     dispatch(state, { type: 'talk', npcId: 'odile' });
     dispatch(state, { type: 'choose_dialogue_option', optionIndex: 0 }); // meet: apples
-    expect(countIn(state.player.backpack, 'apple')).toBe(4);
+    expect(countIn(state.players[0].backpack, 'apple')).toBe(4);
     dispatch(state, { type: 'choose_dialogue_option', optionIndex: 0 }); // to the hub
     const texts = (): string[] => selectDialogue(state)!.options.map((option) => option.text);
     expect(texts()).toContain('Can I help with the orchard?');
@@ -78,8 +78,8 @@ describe('talking to survivors', () => {
     const handIn = selectDialogue(state)!.options.find((option) => option.text === 'I brought your apples.')!;
     expect(dispatch(state, { type: 'choose_dialogue_option', optionIndex: handIn.index }).ok).toBe(true);
     expect(state.quests.odile_windfall.status).toBe('completed');
-    expect(countIn(state.player.backpack, 'apple')).toBe(0);
-    expect(countIn(state.player.backpack, 'seeds')).toBe(4);
+    expect(countIn(state.players[0].backpack, 'apple')).toBe(0);
+    expect(countIn(state.players[0].backpack, 'seeds')).toBe(4);
     dispatch(state, { type: 'choose_dialogue_option', optionIndex: 0 });
     expect(texts()).toContain('Those empty jars on the sill?');
   });
@@ -89,9 +89,9 @@ describe('talking to survivors', () => {
     beside(state, 'wren');
     give(state, 'berries', 1);
     dispatch(state, { type: 'talk', npcId: 'wren' });
-    const before = { ...state.player.position };
+    const before = { ...state.players[0].position };
     const events = run(state, { moveX: 1, run: true }, 2);
-    expect(state.player.position).toEqual(before);
+    expect(state.players[0].position).toEqual(before);
     expect(dispatch(state, { type: 'eat', itemId: 'berries' })).toMatchObject({ ok: false, reason: 'in_dialogue' });
     expect(dispatch(state, { type: 'choose_dialogue_option', optionIndex: 9 })).toMatchObject({ ok: false, reason: 'invalid_option' });
     expect(dispatch(state, { type: 'end_dialogue' }).ok).toBe(true);
@@ -99,7 +99,7 @@ describe('talking to survivors', () => {
     expect(dispatch(state, { type: 'choose_dialogue_option', optionIndex: 0 })).toMatchObject({ ok: false, reason: 'no_dialogue_open' });
     expect(events.every((event) => event.type !== 'dialogue_closed')).toBe(true);
     run(state, { moveX: 1 }, 1);
-    expect(state.player.position.x).toBeGreaterThan(before.x + 2);
+    expect(state.players[0].position.x).toBeGreaterThan(before.x + 2);
   });
 
   it('counts a conversation toward "meet" objectives', () => {

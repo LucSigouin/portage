@@ -2,10 +2,10 @@
 import { ISLANDS_BY_ID, ITEMS, REGIONS_BY_ID, WEATHER } from '../../data/index.ts';
 import type { Settings } from '../../settings/index.ts';
 import {
-  bearingBetween, bearingDifference, selectActiveQuests, selectCanoeStats, selectInteractable, selectMap,
+  bearingBetween, bearingDifference, playerOf, selectActiveQuests, selectCanoeStats, selectInteractable, selectMap,
   selectMeters, selectTimeOfDay, selectWeather,
 } from '../../sim/index.ts';
-import type { GameState, QuestView } from '../../sim/index.ts';
+import type { GameState, PlayerId, QuestView } from '../../sim/index.ts';
 import { bearingDegrees, cardinalName, distanceText, durationText, primaryKey } from './format.ts';
 import type {
   CompassMarkModel, CompassModel, HotbarSlotModel, HudModel, MeterModel, ObjectiveRowModel, PromptModel,
@@ -23,8 +23,8 @@ export function objectiveRows(quest: QuestView): ObjectiveRowModel[] {
   }));
 }
 
-function buildMeters(state: GameState): MeterModel[] {
-  const meters = selectMeters(state);
+function buildMeters(state: GameState, playerId: PlayerId): MeterModel[] {
+  const meters = selectMeters(state, playerId);
   return [
     { id: 'hunger', label: 'Hunger', value: Math.round(meters.hunger), cap: 100, low: meters.low.hunger, pattern: 'stripes' },
     { id: 'thirst', label: 'Thirst', value: Math.round(meters.thirst), cap: 100, low: meters.low.thirst, pattern: 'waves' },
@@ -32,10 +32,10 @@ function buildMeters(state: GameState): MeterModel[] {
   ];
 }
 
-function buildWaterGauge(state: GameState): WaterGaugeModel {
-  const meters = selectMeters(state);
+function buildWaterGauge(state: GameState, playerId: PlayerId): WaterGaugeModel {
+  const meters = selectMeters(state, playerId);
   const stats = selectCanoeStats(state);
-  const aboard = state.player.mode === 'canoe';
+  const aboard = playerOf(state, playerId).mode === 'canoe';
   const gain = stats.leakPerSecond + stats.floodPerSecond;
   const afloat = aboard && !state.canoe.beached;
   const rate = (afloat ? gain : 0) - (state.canoe.bailing ? stats.bailPerSecond : 0);
@@ -54,8 +54,8 @@ function buildWaterGauge(state: GameState): WaterGaugeModel {
   };
 }
 
-function buildHotbar(state: GameState, settings: Settings): HotbarSlotModel[] {
-  const { tools, selectedTool } = state.player;
+function buildHotbar(state: GameState, settings: Settings, playerId: PlayerId): HotbarSlotModel[] {
+  const { tools, selectedTool } = playerOf(state, playerId);
   return HOTBAR_ACTIONS.map((action, index) => {
     const toolId = tools[index] ?? null;
     const selected = toolId !== null && toolId === selectedTool;
@@ -80,8 +80,8 @@ function buildTracker(state: GameState): QuestTrackerModel | null {
   };
 }
 
-function buildCompass(state: GameState, cameraYaw: number, trackedQuestId: string | null): CompassModel {
-  const { x, z } = state.player.position;
+function buildCompass(state: GameState, cameraYaw: number, trackedQuestId: string | null, playerId: PlayerId): CompassModel {
+  const { x, z } = playerOf(state, playerId).position;
   const mark = (id: string, kind: CompassMarkModel['kind'], label: string, bearing: number, distance: number | null): CompassMarkModel => ({
     id, kind, label,
     bearingDegrees: bearingDegrees(bearing),
@@ -94,7 +94,7 @@ function buildCompass(state: GameState, cameraYaw: number, trackedQuestId: strin
     mark('south', 'cardinal', 'S', Math.PI, null),
     mark('west', 'cardinal', 'W', -Math.PI / 2, null),
   ];
-  for (const marker of selectMap(state).markers) {
+  for (const marker of selectMap(state, playerId).markers) {
     const distance = Math.hypot(marker.position.x - x, marker.position.z - z);
     const bearing = bearingBetween(x, z, marker.position.x, marker.position.z);
     if (marker.kind === 'quest' && marker.questId === trackedQuestId) marks.push(mark('quest', 'quest', marker.label, bearing, distance));
@@ -103,8 +103,8 @@ function buildCompass(state: GameState, cameraYaw: number, trackedQuestId: strin
   return { headingDegrees: bearingDegrees(cameraYaw), cardinal: cardinalName(cameraYaw, 8), marks };
 }
 
-function buildPrompt(state: GameState, settings: Settings): PromptModel | null {
-  const interactable = selectInteractable(state);
+function buildPrompt(state: GameState, settings: Settings, playerId: PlayerId): PromptModel | null {
+  const interactable = selectInteractable(state, playerId);
   if (!interactable) return null;
   const keyLabel = primaryKey(settings.controls.keyBindings, 'interact');
   if (interactable.kind !== 'node') return { text: interactable.prompt, keyLabel, mode: 'press', progress: 0 };
@@ -116,8 +116,8 @@ function buildPrompt(state: GameState, settings: Settings): PromptModel | null {
   };
 }
 
-function buildCanoeLines(state: GameState): { text: string; tone: Tone }[] {
-  if (state.player.mode !== 'canoe') return [];
+function buildCanoeLines(state: GameState, playerId: PlayerId): { text: string; tone: Tone }[] {
+  if (playerOf(state, playerId).mode !== 'canoe') return [];
   const stats = selectCanoeStats(state);
   const canoe = state.canoe;
   const lines: { text: string; tone: Tone }[] = [];
@@ -139,44 +139,49 @@ function buildCanoeLines(state: GameState): { text: string; tone: Tone }[] {
   return lines;
 }
 
-function buildHint(state: GameState, settings: Settings): string | null {
+function buildHint(state: GameState, settings: Settings, playerId: PlayerId): string | null {
   if (!settings.gameplay.hints) return null;
   const bindings = settings.controls.keyBindings;
-  const meters = selectMeters(state);
-  const aboard = state.player.mode === 'canoe';
-  if (aboard && !state.canoe.beached && meters.waterLevel >= 40 && !state.canoe.bailing) {
+  const meters = selectMeters(state, playerId);
+  const player = playerOf(state, playerId);
+  const aboard = player.mode === 'canoe';
+  if (aboard && !state.canoe.beached && meters.waterLevel >= 40 && !player.bailing) {
     return `Hold ${primaryKey(bindings, 'bail')} to bail.`;
   }
   if (meters.low.thirst) return `Thirsty. Drink from the inventory (${primaryKey(bindings, 'inventory')}); boil water at a fire first.`;
   if (meters.low.hunger) return `Hungry. Eat from the inventory (${primaryKey(bindings, 'inventory')}).`;
   if (meters.low.energy) return 'Worn out. Stand still to rest, or sleep at a camp.';
-  if (!aboard && state.player.backpack.length >= 8) return 'Backpack full. Stow it in the canoe from the inventory.';
+  if (!aboard && player.backpack.length >= 8) return 'Backpack full. Stow it in the canoe from the inventory.';
   if (state.pendingRewards.length > 0) return `Rewards are waiting. Make room, then claim them in the inventory (${primaryKey(bindings, 'inventory')}).`;
   return null;
 }
 
-/** `cameraYaw` is the bearing the camera looks along; the compass turns with it. */
-export function buildHudModel(state: GameState, settings: Settings, cameraYaw: number): HudModel {
-  const time = selectTimeOfDay(state);
+/**
+ * The HUD of one player (`playerId`, player 0 by default). `cameraYaw` is the
+ * bearing the camera looks along; the compass turns with it.
+ */
+export function buildHudModel(state: GameState, settings: Settings, cameraYaw: number, playerId: PlayerId = 0): HudModel {
+  const player = playerOf(state, playerId);
+  const time = selectTimeOfDay(state, playerId);
   const weather = selectWeather(state);
   const tracker = buildTracker(state);
-  const island = state.player.mode === 'foot' && state.player.islandId ? ISLANDS_BY_ID[state.player.islandId].name : null;
+  const island = player.mode === 'foot' && player.islandId ? ISLANDS_BY_ID[player.islandId].name : null;
   const nextName = WEATHER[weather.nextKind].name.toLowerCase();
   return {
-    meters: buildMeters(state),
-    water: buildWaterGauge(state),
-    hotbar: buildHotbar(state, settings),
+    meters: buildMeters(state, playerId),
+    water: buildWaterGauge(state, playerId),
+    hotbar: buildHotbar(state, settings, playerId),
     tracker,
-    compass: buildCompass(state, cameraYaw, tracker?.questId ?? null),
-    prompt: buildPrompt(state, settings),
+    compass: buildCompass(state, cameraYaw, tracker?.questId ?? null, playerId),
+    prompt: buildPrompt(state, settings, playerId),
     clockText: `Day ${time.day}, ${time.clock}`,
     night: time.isNight,
     weatherText: weather.nextKind === weather.kind
       ? weather.name
       : `${weather.name}, ${nextName} in ${durationText(weather.secondsUntilChange)}`,
     stormWarning: weather.nextKind === 'storm' && weather.kind !== 'storm' && weather.secondsUntilChange <= 90,
-    placeText: island ?? REGIONS_BY_ID[state.player.regionId].name,
-    canoeLines: buildCanoeLines(state),
-    hint: buildHint(state, settings),
+    placeText: island ?? REGIONS_BY_ID[player.regionId].name,
+    canoeLines: buildCanoeLines(state, playerId),
+    hint: buildHint(state, settings, playerId),
   };
 }

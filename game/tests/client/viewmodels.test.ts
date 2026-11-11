@@ -57,14 +57,14 @@ describe('wording', () => {
 describe('the HUD', () => {
   it('shows three meters with low warnings and the starving cap', () => {
     const state = newGame();
-    state.player.hunger = 20.4;
-    state.player.thirst = 60;
+    state.players[0].hunger = 20.4;
+    state.players[0].thirst = 60;
     const hud = buildHudModel(state, settings, 0);
     expect(hud.meters.map((meter) => [meter.id, meter.value, meter.low])).toEqual([
       ['hunger', 20, true], ['thirst', 60, false], ['energy', 90, false],
     ]);
     expect(hud.meters[2].cap).toBe(100);
-    state.player.hunger = 0;
+    state.players[0].hunger = 0;
     expect(buildHudModel(state, settings, 0).meters[2].cap).toBe(40);
     // Three different patterns, for the patterned-meters setting.
     expect(new Set(hud.meters.map((meter) => meter.pattern)).size).toBe(3);
@@ -85,7 +85,7 @@ describe('the HUD', () => {
   it('lays the tool belt on five hotbar slots with the bound keys', () => {
     const state = newGame();
     give(state, 'stone_knife');
-    state.player.selectedTool = 'stone_knife';
+    state.players[0].selectedTool = 'stone_knife';
     const hotbar = buildHudModel(state, settings, 0).hotbar;
     expect(hotbar).toHaveLength(5);
     expect(hotbar[0]).toMatchObject({ number: 1, keyLabel: '1', toolId: 'bailing_can', name: 'Bailing can', selected: false });
@@ -365,7 +365,7 @@ describe('the panels', () => {
     const state = newGame();
     expect(buildDialoguePanel(state)).toBeNull();
     standOn(state, 'orchard_hill');
-    state.dialogue = { npcId: 'odile', nodeId: 'meet' };
+    state.players[0].dialogue = { npcId: 'odile', nodeId: 'meet' };
     const panel = buildDialoguePanel(state)!;
     expect(panel.speaker).toBe('Odile');
     expect(panel.text).toContain('A canoe');

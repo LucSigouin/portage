@@ -11,9 +11,9 @@
 import { ISLANDS_BY_ID } from '../data/index.ts';
 import type { RegionId, WeatherKind } from '../data/index.ts';
 import {
-  FIXED_STEP, nearestIsland, selectInventory, selectMeters, selectTimeOfDay, selectWeather, waterRoughnessAt,
+  FIXED_STEP, nearestIsland, playerOf, selectInventory, selectMeters, selectTimeOfDay, selectWeather, waterRoughnessAt,
 } from '../sim/index.ts';
-import type { GameState } from '../sim/index.ts';
+import type { GameState, PlayerId } from '../sim/index.ts';
 import { SCAVENGE_INTERVAL, scavengeRequest } from './cues.ts';
 import type { CueRequest } from './cues.ts';
 import type { AudioGraph, NoiseColor, SmoothedParameter } from './graph.ts';
@@ -170,8 +170,9 @@ const TELEPORT_SPEED = 8;
  * holds it. Under sail the two cannot be told apart, so only a power stroke
  * (which the state does flag) counts as paddling there.
  */
-export function deriveLayerInputs(state: GameState, memory: DeriveMemory, frameSeconds: number): LayerInputs {
-  const { player, canoe } = state;
+export function deriveLayerInputs(state: GameState, memory: DeriveMemory, frameSeconds: number, playerId: PlayerId = 0): LayerInputs {
+  const player = playerOf(state, playerId);
+  const canoe = state.canoe;
   const weather = selectWeather(state);
   const aboard = player.mode === 'canoe';
   if (!memory.initialised || state.tick < memory.tick) {
@@ -189,7 +190,7 @@ export function deriveLayerInputs(state: GameState, memory: DeriveMemory, frameS
   if (steppedSeconds > 0) {
     const speed = Math.abs(canoe.speed);
     const change = (speed - Math.abs(memory.canoeSpeed)) / steppedSeconds;
-    const held = aboard && !canoe.bailing && !canoe.sailRaised && speed > 0.25 && change > -0.3 * speed;
+    const held = aboard && !player.bailing && !canoe.sailRaised && speed > 0.25 && change > -0.3 * speed;
     memory.paddleConfidence = clamp(memory.paddleConfidence + ((held ? 1 : -1) * steppedSeconds) / 0.3, 0, 1);
     const walked = Math.hypot(player.position.x - memory.footX, player.position.z - memory.footZ) / steppedSeconds;
     memory.footSpeed = aboard || walked > TELEPORT_SPEED ? 0 : walked;
@@ -202,14 +203,14 @@ export function deriveLayerInputs(state: GameState, memory: DeriveMemory, frameS
   memory.slowCountdown -= frameSeconds;
   if (memory.slowCountdown <= 0) {
     memory.slowCountdown = SLOW_LOOKUP_SECONDS;
-    memory.nearFire = selectInventory(state).stations.includes('fire');
+    memory.nearFire = selectInventory(state, playerId).stations.includes('fire');
     const island = ISLANDS_BY_ID[nearestIsland(player.position.x, player.position.z)];
     const offshore = Math.hypot(player.position.x - island.center.x, player.position.z - island.center.z)
       - Math.max(island.radiusX, island.radiusZ);
     memory.openWater = aboard ? clamp((offshore - 20) / 160, 0, 1) : 0;
   }
 
-  const powerStroke = aboard && player.exerting && !canoe.bailing;
+  const powerStroke = aboard && player.exerting && !player.bailing;
   return {
     roughness: waterRoughnessAt(player.position.x, player.position.z, weather.stormLevel),
     windSpeed: weather.windSpeed,
@@ -223,8 +224,8 @@ export function deriveLayerInputs(state: GameState, memory: DeriveMemory, frameS
     aboard,
     canoeSpeed: canoe.speed,
     paddling: powerStroke ? 'power' : memory.paddleConfidence > 0.5 ? 'paddle' : 'none',
-    bailing: canoe.bailing,
-    hullWater: selectMeters(state).waterLevel / 100,
+    bailing: aboard && canoe.bailing,
+    hullWater: selectMeters(state, playerId).waterLevel / 100,
     nearCanoe: aboard || Math.hypot(player.position.x - canoe.position.x, player.position.z - canoe.position.z) < 8,
     nearFire: memory.nearFire,
     onFoot: !aboard,

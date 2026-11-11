@@ -9,8 +9,8 @@ import {
 } from './inventory.ts';
 import { questGateOpen, updateQuests } from './quests.ts';
 import { nextRandom, randomInteger } from './random.ts';
-import { findStandingSpot } from './world.ts';
-import type { Command, GameState, Missing, NodeState } from './types.ts';
+import { findStandingSpot, terrainHeight } from './world.ts';
+import type { Command, GameState, Missing, NodeState, PlayerState } from './types.ts';
 
 const CANOE_NODES = NODES.filter((definition) => definition.reach === 'canoe');
 
@@ -52,18 +52,18 @@ export function actionReady(state: GameState, nodeId: NodeId, actionIndex: numbe
 }
 
 /** What a node action still needs: tool, attachment or quest progress. */
-function actionMissing(state: GameState, definition: NodeDefinition, actionIndex: number): Missing {
+function actionMissing(state: GameState, player: PlayerState, definition: NodeDefinition, actionIndex: number): Missing {
   const action = definition.actions[actionIndex];
   const missing = emptyMissing();
-  if (action.tool && !hasTool(state, action.tool)) missing.tools.push(action.tool);
+  if (action.tool && !hasTool(player, action.tool)) missing.tools.push(action.tool);
   if (action.attachment && !hasAttachment(state, action.attachment)) missing.attachments.push(action.attachment);
   return missing;
 }
 
-function actionAllowed(state: GameState, definition: NodeDefinition, actionIndex: number): boolean {
+function actionAllowed(state: GameState, player: PlayerState, definition: NodeDefinition, actionIndex: number): boolean {
   const action = definition.actions[actionIndex];
   if (action.questGate && !questGateOpen(state, action.questGate, definition.id)) return false;
-  return !hasMissing(actionMissing(state, definition, actionIndex));
+  return !hasMissing(actionMissing(state, player, definition, actionIndex));
 }
 
 /**
@@ -72,24 +72,28 @@ function actionAllowed(state: GameState, definition: NodeDefinition, actionIndex
  * selected tool, then the first action the player can do, then the first one
  * still available (reported with what it is missing).
  */
-export function chooseNodeAction(state: GameState, definition: NodeDefinition): { actionIndex: number; allowed: boolean } | null {
+export function chooseNodeAction(
+  state: GameState,
+  player: PlayerState,
+  definition: NodeDefinition,
+): { actionIndex: number; allowed: boolean } | null {
   const nodeState = state.nodes[definition.id];
   if (nodeState && nodeState.leftover.length > 0) return { actionIndex: PICK_UP_ACTION, allowed: true };
   const ready = definition.actions.map((_, index) => index).filter((index) => actionReady(state, definition.id, index));
   if (ready.length === 0) return null;
-  const selectedTool = state.player.selectedTool;
+  const selectedTool = player.selectedTool;
   const selected = ready.find((index) => selectedTool !== null && definition.actions[index].tool === selectedTool
-    && actionAllowed(state, definition, index));
+    && actionAllowed(state, player, definition, index));
   if (selected !== undefined) return { actionIndex: selected, allowed: true };
-  const allowed = ready.find((index) => actionAllowed(state, definition, index));
+  const allowed = ready.find((index) => actionAllowed(state, player, definition, index));
   if (allowed !== undefined) return { actionIndex: allowed, allowed: true };
   return { actionIndex: ready[0], allowed: false };
 }
 
-function nodeInteractable(state: GameState, definition: NodeDefinition, distance: number): Interactable | null {
-  const choice = chooseNodeAction(state, definition);
+function nodeInteractable(state: GameState, player: PlayerState, definition: NodeDefinition, distance: number): Interactable | null {
+  const choice = chooseNodeAction(state, player, definition);
   if (!choice) return null;
-  const harvest = state.player.harvest;
+  const harvest = player.harvest;
   const holding = harvest !== null && harvest.nodeId === definition.id && harvest.actionIndex === choice.actionIndex;
   if (choice.actionIndex === PICK_UP_ACTION) {
     return {
@@ -99,7 +103,7 @@ function nodeInteractable(state: GameState, definition: NodeDefinition, distance
     };
   }
   const action = definition.actions[choice.actionIndex];
-  const missing = actionMissing(state, definition, choice.actionIndex);
+  const missing = actionMissing(state, player, definition, choice.actionIndex);
   let prompt = `${action.verb}: ${definition.name}`;
   if (!choice.allowed) {
     if (missing.tools.length > 0) prompt = `${definition.name} needs ${ITEMS[missing.tools[0]].name.toLowerCase()}`;
@@ -126,23 +130,49 @@ export function distanceToHull(state: GameState, x: number, z: number): number {
   return Math.hypot(offsetX - forwardX * alongHull, offsetZ - forwardZ * alongHull);
 }
 
-/** Where the player would step ashore from the canoe, or null. */
-export function disembarkSpot(state: GameState): { x: number; z: number } | null {
-  const canoe = state.canoe;
-  const forwardX = Math.sin(canoe.heading);
-  const forwardZ = -Math.cos(canoe.heading);
+/** Where someone would step ashore from a hull lying at this point and heading, or null. */
+export function shoreSpotBeside(x: number, z: number, heading: number): { x: number; z: number } | null {
+  const forwardX = Math.sin(heading);
+  const forwardZ = -Math.cos(heading);
   const reach = TUNING.canoe.disembarkReach;
   for (const alongHull of [2.2, 0, -2.2]) {
-    const spot = findStandingSpot(canoe.position.x + forwardX * alongHull, canoe.position.z + forwardZ * alongHull, reach);
+    const spot = findStandingSpot(x + forwardX * alongHull, z + forwardZ * alongHull, reach);
     if (spot) return spot;
   }
   return null;
 }
 
-/** The nearest thing the interact key would act on, or null. */
-export function findInteractable(state: GameState): Interactable | null {
-  if (state.dialogue) return null;
-  const player = state.player;
+/** Where a player would step ashore from the canoe, or null. */
+export function disembarkSpot(state: GameState): { x: number; z: number } | null {
+  return shoreSpotBeside(state.canoe.position.x, state.canoe.position.z, state.canoe.heading);
+}
+
+/** Largest distance at which two people on foot count as standing on the same spot, metres. */
+const ELBOW_ROOM = 0.6;
+
+/**
+ * A spot beside `spot` that no other player is standing on, so a crew stepping
+ * ashore does not pile onto one point. Alone, or with the spot free, it is `spot`.
+ */
+export function clearSpot(state: GameState, player: PlayerState, spot: { x: number; z: number }): { x: number; z: number } {
+  const crowded = (x: number, z: number): boolean => state.players.some((other) => other !== player && other.mode === 'foot'
+    && Math.hypot(other.position.x - x, other.position.z - z) < ELBOW_ROOM);
+  if (!crowded(spot.x, spot.z)) return spot;
+  for (let step = 0; step < 8; step += 1) {
+    const angle = state.canoe.heading + (step / 8) * 2 * Math.PI;
+    const x = spot.x + Math.sin(angle) * 0.9;
+    const z = spot.z - Math.cos(angle) * 0.9;
+    if (terrainHeight(x, z) >= -TUNING.foot.disembarkDepth && !crowded(x, z)) return { x, z };
+  }
+  return spot;
+}
+
+/** The nearest thing the interact key would act on for this player, or null. */
+export function findInteractable(state: GameState, player: PlayerState): Interactable | null {
+  if (player.dialogue) return null;
+  if (player.asleep) {
+    return { kind: 'bed', name: 'Camp', prompt: 'Get up (waiting for the crew to sleep)', command: { type: 'wake' }, distance: 0 };
+  }
   let best: Interactable | null = null;
   const consider = (candidate: Interactable | null): void => {
     if (candidate && (!best || candidate.distance < best.distance)) best = candidate;
@@ -151,7 +181,7 @@ export function findInteractable(state: GameState): Interactable | null {
   if (player.mode === 'canoe') {
     for (const definition of CANOE_NODES) {
       const distance = Math.hypot(definition.position.x - state.canoe.position.x, definition.position.z - state.canoe.position.z);
-      if (distance <= TUNING.foot.canoeNodeRange) consider(nodeInteractable(state, definition, distance));
+      if (distance <= TUNING.foot.canoeNodeRange) consider(nodeInteractable(state, player, definition, distance));
     }
     if (!best && disembarkSpot(state)) {
       best = { kind: 'land', name: 'Shore', prompt: 'Land', command: { type: 'disembark' }, distance: 0 };
@@ -163,7 +193,7 @@ export function findInteractable(state: GameState): Interactable | null {
     for (const definition of NODES_BY_ISLAND[player.islandId]) {
       if (definition.reach !== 'foot') continue;
       const distance = Math.hypot(definition.position.x - player.position.x, definition.position.z - player.position.z);
-      if (distance <= TUNING.foot.nodeRange) consider(nodeInteractable(state, definition, distance));
+      if (distance <= TUNING.foot.nodeRange) consider(nodeInteractable(state, player, definition, distance));
     }
     for (const npcId of NPC_IDS) {
       const npc = NPCS[npcId];
@@ -174,7 +204,7 @@ export function findInteractable(state: GameState): Interactable | null {
         consider({ kind: 'npc', npcId, name: npc.name, prompt: `Talk to ${npc.name}`, command: { type: 'talk', npcId }, distance });
       }
     }
-    const camp = campInReach(state);
+    const camp = campInReach(player);
     if (camp?.camp?.sleep) {
       const position = spotPosition(camp, camp.camp.spot);
       const distance = Math.hypot(position.x - player.position.x, position.z - player.position.z);
@@ -220,24 +250,24 @@ function nodeStateFor(state: GameState, definition: NodeDefinition): NodeState {
   return nodeState;
 }
 
-function completeHarvest(state: GameState, definition: NodeDefinition, actionIndex: number): void {
+function completeHarvest(state: GameState, player: PlayerState, definition: NodeDefinition, actionIndex: number): void {
   const nodeState = nodeStateFor(state, definition);
   if (actionIndex === PICK_UP_ACTION) {
-    nodeState.leftover = grantItems(state, nodeState.leftover);
+    nodeState.leftover = grantItems(state, player, nodeState.leftover);
     return;
   }
   const action = definition.actions[actionIndex];
-  const leftover = grantItems(state, rollLoot(state, action.lootTableId));
+  const leftover = grantItems(state, player, rollLoot(state, action.lootTableId));
   for (const stack of leftover) {
     nodeState.leftover.push(stack);
-    emit(state, { type: 'item_left_behind', nodeId: definition.id, itemId: stack.itemId, count: stack.count });
+    emit(state, { type: 'item_left_behind', nodeId: definition.id, itemId: stack.itemId, count: stack.count }, player);
   }
   nodeState.readyAt[actionIndex] = action.respawnDays === null
     ? null
     : state.time + action.respawnDays * TUNING.time.daySeconds;
-  state.player.energy = Math.max(0, state.player.energy - action.energyCost);
+  player.energy = Math.max(0, player.energy - action.energyCost);
   state.statistics.nodesHarvested += 1;
-  emit(state, { type: 'node_depleted', nodeId: definition.id });
+  emit(state, { type: 'node_depleted', nodeId: definition.id }, player);
   if (definition.bottleId && !state.bottlesFound.includes(definition.bottleId)) {
     state.bottlesFound.push(definition.bottleId);
     emit(state, { type: 'bottle_found', bottleId: definition.bottleId });
@@ -246,26 +276,25 @@ function completeHarvest(state: GameState, definition: NodeDefinition, actionInd
     state.statistics.cachesHauled += 1;
     emit(state, { type: 'cache_hauled', nodeId: definition.id });
   }
-  updateQuests(state);
+  updateQuests(state, player);
 }
 
 /** Advance (or drop) the scavenge hold. Called every fixed step. */
-export function updateHarvest(state: GameState, interactHeld: boolean, deltaSeconds: number): void {
-  const player = state.player;
+export function updateHarvest(state: GameState, player: PlayerState, interactHeld: boolean, deltaSeconds: number): void {
   const pressed = interactHeld && !player.interactWasHeld;
   player.interactWasHeld = interactHeld;
-  if (!interactHeld || state.dialogue) {
+  if (!interactHeld || player.dialogue || player.asleep) {
     player.harvest = null;
     return;
   }
-  const target = findInteractable(state);
+  const target = findInteractable(state, player);
   if (!target || target.kind !== 'node') {
     player.harvest = null;
     return;
   }
   if (!target.available) {
     player.harvest = null;
-    if (pressed && target.missing) emit(state, { type: 'harvest_blocked', nodeId: target.nodeId, missing: target.missing });
+    if (pressed && target.missing) emit(state, { type: 'harvest_blocked', nodeId: target.nodeId, missing: target.missing }, player);
     return;
   }
   const definition = NODES_BY_ID[target.nodeId];
@@ -278,12 +307,12 @@ export function updateHarvest(state: GameState, interactHeld: boolean, deltaSeco
   }
   if (!player.harvest || player.harvest.nodeId !== target.nodeId || player.harvest.actionIndex !== target.actionIndex) {
     player.harvest = { nodeId: target.nodeId, actionIndex: target.actionIndex, progress: 0 };
-    emit(state, { type: 'harvest_started', nodeId: target.nodeId });
+    emit(state, { type: 'harvest_started', nodeId: target.nodeId }, player);
   }
   player.harvest.progress += deltaSeconds;
   if (player.harvest.progress >= target.holdSeconds - 1e-9) {
     const actionIndex = player.harvest.actionIndex;
     player.harvest = null;
-    completeHarvest(state, definition, actionIndex);
+    completeHarvest(state, player, definition, actionIndex);
   }
 }

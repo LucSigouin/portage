@@ -14,9 +14,9 @@ import {
 } from '../settings/index.ts';
 import type { InputAction, Settings, SettingsStorage } from '../settings/index.ts';
 import {
-  FIXED_STEP, NEUTRAL_INPUT, createGame, dispatch, drainEvents, selectInteractable, step,
+  FIXED_STEP, NEUTRAL_INPUT, createGame, dispatch, drainEvents, playerOf, selectInteractable, step,
 } from '../sim/index.ts';
-import type { Command, CommandResult, GameEvent, GameState, StepInput } from '../sim/index.ts';
+import type { Command, CommandResult, GameEvent, GameState, PlayerId, StepInput } from '../sim/index.ts';
 import { InputController } from './input.ts';
 import type { InputOutcome, InputSnapshot } from './input.ts';
 import type { InterfaceIntent, InterfaceSound } from './intents.ts';
@@ -38,7 +38,7 @@ export interface SessionOptions {
   randomSeed?: () => number;
 }
 
-/** Something that supplies the input for each fixed step in place of the keyboard: the bot. */
+/** Something that supplies player 0's input for each fixed step in place of the keyboard: the bot. */
 export interface StepDriver {
   /** Input for the next 1/60 s step, or null when it has nothing more to do. */
   next(): StepInput | null;
@@ -85,6 +85,13 @@ export class Session {
   panels: PanelState = createPanelState('lobby');
   /** The game being played, or null in the lobby. */
   game: GameState | null = null;
+  /**
+   * The player this screen plays: the keys drive them, commands are theirs and
+   * the view-models are built for them. Always 0 until the networking step.
+   */
+  localPlayerId: PlayerId = 0;
+  /** Players in a new game, 1 to 4 (`?crew=N`). The extra ones sit idle. */
+  crewSize = 1;
   /** The slot the game autosaves into. Null for a staged game that never saves. */
   slot: number | null = null;
   /** The scene behind the lobby: a game nobody plays. */
@@ -187,7 +194,7 @@ export class Session {
   /** Start a new game in a slot, replacing whatever was there. */
   newGame(slot: number): boolean {
     if (!Number.isInteger(slot) || slot < 0 || slot >= SAVE_SLOT_COUNT) return false;
-    const state = createGame(this.randomSeed(), { difficulty: this.settings.gameplay.difficulty });
+    const state = createGame(this.randomSeed(), { difficulty: this.settings.gameplay.difficulty, crew: this.crewSize });
     this.enterGame(state, slot);
     this.saveNow();
     return true;
@@ -300,7 +307,7 @@ export class Session {
       else this.stepWithKeys(game, seconds, cameraYaw);
     }
     const events = drainEvents(game);
-    this.applyPanels({ type: 'sync_dialogue', open: game.dialogue !== null }, true);
+    this.applyPanels({ type: 'sync_dialogue', open: playerOf(game, this.localPlayerId).dialogue !== null }, true);
     if (events.some((event) => event.type === 'game_completed')) {
       this.applyPanels({ type: 'close_all' }, true);
       this.applyPanels({ type: 'open', panel: 'credits' });
@@ -318,12 +325,20 @@ export class Session {
     this.lastInput = input;
     const before = game.playedSeconds;
     let remaining = seconds;
+    const inputs = this.crewInput(input, this.localPlayerId);
     while (remaining > 1e-9) {
       const chunk = Math.min(remaining, TUNING.maximumFrameSeconds);
-      step(game, input, chunk);
+      step(game, inputs, chunk);
       remaining -= chunk;
     }
     this.simulatedSeconds = game.playedSeconds - before;
+  }
+
+  /** One player's input as a crew's: everyone else holds still. */
+  private crewInput(input: StepInput, playerId: PlayerId): (StepInput | undefined)[] {
+    const inputs: (StepInput | undefined)[] = [];
+    inputs[playerId] = input;
+    return inputs;
   }
 
   private stepWithDriver(game: GameState, seconds: number): void {
@@ -361,7 +376,7 @@ export class Session {
    */
   dispatch(command: Command, quiet = false): CommandResult {
     if (!this.game) return { ok: false, reason: 'unknown_id', missing: null };
-    const result = dispatch(this.game, command);
+    const result = dispatch(this.game, command, this.localPlayerId);
     if (!result.ok && !quiet) {
       this.notice(failureText(result.reason, result.missing), 'warning');
       this.sound('error');
@@ -375,12 +390,13 @@ export class Session {
   inputSnapshot(): InputSnapshot | null {
     const game = this.game;
     if (!game || this.driver || this.paused || !allowsGameplayInput(this.panels)) return null;
+    const player = playerOf(game, this.localPlayerId);
     return {
-      mode: game.player.mode,
-      interactable: selectInteractable(game),
+      mode: player.mode,
+      interactable: selectInteractable(game, this.localPlayerId),
       sailRaised: game.canoe.sailRaised,
-      tools: game.player.tools,
-      selectedTool: game.player.selectedTool,
+      tools: player.tools,
+      selectedTool: player.selectedTool,
     };
   }
 
