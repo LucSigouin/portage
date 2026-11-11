@@ -229,7 +229,7 @@ export class CanoeView {
     // The leak: bilge water that rises with the water level.
     bilge.visible = canoe.waterLevel > 1;
     const flooded = canoe.waterLevel / 100;
-    bilge.position.y = 0.09 + flooded * (shape.HULL.D - 0.15);
+    bilge.position.y = shape.HULL.floor + 0.012 + flooded * (shape.HULL.D - shape.HULL.floor - 0.07);
     bilge.scale.set(1 + flooded * 0.55, 1, 1 + flooded * 0.5);
 
     // What each one is doing eases toward their own flags. A game just handed over (a load, a staged shot)

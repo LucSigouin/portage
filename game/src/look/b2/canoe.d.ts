@@ -4,7 +4,9 @@ export interface HullDimensions { length: number; beam: number; depth: number; d
 
 /** A hull lofted from the rules engine's dimensions, in B2's hull space: bow toward +z, y = 0 at the keel. */
 export interface HullShape {
-  HULL: { L: number; B: number; D: number; draft: number; seatZ: number; bowSeatZ: number; seatY: number; k: number };
+  HULL: { L: number; B: number; D: number; draft: number; seatZ: number; bowSeatZ: number; seatY: number; k: number;
+    /** The floor you see inside, from the keel: just above the waterline. */
+    floor: number };
   HL: number;
   hullPoint(t: number, s: number, inset?: number, out?: Vector3): Vector3;
   /** Half beam and gunwale height at hull-local z. */
