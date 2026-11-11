@@ -12,7 +12,7 @@ import type { FrameStats } from './loop.ts';
 import { coversPlayView } from './panels.ts';
 import { Session } from './session.ts';
 import type { SessionOptions, SessionSignal } from './session.ts';
-import { ToastQueue, buildInterfaceModel, toastsFromEvents } from './viewmodels/index.ts';
+import { ToastQueue, buildInterfaceModel, toastsForPlayer } from './viewmodels/index.ts';
 import type { InterfaceModel } from './viewmodels/index.ts';
 
 export interface AppOptions extends SessionOptions {
@@ -137,15 +137,16 @@ export class App {
     const session = this.session;
     this.elapsedSeconds += frameSeconds;
 
-    // Step, then drain the events once and fan them out. The sound and the
-    // toasts are the local player's; the world shows what everyone did.
+    // Step, then drain the events once and fan them out. The sound is the local
+    // player's; the toasts are theirs plus the crew's news (a new tool is everyone's);
+    // the world shows what everyone did.
     const events = session.advance(frameSeconds, this.camera.yaw);
     const state = session.activeState;
     const ownEvents = eventsFor(events, session.localPlayerId);
     this.followScene();
     this.audio.handleEvents(ownEvents);
     this.audio.update(state, frameSeconds, session.localPlayerId);
-    this.toasts.addAll(toastsFromEvents(ownEvents, state));
+    this.toasts.addAll(toastsForPlayer(events, state, session.localPlayerId));
     this.toasts.update(frameSeconds);
 
     const frame: FrameInfo = {

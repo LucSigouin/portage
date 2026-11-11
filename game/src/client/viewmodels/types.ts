@@ -5,6 +5,7 @@
  */
 import type { AttachmentId, IslandId, ItemId, QuestId, RecipeId, ToolId } from '../../data/index.ts';
 import type { InputAction } from '../../settings/index.ts';
+import type { PlayerId } from '../../sim/index.ts';
 import type { InterfaceIntent, SettingId, SettingValue } from '../intents.ts';
 import type { PanelId, ScreenId, SettingsTabId } from '../panels.ts';
 
@@ -74,8 +75,11 @@ export interface QuestTrackerModel {
 
 export interface CompassMarkModel {
   id: string;
-  kind: 'cardinal' | 'quest' | 'canoe' | 'respawn';
+  kind: 'cardinal' | 'quest' | 'canoe' | 'respawn' | 'crew';
   label: string;
+  /** Crew marks only: the crewmate's toque colour, and their place in the crew (0 to 3). */
+  color?: string;
+  crewIndex?: number;
   /** Bearing from the player, degrees, 0 = north, clockwise. */
   bearingDegrees: number;
   /** Bearing relative to where the camera looks, -180 to 180, to a hundredth of a degree. 0 is dead ahead. */
@@ -99,7 +103,29 @@ export interface PromptModel {
   mode: 'press' | 'blocked';
 }
 
+/** One crew member in the crew list. Built from that player's own state, nothing else. */
+export interface CrewRowModel {
+  playerId: PlayerId;
+  /** "Player 2", from `CREW_MARKS`, until players can type a name. */
+  label: string;
+  /** The toque colour the look dresses them in, as `#rrggbb`. */
+  color: string;
+  /** True for the row of the player this screen belongs to. */
+  you: boolean;
+  where: 'aboard' | 'ashore' | 'asleep';
+  /** "Aboard", "Ashore · Home Knoll", "Asleep · Home Knoll". */
+  placeText: string;
+  /** "420 m" to a crewmate who is somewhere else. Empty for you and for anyone within a few steps. */
+  distanceText: string;
+  /** Hunger, thirst, energy: the same numbers that player's own HUD shows. */
+  meters: MeterModel[];
+  /** "low energy", "low hunger, thirst", or an empty string when nothing is low. */
+  lowText: string;
+}
+
 export interface HudModel {
+  /** Everyone in the crew, in player order. Empty when playing alone: the crew list is not drawn. */
+  crew: CrewRowModel[];
   meters: MeterModel[];
   water: WaterGaugeModel;
   hotbar: HotbarSlotModel[];
@@ -234,6 +260,8 @@ export interface QuestRowModel {
   tracked: boolean;
   giverText: string;
   objectives: ObjectiveRowModel[];
+  /** The items handing it in will give, for their icons. Empty when the reward is not an item, and once the quest is done. */
+  rewards: { itemId: ItemId; name: string; count: number }[];
   track: ButtonModel | null;
 }
 
@@ -253,10 +281,13 @@ export interface MapIslandModel {
 }
 
 export interface MapMarkerModel {
-  kind: 'player' | 'canoe' | 'respawn' | 'quest' | 'survivor';
+  kind: 'player' | 'canoe' | 'respawn' | 'quest' | 'survivor' | 'crew';
   label: string;
   left: number;
   top: number;
+  /** Crew marks only: the crewmate's toque colour, and their place in the crew (0 to 3). */
+  color?: string;
+  crewIndex?: number;
 }
 
 export type PanelModel = { title: string; close: ButtonModel } & (

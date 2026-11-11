@@ -1,6 +1,6 @@
 /** The in-game panels: inventory, crafting, canoe builder, quest log, map and dialogue. */
 import {
-  ATTACHMENTS, HULL_TIERS, ISLANDS, ITEMS, NPCS, RECIPES, REGIONS, STATIONS, TUNING, isStackable,
+  ATTACHMENTS, HULL_TIERS, ISLANDS, ITEMS, NPCS, QUESTS, RECIPES, REGIONS, STATIONS, TUNING, isStackable,
 } from '../../data/index.ts';
 import type { ItemAmount, ItemId, StationId } from '../../data/index.ts';
 import {
@@ -10,7 +10,7 @@ import {
 import type { Command, Container, GameState, InventoryView, ItemStack, Missing, PlayerId, QuestView } from '../../sim/index.ts';
 import type { InterfaceIntent } from '../intents.ts';
 import { cardinalName, countedName, distanceText, itemName, needsText } from './format.ts';
-import { objectiveRows } from './hud.ts';
+import { crewElsewhere, crewMark, objectiveRows } from './hud.ts';
 import type {
   BuildRowModel, ButtonModel, CostRowModel, ItemSlotModel, MapIslandModel, MapMarkerModel, PanelModel,
   QuestRowModel, RecipeRowModel,
@@ -227,6 +227,9 @@ function questRow(quest: QuestView): QuestRowModel {
     tracked: quest.tracked,
     giverText: giver ? (quest.status === 'available' ? `Ask ${giver}` : `For ${giver}`) : '',
     objectives: objectiveRows(quest),
+    // What is still to come. A finished quest has paid out, so its row lists nothing.
+    rewards: quest.status === 'completed' ? []
+      : QUESTS[quest.questId].rewards.items.map(({ itemId, count }) => ({ itemId, name: itemName(itemId), count })),
     track: trackable
       ? button(quest.tracked ? 'Tracked' : 'Track', command({ type: 'track_quest', questId: quest.questId }), !quest.tracked)
       : null,
@@ -275,6 +278,13 @@ export function buildMapPanel(state: GameState, playerId: PlayerId = 0): PanelBo
   const markers: MapMarkerModel[] = map.markers.map((marker) => ({
     kind: marker.kind, label: marker.label, left: mapLeft(marker.position.x), top: mapTop(marker.position.z),
   }));
+  // Crewmates who are somewhere else, each at their own place and in their own colour.
+  for (const { player } of crewElsewhere(state, playerId)) {
+    markers.push({
+      kind: 'crew', left: mapLeft(player.position.x), top: mapTop(player.position.z),
+      ...crewMark(player.id), crewIndex: state.players.indexOf(player),
+    });
+  }
   return {
     id: 'map',
     fullChart: map.fullChart,
