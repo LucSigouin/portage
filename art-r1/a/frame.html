@@ -1,0 +1,15 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Portage frame check</title>
+<!-- dev aid: /frame.html?w=1920&h=1080&shot=play shows the game in an exact-size viewport on a magenta mat -->
+<style>html,body{margin:0;background:#ff00ff;overflow:hidden}iframe{border:0;transform-origin:0 0;display:block;position:absolute;left:8px;top:8px}</style>
+<iframe id="f"></iframe>
+<script>
+  const q = new URLSearchParams(location.search);
+  const w = +q.get('w') || 1280, h = +q.get('h') || 720;
+  const s = Math.min((innerWidth - 16) / w, (innerHeight - 16) / h, 1);
+  const f = document.getElementById('f');
+  f.width = w; f.height = h; f.style.transform = `scale(${s})`;
+  q.delete('w'); q.delete('h');
+  f.src = '/?' + q.toString();
+</script>

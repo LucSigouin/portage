@@ -1,0 +1,271 @@
+/**
+ * Keyboard and mouse to simulation intent, through the key bindings in the
+ * settings. No DOM types in here: the browser glue in `main.ts` forwards key
+ * codes and pointer deltas, and tests call the same methods with plain values.
+ *
+ * - `keyDown` returns the discrete outcomes of a press: a command for the
+ *   rules engine, a panel toggle, an Esc, or the result of a rebind capture.
+ * - `sample` returns the held state as a `StepInput`, once per frame.
+ * - `takeCameraInput` returns the orbit and zoom since the last call.
+ */
+import type { ToolId } from '../data/index.ts';
+import { actionForKey, cloneKeyBindings, rebindKey } from '../settings/index.ts';
+import type { InputAction, KeyBindings, ScavengeMode } from '../settings/index.ts';
+import { NEUTRAL_INPUT } from '../sim/index.ts';
+import type { Command, Interactable, StepInput } from '../sim/index.ts';
+import type { PanelId } from './panels.ts';
+
+/** What the input layer reads from the game to resolve a press. */
+export interface InputSnapshot {
+  mode: 'canoe' | 'foot';
+  /** `selectInteractable(state)`. */
+  interactable: Interactable | null;
+  sailRaised: boolean;
+  /** The tool belt, in hotbar order. */
+  tools: readonly ToolId[];
+  selectedTool: ToolId | null;
+}
+
+export type InputOutcome =
+  | { type: 'command'; command: Command }
+  | { type: 'toggle_panel'; panel: PanelId }
+  | { type: 'escape' }
+  /** A rebind capture took a key. `unbound` lists the actions that lost it. */
+  | { type: 'rebound'; action: InputAction; slot: number; keyCode: string; bindings: KeyBindings; unbound: InputAction[] }
+  | { type: 'rebind_cancelled' };
+
+export interface InputOptions {
+  keyBindings: KeyBindings;
+  scavengeMode: ScavengeMode;
+  /** 0.1 to 3. Scales orbit speed. */
+  mouseSensitivity: number;
+  invertY: boolean;
+}
+
+/** Orbit and zoom gathered since the last frame. */
+export interface CameraInput {
+  /** Radians to add to the bearing the camera looks along. */
+  yawDelta: number;
+  /** Radians to add to the camera's elevation. */
+  pitchDelta: number;
+  /** Positive zooms out. One wheel notch is about 0.1. */
+  zoomDelta: number;
+  dragging: boolean;
+}
+
+const PANEL_FOR_ACTION: Partial<Record<InputAction, PanelId>> = {
+  inventory: 'inventory', craft: 'crafting', canoeBuilder: 'canoe_builder', questLog: 'quest_log', map: 'map',
+};
+
+const TOOL_SLOT_FOR_ACTION: Partial<Record<InputAction, number>> = {
+  tool1: 0, tool2: 1, tool3: 2, tool4: 3, tool5: 4,
+};
+
+/** Actions that move the player. In toggle mode, any of them ends a latched scavenge. */
+const MOVEMENT_ACTIONS: readonly InputAction[] = [
+  'paddle', 'backPaddle', 'steerPort', 'steerStarboard', 'moveForward', 'moveBack', 'moveLeft', 'moveRight',
+];
+
+/** Radians of orbit per pixel of drag at sensitivity 1. */
+export const ORBIT_RADIANS_PER_PIXEL = 0.005;
+/** Zoom per unit of wheel delta (a notch is about 100). */
+export const ZOOM_PER_WHEEL_UNIT = 0.001;
+
+const targetOf = (interactable: Interactable | null): string | null =>
+  (interactable?.kind === 'node' ? `${interactable.nodeId}:${interactable.actionIndex}` : null);
+
+export class InputController {
+  private options: InputOptions;
+  private readonly held = new Set<string>();
+  /** The interact key has done its job for this press; ignore it until released. */
+  private interactSpent = false;
+  /** Toggle mode: the node action being scavenged hands-free, or null. */
+  private latchedTarget: string | null = null;
+  private captureTarget: { action: InputAction; slot: number } | null = null;
+  private dragging = false;
+  private yawDelta = 0;
+  private pitchDelta = 0;
+  private zoomDelta = 0;
+
+  constructor(options: InputOptions) {
+    this.options = { ...options, keyBindings: cloneKeyBindings(options.keyBindings) };
+  }
+
+  configure(options: Partial<InputOptions>): void {
+    this.options = { ...this.options, ...options };
+    if (options.keyBindings) this.options.keyBindings = cloneKeyBindings(options.keyBindings);
+    if (options.scavengeMode === 'hold') this.latchedTarget = null;
+  }
+
+  get keyBindings(): KeyBindings {
+    return this.options.keyBindings;
+  }
+
+  // --- Rebinding ------------------------------------------------------------
+
+  /** The action and slot waiting for a key, or null. */
+  get capture(): { action: InputAction; slot: number } | null {
+    return this.captureTarget;
+  }
+
+  /** The next key pressed is bound to this action and slot. Esc cancels. */
+  beginCapture(action: InputAction, slot: number): void {
+    this.captureTarget = { action, slot };
+    this.releaseAll();
+  }
+
+  cancelCapture(): void {
+    this.captureTarget = null;
+  }
+
+  // --- Keys -----------------------------------------------------------------
+
+  /** True when the key means something to the game, so the browser default should be stopped. */
+  handlesKey(keyCode: string): boolean {
+    if (this.captureTarget) return true;
+    return keyCode === 'Escape' || actionForKey(this.options.keyBindings, keyCode, 'canoe') !== null
+      || actionForKey(this.options.keyBindings, keyCode, 'foot') !== null;
+  }
+
+  /**
+   * A key went down. `snapshot` is null when the keys do not drive the game
+   * (the lobby, or any open panel): then only the panel keys and Esc act.
+   */
+  keyDown(keyCode: string, repeat: boolean, snapshot: InputSnapshot | null): InputOutcome[] {
+    if (this.captureTarget) {
+      if (repeat) return [];
+      const { action, slot } = this.captureTarget;
+      this.captureTarget = null;
+      if (keyCode === 'Escape') return [{ type: 'rebind_cancelled' }];
+      const { bindings, unbound } = rebindKey(this.options.keyBindings, action, slot, keyCode);
+      this.options.keyBindings = bindings;
+      return [{ type: 'rebound', action, slot, keyCode, bindings: cloneKeyBindings(bindings), unbound }];
+    }
+    if (repeat) return [];
+    this.held.add(keyCode);
+
+    const bindings = this.options.keyBindings;
+    const action = actionForKey(bindings, keyCode, snapshot?.mode ?? 'foot');
+    if (action === 'pause') return [{ type: 'escape' }];
+    // Esc always backs out when the player has left Pause unbound.
+    if (action === null) return keyCode === 'Escape' && bindings.pause.length === 0 ? [{ type: 'escape' }] : [];
+    const panel = PANEL_FOR_ACTION[action];
+    if (panel) return [{ type: 'toggle_panel', panel }];
+    if (!snapshot) return [];
+
+    if (MOVEMENT_ACTIONS.includes(action)) {
+      this.latchedTarget = null;
+      return [];
+    }
+    switch (action) {
+      case 'interact':
+        return this.pressInteract(snapshot);
+      case 'lantern':
+        return [{ type: 'command', command: { type: 'toggle_lantern' } }];
+      case 'sail':
+        return [{ type: 'command', command: { type: 'set_sail', raised: !snapshot.sailRaised } }];
+      default: {
+        const toolSlot = TOOL_SLOT_FOR_ACTION[action];
+        if (toolSlot === undefined) return [];
+        const toolId = snapshot.tools[toolSlot];
+        if (toolId === undefined) return [];
+        return [{ type: 'command', command: { type: 'select_tool', toolId: snapshot.selectedTool === toolId ? null : toolId } }];
+      }
+    }
+  }
+
+  private pressInteract(snapshot: InputSnapshot): InputOutcome[] {
+    const interactable = snapshot.interactable;
+    if (!interactable) return [];
+    if (interactable.kind !== 'node') {
+      // Boarding, landing, talking, sleeping: one press, one command.
+      this.interactSpent = true;
+      this.latchedTarget = null;
+      return [{ type: 'command', command: interactable.command }];
+    }
+    if (this.options.scavengeMode === 'toggle') {
+      const target = targetOf(interactable);
+      this.latchedTarget = this.latchedTarget === target ? null : target;
+    }
+    return [];
+  }
+
+  keyUp(keyCode: string): void {
+    this.held.delete(keyCode);
+    if (this.options.keyBindings.interact.includes(keyCode)) this.interactSpent = false;
+  }
+
+  /** Window blur, a panel opening, the tab hiding: let go of everything. */
+  releaseAll(): void {
+    this.held.clear();
+    this.interactSpent = false;
+    this.latchedTarget = null;
+    this.dragging = false;
+  }
+
+  isHeld(action: InputAction): boolean {
+    return this.options.keyBindings[action].some((keyCode) => this.held.has(keyCode));
+  }
+
+  /** The held keys as intent for this frame. `snapshot` null gives a neutral input. */
+  sample(snapshot: InputSnapshot | null, cameraYaw: number): StepInput {
+    if (!snapshot) {
+      this.latchedTarget = null;
+      return { ...NEUTRAL_INPUT, cameraYaw };
+    }
+    const axis = (positive: InputAction, negative: InputAction): number =>
+      (this.isHeld(positive) ? 1 : 0) - (this.isHeld(negative) ? 1 : 0);
+    const input: StepInput = { ...NEUTRAL_INPUT, cameraYaw, interactHeld: this.interactHeld(snapshot) };
+    if (snapshot.mode === 'canoe') {
+      input.paddle = axis('paddle', 'backPaddle');
+      input.steer = axis('steerStarboard', 'steerPort');
+      input.powerStroke = this.isHeld('powerStroke');
+      input.bail = this.isHeld('bail');
+    } else {
+      input.moveX = axis('moveRight', 'moveLeft');
+      input.moveY = axis('moveForward', 'moveBack');
+      input.run = this.isHeld('run');
+    }
+    return input;
+  }
+
+  private interactHeld(snapshot: InputSnapshot): boolean {
+    const target = targetOf(snapshot.interactable);
+    if (this.options.scavengeMode === 'toggle') {
+      // The latch lets go when the node is done, changes action, or is out of reach.
+      if (this.latchedTarget !== null && this.latchedTarget !== target) this.latchedTarget = null;
+      return this.latchedTarget !== null;
+    }
+    return target !== null && !this.interactSpent && this.isHeld('interact');
+  }
+
+  // --- Mouse ----------------------------------------------------------------
+
+  pointerDown(): void {
+    this.dragging = true;
+  }
+
+  pointerUp(): void {
+    this.dragging = false;
+  }
+
+  /** Pointer movement in pixels. Only orbits while a button is held. */
+  pointerMove(deltaX: number, deltaY: number): void {
+    if (!this.dragging) return;
+    const scale = ORBIT_RADIANS_PER_PIXEL * this.options.mouseSensitivity;
+    this.yawDelta += deltaX * scale;
+    this.pitchDelta += deltaY * scale * (this.options.invertY ? -1 : 1);
+  }
+
+  wheel(deltaY: number): void {
+    this.zoomDelta += deltaY * ZOOM_PER_WHEEL_UNIT;
+  }
+
+  takeCameraInput(): CameraInput {
+    const input = { yawDelta: this.yawDelta, pitchDelta: this.pitchDelta, zoomDelta: this.zoomDelta, dragging: this.dragging };
+    this.yawDelta = 0;
+    this.pitchDelta = 0;
+    this.zoomDelta = 0;
+    return input;
+  }
+}

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{name}} hub</title>
+<meta name="description" content="{{pitch}}">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23121617'/%3E%3Cpath d='M4 15q12 9 24 0-3 8-12 8T4 15z' fill='%23e2a55a'/%3E%3C/svg%3E">
+<style>
+{{css}}
+</style>
+</head>
+<body>
+<a class="skip" href="#status">Skip to status</a>
+<div class="bar">
+  <div class="wrap">
+    <a class="home" href="#top">{{name}}</a>
+    <nav aria-label="Sections"><a href="#status">Status</a>{{nav}}</nav>
+    <span class="stamp">Updated {{updated}}</span>
+  </div>
+</div>
+<header class="masthead wrap" id="top">
+  <h1>{{name}}</h1>
+  <p class="pitch">{{pitch}}</p>
+</header>
+<main class="wrap">
+  <section class="status" id="status" aria-labelledby="status-heading">
+    <h2 id="status-heading" class="hidden-heading">Status</h2>
+{{status}}
+  </section>
+{{sections}}
+</main>
+<footer class="foot">
+  <div class="wrap cols">
+    <div>
+      <h2>Open this hub from another computer</h2>
+      <ul>
+{{addresses}}
+      </ul>
+      <p>The Mac must be on and awake, and this computer must be on the same network or on Tailscale.</p>
+    </div>
+    <div>
+      <h2>Keep it current</h2>
+      <p>Edit <code>hub/hub.json</code> on the Mac, then run:</p>
+      <p><code>{{rebuild}}</code></p>
+      <p>Everything here is a static copy. Changes on the Mac show up after a rebuild.</p>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

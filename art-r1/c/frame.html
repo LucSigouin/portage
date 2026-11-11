@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Portage C, fixed-size frame</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+      iframe { border: 0; position: absolute; left: 50%; top: 50%; transform-origin: 0 0; }
+    </style>
+  </head>
+  <body>
+    <!-- Dev aid: shows the game at an exact viewport (?w=1280&h=720&shot=play) scaled to fit, for like-for-like screenshots. -->
+    <iframe id="view" title="Portage"></iframe>
+    <script>
+      const query = new URLSearchParams(location.search);
+      const width = Number(query.get('w')) || 1280, height = Number(query.get('h')) || 720;
+      query.delete('w');
+      query.delete('h');
+      const view = document.getElementById('view');
+      view.width = width;
+      view.height = height;
+      view.src = '/?' + query.toString();
+      const fit = () => {
+        const scale = Math.min(innerWidth / width, innerHeight / height);
+        view.style.transform = `scale(${scale}) translate(-50%, -50%)`;
+      };
+      addEventListener('resize', fit);
+      fit();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,341 @@
+/**
+ * The interface model: everything the DOM UI draws, already worded, counted
+ * and sorted. View models build it from the selectors; the UI only renders it
+ * and sends back the intent attached to whatever was clicked.
+ */
+import type { AttachmentId, IslandId, ItemId, QuestId, RecipeId, ToolId } from '../../data/index.ts';
+import type { InputAction } from '../../settings/index.ts';
+import type { InterfaceIntent, SettingId, SettingValue } from '../intents.ts';
+import type { PanelId, ScreenId, SettingsTabId } from '../panels.ts';
+
+export type Tone = 'info' | 'good' | 'warning' | 'danger';
+
+/** A clickable control. `note` says why it is disabled, or adds a detail. */
+export interface ButtonModel {
+  label: string;
+  intent: InterfaceIntent;
+  enabled: boolean;
+  note: string | null;
+}
+
+// --- HUD ---------------------------------------------------------------------
+
+export interface MeterModel {
+  id: 'hunger' | 'thirst' | 'energy';
+  label: string;
+  /** 0 to 100, whole numbers. */
+  value: number;
+  /** Energy only: the ceiling while starving or parched. 100 otherwise. */
+  cap: number;
+  low: boolean;
+  /** Fill pattern for the patterned-meters setting. */
+  pattern: 'stripes' | 'dots' | 'waves';
+}
+
+export interface WaterGaugeModel {
+  /** False on foot with a dry canoe: nothing to show. */
+  visible: boolean;
+  /** 0 to 100, whole numbers. 100 capsizes. */
+  value: number;
+  warning: boolean;
+  trend: 'rising' | 'falling' | 'steady';
+  /** One line of status, for example "Taking on water". */
+  label: string;
+}
+
+export interface HotbarSlotModel {
+  /** 1 to 5. */
+  number: number;
+  keyLabel: string;
+  toolId: ToolId | null;
+  name: string;
+  selected: boolean;
+  /** Selects the tool, or puts it away when it is already selected. Null for an empty slot. */
+  intent: InterfaceIntent | null;
+}
+
+export interface ObjectiveRowModel {
+  text: string;
+  /** "2 / 4", or an empty string for a single step. */
+  progressText: string;
+  done: boolean;
+}
+
+export interface QuestTrackerModel {
+  questId: QuestId;
+  name: string;
+  kind: 'main' | 'side';
+  /** True when it only needs handing in. */
+  ready: boolean;
+  objectives: ObjectiveRowModel[];
+}
+
+export interface CompassMarkModel {
+  id: string;
+  kind: 'cardinal' | 'quest' | 'canoe' | 'respawn';
+  label: string;
+  /** Bearing from the player, degrees, 0 = north, clockwise. */
+  bearingDegrees: number;
+  /** Bearing relative to where the camera looks, -180 to 180. 0 is dead ahead. */
+  relativeDegrees: number;
+  /** "420 m", or an empty string for cardinal points. */
+  distanceText: string;
+}
+
+export interface CompassModel {
+  /** Bearing the camera looks along, degrees. */
+  headingDegrees: number;
+  /** "N", "NE", ... */
+  cardinal: string;
+  marks: CompassMarkModel[];
+}
+
+export interface PromptModel {
+  text: string;
+  keyLabel: string;
+  /** `press`: one tap. `hold`: keep it down. `blocked`: something is missing. */
+  mode: 'press' | 'hold' | 'blocked';
+  /** 0 to 1 while holding. */
+  progress: number;
+}
+
+export interface HudModel {
+  meters: MeterModel[];
+  water: WaterGaugeModel;
+  hotbar: HotbarSlotModel[];
+  tracker: QuestTrackerModel | null;
+  compass: CompassModel;
+  prompt: PromptModel | null;
+  /** "Day 2, 14:05". */
+  clockText: string;
+  night: boolean;
+  /** "Clear, rain in 3 min". */
+  weatherText: string;
+  stormWarning: boolean;
+  /** "The Shallows", or the island name when standing on one. */
+  placeText: string;
+  /** Canoe status lines: speed, sail, lantern, rough water. Empty on foot. */
+  canoeLines: { text: string; tone: Tone }[];
+  /** A one-line tip, when the hints setting is on and one applies. */
+  hint: string | null;
+}
+
+export interface ToastModel {
+  id: number;
+  text: string;
+  tone: Tone;
+  /** 1 fresh to 0 about to go. */
+  life: number;
+}
+
+// --- Lobby and menus ----------------------------------------------------------
+
+export interface LobbyModel {
+  title: string;
+  tagline: string;
+  buttons: ButtonModel[];
+}
+
+export interface SaveSlotModel {
+  slot: number;
+  title: string;
+  empty: boolean;
+  corrupt: boolean;
+  /** "Day 3, 1 h 12 min played, Standard". */
+  summary: string;
+  /** "Quest 5: A proper edge". */
+  questText: string;
+  /** "Saved 4 min ago". */
+  savedText: string;
+  /** True for the slot the running game saves into. */
+  current: boolean;
+  buttons: ButtonModel[];
+}
+
+export type SettingRowModel = { setting: SettingId; label: string; valueText: string } & (
+  | { kind: 'slider'; value: number; minimum: number; maximum: number; step: number }
+  | { kind: 'choice'; value: SettingValue; options: { value: SettingValue; label: string }[] }
+  | { kind: 'toggle'; value: boolean }
+);
+
+export interface BindingRowModel {
+  action: InputAction;
+  label: string;
+  /** "Canoe", "On foot" or "Always". */
+  contextLabel: string;
+  /** Two slots. `keyLabel` is null for an empty slot. */
+  slots: { slot: number; keyLabel: string | null; capturing: boolean; rebind: InterfaceIntent; clear: InterfaceIntent | null }[];
+  /** True when the action has no key at all. */
+  unbound: boolean;
+}
+
+export interface ControlLineModel {
+  label: string;
+  keys: string;
+}
+
+// --- Panels --------------------------------------------------------------------
+
+export interface ItemSlotModel {
+  itemId: ItemId | null;
+  name: string;
+  count: number;
+  description: string;
+  buttons: ButtonModel[];
+}
+
+export interface CostRowModel {
+  name: string;
+  have: number;
+  need: number;
+  enough: boolean;
+}
+
+export interface RecipeRowModel {
+  recipeId: RecipeId;
+  name: string;
+  description: string;
+  /** "2 x Plank". */
+  outputText: string;
+  /** False until a survivor teaches it. */
+  known: boolean;
+  inputs: CostRowModel[];
+  /** "Needs 3 more plank, hammer", or an empty string when craftable. */
+  missingText: string;
+  craft: ButtonModel;
+  /** Present when more than one can be made. */
+  craftAll: ButtonModel | null;
+}
+
+export interface BuildRowModel {
+  id: AttachmentId | 'hull';
+  name: string;
+  description: string;
+  built: boolean;
+  costs: CostRowModel[];
+  missingText: string;
+  build: ButtonModel | null;
+}
+
+export interface QuestRowModel {
+  questId: QuestId;
+  name: string;
+  description: string;
+  kind: 'main' | 'side';
+  /** "Active", "Ready to hand in", "On offer", "Done". */
+  statusText: string;
+  done: boolean;
+  tracked: boolean;
+  giverText: string;
+  objectives: ObjectiveRowModel[];
+  track: ButtonModel | null;
+}
+
+export interface MapIslandModel {
+  islandId: IslandId;
+  name: string;
+  /** Position on the map, 0 to 1 from the west and north edges. */
+  left: number;
+  top: number;
+  /** Size on the map, as shares of its width and height. */
+  width: number;
+  height: number;
+  /** Degrees to rotate the outline, clockwise. */
+  rotationDegrees: number;
+  /** "NNE, 420 m" with the map table, otherwise an empty string. */
+  bearingText: string;
+}
+
+export interface MapMarkerModel {
+  kind: 'player' | 'canoe' | 'respawn' | 'quest' | 'survivor';
+  label: string;
+  left: number;
+  top: number;
+}
+
+export type PanelModel = { title: string; close: ButtonModel } & (
+  | {
+    id: 'settings';
+    tabs: { tab: SettingsTabId; label: string; selected: boolean; intent: InterfaceIntent }[];
+    rows: SettingRowModel[];
+    /** Controls tab only. */
+    bindings: BindingRowModel[];
+    /** "Press a key for Paddle. Esc cancels.", a conflict report, or an empty string. */
+    bindingNotice: string;
+    resetBindings: ButtonModel | null;
+  }
+  | { id: 'how_to_play'; sections: { heading: string; lines: string[]; controls: ControlLineModel[] }[] }
+  | { id: 'credits'; lines: string[]; completed: boolean }
+  | { id: 'pause'; buttons: ButtonModel[]; summary: string }
+  | { id: 'save_slots'; slots: SaveSlotModel[] }
+  | {
+    id: 'inventory';
+    backpack: { label: string; slots: ItemSlotModel[] };
+    cargo: { label: string; slots: ItemSlotModel[]; accessible: boolean };
+    tools: { toolId: ToolId; name: string; selected: boolean; intent: InterfaceIntent }[];
+    keyItems: { name: string; count: number }[];
+    stow: ButtonModel;
+    fillWater: ButtonModel;
+    /** Rewards that did not fit, with the button that claims them. */
+    pendingRewards: { text: string; claim: ButtonModel } | null;
+    stationsText: string;
+  }
+  | { id: 'crafting'; stations: { name: string; inReach: boolean; recipes: RecipeRowModel[] }[] }
+  | {
+    id: 'canoe_builder';
+    /** Why nothing can be built right now, or an empty string. */
+    blockedText: string;
+    statLines: string[];
+    hull: BuildRowModel | null;
+    attachments: BuildRowModel[];
+  }
+  | { id: 'quest_log'; groups: { heading: string; quests: QuestRowModel[] }[] }
+  | {
+    id: 'map';
+    fullChart: boolean;
+    /** "9 of 15 islands charted". */
+    summary: string;
+    regions: { name: string; top: number; height: number; roughness: number }[];
+    islands: MapIslandModel[];
+    markers: MapMarkerModel[];
+  }
+  | { id: 'dialogue'; speaker: string; text: string; options: ButtonModel[] }
+);
+
+export interface ConfirmModel {
+  title: string;
+  message: string;
+  accept: ButtonModel;
+  cancel: ButtonModel;
+}
+
+export interface DebugModel {
+  /** False when only the extra lines are wanted. */
+  showFrameRate: boolean;
+  framesPerSecond: number;
+  /** Milliseconds from one frame to the next. */
+  frameMilliseconds: number;
+  /** Milliseconds of work inside the frame. */
+  workMilliseconds: number;
+  /** Extra debug lines: the bot's status, the staged shot. */
+  lines: string[];
+}
+
+/** One frame of UI. `update` gets a fresh one every frame. */
+export interface InterfaceModel {
+  screen: ScreenId;
+  /** 0.75 to 1.5, from the accessibility settings. */
+  uiScale: number;
+  patternedMeters: boolean;
+  /** True while the simulation is frozen. */
+  paused: boolean;
+  lobby: LobbyModel | null;
+  hud: HudModel | null;
+  toasts: ToastModel[];
+  /** The panel that has the keyboard, or null. A confirm dialog sits on top of it. */
+  panel: PanelModel | null;
+  /** Ids of every open panel, bottom to top. */
+  openPanels: PanelId[];
+  confirm: ConfirmModel | null;
+  debug: DebugModel | null;
+}

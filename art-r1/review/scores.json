@@ -1,0 +1,100 @@
+{
+  "pick": "b",
+  "why": "Ties Cutbank on points (50 each) and wins on the canoe, the star of the game: ink outlines make every bolted-on piece read as its own object.",
+  "scores": {
+    "a": {
+      "water": 8,
+      "canoe": 7,
+      "readability": 9,
+      "cohesion": 8,
+      "ui": 9,
+      "performance": 9
+    },
+    "b": {
+      "water": 8,
+      "canoe": 9,
+      "readability": 8,
+      "cohesion": 9,
+      "ui": 8,
+      "performance": 8
+    },
+    "c": {
+      "water": 7,
+      "canoe": 8,
+      "readability": 7,
+      "cohesion": 8,
+      "ui": 7,
+      "performance": 8
+    }
+  },
+  "evidence": {
+    "a": {
+      "water": "Reads as water at once: teal facets ride a real swell, bold foam bands and rings at every shore; the wake is two short stiff wedges.",
+      "canoe": "Starter is humble and the raft is festive, but the starboard deck merges into one wood-toned cluster, bolts vanish at chase distance, and the paddler is a box stack whose paddle is hidden for half of each stroke.",
+      "readability": "Island pops against teal water and peach sky; three yellow diamonds mark loot from 47 m; steeple, pylons and silos all read. On the island shot the paddler hides the crate.",
+      "cohesion": "3D, HUD and lobby share one palette and the same diamond and sign-post language; the 3D on its own is the most familiar look of the three.",
+      "ui": "Boldest and easiest to read at both sizes; the title feels shipped. The settings panel sits on top of the logo and the pause post runs through the hotbar.",
+      "performance": "60 fps at 1080p at full resolution, about 5 to 6 ms of GPU a frame, 23 to 52 draw calls; its on-page console check reads clean."
+    },
+    "b": {
+      "water": "Painted washes with drawn ripple marks, brushed reflections of island and canoe, a dry-brush wake and paddle rings. The surface is flat, so the canoe barely bobs.",
+      "canoe": "Ink outlines make all 15 attachments read as separate bolted-on objects in one frame, in the beauty shot and in the chase camera. Paddler and paddle read clearly.",
+      "readability": "Island and landmarks are crisp against pale mist and a flag label names the target. Loot marks are faint from 68 m; on the island the pencil labels are the clearest of the three.",
+      "cohesion": "Paper, ink and wash run through the 3D pass, the HUD cards, the icons, the logo and the red seal. The only look here that is not a familiar one.",
+      "ui": "Best title screen; settings and pause are on-style. HUD hand notes drop to 9 to 11 px at 1280x720 and the compass strip is see-through over trees.",
+      "performance": "60 fps at 1080p at full resolution. 8.4 ms a frame measured, the highest of the three (scene drawn twice plus the ink pass). No error bar shown."
+    },
+    "c": {
+      "water": "The most convincing surface: real reflections, ripples, lantern glitter, shore foam. The wake is four ruler-straight rails that read as road lane lines.",
+      "canoe": "The lantern-on-a-stick starter has the most character and the lamp-lit raft impresses, but rudder, rain catcher and floats sink into the dark and the red hull is hidden.",
+      "readability": "Loot stars pop and the compass names the knoll and the steeple, but the knoll is a dark mass on dark water and the sunset pulls the eye to the left of it.",
+      "cohesion": "The amber lamp ties 3D, logo and thin-line UI together. Tree and driftwood shapes wobble in style: grape-cluster birch, disc-pad pines, spike driftwood.",
+      "ui": "Title and panels feel shipped. HUD type is thin and low-contrast, 8 to 10 px at 1280x720, and has no backing over the bright sky.",
+      "performance": "60 fps at 1080p, and still 60 at three times the GPU work (under about 5.6 ms a frame). 398 draw calls for the upgraded canoe. No problems logged on page."
+    }
+  },
+  "fixes": {
+    "a": [
+      "Canoe, paddler: from the chase camera the paddler is a stack of boxes and the paddle is hidden for the power half of each stroke (blade under opaque water, 5 cm shaft the colour of the hull). Give the paddler shoulders and separate arms, make the shaft twice as thick with a red band, and keep the blade tip above water or add a splash at the catch.",
+      "Canoe, attachments: cargo rack, planters, smoker and winch base merge into one wood-toned cluster, and the 3.5 cm bolts cannot be seen from 9 to 13 m. Give each attachment one accent colour, make bolt heads and iron brackets two to three times bigger, and leave 15 to 20 cm between neighbours.",
+      "Look: the 3D alone is the most familiar of the three (cone-stack spruce, ball clouds). Carry the sign-paint language into the world: stencilled marks, painted bands, hand-cut uneven tree outlines.",
+      "Island shot: the paddler stands in front of the crate and the berry bush, hiding two of three loot items, and the yellow diamonds carry no names. Move the standing spot 1.5 m aside and show the item name on approach.",
+      "UI: the settings panel opens on top of the lobby logo and menu, so the logo peeks out behind it; the pause sign post runs through the hotbar. Hide the lobby column while a panel is open and stop the post above the hotbar.",
+      "Wake: two stiff white wedges about 3 m long. Make it longer, tapering and broken.",
+      "Build: all font subsets are imported, so the build ships 24 font files. Import the latin-only files (8).",
+      "Water shader: one height texture and fixed slots (3 hulls, 8 foam rings) cover one island only. Needs a world-wide height source before a second island."
+    ],
+    "b": [
+      "Rough water has no look yet: the surface is a flat painted plane and the canoe rides an invisible 4 cm swell. The game gates regions by roughness 1 to 3 and by storms. Prototype it (moving mesh plus bigger crest strokes and whitecaps) before building on this look.",
+      "HUD type at 1280x720: hand notes are 9 to 11 px (\"taking water, bail soon\", the quest \"then\" line, the settings sub-notes). Set a 13 px floor and drop or enlarge the smallest notes.",
+      "Loot from the canoe: the far marks are about 20 px ochre ticks on sand and loot colours are muted, so they are easy to miss at 68 m. Double the far marks, back them with ink, lift loot saturation a little.",
+      "No lantern light or night: the lantern is a glowing mesh that lights nothing, and the shader has one sun and no shadows. Add a lamp term to the ink material and mock a night palette.",
+      "Frame cost is the highest: 8.4 ms at 2231x1254 on an M5. Draw the reflection at a third of the size or every other frame.",
+      "Ink ids are 8-bit (239 values, reused in a cycle). As content grows, neighbours will share an id and lose the line between them. Use a 16-bit id.",
+      "Compass strip is see-through: on the island shot a tree crown shows behind it. Make it opaque paper.",
+      "Smoke puffs read as grey outlined ovals over the sail. Drop their outline.",
+      "Lobby shows the starter canoe while Continue says \"the homestead floats\". Put the upgraded canoe on the title screen.",
+      "Arrow keys do nothing (W/S/A/D only)."
+    ],
+    "c": [
+      "Wake: four ruler-straight pale rails, 9 seconds long, read as road lane lines in the play, pause and upgraded shots. Cut life to about 4 s, break the lines with noise, taper them, fade the inner pair.",
+      "Readability: the knoll is a dark mass on dark water, the brightest area is the sunset to its left, and loot stars share their colour with the fireflies. Put the glow or a mist band behind the target island, rim-light its shore, and give loot stars a larger, distinct shape and pulse.",
+      "HUD: thin low-contrast type with no backing; 8 to 10 px at 1280x720 (compass numbers, slot keys, \"Swap canoe\"), and the quest text washes out over the sunset. Set a 12 px floor, raise contrast of the two grey text colours, add a soft dark scrim behind each HUD group.",
+      "The look only exists at dusk. The game runs a 24 minute day with 16 minutes of daylight, and no daytime version is shown. Mock noon and a storm with the same assets before committing.",
+      "Shapes wobble in style: birch crowns are 40 small spheres (they read as grapes), pine pads are stacked discs, driftwood is white spikes. Use fewer, larger crown masses and bark-toned logs.",
+      "Draw calls: 398 a frame for the upgraded canoe (one mesh per material per attachment, drawn twice for the reflection). Use vertex colours and one material per attachment.",
+      "Starter hull: the pale bark patch reads as a hole in the hull on the lobby shot. Tone it down and add stitches.",
+      "Credits hard-code the name \"Luc Sigouin\". Fine locally; decide before anything is public."
+    ]
+  },
+  "unverified": [
+    "Keyboard and mouse feel: I could not press keys or drag inside the browser nodes. W/S/A/D paddling, steering, U swap, E land, Esc pause and drag-to-orbit are confirmed in the input code only.",
+    "Console output: no devtools access. I relied on each build's own on-page catcher (A chip says \"console clean\", B shows no red error bar, C shows no debug box). The catchers exist in all three main.js files.",
+    "Load time: only self-reported, on the dev server with a warm cache (A 0.11 to 0.16 s, C 0.28 to 0.36 s to first frame). B has no timer. A cold load of the built dist was not timed.",
+    "Runtime network requests: no network panel. Checked by searching src and dist only: no external URL, and the one fetch() in each bundle is Vite's preload helper, which has nothing to load.",
+    "Other machines and browsers: fps was read on one Apple M5 MacBook inside CNVS browser nodes, one look at a time, capped at 60 by the display. No older laptop, no Chrome or Firefox.",
+    "Native sharpness of A and B at 1920x1080: their browser nodes are 784 px wide, so the 1080p frames were captured scaled to 1536x864 and 1568x882. C was captured at 2844x1600.",
+    "Screens not captured: How to Play, Credits, and the Audio, Controls, Gameplay and Accessibility tabs. Read in code only.",
+    "The built dist folders were built (exit 0) but not served or run. Every screenshot comes from the dev servers."
+  ]
+}

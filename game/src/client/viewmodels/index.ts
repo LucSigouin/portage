@@ -1,0 +1,115 @@
+/**
+ * View models: pure functions from the selectors to display-ready rows.
+ * `buildInterfaceModel` assembles one frame of UI from plain inputs.
+ */
+import type { SlotSummary } from '../../save/index.ts';
+import type { InputAction, Settings } from '../../settings/index.ts';
+import type { GameState } from '../../sim/index.ts';
+import { topPanel } from '../panels.ts';
+import type { PanelId, PanelState } from '../panels.ts';
+import {
+  buildCanoeBuilderPanel, buildCraftingPanel, buildDialoguePanel, buildInventoryPanel, buildMapPanel,
+  buildQuestLogPanel,
+} from './gamepanels.ts';
+import { buildHudModel } from './hud.ts';
+import {
+  buildConfirmModel, buildCreditsPanel, buildHowToPlayPanel, buildLobbyModel, buildPausePanel, buildSaveSlotsPanel,
+} from './menus.ts';
+import { buildSettingsPanel } from './settings.ts';
+import type { DebugModel, InterfaceModel, PanelModel, ToastModel } from './types.ts';
+
+export * from './types.ts';
+export * from './format.ts';
+export * from './hud.ts';
+export * from './toasts.ts';
+export * from './gamepanels.ts';
+export * from './menus.ts';
+export * from './settings.ts';
+
+export interface InterfaceModelInput {
+  panels: PanelState;
+  settings: Settings;
+  /** The game being played, or null in the lobby. */
+  game: GameState | null;
+  paused: boolean;
+  /** Bearing the camera looks along, radians. */
+  cameraYaw: number;
+  toasts: ToastModel[];
+  slots: readonly SlotSummary[];
+  latestSlot: number | null;
+  currentSlot: number | null;
+  /** Wall clock, milliseconds. */
+  now: number;
+  /** The key binding waiting for a key, or null. */
+  capture: { action: InputAction; slot: number } | null;
+  bindingNotice: string;
+  /** "Quest 5 of 12: A proper edge". */
+  progressText: string;
+  debug: DebugModel | null;
+}
+
+const PANEL_TITLES: Readonly<Record<PanelId, string>> = {
+  settings: 'Settings', how_to_play: 'How to Play', credits: 'Credits', pause: 'Paused', save_slots: 'Save slots',
+  inventory: 'Inventory', crafting: 'Crafting', canoe_builder: 'Canoe builder', quest_log: 'Quest log', map: 'Map',
+  dialogue: 'Conversation', confirm: 'Confirm',
+};
+
+/** The model of one open panel, or null when it has nothing to show. */
+export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): PanelModel | null {
+  const frame = {
+    title: PANEL_TITLES[panel],
+    close: {
+      label: panel === 'dialogue' ? 'Leave' : 'Close',
+      intent: { type: 'close_panel' as const }, enabled: true, note: null,
+    },
+  };
+  const game = input.game;
+  switch (panel) {
+    case 'settings':
+      return { ...frame, ...buildSettingsPanel(input.settings, input.panels.settingsTab, input.capture, input.bindingNotice) };
+    case 'how_to_play':
+      return { ...frame, ...buildHowToPlayPanel(input.settings) };
+    case 'credits':
+      return { ...frame, ...buildCreditsPanel(game?.flags.beacon_lit === true) };
+    case 'pause':
+      return { ...frame, ...buildPausePanel(input.progressText) };
+    case 'save_slots':
+      return { ...frame, ...buildSaveSlotsPanel(input.slots, input.now, input.currentSlot) };
+    case 'inventory':
+      return game ? { ...frame, ...buildInventoryPanel(game) } : null;
+    case 'crafting':
+      return game ? { ...frame, ...buildCraftingPanel(game) } : null;
+    case 'canoe_builder':
+      return game ? { ...frame, ...buildCanoeBuilderPanel(game) } : null;
+    case 'quest_log':
+      return game ? { ...frame, ...buildQuestLogPanel(game) } : null;
+    case 'map':
+      return game ? { ...frame, ...buildMapPanel(game) } : null;
+    case 'dialogue': {
+      const body = game ? buildDialoguePanel(game) : null;
+      return body ? { ...frame, ...body } : null;
+    }
+    case 'confirm':
+      return null;
+  }
+}
+
+/** One frame of UI. Only the panel on top (under any confirm dialog) is built. */
+export function buildInterfaceModel(input: InterfaceModelInput): InterfaceModel {
+  const { panels, settings, game } = input;
+  const top = topPanel(panels);
+  const beneath = top === 'confirm' ? panels.stack[panels.stack.length - 2] ?? null : top;
+  return {
+    screen: panels.screen,
+    uiScale: settings.accessibility.uiScale,
+    patternedMeters: settings.accessibility.patternedMeters,
+    paused: input.paused,
+    lobby: panels.screen === 'lobby' ? buildLobbyModel(input.slots, input.latestSlot) : null,
+    hud: game ? buildHudModel(game, settings, input.cameraYaw) : null,
+    toasts: input.toasts,
+    panel: beneath ? buildPanelModel(beneath, input) : null,
+    openPanels: [...panels.stack],
+    confirm: top === 'confirm' && panels.confirm ? buildConfirmModel(panels.confirm) : null,
+    debug: input.debug,
+  };
+}

@@ -1,0 +1,12 @@
+{
+  "name": "portage-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "shoot": "node shoot.mjs",
+    "test": "playwright test --workers=1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

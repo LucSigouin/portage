@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+art-r1/shots/
+art-r1/review/shots/
+hub/site/
+e2e/test-results/

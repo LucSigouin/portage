@@ -1,0 +1,40 @@
+<!doctype html>
+<!-- Review helper: shows the game in an exact-size viewport, scaled to fit the window.
+     /frame.html?w=1280&h=720&shot=play  (any other params pass through to the game) -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Portage B2 — frame</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #1d1e22;
+        overflow: hidden;
+      }
+      iframe {
+        border: 0;
+        display: block;
+        transform-origin: 0 0;
+      }
+    </style>
+  </head>
+  <body>
+    <iframe id="f"></iframe>
+    <script>
+      const p = new URLSearchParams(location.search);
+      const w = +p.get('w') || 1280;
+      const h = +p.get('h') || 720;
+      p.delete('w');
+      p.delete('h');
+      const f = document.getElementById('f');
+      f.width = w;
+      f.height = h;
+      const fit = () => (f.style.transform = `scale(${Math.min(1, innerWidth / w, innerHeight / h)})`);
+      fit();
+      addEventListener('resize', fit);
+      f.src = '/?' + p.toString();
+    </script>
+  </body>
+</html>

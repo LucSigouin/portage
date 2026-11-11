@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B and B2 side by side · Portage</title>
+<meta name="description" content="Look B on the left and look B2 on the right, live, in the same view. Keys drive both.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23121617'/%3E%3Cpath d='M4 15q12 9 24 0-3 8-12 8T4 15z' fill='%23e2a55a'/%3E%3C/svg%3E">
+<style>
+  :root { color-scheme: dark; --bg: #121617; --surface: #191f20; --line: #2e3839; --text: #e4dfd3; --muted: #a0a9a4; --accent: #e2a55a; --accent-ink: #1b1407; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; flex-direction: column; background: var(--bg); color: var(--text); font: 15px/1.4 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .bar a { color: var(--text); text-decoration: none; font-weight: 600; }
+  .bar a:hover { color: var(--accent); }
+  .views { display: flex; flex-wrap: wrap; gap: 4px; }
+  button { font: inherit; color: var(--text); background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 4px 12px; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .hint { color: var(--muted); margin-left: auto; }
+  .panes { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; background: var(--line); }
+  .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
+  .pane iframe { flex: 1; min-height: 0; display: block; width: 100%; border: 0; }
+  .tag { padding: 4px 16px; text-align: center; color: var(--muted); }
+  .tag b { color: var(--accent); }
+  @media (max-width: 900px) { .panes { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } .hint { margin-left: 0; } }
+</style>
+</head>
+<body>
+<div class="bar">
+  <a href="index.html">&larr; Portage hub</a>
+  <div class="views" id="views" role="group" aria-label="View shown in both"></div>
+  <button id="rate" aria-pressed="false">Frame rate</button>
+  <span class="hint" id="hint"></span>
+</div>
+<main class="panes">
+  <div class="pane"><span class="tag"><b>B</b> · the one you liked</span><iframe id="left" title="Look B"></iframe></div>
+  <div class="pane"><span class="tag"><b>B2</b> · sharper, more detail</span><iframe id="right" title="Look B2"></iframe></div>
+</main>
+<script>
+  // Both looks live on this same site, so this page can hand each key press to both of them.
+  const VIEWS = [['play', 'Play'], ['upgraded', 'Upgraded canoe'], ['island', 'Island'], ['lobby', 'Lobby'], ['settings', 'Settings'], ['pause', 'Pause'], ['', 'Free play']];
+  const frames = [['left', 'looks/b/'], ['right', 'looks/b2/']].map(([id, path]) => ({ frame: document.getElementById(id), path }));
+  const wanted = new URLSearchParams(location.search);
+  let view = VIEWS.some(([key]) => key === wanted.get('view')) ? wanted.get('view') : 'play';
+  let rate = wanted.has('fps');
+
+  function show() {
+    const query = [view && `shot=${view}`, rate && 'fps=1'].filter(Boolean).join('&');
+    for (const { frame, path } of frames) frame.src = path + (query ? `?${query}` : '');
+    for (const button of document.querySelectorAll('#views button')) button.setAttribute('aria-pressed', String(button.dataset.view === view));
+    document.getElementById('rate').setAttribute('aria-pressed', String(rate));
+    document.getElementById('hint').textContent = view === '' ? 'Click New Game on each side. Then W A S D paddle both, U swaps the canoe, E lands.' : 'Same camera on both sides, held still.';
+    history.replaceState(null, '', `?view=${view}${rate ? '&fps=1' : ''}`);
+  }
+
+  for (const [key, title] of VIEWS) {
+    const button = document.createElement('button');
+    button.textContent = title;
+    button.dataset.view = key;
+    button.addEventListener('click', () => { view = key; show(); button.blur(); });
+    document.getElementById('views').append(button);
+  }
+  document.getElementById('rate').addEventListener('click', (event) => { rate = !rate; show(); event.currentTarget.blur(); });
+
+  // A real key press, wherever it lands (this page or either look), is repeated into every look that did not get it.
+  function relay(event, source) {
+    if (!event.isTrusted || event.metaKey || event.ctrlKey || event.altKey) return;
+    for (const { frame } of frames) {
+      const target = frame.contentWindow;
+      if (!target || target === source) continue;
+      target.dispatchEvent(new KeyboardEvent(event.type, { key: event.key, code: event.code, repeat: event.repeat, bubbles: true, cancelable: true }));
+    }
+  }
+  for (const type of ['keydown', 'keyup']) {
+    window.addEventListener(type, (event) => relay(event, window));
+    for (const { frame } of frames) frame.addEventListener('load', () => frame.contentWindow.addEventListener(type, (event) => relay(event, frame.contentWindow)));
+  }
+  show();
+</script>
+</body>
+</html>

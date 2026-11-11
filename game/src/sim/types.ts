@@ -1,0 +1,331 @@
+import type {
+  AttachmentId, BottleId, Difficulty, FlagId, IslandId, ItemAmount, ItemId, NodeId, NpcId, QuestId,
+  QuestStatus, RecipeId, RegionId, StationId, ToolId, WeatherKind,
+} from '../data/types.ts';
+
+/** Bump when the shape of GameState changes; add a migration in `src/save/`. */
+export const STATE_VERSION = 1;
+
+export interface Vector3 {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** A stack in the backpack or the cargo. */
+export type ItemStack = ItemAmount;
+
+export interface GameOptions {
+  difficulty?: Difficulty;
+}
+
+/**
+ * Per-frame analog intent. Never key codes: the client maps keys, sticks or
+ * touch onto these. Every field is optional in spirit; use `NEUTRAL_INPUT` as
+ * the base.
+ */
+export interface StepInput {
+  /** Canoe: -1 back-paddle to +1 paddle. */
+  paddle: number;
+  /** Canoe: -1 turn to port to +1 turn to starboard. */
+  steer: number;
+  /** Canoe: hold for a power stroke (costs energy). */
+  powerStroke: boolean;
+  /** Canoe: hold to bail. Paddling stops while bailing. */
+  bail: boolean;
+  /** On foot: strafe, -1 left to +1 right of the camera. */
+  moveX: number;
+  /** On foot: -1 toward the camera to +1 away from it. */
+  moveY: number;
+  /** On foot: hold to run (costs energy). */
+  run: boolean;
+  /** Hold to scavenge the current interactable node. */
+  interactHeld: boolean;
+  /** Bearing the camera looks along, radians (0 = north, clockwise). */
+  cameraYaw: number;
+}
+
+export interface NodeState {
+  /**
+   * Per action: the world time it is available again. null = gone for good.
+   * A node with no entry in `GameState.nodes` has never been touched.
+   */
+  readyAt: (number | null)[];
+  /** Loot that did not fit, waiting to be picked up. */
+  leftover: ItemStack[];
+}
+
+export interface PlayerState {
+  mode: 'canoe' | 'foot';
+  position: Vector3;
+  /** Bearing the player faces, radians. */
+  heading: number;
+  hunger: number;
+  thirst: number;
+  energy: number;
+  backpack: ItemStack[];
+  /** Tool belt. Takes no slot, never lost. */
+  tools: ToolId[];
+  selectedTool: ToolId | null;
+  /** Unique finds and quest items. Take no slot, never lost. */
+  keyItems: Partial<Record<ItemId, number>>;
+  /** Island the player stands on, when on foot. */
+  islandId: IslandId | null;
+  regionId: RegionId;
+  /** Scavenge in progress. */
+  harvest: { nodeId: NodeId; actionIndex: number; progress: number } | null;
+  running: boolean;
+  /** True while a power stroke, run or bail is draining energy. */
+  exerting: boolean;
+  interactWasHeld: boolean;
+}
+
+export interface CanoeState {
+  /** Hull centre. y follows the water surface, or the ground when beached. */
+  position: Vector3;
+  heading: number;
+  /** Forward speed along the heading, metres per second. Negative when backing. */
+  speed: number;
+  /** Radians, positive bow up. For rendering. */
+  pitch: number;
+  /** Radians, positive starboard down. For rendering. */
+  roll: number;
+  /** 0 to 100. 100 capsizes. */
+  waterLevel: number;
+  hullTier: number;
+  attachments: AttachmentId[];
+  cargo: ItemStack[];
+  /** Touching ground, or pulled up by the player. */
+  beached: boolean;
+  /** Where the canoe last touched ground. The canopy respawns here. */
+  lastBeached: { x: number; z: number; heading: number; islandId: IslandId };
+  sailRaised: boolean;
+  lanternLit: boolean;
+  bailing: boolean;
+  /** True while the fog is turning the canoe around. */
+  lostInFog: boolean;
+  /** True while rough water is coming over the side. */
+  takingWater: boolean;
+  swampWarned: boolean;
+  /** Fractions toward the next clean water, fish. */
+  rainProgress: number;
+  fishProgress: number;
+}
+
+export interface WeatherState {
+  kind: WeatherKind;
+  /** Seconds until `nextKind` takes over. The sky shows what is coming. */
+  secondsRemaining: number;
+  nextKind: WeatherKind;
+  nextSeconds: number;
+  /** 0 to 1. Eases in and out; scales the storm roughness bonus. */
+  stormLevel: number;
+  /** Bearing the wind blows toward, radians. */
+  windDirection: number;
+  /** Metres per second, eased toward `windTarget`. */
+  windSpeed: number;
+  windTarget: number;
+  stormWarned: boolean;
+  /** Weather changes since the last storm ended. Storms need a gap. */
+  changesSinceStorm: number;
+}
+
+export interface QuestState {
+  status: QuestStatus;
+  /** One number per objective. An objective is done at its required count. */
+  progress: number[];
+}
+
+export interface DialogueState {
+  npcId: NpcId;
+  nodeId: string;
+}
+
+export interface Statistics {
+  fails: number;
+  itemsCrafted: number;
+  nodesHarvested: number;
+  smokedCount: number;
+  cachesHauled: number;
+  distancePaddled: number;
+  distanceWalked: number;
+}
+
+/**
+ * The whole game. Plain JSON data: no classes, functions, Maps or Sets, no
+ * undefined, NaN or Infinity. `JSON.stringify(state)` is a complete save.
+ */
+export interface GameState {
+  version: number;
+  seed: number;
+  /** Seeded generator state. Advance only through `src/sim/random.ts`. */
+  randomState: number;
+  difficulty: Difficulty;
+  /** Fixed steps simulated. */
+  tick: number;
+  /** Frame time not yet simulated, seconds. */
+  stepAccumulator: number;
+  /** World clock, seconds since midnight of day 1. Sleep and fails jump it. */
+  time: number;
+  /** Seconds actually played (stepped). */
+  playedSeconds: number;
+  player: PlayerState;
+  canoe: CanoeState;
+  weather: WeatherState;
+  /** Sparse: only nodes that have been touched. */
+  nodes: Record<NodeId, NodeState>;
+  quests: Record<QuestId, QuestState>;
+  trackedQuestId: QuestId | null;
+  dialogue: DialogueState | null;
+  flags: Partial<Record<FlagId, boolean>>;
+  discoveredIslands: IslandId[];
+  bottlesFound: BottleId[];
+  /** Island of the last camp slept at. */
+  respawnCampIslandId: IslandId;
+  /** Rewards that did not fit. Collected with `claim_rewards`. */
+  pendingRewards: ItemStack[];
+  statistics: Statistics;
+  /** Drained by the client each frame with `drainEvents`. */
+  events: GameEvent[];
+}
+
+// --- Commands ---------------------------------------------------------------
+
+export type Container = 'backpack' | 'cargo';
+
+/** Discrete player actions. Send with `dispatch(state, command)`. */
+export type Command =
+  | { type: 'craft'; recipeId: RecipeId; count?: number }
+  | { type: 'upgrade_hull' }
+  | { type: 'build_attachment'; attachmentId: AttachmentId }
+  | { type: 'stow_backpack' }
+  | { type: 'transfer'; from: Container; itemId: ItemId; count: number }
+  | { type: 'discard'; from: Container; itemId: ItemId; count: number }
+  | { type: 'eat'; itemId: ItemId }
+  | { type: 'drink'; itemId: ItemId }
+  | { type: 'fill_water'; count: number }
+  | { type: 'sleep' }
+  | { type: 'board' }
+  | { type: 'disembark' }
+  | { type: 'talk'; npcId: NpcId }
+  | { type: 'choose_dialogue_option'; optionIndex: number }
+  | { type: 'end_dialogue' }
+  | { type: 'accept_quest'; questId: QuestId }
+  | { type: 'turn_in_quest'; questId: QuestId }
+  | { type: 'track_quest'; questId: QuestId | null }
+  | { type: 'toggle_lantern' }
+  | { type: 'select_tool'; toolId: ToolId | null }
+  | { type: 'set_sail'; raised: boolean }
+  | { type: 'claim_rewards' }
+  | { type: 'set_difficulty'; difficulty: Difficulty };
+
+export type FailureReason =
+  | 'unknown_id'
+  | 'recipe_locked'
+  | 'missing_requirements'
+  | 'inventory_full'
+  | 'hull_at_maximum'
+  | 'already_built'
+  | 'canoe_not_beached'
+  | 'not_at_canoe'
+  | 'not_aboard'
+  | 'already_aboard'
+  | 'no_shore_in_reach'
+  | 'item_not_held'
+  | 'not_edible'
+  | 'not_drinkable'
+  | 'no_water_in_reach'
+  | 'no_bed_in_reach'
+  | 'not_tired'
+  | 'npc_out_of_reach'
+  | 'no_dialogue_open'
+  | 'invalid_option'
+  | 'in_dialogue'
+  | 'quest_not_available'
+  | 'quest_not_ready'
+  | 'tool_not_owned'
+  | 'nothing_to_claim'
+  | 'invalid_amount';
+
+/**
+ * What a failed command still needs. The UI turns this into
+ * "needs hammer" or "needs 3 more plank".
+ */
+export interface Missing {
+  /** Items short, with the count still needed. */
+  items: ItemAmount[];
+  tools: ToolId[];
+  station: StationId | null;
+  /** Hull tier required, when the hull is too small. */
+  hullTier: number | null;
+  attachments: AttachmentId[];
+  flag: FlagId | null;
+}
+
+export interface CommandSuccess {
+  ok: true;
+  /** Items the command put in the player's hands, if any. */
+  gained: ItemAmount[];
+  /** Items the command used up, if any. */
+  spent: ItemAmount[];
+}
+
+export interface CommandFailure {
+  ok: false;
+  reason: FailureReason;
+  missing: Missing | null;
+}
+
+export type CommandResult = CommandSuccess | CommandFailure;
+
+// --- Events -----------------------------------------------------------------
+
+export type FailCause = 'capsized' | 'exhausted';
+
+/** Things that happened, for sounds, toasts and effects. */
+export type GameEvent =
+  | { type: 'item_gained'; itemId: ItemId; count: number; container: Container | 'belt' | 'key_items' }
+  | { type: 'item_lost'; itemId: ItemId; count: number }
+  | { type: 'item_left_behind'; nodeId: NodeId; itemId: ItemId; count: number }
+  | { type: 'crafted'; recipeId: RecipeId; count: number }
+  | { type: 'ate'; itemId: ItemId }
+  | { type: 'drank'; itemId: ItemId }
+  | { type: 'harvest_started'; nodeId: NodeId }
+  | { type: 'harvest_blocked'; nodeId: NodeId; missing: Missing }
+  | { type: 'node_depleted'; nodeId: NodeId }
+  | { type: 'bottle_found'; bottleId: BottleId }
+  | { type: 'cache_hauled'; nodeId: NodeId }
+  | { type: 'quest_started'; questId: QuestId }
+  | { type: 'quest_advanced'; questId: QuestId; objectiveIndex: number; progress: number; required: number }
+  | { type: 'quest_ready'; questId: QuestId }
+  | { type: 'quest_completed'; questId: QuestId }
+  | { type: 'hull_upgraded'; tier: number }
+  | { type: 'attachment_built'; attachmentId: AttachmentId }
+  | { type: 'weather_changed'; kind: WeatherKind }
+  | { type: 'storm_warning'; secondsUntilStorm: number }
+  | { type: 'rough_water'; roughness: number; stability: number }
+  | { type: 'swamping_warning'; waterLevel: number }
+  | { type: 'capsized' }
+  | { type: 'exhausted' }
+  | { type: 'washed_ashore'; cause: FailCause; islandId: IslandId; lost: ItemAmount[] }
+  | { type: 'canoe_beached'; islandId: IslandId | null }
+  | { type: 'canoe_launched' }
+  | { type: 'boarded' }
+  | { type: 'landed'; islandId: IslandId | null }
+  | { type: 'slept'; hours: number; islandId: IslandId | null }
+  | { type: 'region_entered'; regionId: RegionId }
+  | { type: 'island_discovered'; islandId: IslandId }
+  | { type: 'fog_turned_back' }
+  | { type: 'meter_low'; meter: 'hunger' | 'thirst' | 'energy' }
+  | { type: 'dialogue_opened'; npcId: NpcId }
+  | { type: 'dialogue_closed'; npcId: NpcId }
+  | { type: 'lantern_toggled'; lit: boolean }
+  | { type: 'sail_changed'; raised: boolean }
+  | { type: 'rain_collected' }
+  | { type: 'fish_caught' }
+  | { type: 'planter_harvested' }
+  | { type: 'rewards_pending' }
+  | { type: 'autosave_requested'; reason: 'landing' | 'sleeping' }
+  | { type: 'game_completed' };
+
+export type GameEventType = GameEvent['type'];

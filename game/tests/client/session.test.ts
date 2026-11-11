@@ -1,0 +1,469 @@
+import { describe, expect, it } from 'vitest';
+import { Session } from '../../src/client/session.ts';
+import type { SessionSignal, StepDriver } from '../../src/client/session.ts';
+import { SAVE_KEY_PREFIX, deserialize } from '../../src/save/index.ts';
+import { SETTINGS_KEY } from '../../src/settings/index.ts';
+import { FIXED_STEP, NEUTRAL_INPUT, islandLanding } from '../../src/sim/index.ts';
+import type { GameState } from '../../src/sim/index.ts';
+import { FakeStorage, give, standOn } from '../support.ts';
+
+interface Harness {
+  session: Session;
+  storage: FakeStorage;
+  signals: SessionSignal[];
+  /** Advance the wall clock, milliseconds. */
+  wait(milliseconds: number): void;
+  notices(): string[];
+  sounds(): string[];
+}
+
+function harness(storage = new FakeStorage()): Harness {
+  let clock = 1_000_000;
+  let seed = 100;
+  const session = new Session({ storage, now: () => clock, randomSeed: () => (seed += 1) });
+  const signals: SessionSignal[] = [];
+  session.subscribe((signal) => signals.push(signal));
+  return {
+    session, storage, signals,
+    wait: (milliseconds) => {
+      clock += milliseconds;
+    },
+    notices: () => signals.flatMap((signal) => (signal.type === 'notice' ? [signal.text] : [])),
+    sounds: () => signals.flatMap((signal) => (signal.type === 'interface_sound' ? [signal.sound] : [])),
+  };
+}
+
+const savedState = (storage: FakeStorage, slot: number): GameState => {
+  const result = deserialize(storage.getItem(`${SAVE_KEY_PREFIX}${slot}`));
+  if (!result.ok) throw new Error(`slot ${slot}: ${result.reason}`);
+  return result.state;
+};
+
+/** Run frames of 1/60 s. */
+function frames(session: Session, seconds: number): void {
+  for (let elapsed = 0; elapsed < seconds - 1e-9; elapsed += FIXED_STEP) session.advance(FIXED_STEP, 0);
+}
+
+/** Put the canoe just off Home Knoll's beach, bow toward it, so one press of E lands. */
+function nearShore(state: GameState): void {
+  const landing = islandLanding('home_knoll');
+  state.canoe.position = { x: landing.shore.x, y: 0, z: landing.shore.z - 2 };
+  state.canoe.heading = landing.bearing;
+  state.canoe.speed = 0;
+  state.player.position = { ...state.canoe.position };
+}
+
+describe('lobby and save slots', () => {
+  it('starts in the lobby with default settings and a backdrop that keeps moving', () => {
+    const { session } = harness();
+    expect(session.screen).toBe('lobby');
+    expect(session.game).toBeNull();
+    expect(session.settings.audio.master).toBe(0.8);
+    expect(session.latestSlot()).toBeNull();
+    const before = session.backdrop.time;
+    expect(session.advance(0.2, 0)).toEqual([]);
+    expect(session.backdrop.time).toBeCloseTo(before + 0.2);
+    expect(session.backdrop.events).toEqual([]);
+    expect(session.activeState).toBe(session.backdrop);
+  });
+
+  it('keeps the backdrop afloat however long the lobby stays open', () => {
+    const { session } = harness();
+    const start = session.backdrop.time;
+    // An hour in the lobby. A plain new game would have swamped within two minutes.
+    for (let elapsed = 0; elapsed < 3600; elapsed += 0.25) session.advance(0.25, 0);
+    const backdrop = session.backdrop;
+    expect(backdrop.statistics.fails).toBe(0);
+    expect(backdrop.player.mode).toBe('canoe');
+    expect(backdrop.canoe.beached).toBe(false);
+    expect(backdrop.canoe.waterLevel).toBeLessThan(5);
+    expect(backdrop.player.thirst).toBeGreaterThan(30);
+    expect(backdrop.time).toBeCloseTo(start + 3600, 0); // the clock runs on through every reset
+  });
+
+  it('starts a new game in a slot with a fresh seed each time, and saves it at once', () => {
+    const { session, storage, signals } = harness();
+    session.handleIntent({ type: 'new_game', slot: 1 });
+    expect(session.screen).toBe('game');
+    expect(session.slot).toBe(1);
+    const first = session.game!;
+    expect(savedState(storage, 1).seed).toBe(first.seed);
+    expect(signals.map((signal) => signal.type)).toEqual(expect.arrayContaining(['screen_changed', 'game_started', 'saved']));
+
+    session.handleIntent({ type: 'quit_to_lobby' });
+    session.handleIntent({ type: 'answer_confirm', accepted: true });
+    session.handleIntent({ type: 'new_game', slot: 2 });
+    expect(session.game!.seed).not.toBe(first.seed);
+    expect(session.slotSummaries().map((summary) => summary.empty)).toEqual([true, false, false]);
+    expect(session.newGame(3)).toBe(false); // there is no fourth slot
+  });
+
+  it('continues the newest save and loads any slot, restoring the state exactly', () => {
+    const h = harness();
+    const { session } = h;
+    session.newGame(0);
+    frames(session, 2);
+    h.wait(60_000);
+    session.quitToLobby();
+    session.newGame(2);
+    session.keyDown('KeyR'); // bail, so this game is visibly different
+    frames(session, 3);
+    session.keyUp('KeyR');
+    const played = JSON.parse(JSON.stringify(session.game)) as GameState;
+    h.wait(60_000);
+    session.quitToLobby();
+    expect(session.screen).toBe('lobby');
+    expect(session.latestSlot()).toBe(2);
+
+    session.handleIntent({ type: 'continue_game' });
+    expect(session.slot).toBe(2);
+    expect(session.game).toEqual({ ...played, events: [] });
+
+    session.quitToLobby();
+    session.handleIntent({ type: 'load_game', slot: 0 });
+    expect(session.slot).toBe(0);
+    expect(session.game!.playedSeconds).toBeCloseTo(2, 1);
+  });
+
+  it('refuses to load an empty or broken slot, and says so', () => {
+    const h = harness();
+    expect(h.session.loadGame(1)).toBe(false);
+    expect(h.session.continueGame()).toBe(false);
+    h.storage.setItem(`${SAVE_KEY_PREFIX}1`, '{not json');
+    expect(h.session.loadGame(1)).toBe(false);
+    expect(h.session.screen).toBe('lobby');
+    expect(h.notices()).toEqual(['That slot is empty.', 'That save cannot be read.']);
+    expect(h.sounds()).toContain('error');
+  });
+
+  it('asks before deleting a save, and before starting over a slot that holds a game', () => {
+    const h = harness();
+    const { session, storage } = h;
+    session.newGame(0);
+    const original = savedState(storage, 0).seed;
+    session.quitToLobby();
+
+    session.handleIntent({ type: 'new_game', slot: 0 });
+    expect(session.screen).toBe('lobby'); // nothing happened yet
+    expect(session.panels.confirm).toEqual({ type: 'overwrite_save', slot: 0 });
+    session.handleIntent({ type: 'answer_confirm', accepted: false });
+    expect(savedState(storage, 0).seed).toBe(original);
+
+    session.handleIntent({ type: 'delete_save', slot: 0 });
+    expect(storage.getItem(`${SAVE_KEY_PREFIX}0`)).not.toBeNull();
+    session.handleIntent({ type: 'answer_confirm', accepted: true });
+    expect(storage.getItem(`${SAVE_KEY_PREFIX}0`)).toBeNull();
+    expect(session.slotSummaries()[0].empty).toBe(true);
+
+    session.newGame(0);
+    session.quitToLobby();
+    session.handleIntent({ type: 'new_game', slot: 0 });
+    session.handleIntent({ type: 'answer_confirm', accepted: true });
+    expect(session.screen).toBe('game');
+    expect(savedState(storage, 0).seed).not.toBe(original);
+  });
+
+  it('saves and returns to the lobby on quit, after a confirm', () => {
+    const { session, storage } = harness();
+    session.newGame(1);
+    frames(session, 1);
+    session.handleIntent({ type: 'quit_to_lobby' });
+    expect(session.screen).toBe('game');
+    expect(session.paused).toBe(true); // the confirm dialog pauses
+    session.handleIntent({ type: 'answer_confirm', accepted: true });
+    expect(session.screen).toBe('lobby');
+    expect(session.game).toBeNull();
+    expect(savedState(storage, 1).playedSeconds).toBeCloseTo(1, 1);
+  });
+});
+
+describe('autosave', () => {
+  it('saves when the engine asks: on landing', () => {
+    const h = harness();
+    const { session, storage } = h;
+    session.newGame(0);
+    nearShore(session.game!);
+    session.keyDown('KeyE'); // the interact key follows selectInteractable: here it lands
+    session.keyUp('KeyE');
+    expect(session.game!.player.mode).toBe('foot');
+    expect(savedState(storage, 0).player.mode).toBe('canoe'); // not yet: the event is still queued
+    const events = session.advance(FIXED_STEP, 0);
+    expect(events.map((event) => event.type)).toContain('autosave_requested');
+    expect(savedState(storage, 0).player.mode).toBe('foot');
+    expect(h.signals).toContainEqual({ type: 'saved', slot: 0, reason: 'landing' });
+  });
+
+  it('saves on the timer from the settings, and not at all when it is off', () => {
+    const h = harness();
+    const { session, storage } = h;
+    session.handleIntent({ type: 'change_setting', setting: 'gameplay.autosaveIntervalSeconds', value: 60 });
+    session.newGame(0);
+    const timerSaves = (): number => h.signals.filter((signal) => signal.type === 'saved' && signal.reason === 'timer').length;
+    frames(session, 59);
+    expect(timerSaves()).toBe(0);
+    frames(session, 2);
+    expect(timerSaves()).toBe(1);
+    expect(savedState(storage, 0).playedSeconds).toBeGreaterThan(59);
+
+    // Turning it off applies to the running game.
+    session.updateSettings({ ...session.settings, gameplay: { ...session.settings.gameplay, autosaveIntervalSeconds: 0 } });
+    frames(session, 200);
+    expect(timerSaves()).toBe(1);
+  });
+
+  it('never writes a save for a staged game', () => {
+    const h = harness();
+    const donor = harness();
+    donor.session.newGame(0);
+    h.session.adoptGame(donor.session.game!);
+    nearShore(h.session.game!);
+    h.session.dispatch({ type: 'disembark' });
+    frames(h.session, 1);
+    expect(h.session.slot).toBeNull();
+    expect(h.session.saveNow()).toBe(false);
+    expect([...h.storage.entries.keys()].filter((key) => key.startsWith(SAVE_KEY_PREFIX))).toEqual([]);
+  });
+});
+
+describe('settings', () => {
+  it('saves every change and loads it back in the next session', () => {
+    const h = harness();
+    h.session.handleIntent({ type: 'change_setting', setting: 'audio.master', value: 0.3 });
+    h.session.handleIntent({ type: 'change_setting', setting: 'accessibility.scavengeMode', value: 'toggle' });
+    expect(JSON.parse(h.storage.getItem(SETTINGS_KEY)!).audio.master).toBe(0.3);
+    expect(h.signals.filter((signal) => signal.type === 'settings_changed')).toHaveLength(2);
+    const next = harness(h.storage);
+    expect(next.session.settings.audio.master).toBe(0.3);
+    expect(next.session.settings.accessibility.scavengeMode).toBe('toggle');
+  });
+
+  it('applies the difficulty to the running game and to new and loaded ones', () => {
+    const { session } = harness();
+    session.newGame(0);
+    expect(session.game!.difficulty).toBe('standard');
+    session.handleIntent({ type: 'change_setting', setting: 'gameplay.difficulty', value: 'relaxed' });
+    expect(session.game!.difficulty).toBe('relaxed');
+    session.quitToLobby();
+    session.newGame(1);
+    expect(session.game!.difficulty).toBe('relaxed');
+    session.updateSettings({ ...session.settings, gameplay: { ...session.settings.gameplay, difficulty: 'standard' } });
+    session.quitToLobby();
+    session.loadGame(0); // saved as relaxed, before the setting went back
+    expect(session.game!.difficulty).toBe('standard');
+  });
+
+  it('rebinds a key from the settings screen and reports the conflict', () => {
+    const h = harness();
+    const { session } = h;
+    session.handleIntent({ type: 'open_panel', panel: 'settings' });
+    session.handleIntent({ type: 'select_settings_tab', tab: 'controls' });
+    session.handleIntent({ type: 'begin_rebind', action: 'paddle', slot: 0 });
+    expect(session.input.capture).toEqual({ action: 'paddle', slot: 0 });
+    session.keyDown('KeyE');
+    session.keyUp('KeyE');
+    expect(session.input.capture).toBeNull();
+    expect(session.settings.controls.keyBindings.paddle).toEqual(['KeyE', 'ArrowUp']);
+    expect(session.settings.controls.keyBindings.interact).toEqual([]);
+    expect(session.bindingNotice).toBe('Paddle is now E. Land / interact (hold to scavenge) lost that key.');
+    expect(JSON.parse(h.storage.getItem(SETTINGS_KEY)!).controls.keyBindings.paddle).toEqual(['KeyE', 'ArrowUp']);
+    expect(session.isOpen('settings')).toBe(true); // the captured key did not close or open anything
+
+    // Esc cancels a capture without closing the panel.
+    session.handleIntent({ type: 'begin_rebind', action: 'bail', slot: 0 });
+    session.keyDown('Escape');
+    expect(session.input.capture).toBeNull();
+    expect(session.isOpen('settings')).toBe(true);
+    expect(session.settings.controls.keyBindings.bail).toEqual(['KeyR']);
+
+    // The new binding drives the game.
+    session.handleIntent({ type: 'close_panel' });
+    session.newGame(0);
+    session.keyDown('KeyE');
+    frames(session, 2);
+    expect(session.game!.canoe.speed).toBeGreaterThan(0.5);
+  });
+
+  it('clears one key, and resets them all after a confirm', () => {
+    const { session } = harness();
+    session.handleIntent({ type: 'clear_binding', action: 'paddle', slot: 1 });
+    expect(session.settings.controls.keyBindings.paddle).toEqual(['KeyW']);
+    session.handleIntent({ type: 'reset_key_bindings' });
+    expect(session.settings.controls.keyBindings.paddle).toEqual(['KeyW']);
+    session.handleIntent({ type: 'answer_confirm', accepted: true });
+    expect(session.settings.controls.keyBindings.paddle).toEqual(['KeyW', 'ArrowUp']);
+  });
+});
+
+describe('pausing', () => {
+  it('freezes the simulation while a full panel or the pause menu is open', () => {
+    const { session } = harness();
+    session.newGame(0);
+    frames(session, 1);
+    const time = session.game!.time;
+    session.keyDown('Tab');
+    expect(session.isOpen('inventory')).toBe(true);
+    expect(session.paused).toBe(true);
+    frames(session, 5);
+    expect(session.game!.time).toBe(time);
+    expect(session.simulatedSeconds).toBe(0);
+    session.keyDown('Escape'); // closes the inventory
+    expect(session.paused).toBe(false);
+    session.keyDown('Escape'); // now pauses
+    expect(session.isOpen('pause')).toBe(true);
+    frames(session, 5);
+    expect(session.game!.time).toBe(time);
+    session.handleIntent({ type: 'resume' });
+    frames(session, 1);
+    expect(session.game!.time).toBeCloseTo(time + 1, 5);
+  });
+
+  it('pauses, lets go of the keys and saves when the tab is hidden', () => {
+    const { session, storage } = harness();
+    session.newGame(0);
+    session.keyDown('KeyW');
+    frames(session, 2);
+    const time = session.game!.time;
+    session.setHidden(true);
+    expect(session.paused).toBe(true);
+    expect(savedState(storage, 0).playedSeconds).toBeCloseTo(2, 1);
+    frames(session, 5);
+    expect(session.game!.time).toBe(time);
+    session.setHidden(false);
+    frames(session, 5);
+    // The W that was held when the tab went away is no longer held.
+    expect(Math.abs(session.game!.canoe.speed)).toBeLessThan(0.3);
+  });
+
+  it('keeps the world moving during a conversation and ends it on Esc', () => {
+    const { session } = harness();
+    session.newGame(0);
+    const game = session.game!;
+    standOn(game, 'orchard_hill');
+    game.dialogue = { npcId: 'odile', nodeId: 'hub' };
+    session.advance(FIXED_STEP, 0);
+    expect(session.isOpen('dialogue')).toBe(true);
+    expect(session.paused).toBe(false);
+    const time = game.time;
+    frames(session, 1);
+    expect(game.time).toBeCloseTo(time + 1, 5);
+    session.keyDown('Escape');
+    expect(game.dialogue).toBeNull();
+    session.advance(FIXED_STEP, 0);
+    expect(session.isOpen('dialogue')).toBe(false);
+  });
+
+  it('holds a staged shot still when frozen', () => {
+    const { session } = harness();
+    session.newGame(0);
+    session.frozen = true;
+    const time = session.game!.time;
+    frames(session, 2);
+    expect(session.game!.time).toBe(time);
+  });
+});
+
+describe('keys and commands', () => {
+  it('drives the canoe from the keyboard, and not while a panel is open', () => {
+    const { session } = harness();
+    session.newGame(0);
+    session.keyDown('KeyW');
+    frames(session, 2);
+    expect(session.game!.canoe.speed).toBeGreaterThan(0.5);
+    expect(session.lastInput.paddle).toBe(1);
+    session.keyUp('KeyW');
+
+    session.keyDown('KeyM');
+    expect(session.isOpen('map')).toBe(true);
+    expect(session.inputSnapshot()).toBeNull();
+    session.keyDown('KeyF'); // would toggle the lantern
+    expect(session.game!.events).toEqual([]);
+  });
+
+  it('refuses the canoe builder afloat, with a reason, and opens it once beached', () => {
+    const h = harness();
+    const { session } = h;
+    session.newGame(0);
+    session.keyDown('KeyB');
+    expect(session.isOpen('canoe_builder')).toBe(false);
+    expect(h.notices()).toEqual(['Beach the canoe to work on it.']);
+    expect(h.sounds()).toContain('error');
+    standOn(session.game!, 'home_knoll');
+    session.keyDown('KeyB');
+    expect(session.isOpen('canoe_builder')).toBe(true);
+    expect(h.sounds().at(-1)).toBe('open');
+  });
+
+  it('turns a refused command into a notice that names what is missing', () => {
+    const h = harness();
+    const { session } = h;
+    session.newGame(0);
+    standOn(session.game!, 'home_knoll');
+    session.handleIntent({ type: 'command', command: { type: 'upgrade_hull' } });
+    expect(h.notices()).toEqual(['Needs 2 more pitch, 3 more birch bark.']);
+    give(session.game!, 'pitch', 2);
+    give(session.game!, 'birch_bark', 3);
+    session.handleIntent({ type: 'command', command: { type: 'upgrade_hull' } });
+    expect(session.game!.canoe.hullTier).toBe(1);
+    expect(h.notices()).toHaveLength(1);
+    expect(h.sounds().at(-1)).toBe('click');
+    // Quiet probes (the bot's) raise nothing.
+    expect(session.dispatch({ type: 'sleep' }, true).ok).toBe(false);
+    expect(h.notices()).toHaveLength(1);
+  });
+
+  it('opens the credits when the Beacon is lit', () => {
+    const { session } = harness();
+    session.newGame(0);
+    session.keyDown('Tab');
+    session.game!.flags.beacon_lit = true;
+    session.game!.events.push({ type: 'game_completed' });
+    session.advance(FIXED_STEP, 0);
+    expect(session.panels.stack).toEqual(['credits']);
+    expect(session.paused).toBe(true);
+    session.keyDown('Escape');
+    expect(session.paused).toBe(false); // free play
+  });
+});
+
+describe('a step driver (the bot)', () => {
+  it('feeds one input per fixed step at the time scale, then hands the keys back', () => {
+    const h = harness();
+    const { session } = h;
+    session.newGame(0);
+    let asked = 0;
+    const driver: StepDriver = {
+      next: () => {
+        asked += 1;
+        return asked <= 240 ? { ...NEUTRAL_INPUT, paddle: 1 } : null;
+      },
+    };
+    session.attachDriver(driver);
+    session.timeScale = 8;
+    expect(session.hasDriver).toBe(true);
+    const tick = session.game!.tick;
+    session.keyDown('KeyS'); // the player's keys are ignored while the bot drives
+    session.advance(1 / 60, 0);
+    expect(session.game!.tick - tick).toBe(8);
+    expect(session.simulatedSeconds).toBeCloseTo(8 * FIXED_STEP);
+    expect(session.lastInput.paddle).toBe(1);
+    for (let frame = 1; frame < 30; frame += 1) session.advance(1 / 60, 0);
+    expect(session.game!.tick - tick).toBe(240);
+    expect(session.hasDriver).toBe(true); // it has not been asked for step 241 yet
+    session.advance(1 / 60, 0);
+    expect(session.hasDriver).toBe(false);
+    expect(h.signals).toContainEqual({ type: 'driver_finished' });
+    expect(session.game!.canoe.speed).toBeGreaterThan(1.5);
+    // The keys come back at normal speed, and the S pressed during the replay is not stuck down.
+    expect(session.timeScale).toBe(1);
+    frames(session, 1);
+    expect(session.game!.tick - tick).toBe(300);
+    expect(session.lastInput.paddle).toBe(0);
+    expect(session.game!.canoe.speed).toBeGreaterThan(0);
+    // Paused, the driver is not asked at all.
+    asked = 0;
+    session.attachDriver(driver);
+    session.keyDown('Escape');
+    frames(session, 1);
+    expect(asked).toBe(0);
+  });
+});

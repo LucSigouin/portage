@@ -1,0 +1,17 @@
+{
+  "name": "portage-art-a-cutbank",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5211 --strictPort",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@fontsource/barlow-condensed": "^5.0.0",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
+}

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Look B against B2 · {{name}}</title>
+<meta name="description" content="Ink &amp; Wash, before and after the sharpness and detail round: the same six shots side by side, with 100% crops and the measured numbers.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23121617'/%3E%3Cpath d='M4 15q12 9 24 0-3 8-12 8T4 15z' fill='%23e2a55a'/%3E%3C/svg%3E">
+<style>
+{{css}}
+</style>
+</head>
+<body>
+<a class="skip" href="#numbers">Skip to the numbers</a>
+<div class="bar compare-bar">
+  <div class="wrap">
+    <a class="home" href="index.html">&larr; {{name}} hub</a>
+    <nav aria-label="On this page"><a href="#numbers">Numbers</a>{{nav}}<a href="#big-screen">2560&times;1440</a><a href="#reading">How to read this</a></nav>
+    <span class="stamp">Measured {{measured}}</span>
+  </div>
+</div>
+<main class="wrap compare">
+  <h1>Look B against B2</h1>
+  <p class="verdict">B2 is the same Ink &amp; Wash look, drawn at the screen's full size, with clean pen lines and more drawn detail inside the washes. It costs about twice as much to draw ({{ratio}} times B).</p>
+
+  <section class="ask" aria-labelledby="ask-heading">
+    <h2 id="ask-heading">Waiting on Luc</h2>
+    <p>Compare B with B2, then pick one and tell Claude in chat: &ldquo;B&rdquo; or &ldquo;B2&rdquo;. Menus, lobby and HUD are the same in both.</p>
+    <p class="live"><a href="looks/b/">Play B live</a><a href="looks/b2/">Play B2 live</a><a href="looks/b2/?shot=upgraded&amp;fps=1">B2 with its frame-rate readout</a></p>
+  </section>
+
+  <ul class="points" aria-label="What changed">
+    <li><b>What changed, in one line:</b> B2 no longer resamples the picture or caps it below the screen's size, its pen lines are anti-aliased, and every wash has pen work fixed to the object it sits on.</li>
+    <li><b>Sharp:</b> B drew 76% of a 2560&times;1440 screen and 34% of a 3840&times;2160 one. B2 draws 100% of both, so nothing is stretched.</li>
+    <li><b>Detail:</b> wood grain, bark, needles, shingles, rock beds and cracks, pebbles, tide lines, reeds, stitched patches, nails, rope lay, stencils, a far shore.</li>
+    <li><b>Steady:</b> every stroke rides on its object. Line boil stays off. On land with a still camera, 0 pixels change.</li>
+    <li><b>Cost:</b> B2 is heavier. If frames run long it sheds reflections first, then fine strokes, then pen anti-aliasing, and resolution last. The <code>&amp;fps=1</code> readout names whatever it shed.</li>
+  </ul>
+
+  <section class="section" id="numbers" aria-labelledby="numbers-heading">
+    <h2 id="numbers-heading">Numbers</h2>
+    <p>Before is B, after is B2. Same machine, same script, one after the other.</p>
+    <div class="numbers" tabindex="0" role="region" aria-labelledby="numbers-heading">
+      <table>
+        <thead><tr><th scope="col">What</th><th scope="col">B (before)</th><th scope="col">B2 (after)</th><th scope="col">What it means</th></tr></thead>
+        <tbody>
+{{numbers}}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section" id="shots" aria-labelledby="shots-heading">
+    <h2 id="shots-heading">The six shots at 1920&times;1080</h2>
+    <p>B on the left, B2 on the right. The big pictures are scaled to fit: click one for the full 1920&times;1080 file. The crops under them are at 100%, one picture pixel per screen pixel. Sharpness shows there.</p>
+{{shots}}
+  </section>
+
+  <section class="section" id="big-screen" aria-labelledby="big-heading">
+    <h2 id="big-heading">On a 2560&times;1440 screen</h2>
+    <p>These are 100% crops of 2560&times;1440 screenshots. B draws {{bBig}} here and the browser stretches it to fit, so it goes soft. B2 draws all 2560&times;1440.</p>
+{{big}}
+  </section>
+
+  <section class="section" id="reading" aria-labelledby="reading-heading">
+    <h2 id="reading-heading">How to read this page</h2>
+    <ul class="points">
+      <li><b>100% crops:</b> never scaled by this page. On a dense screen (a laptop at 2&times;) the browser doubles every pixel, for B and B2 alike.</li>
+      <li><b>Pictures:</b> JPEG, quality 90 for the full shots and 95 for the crops. The original PNG screenshots are on the Mac in <code>scratch/portage/b2/</code>.</li>
+      <li><b>Frame cost:</b> the frame is drawn 6 times back to back and timed. Other 3D pages were running on the same graphics chip, so both figures read high. Trust the ratio, not the milliseconds.</li>
+      <li><b>Edge sharpness:</b> at each strong edge, the share of the change that happens in one pixel step. 1.0 is a one-pixel edge. Anti-aliased lines sit near 0.75.</li>
+      <li><b>Paper grain:</b> the one thing still fixed to the screen. It is the sheet. B2 turns it down from 60 to 36 on the settings slider.</li>
+    </ul>
+  </section>
+</main>
+<script>
+// A 100% crop scrolls sideways only when its column is narrower than the crop. Only then does it need
+// to be a keyboard stop.
+const crops = document.querySelectorAll('.crop');
+const mark = () => crops.forEach((crop) => {
+  if (crop.scrollWidth > crop.clientWidth + 1) crop.tabIndex = 0;
+  else crop.removeAttribute('tabindex');
+});
+mark();
+addEventListener('resize', mark);
+</script>
+</body>
+</html>

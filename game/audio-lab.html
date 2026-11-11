@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Portage audio lab</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --ground: #14181c;
+        --panel: #1c2228;
+        --line: #2e3740;
+        --text: #dfe5ea;
+        --muted: #93a0ab;
+        --accent: #e0a458;
+        --good: #6fbf8b;
+        --warn: #e0c158;
+        --bad: #e06a58;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 20px 24px 60px;
+        background: var(--ground);
+        color: var(--text);
+        font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      header { max-width: 1800px; margin: 0 auto 16px; }
+      h1 { margin: 0 0 4px; font-size: 22px; font-weight: 650; }
+      header p { margin: 0; color: var(--muted); max-width: 90ch; }
+      main {
+        max-width: 1800px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: minmax(300px, 380px) minmax(360px, 1fr) minmax(360px, 1.15fr);
+        gap: 16px;
+        align-items: start;
+      }
+      .column { display: grid; gap: 16px; }
+      /* Grid items may shrink below their content, so the wide table scrolls inside its panel instead of widening the page. */
+      main > *, .column > *, .panel { min-width: 0; }
+      #selftest { grid-column: 1 / -1; }
+      @media (max-width: 1250px) { main { grid-template-columns: 1fr 1fr; } }
+      @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+
+      .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px 16px; }
+      h2 { margin: 0 0 6px; font-size: 15px; font-weight: 650; }
+      h3 { margin: 12px 0 6px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+      .hint { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+      .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+      .status { color: var(--muted); font-size: 13px; margin: 0; }
+      .status.finished { color: var(--text); }
+
+      button {
+        font: inherit;
+        color: var(--text);
+        background: #27303a;
+        border: 1px solid #3a4651;
+        border-radius: 6px;
+        padding: 6px 11px;
+        cursor: pointer;
+      }
+      button:hover { background: #313c48; border-color: #51606e; }
+      button:active { transform: translateY(1px); }
+      button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      button.primary { background: var(--accent); border-color: var(--accent); color: #1c1408; font-weight: 650; }
+      button.primary:hover { background: #ecb571; }
+      button.primary.done { background: transparent; color: var(--good); border-color: var(--good); }
+      .buttons, .presets { display: flex; flex-wrap: wrap; gap: 6px; }
+      .presets { margin-bottom: 12px; }
+
+      .scenes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+      button.scene { text-align: left; text-transform: capitalize; font-weight: 600; }
+      button.scene small { display: block; font-weight: 400; color: var(--muted); text-transform: none; }
+      button.scene.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+
+      .control { display: grid; grid-template-columns: minmax(96px, 150px) minmax(60px, 1fr) 96px; align-items: center; gap: 10px; padding: 3px 0; }
+      .control .name, .name { color: var(--muted); }
+      .control input[type="range"] { width: 100%; accent-color: var(--accent); }
+      .control output { font-variant-numeric: tabular-nums; text-align: right; }
+      .control select { grid-column: 2 / 4; font: inherit; color: var(--text); background: #27303a; border: 1px solid #3a4651; border-radius: 6px; padding: 4px 6px; }
+      #start .control { grid-template-columns: 76px minmax(60px, 1fr) 48px; }
+      .control.check { grid-template-columns: 20px 1fr; }
+      .control.check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+      .control.check .name { color: var(--text); }
+      .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(330px, 100%), 1fr)); gap: 12px; }
+      fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 0; padding: 6px 12px 10px; min-width: 0; }
+      legend { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; padding: 0 4px; }
+
+      .meter-row { display: grid; grid-template-columns: 104px 1fr 46px 34px; align-items: center; gap: 8px; margin: 6px 0; color: var(--muted); }
+      .meter-row output { color: var(--text); font-variant-numeric: tabular-nums; text-align: right; }
+      .track { height: 12px; background: #0d1013; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+      .bar { height: 100%; width: 0; background: var(--good); }
+      .bar.hot { background: var(--bad); }
+      .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 14px; margin: 10px 0 4px; }
+      .fact output { color: var(--text); font-variant-numeric: tabular-nums; margin-left: 6px; }
+      .voices { display: flex; flex-wrap: wrap; gap: 4px 10px; font-variant-numeric: tabular-nums; flex: 1; }
+
+      .table-wrap { overflow-x: auto; margin-top: 12px; }
+      table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+      th, td { text-align: left; padding: 3px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+      th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--panel); white-space: normal; vertical-align: bottom; }
+      td.number { text-align: right; font-variant-numeric: tabular-nums; }
+      td.note { color: var(--muted); white-space: normal; }
+      td.verdict { font-weight: 650; }
+      tr.ok td.verdict { color: var(--good); }
+      tr.quiet td.verdict { color: var(--warn); }
+      tr.hot td.verdict, tr.silent td.verdict, tr.failed td.verdict { color: var(--bad); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Portage audio lab</h1>
+      <p>Every sound here is synthesised live by the game's audio engine. Click anything once to unlock sound, pick a scene, then press buttons and move sliders. The self-test at the bottom measures levels without speakers.</p>
+    </header>
+    <main>
+      <div class="column">
+        <div id="start" class="column"></div>
+        <div id="meter"></div>
+        <div id="interface"></div>
+      </div>
+      <div id="world" class="column"></div>
+      <div id="sounds" class="column"></div>
+      <div id="selftest"></div>
+    </main>
+    <script type="module" src="/src/audio/lab/lab.ts"></script>
+  </body>
+</html>

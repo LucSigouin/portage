@@ -1,0 +1,25 @@
+{
+  "name": "portage",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5220 --strictPort",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "check": "tsc --noEmit && vitest run",
+    "bot": "node src/bot/cli.ts",
+    "bundle": "vite build",
+    "test:client": "vitest run tests/client",
+    "test:audio": "vitest run tests/audio"
+  },
+  "dependencies": {
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.187.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.7",
+    "vitest": "^5.1.0"
+  }
+}
