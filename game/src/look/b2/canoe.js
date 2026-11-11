@@ -3,7 +3,7 @@
 // B2's own hull space: bow toward +z, y = 0 at the keel amidships. canoe.ts turns it to face -z and
 // sinks it by the draft. Attachments live in attachments.js and attachments.ts.
 import * as THREE from 'three';
-import { Builder, piece, setSpan, nextId } from './geo.js';
+import { Builder, piece, setSpan, nextId, THIN } from './geo.js';
 import { PAL } from './palette.js';
 import { KIND } from './detail.js';
 
@@ -12,7 +12,7 @@ const B2_LENGTH = 5.6;
 // dims: { length, beam, depth, draft } in metres (HULL_TIERS[tier].dimensions)
 export function makeHullShape(dims) {
   const k = dims.length / B2_LENGTH;
-  const HULL = { L: dims.length, B: dims.beam, D: dims.depth, draft: dims.draft, seatZ: -1.74 * k, bowSeatZ: 1.45 * k, seatY: 0.3 * (dims.depth / 0.4), k };
+  const HULL = { L: dims.length, B: dims.beam, D: dims.depth, draft: dims.draft, seatZ: -1.74 * k, bowSeatZ: 1.45 * k, seatY: 0.3 * (dims.depth / 0.4), k, floor: dims.draft + 0.05 };
   const HL = HULL.L / 2;
   const hullHW = (t) => (HULL.B / 2) * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(t), 2.3)), 0.6);
   const hullSheer = (t) => HULL.D + 0.3 * k * Math.pow(Math.abs(t), 2.8);
@@ -38,25 +38,53 @@ export function makeHullShape(dims) {
   return { HULL, HL, hullHW, hullSheer, hullKeel, hullPoint, halfBeamAt, sheerAt };
 }
 
-// tier 0 leaky (B2's hull: every patch is a leak mended), 1 patched (bark and pitch over the seams),
-// 2 ribbed (new rails, rub strakes and mount blocks), 3 long (the same, longer, sheathed in tin at the bow)
+// The four hulls. The paddling camera looks down into the boat from astern, so what tells the tiers
+// apart is drawn where it shows from there: the planking inside, the rails, the decks, the fittings.
+//   0 leaky   faded paint flaking to bare wood, two split seams stuffed with rag, a snapped rail, grey planking
+//   1 patched the same boat: birch bark over both seams, pitched down black, the rail splinted and whipped
+//   2 ribbed  rebuilt: fresh cedar, a dark rib every third station, stout rails, rub strakes, mount blocks, a mast step
+//   3 long    a metre and a half longer: a cream band under the sheer, tin riveted round the bow, closer ribs, floorboards
+const PITCH = '#2e2b2d';
+const BARK = '#ece5d2';
+const CRACK = '#232327';
+const flake = (i, j) => (((i * 73 + j * 151 + 7) * 2654435761) >>> 0) / 4294967296;
+
 export function buildHull(shape, tier = 0) {
   const { HULL, HL, hullHW, hullSheer, hullKeel, hullPoint } = shape;
   const b = new Builder(11);
+  const old = tier < 2;
   const NS = 36;
   const US = [1, 0.93, 0.82, 0.68, 0.52, 0.36, 0.18, 0]; // rows from sheer to keel
   const S = [...US.map((u) => -u), ...US.slice(0, -1).reverse()];
   const NR = S.length - 1; // 14
-  const outer = [];
-  const inner = [];
-  for (let i = 0; i <= NS; i++) {
-    const t = -0.992 + (1.984 * i) / NS;
-    outer.push(S.map((s) => hullPoint(t, s, 0)));
-    inner.push(S.map((s) => hullPoint(t, s, 0.024)));
-  }
+  const T = Array.from({ length: NS + 1 }, (_, i) => -0.992 + (1.984 * i) / NS);
+  const outer = T.map((t) => S.map((s) => hullPoint(t, s, 0)));
+  // The planking you see inside stops at a floor just above the waterline. The game draws the water after the
+  // world and the heroes apart, so anything aboard that lies under the waterline is painted over by the water.
+  const skin = (t, s, inset) => {
+    const p = hullPoint(t, s, inset);
+    if (inset > 0.01 && p.y < HULL.floor) p.y = HULL.floor + (inset - 0.024);
+    return p;
+  };
+  const inner = T.map((t) => S.map((s) => skin(t, s, 0.024)));
   const rowOf = (j) => (j < NR / 2 ? j : NR - 1 - j); // 0 = sheer strake … 6 = keel
+  const sideOf = (j) => (j < NR / 2 ? 0 : 1);
   const strake = {};
   const sid = (key) => (strake[key] ??= nextId());
+  // a pen-weight line lying on the hull's skin, from station i0 to i1 along the vertex row j
+  const along = (i0, i1, j, inset, r, color) => {
+    const pts = [];
+    for (let i = i0; i <= i1; i++) pts.push(skin(T[i], S[j], inset).toArray());
+    b.tube(pts, r, color, { steps: (i1 - i0) * 3, id: THIN, flat: true, kind: KIND.PLAIN }, 5);
+  };
+  const up = (i, j0, j1, inset, r, color) => {
+    const pts = [];
+    for (let j = j0; j <= j1; j++) pts.push(skin(T[i], S[j], inset).toArray());
+    b.tube(pts, r, color, { steps: (j1 - j0) * 3, id: THIN, flat: true, kind: KIND.PLAIN }, 5);
+  };
+  // the two seams that split: the edge between the third and fourth strakes, one a side
+  const seams = [{ side: 0, j: 4, i0: 9, i1: 24 }, { side: 1, j: NR - 4, i0: 10, i1: 25 }];
+
   // patches: the hull's history, each its own inked shape
   const patches = [
     { i0: 22, i1: 23, rows: [1, 2], side: 1, color: '#e3d7b9' }, // canvas
@@ -68,26 +96,28 @@ export function buildHull(shape, tier = 0) {
     { i0: 6, i1: 7, rows: [2, 3], side: 1, color: PAL.tin },
   ];
   if (tier === 1) {
-    // birch bark laid over the two split seams, pitched down
-    patches.push(
-      { i0: 15, i1: 20, rows: [3], side: 1, color: '#ece5d2' }, { i0: 16, i1: 21, rows: [3], side: 0, color: '#ece5d2' },
-      { i0: 9, i1: 11, rows: [1], side: 1, color: '#ece5d2' }, { i0: 29, i1: 31, rows: [2], side: 0, color: '#ece5d2' },
-      { i0: 18, i1: 19, rows: [1], side: 0, color: '#3f3d40' }, { i0: 31, i1: 32, rows: [2], side: 1, color: '#3f3d40' },
-    );
+    // birch bark laid over the two split seams, and over two more weeps
+    for (const seam of seams) patches.push({ i0: seam.i0, i1: seam.i1 - 1, rows: [3, 4], side: seam.side, color: BARK, bark: true });
+    patches.push({ i0: 2, i1: 5, rows: [1, 2], side: 1, color: BARK, bark: true }, { i0: 2, i1: 4, rows: [1, 2], side: 0, color: BARK, bark: true },
+      { i0: 29, i1: 31, rows: [2], side: 0, color: BARK, bark: true });
   }
   if (tier >= 2) patches.length = 2; // rebuilt: only the oldest mends are left
   if (tier >= 3) {
-    // tin sheathing over the bow
-    patches.push({ i0: 30, i1: 35, rows: [2, 3], side: 0, color: PAL.tin }, { i0: 30, i1: 35, rows: [2, 3], side: 1, color: PAL.tin },
-      { i0: 32, i1: 35, rows: [1], side: 0, color: '#9aa3a4' }, { i0: 32, i1: 35, rows: [1], side: 1, color: '#9aa3a4' });
+    // tin sheathing round the bow
+    patches.push({ i0: 30, i1: 35, rows: [2, 3, 4], side: 0, color: PAL.tin, tin: true }, { i0: 30, i1: 35, rows: [2, 3, 4], side: 1, color: PAL.tin, tin: true },
+      { i0: 32, i1: 35, rows: [1], side: 0, color: '#9aa3a4', tin: true }, { i0: 32, i1: 35, rows: [1], side: 1, color: '#9aa3a4', tin: true });
   }
   patches.forEach((p) => (p.id = nextId()));
   const patchAt = (i, j) => {
     const r = rowOf(j);
-    const side = j < NR / 2 ? 0 : 1;
+    const side = sideOf(j);
     return patches.find((p) => p.side === side && i >= p.i0 && i <= p.i1 && p.rows.includes(r));
   };
-  const rust = [tier >= 2 ? PAL.woodLight : '#efe6cf', PAL.rust, '#bd5c40', '#a04c37', '#874233', '#874233', '#874233'];
+  const paint = tier === 3 ? [PAL.woodLight, '#efe6cf', PAL.rust, '#a04c37', '#874233', '#874233', '#874233']
+    : tier === 2 ? [PAL.woodLight, PAL.rust, '#bd5c40', '#a04c37', '#874233', '#874233', '#874233']
+      : ['#cfc5ad', '#b9917f', '#ad8776', '#a17f70', '#93786b', '#93786b', '#93786b']; // sun-faded
+  // on the old hull the paint has flaked off in places, down to grey wood
+  const bare = (i, j) => old && rowOf(j) > 0 && flake(i, j) < 0.42;
   // each patch carries its own frame (metres along the hull, metres up the strakes) for its row of stitches
   const CELL = (1.984 * HL) / NS;
   for (const p of patches) {
@@ -100,7 +130,7 @@ export function buildHull(shape, tier = 0) {
   }
   b.grid(
     outer,
-    (i, j) => patchAt(i, j)?.color ?? rust[rowOf(j)],
+    (i, j) => patchAt(i, j)?.color ?? (bare(i, j) ? '#a89d8a' : paint[rowOf(j)]),
     (i, j) => {
       const p = patchAt(i, j);
       if (p) return p.id;
@@ -108,54 +138,125 @@ export function buildHull(shape, tier = 0) {
       return r >= 4 ? sid('keel') : sid(`${j < NR / 2 ? 'a' : 'b'}${r}`);
     },
     {
-      kind: (i, j) => (patchAt(i, j) ? KIND.PATCH : KIND.PAINT),
+      kind: (i, j) => (patchAt(i, j) ? KIND.PATCH : bare(i, j) ? KIND.DRIFT : KIND.PAINT),
       tex: (vi, vj, i, j) => {
         const p = patchAt(i, j);
         return p ? [(vi - p.i0) * CELL, p.girth[vj - p.j0], (p.i1 + 1 - p.i0) * CELL, p.girth[p.girth.length - 1]] : null;
       },
     }
   );
+  for (const p of patches) {
+    if (p.bark) {
+      // pitch run round the edge of every piece of bark
+      along(p.i0, p.i1 + 1, p.j0, -0.004, 0.013, PITCH);
+      along(p.i0, p.i1 + 1, p.j1, -0.004, 0.013, PITCH);
+      up(p.i0, p.j0, p.j1, -0.004, 0.013, PITCH);
+      up(p.i1 + 1, p.j0, p.j1, -0.004, 0.013, PITCH);
+    }
+    if (p.tin) {
+      // a row of rivets along the top of each sheet
+      const j = p.side === 0 ? p.j0 : p.j1;
+      for (let i = p.i0; i <= p.i1; i++) {
+        const at = hullPoint((T[i] + T[i + 1]) / 2, S[j] * (p.side === 0 ? 0.985 : 0.985), -0.004);
+        b.sphere(0.011, '#6f7678', { pos: at.toArray(), flat: true, kind: KIND.PLAIN }, 6);
+      }
+    }
+  }
   // her name, stencilled on both bows
   for (const sd of [1, -1]) {
     const t0 = sd > 0 ? 0.665 : 0.565;
     const o = hullPoint(t0, sd * 0.775);
-    const along = hullPoint(t0 - sd * 0.03, sd * 0.775).sub(o).normalize();
-    const up = hullPoint(t0, sd * 0.86).sub(o).normalize();
-    const out = new THREE.Vector3().crossVectors(along, up).normalize();
+    const right = hullPoint(t0 - sd * 0.03, sd * 0.775).sub(o).normalize();
+    const upward = hullPoint(t0, sd * 0.86).sub(o).normalize();
+    const out = new THREE.Vector3().crossVectors(right, upward).normalize();
     o.addScaledVector(out, 0.004);
-    b.stencil('OTTER', o.toArray(), along.toArray(), up.toArray(), 0.062, '#efe6cf');
+    b.stencil('OTTER', o.toArray(), right.toArray(), upward.toArray(), 0.062, old ? '#d8ccae' : '#efe6cf');
   }
-  // inside: cedar planking with darker ribs
+
+  // inside: on the old hull grey planking; rebuilt, fresh cedar with a dark rib at every third station (every second on the long one)
   const ribId = nextId();
   const plankId = nextId();
+  const barkIn = seams.map(() => nextId());
+  const seamAt = (i, j) => (tier === 1 ? seams.findIndex((seam) => seam.side === sideOf(j) && i >= seam.i0 && i < seam.i1 && rowOf(j) >= 3 && rowOf(j) <= 5) : -1);
+  const rib = (i) => (tier >= 3 ? i % 2 === 0 : tier === 2 ? i % 3 === 0 : Math.floor(i / 3) % 2 === 1);
   b.grid(
     inner,
-    (i) => (tier >= 2 ? (i % 3 === 0 ? '#a98658' : '#dcc091') : Math.floor(i / 3) % 2 ? '#d0b07f' : '#d9bc8d'),
-    (i) => ((tier >= 2 ? i % 3 === 0 : Math.floor(i / 3) % 2) ? ribId : plankId)
+    (i, j) => {
+      if (seamAt(i, j) >= 0) return BARK;
+      if (tier >= 3) return rib(i) ? '#8f6d47' : '#e6cf9f';
+      if (tier === 2) return rib(i) ? '#8f6d47' : '#e2c896';
+      return flake(i, j + 40) < 0.16 ? '#8f8370' : rib(i) ? '#a89b86' : '#b8ab95';
+    },
+    (i, j) => (seamAt(i, j) >= 0 ? barkIn[seamAt(i, j)] : rib(i) ? ribId : plankId),
+    { kind: (i, j) => (seamAt(i, j) >= 0 ? KIND.BIRCH : KIND.WOOD) }
   );
+  for (const seam of seams) {
+    if (tier === 0) {
+      // the split: a dark slit through the planking, inside and out, with rag pushed into it
+      along(seam.i0, seam.i1, seam.j, -0.003, 0.011, CRACK);
+      along(seam.i0, seam.i1, seam.j, 0.028, 0.014, CRACK);
+      for (const i of [seam.i0 + 2, seam.i1 - 1]) {
+        const at = skin(T[i], S[seam.j], 0.036);
+        b.sphere(0.034, '#e3d7b9', { pos: at.toArray(), scale: [1, 0.7, 1.7], kind: KIND.CLOTH }, 7);
+      }
+    } else if (tier === 1) {
+      // the same bark seen from inside, bedded in pitch
+      const [j0, j1] = seam.side === 0 ? [seam.j - 1, seam.j + 2] : [seam.j - 2, seam.j + 1];
+      along(seam.i0, seam.i1, j0, 0.03, 0.014, PITCH);
+      along(seam.i0, seam.i1, j1, 0.03, 0.014, PITCH);
+      up(seam.i0, j0, j1, 0.03, 0.014, PITCH);
+      up(seam.i1, j0, j1, 0.03, 0.014, PITCH);
+    }
+  }
+
   // gunwales, tacked down every hand-span
+  const railR = old ? 0.027 : 0.036;
+  const railColor = old ? PAL.woodDark : tier >= 3 ? '#efe6cf' : PAL.wood;
   for (const j of [0, NR]) {
-    const pts = outer.map((row) => [row[j].x * 1.0, row[j].y + 0.004, row[j].z]);
-    b.tube(pts, tier >= 2 ? 0.036 : 0.027, tier >= 2 ? PAL.wood : PAL.woodDark, { steps: 72 }, 6);
-    if (tier >= 2) {
-      // ribbed: a rub strake along each side, and blocks on the rail where things bolt on
+    const pts = outer.map((row) => [row[j].x, row[j].y + 0.004, row[j].z]);
+    if (old && j === 0) {
+      // this rail snapped between two stations
+      b.tube(pts.slice(0, 21), railR, railColor, { steps: 40 }, 6);
+      b.tube(pts.slice(23), railR, railColor, { steps: 28 }, 6);
+      if (tier === 0) {
+        // splintered ends
+        b.beam(pts[20], [pts[20][0] + 0.03, pts[20][1] + 0.05, pts[20][2] + 0.1], 0.013, '#d8c8a2', { r2: 0.004, kind: KIND.WOOD }, 5);
+        b.beam(pts[23], [pts[23][0] + 0.01, pts[23][1] + 0.03, pts[23][2] - 0.09], 0.013, '#d8c8a2', { r2: 0.004, kind: KIND.WOOD }, 5);
+      } else {
+        // splinted with a batten and whipped with cord
+        b.tube(pts.slice(19, 25).map((p) => [p[0], p[1] + 0.012, p[2]]), 0.023, PAL.woodLight, { steps: 12 }, 6);
+        for (const i of [19, 20, 23, 24]) {
+          for (const d of [0.25, 0.5, 0.75]) {
+            const at = [0, 1, 2].map((axis) => pts[i][axis] + (pts[i + 1][axis] - pts[i][axis]) * d);
+            b.torus(0.036, 0.009, '#d9c79b', { pos: [at[0], at[1] + 0.008, at[2]], id: 0.71, kind: KIND.ROPE }, 8);
+          }
+        }
+      }
+    } else {
+      b.tube(pts, railR, railColor, { steps: 72, kind: tier >= 3 ? KIND.PAINT : KIND.WOOD }, 6);
+    }
+    if (!old) {
+      // rebuilt: a rub strake along each side, and blocks on the rail where things bolt on
       const rj = j === 0 ? 2 : NR - 2;
       b.tube(outer.filter((_, i) => i > 2 && i < NS - 2).map((row) => [row[rj].x * 1.02, row[rj].y, row[rj].z]), 0.016, PAL.woodLight, { steps: 60 }, 5);
-      for (const i of [7, 13, 23, 29]) {
+      for (const i of tier >= 3 ? [5, 9, 14, 18, 22, 27, 31] : [7, 13, 23, 29]) {
         b.box(0.06, 0.05, 0.16, PAL.woodDark, { pos: [outer[i][j].x, outer[i][j].y + 0.03, outer[i][j].z] });
         b.bolt(outer[i][j].x, outer[i][j].y + 0.06, outer[i][j].z, '#2f3038', 0.014);
       }
     }
-    for (let i = 2; i < NS - 1; i += 2) b.tack(outer[i][j].x, outer[i][j].y + 0.033, outer[i][j].z, 0.01, '#c9b78e');
+    for (let i = 2; i < NS - 1; i += 2) {
+      if (old && j === 0 && i >= 20 && i <= 23) continue;
+      b.tack(outer[i][j].x, outer[i][j].y + 0.033, outer[i][j].z, 0.01, '#c9b78e');
+    }
   }
-  // stem bands
+  // stem bands and deck plates. sg = +1 is the bow.
   for (const sg of [-1, 1]) {
+    const tinned = tier >= 3 && sg > 0;
     const pts = [];
     for (let t = 0.8; t <= 0.992; t += 0.032) pts.push([0, hullKeel(t) - 0.004, sg * t * HL]);
     pts.push([0, hullKeel(0.992) + 0.02, sg * (0.992 * HL + 0.012)]);
     pts.push([0, hullSheer(0.992) + 0.03, sg * (0.992 * HL + 0.014)]);
-    b.tube(pts, 0.022, PAL.woodDark, { steps: 24 }, 6);
-    // deck plate
+    b.tube(pts, 0.022, tinned ? PAL.tin : PAL.woodDark, { steps: 24, kind: tinned ? KIND.METAL : KIND.WOOD }, 6);
     const deck = [];
     for (let q = 0; q <= 5; q++) {
       const t = sg * (0.76 + (0.232 * q) / 5);
@@ -164,28 +265,69 @@ export function buildHull(shape, tier = 0) {
       deck.push([new THREE.Vector3(-w, y, t * HL), new THREE.Vector3(0, y + 0.02, t * HL), new THREE.Vector3(w, y, t * HL)]);
     }
     const did = nextId();
-    b.grid(deck, () => '#8a6748', () => did);
+    const mendId = nextId();
+    // on the old hull half the stern deck has gone: a hole on the leaky one, a sheet of bark pitched over it once patched
+    const gone = (i, j) => old && sg < 0 && i <= 2 && j === 1;
+    b.grid(deck, (i, j) => (gone(i, j) ? (tier === 0 ? null : BARK) : tinned ? PAL.tin : old ? '#8f8371' : '#c9a877'), (i, j) => (gone(i, j) ? mendId : did),
+      { kind: (i, j) => (gone(i, j) ? KIND.BIRCH : tinned ? KIND.METAL : KIND.WOOD) });
+    if (tier === 1 && sg < 0) {
+      const lift = (v) => [v.x, v.y + 0.006, v.z];
+      b.tube([deck[0][1], deck[1][1], deck[2][1], deck[3][1]].map(lift), 0.013, PITCH, { id: THIN, flat: true, kind: KIND.PLAIN }, 5);
+      b.tube([deck[3][1], deck[3][2]].map(lift), 0.013, PITCH, { id: THIN, flat: true, kind: KIND.PLAIN }, 5);
+      b.tube([deck[0][1], deck[0][2]].map(lift), 0.013, PITCH, { id: THIN, flat: true, kind: KIND.PLAIN }, 5);
+    }
+    if (!old) {
+      // a coaming across the deck's open edge, and the plate things bolt down to
+      const tc = 0.76;
+      b.box(hullHW(tc) * 2 - 0.02, 0.05, 0.035, PAL.woodDark, { pos: [0, hullSheer(tc) + 0.03, sg * tc * HL] });
+      const tp = 0.8;
+      b.box(0.2, 0.012, 0.2, PAL.iron, { pos: [0, hullSheer(tp) + 0.036, sg * tp * HL], kind: KIND.METAL });
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.bolt(sx * 0.075, hullSheer(tp) + 0.046, sg * tp * HL + sz * 0.075, '#2f3038', 0.012);
+    }
+    if (tinned) {
+      for (let q = 0; q < 5; q++) {
+        const t = 0.78 + q * 0.045;
+        for (const sx of [-1, 1]) b.tack(sx * (hullHW(t) - 0.03), hullSheer(t) + 0.016, t * HL, 0.009, '#6f7678');
+      }
+    }
   }
   // thwart + seats
+  const frame = old ? PAL.woodDark : PAL.wood;
   const across = (z, depth, y, color, th = 0.03) => {
     const t = z / HL;
     b.box(hullHW(t) * 2 - 0.02, th, depth, color, { pos: [0, y, z] });
   };
-  across(0.1, 0.075, HULL.D - 0.02, PAL.woodDark);
+  across(0.1, 0.075, HULL.D - 0.02, frame);
   for (const z of [HULL.seatZ, HULL.bowSeatZ]) {
     const t = z / HL;
     const w = hullHW(t) * 2 - 0.03;
-    b.box(w, 0.03, 0.05, PAL.woodDark, { pos: [0, HULL.seatY, z - 0.14] });
-    b.box(w, 0.03, 0.05, PAL.woodDark, { pos: [0, HULL.seatY, z + 0.14] });
-    b.box(w * 0.86, 0.016, 0.25, '#e4d8ba', { pos: [0, HULL.seatY + 0.004, z], kind: KIND.CANE }); // cane seat
+    b.box(w, 0.03, 0.05, frame, { pos: [0, HULL.seatY, z - 0.14] });
+    b.box(w, 0.03, 0.05, frame, { pos: [0, HULL.seatY, z + 0.14] });
+    b.box(w * 0.86, 0.016, 0.25, old ? '#d6c9a8' : '#e4d8ba', { pos: [0, HULL.seatY + 0.004, z], kind: KIND.CANE }); // cane seat
     for (const sx of [-1, 1]) for (const dz of [-0.14, 0.14]) b.bolt((sx * w) / 2 - sx * 0.035, HULL.seatY + 0.018, z + dz, '#3a3b44', 0.012);
   }
   // thwart lashed to the gunwales
   for (const sx of [-1, 1]) {
     for (const dz of [-0.02, 0.02]) b.torus(0.04, 0.009, '#d9c79b', { pos: [sx * (hullHW(0.1 / HL) - 0.03), HULL.D - 0.005, 0.1 + dz], rot: [0, 0, 0], id: 0.71, kind: KIND.ROPE }, 8);
   }
+  if (!old) {
+    // the mast step: a block on the keelson with an iron collar, waiting for a mast
+    const z = 0.4;
+    const y = HULL.floor + 0.03;
+    b.box(0.2, 0.05, 0.2, PAL.woodDark, { pos: [0, y, z] });
+    b.torus(0.062, 0.014, PAL.iron, { pos: [0, y + 0.03, z], rot: [Math.PI / 2, 0, 0], kind: KIND.METAL }, 10);
+  }
+  if (tier >= 3) {
+    // floorboards: slats over the ribs, the middle ones longest
+    [-0.21, -0.105, 0, 0.105, 0.21].forEach((x, n) => {
+      const reach = (Math.abs(x) > 0.15 ? 0.42 : 0.56) * HL;
+      b.box(0.088, 0.016, reach * 2, n % 2 ? '#d6c193' : '#c8b184', { pos: [x, HULL.floor + 0.012, 0], kind: KIND.WOOD, axis: 2 });
+    });
+    for (const z of [-0.36 * HL, 0, 0.36 * HL]) b.box(0.52, 0.012, 0.05, PAL.woodDark, { pos: [0, HULL.floor + 0.024, z] });
+  }
   return b.mesh();
 }
+
 
 // The leak: water lying in the bilge. world-view lifts it with canoe.waterLevel.
 export function buildBilge(shape) {
@@ -206,7 +348,8 @@ export function buildBilge(shape) {
 // loose kit is shoved up against the thwart, out of their way. Left out, it is B2's layout exactly.
 export function buildStarterKit(shape, crewed = false) {
   const b = new Builder(23);
-  b.root = new THREE.Matrix4().makeScale(1, shape.HULL.D / 0.4, shape.HULL.k); // B2 laid it out in a 5.6 m hull
+  // B2 laid it out in a 5.6 m hull, on a floor 6 cm up
+  b.root = new THREE.Matrix4().makeTranslation(0, shape.HULL.floor - 0.06, 0).multiply(new THREE.Matrix4().makeScale(1, shape.HULL.D / 0.4, shape.HULL.k));
   const tinZ = crewed ? -0.2 : -0.72;
   const packZ = crewed ? 0.34 : 0.72;
   const gumZ = crewed ? -0.06 : -0.35;

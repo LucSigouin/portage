@@ -1,0 +1,316 @@
+/**
+ * The bolted-on pieces, checked from their own meshes with no graphics card:
+ * every id has a real drawing, each one sits at the mount the rules give,
+ * the ones with a state follow it, and on the fully fitted long canoe no
+ * crew member is inside a piece.
+ */
+import * as THREE from 'three';
+import { describe, expect, it } from 'vitest';
+import { ATTACHMENT_IDS, HULL_TIERS } from '../../src/data/index.ts';
+import type { AttachmentId } from '../../src/data/index.ts';
+import { attachmentTransformForHull, createGame } from '../../src/sim/index.ts';
+import type { GameState } from '../../src/sim/index.ts';
+import { PLACEHOLDER_ATTACHMENTS, buildAttachment } from '../../src/look/attachments.ts';
+import type { AttachmentPiece } from '../../src/look/attachments.ts';
+import { makeHullShape } from '../../src/look/b2/canoe.js';
+import type { Crew as Figure } from '../../src/look/b2/canoe.js';
+import { CanoeView } from '../../src/look/canoe.ts';
+import { crewOf } from '../../src/look/crew.ts';
+import { boxTouchesTriangle, slabsOf, trianglesOf } from './canoe-geometry.ts';
+import type { Triangles } from './canoe-geometry.ts';
+
+function build(attachmentId: AttachmentId, tier: number): AttachmentPiece {
+  const dimensions = HULL_TIERS[tier].dimensions;
+  const transform = attachmentTransformForHull(attachmentId, tier);
+  return buildAttachment(attachmentId, {
+    hullTier: tier, shape: makeHullShape(dimensions), halfBeam: dimensions.beam / 2, gunwaleY: dimensions.depth - dimensions.draft,
+    mount: transform.position, rotation: transform.rotation,
+  });
+}
+
+const meshesOf = (object: THREE.Object3D): THREE.Mesh[] => {
+  const meshes: THREE.Mesh[] = [];
+  object.traverse((child) => {
+    if ((child as THREE.Mesh).isMesh) meshes.push(child as THREE.Mesh);
+  });
+  return meshes;
+};
+
+/** A game with the long hull, every attachment and a crew of four, the canoe at the origin pointing down -z. */
+function fitted(tier = 3, crew = 4): GameState {
+  const state = createGame(7, { crew });
+  state.canoe.hullTier = tier;
+  state.canoe.attachments = ATTACHMENT_IDS.filter((attachmentId) => tier >= 3 || (attachmentId !== 'winch' && attachmentId !== 'radio'));
+  state.canoe.position = { x: 0, y: 0, z: 0 };
+  state.canoe.heading = 0;
+  state.canoe.pitch = 0;
+  state.canoe.roll = 0;
+  state.canoe.beached = false;
+  state.canoe.sailRaised = true;
+  return state;
+}
+
+const holdersOf = (view: CanoeView): THREE.Object3D[] => (view as unknown as { attachments: THREE.Group }).attachments.children;
+const figureOf = (view: CanoeView, playerId: number): Figure =>
+  (view as unknown as { members: Map<number, { figure: Figure }> }).members.get(playerId)!.figure;
+
+describe('every attachment', () => {
+  it('has its own drawing: many pieces, many colours, no stand-in box', () => {
+    expect(ATTACHMENT_IDS).toHaveLength(19);
+    expect(PLACEHOLDER_ATTACHMENTS).toEqual([]);
+    for (const attachmentId of ATTACHMENT_IDS) {
+      const ids = new Set<number>();
+      const colours = new Set<string>();
+      let vertices = 0;
+      for (const mesh of meshesOf(build(attachmentId, 3).object)) {
+        const info = mesh.geometry.getAttribute('aInfo');
+        const colour = mesh.geometry.getAttribute('aColor');
+        vertices += info.count;
+        for (let index = 0; index < info.count; index += 1) {
+          ids.add(info.getX(index));
+          colours.add(`${colour.getX(index).toFixed(2)},${colour.getY(index).toFixed(2)},${colour.getZ(index).toFixed(2)}`);
+        }
+      }
+      // The old stand-in was one box with two straps and four bolts: 7 pieces, about 500 vertices, 3 colours.
+      expect(ids.size, `${attachmentId}: inked pieces`).toBeGreaterThanOrEqual(12);
+      expect(colours.size, `${attachmentId}: colours`).toBeGreaterThanOrEqual(4);
+      expect(vertices, `${attachmentId}: vertices`).toBeGreaterThan(900);
+    }
+  });
+
+  it('sits at the mount the rules give, on both hulls that carry it', () => {
+    for (const tier of [2, 3]) {
+      for (const attachmentId of ATTACHMENT_IDS) {
+        // In the mount's own space the mount is the origin: the piece must reach it, within a hand's width.
+        const box = new THREE.Box3();
+        const piece = build(attachmentId, tier);
+        piece.update?.(fitted(tier).canoe, 0);
+        for (const mesh of meshesOf(piece.object)) {
+          mesh.geometry.computeBoundingBox();
+          box.union(mesh.geometry.boundingBox!);
+        }
+        const gap = box.distanceToPoint(new THREE.Vector3(0, 0, 0));
+        expect(gap, `${attachmentId} on tier ${tier}: metres from its mount`).toBeLessThan(0.1);
+        // And it is not a piece that merely passes by: most of it is within reach of the mount.
+        const centre = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        expect(Math.hypot(centre.x, centre.z), `${attachmentId} on tier ${tier}: centre from its mount`).toBeLessThan(Math.max(size.x, size.z) * 0.62 + 0.05);
+      }
+    }
+  });
+
+  it('is hung by the canoe view exactly where the rules say', () => {
+    for (const tier of [2, 3]) {
+      const state = fitted(tier);
+      const view = new CanoeView();
+      view.sync(state, crewOf(state), 0, 0, true, true);
+      const holders = holdersOf(view);
+      expect(holders).toHaveLength(state.canoe.attachments.length);
+      state.canoe.attachments.forEach((attachmentId, index) => {
+        const transform = attachmentTransformForHull(attachmentId, tier);
+        expect(holders[index].position.toArray(), attachmentId).toEqual(transform.position);
+        expect([holders[index].rotation.x, holders[index].rotation.y, holders[index].rotation.z], attachmentId).toEqual(transform.rotation);
+      });
+    }
+  });
+});
+
+describe('pieces with a state', () => {
+  const visibleVertices = (piece: AttachmentPiece): number =>
+    meshesOf(piece.object).reduce((sum, mesh) => {
+      let shown = true;
+      for (let node: THREE.Object3D | null = mesh; node; node = node.parent) shown &&= node.visible;
+      return sum + (shown ? mesh.geometry.getAttribute('position').count : 0);
+    }, 0);
+  /** The colours a piece shows right now that glow fully (a lit lamp). */
+  const lamps = (piece: AttachmentPiece): number =>
+    meshesOf(piece.object).reduce((sum, mesh) => {
+      let shown = true;
+      for (let node: THREE.Object3D | null = mesh; node; node = node.parent) shown &&= node.visible;
+      const info = mesh.geometry.getAttribute('aInfo');
+      let glowing = 0;
+      for (let index = 0; index < info.count; index += 1) if (info.getY(index) >= 0.99) glowing += 1;
+      return sum + (shown ? glowing : 0);
+    }, 0);
+
+  it('the sail is set when raised and furled on the boom when not', () => {
+    const state = fitted();
+    const piece = build('mast_sail', 3);
+    const heights = (): number => {
+      const box = new THREE.Box3();
+      piece.object.updateMatrixWorld(true);
+      piece.object.traverseVisible((child) => {
+        const mesh = child as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        mesh.geometry.computeBoundingBox();
+        box.union(mesh.geometry.boundingBox!);
+      });
+      return box.max.y;
+    };
+    state.canoe.sailRaised = true;
+    piece.update!(state.canoe, 0);
+    const raised = visibleVertices(piece);
+    const cloth = meshesOf(piece.object).filter((mesh) => (mesh.geometry.getAttribute('position') as THREE.BufferAttribute).usage === THREE.DynamicDrawUsage);
+    expect(cloth).toHaveLength(1);
+    expect(cloth[0].parent!.visible).toBe(true);
+    state.canoe.sailRaised = false;
+    piece.update!(state.canoe, 0);
+    expect(cloth[0].parent!.visible).toBe(false);
+    expect(visibleVertices(piece)).not.toBe(raised);
+    // The mast stands either way.
+    expect(heights()).toBeGreaterThan(4);
+  });
+
+  it('the sail moves slowly: under 4 cm in a tenth of a second anywhere on it', () => {
+    const state = fitted();
+    const piece = build('mast_sail', 3);
+    const cloth = meshesOf(piece.object).find((mesh) => (mesh.geometry.getAttribute('position') as THREE.BufferAttribute).usage === THREE.DynamicDrawUsage)!;
+    let fastest = 0;
+    for (let time = 0; time < 20; time += 0.1) {
+      piece.update!(state.canoe, time);
+      const before = Float32Array.from(cloth.geometry.getAttribute('position').array);
+      piece.update!(state.canoe, time + 0.1);
+      const after = cloth.geometry.getAttribute('position').array;
+      for (let index = 0; index < before.length; index += 3) {
+        fastest = Math.max(fastest, Math.hypot(after[index] - before[index], after[index + 1] - before[index + 1], after[index + 2] - before[index + 2]));
+      }
+    }
+    expect(fastest).toBeGreaterThan(0.0005);
+    expect(fastest).toBeLessThan(0.004);
+  });
+
+  it('the lantern glows only when the canoe says it is lit', () => {
+    const state = fitted();
+    const piece = build('lantern_mast', 3);
+    state.canoe.lanternLit = true;
+    piece.update!(state.canoe, 0);
+    expect(lamps(piece)).toBeGreaterThan(0);
+    state.canoe.lanternLit = false;
+    piece.update!(state.canoe, 0);
+    expect(lamps(piece)).toBe(0);
+  });
+
+  it('the canopy is rolled forward under way and drawn over the cockpit when beached', () => {
+    const state = fitted();
+    const piece = build('canopy', 3);
+    const spanShown = (): number => {
+      const box = new THREE.Box3();
+      piece.object.traverseVisible((child) => {
+        const mesh = child as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const info = mesh.geometry.getAttribute('aInfo');
+        const position = mesh.geometry.getAttribute('position');
+        // cloth only (material tag 5 or a stitched patch 14)
+        for (let index = 0; index < info.count; index += 1) {
+          if (info.getZ(index) === 5 || info.getZ(index) === 14) box.expandByPoint(new THREE.Vector3().fromBufferAttribute(position, index));
+        }
+      });
+      return box.isEmpty() ? 0 : box.max.z - box.min.z;
+    };
+    state.canoe.beached = false;
+    piece.update!(state.canoe, 0);
+    expect(spanShown()).toBeLessThan(0.3);
+    state.canoe.beached = true;
+    piece.update!(state.canoe, 0);
+    expect(spanShown()).toBeGreaterThan(0.9);
+  });
+
+  it('the water in the rain pail stands at the rain progress', () => {
+    const state = fitted();
+    const piece = build('rain_catcher', 3);
+    const level = (): number => {
+      const water = meshesOf(piece.object).find((mesh) => mesh.position.lengthSq() > 0 || mesh.geometry.getAttribute('position').count < 200)!;
+      // The mount is tilted 0.2 rad about z; in canoe space the water only ever moves straight up.
+      const turned = water.position.clone().applyEuler(new THREE.Euler(0, 0, 0.2));
+      expect(Math.abs(turned.x)).toBeLessThan(1e-6);
+      return turned.y;
+    };
+    state.canoe.rainProgress = 0;
+    piece.update!(state.canoe, 0);
+    const empty = level();
+    state.canoe.rainProgress = 1;
+    piece.update!(state.canoe, 0);
+    expect(level() - empty).toBeGreaterThan(0.12);
+  });
+});
+
+describe('the fully fitted long canoe with a crew of four', () => {
+  type Pose = 'rest' | 'paddle' | 'bail' | 'sleep';
+  interface Hit { pose: Pose; seat: number; part: AttachmentId; limb: string }
+
+  /** Every place a crew member's body is inside a piece, over a few seconds of that pose. `paddles` checks the paddles instead. */
+  function hits(tier: number, poses: Pose[], paddles = false, crew = 4): Hit[] {
+    const found = new Map<string, Hit>();
+    for (const pose of poses) {
+      const state = fitted(tier, crew);
+      for (const player of state.players) {
+        player.paddling = pose === 'paddle';
+        player.bailing = pose === 'bail';
+        player.asleep = pose === 'sleep';
+      }
+      const view = new CanoeView();
+      view.sync(state, crewOf(state), 0, 0, true, true);
+      view.group.updateMatrixWorld(true);
+      const parts: { id: AttachmentId; triangles: Triangles }[] = holdersOf(view).map((holder, index) => ({
+        id: state.canoe.attachments[index], triangles: trianglesOf(holder),
+      }));
+      // Long enough for the paddles to change sides twice.
+      const seconds = pose === 'paddle' ? 9 : pose === 'bail' ? 2.6 : 0.4;
+      for (let time = 0; time < seconds; time += 1 / 12) {
+        view.sync(state, crewOf(state), 1 / 12, time, true, false);
+        view.group.updateMatrixWorld(true);
+        for (const player of state.players) {
+          const figure = figureOf(view, player.id);
+          figure.root.traverse((child) => {
+            const mesh = child as THREE.Mesh;
+            if (!mesh.isMesh || !mesh.visible || (mesh === figure.paddler.paddle) !== paddles) return;
+            const rail = HULL_TIERS[tier].dimensions.beam / 2 + 0.05;
+            for (const box of slabsOf(mesh, paddles ? 0.05 : 0.1)) {
+              // A paddle is checked where it is outboard: changing sides, it swings across the boat in a fifth of a second.
+              if (paddles && Math.min(Math.abs(box.min.x), Math.abs(box.max.x)) < rail) continue;
+              for (const part of parts) {
+                if (found.has(`${pose}:${player.seat}:${part.id}`)) continue;
+                if (boxTouchesTriangle(box, part.triangles)) {
+                  const at = box.getCenter(new THREE.Vector3());
+                  found.set(`${pose}:${player.seat}:${part.id}`, { pose, seat: player.seat ?? -1, part: part.id, limb: `at ${at.x.toFixed(2)}, ${at.y.toFixed(2)}, ${at.z.toFixed(2)}` });
+                }
+              }
+            }
+          });
+        }
+      }
+    }
+    return [...found.values()];
+  }
+  const told = (list: Hit[]): string[] => list.map((hit) => `${hit.pose} seat ${hit.seat} in ${hit.part}`).sort();
+
+  it('seats nobody inside a piece: at rest, paddling, bailing or asleep', () => {
+    const found = hits(3, ['rest', 'paddle', 'bail', 'sleep']);
+    // One is left that the drawing cannot solve. The rules put the firebox 41 cm behind the bow seat and 44 cm
+    // ahead of the forward kneeler: paddling, that kneeler's leading hand passes over the firebox's aft lip.
+    // The firebox is drawn 9 cm deep and 10 cm tall to keep it to that. It is in the report, with the numbers.
+    expect(told(found), found.map((hit) => `${hit.part} ${hit.limb}`).join('; ')).toEqual(['paddle seat 3 in firebox']);
+  });
+
+  it('lets the two seated paddlers swing their paddles clear of every piece', () => {
+    const inTheWay = hits(3, ['paddle', 'rest'], true).filter((hit) => hit.seat <= 1);
+    expect(told(inTheWay)).toEqual([]);
+  });
+
+  it('on the ribbed hull, the lone paddler fits round everything it can carry', () => {
+    expect(told(hits(2, ['rest', 'paddle', 'bail', 'sleep'], false, 1))).toEqual([]);
+    expect(told(hits(2, ['rest', 'paddle'], true, 1))).toEqual([]);
+  });
+
+  it('on the ribbed hull, a bow paddler fits too, but for the firebox the rules mount on the bow seat', () => {
+    // Tier 2: the bow seat is at z = -1.269 and the firebox mount at z = -1.25. In the report.
+    const found = hits(2, ['rest', 'paddle', 'bail', 'sleep'], false, 2);
+    expect([...new Set(found.map((hit) => `seat ${hit.seat} in ${hit.part}`))].sort()).toEqual(['seat 1 in firebox']);
+  });
+
+  it('knows the one thing the drawing cannot solve: the kneelers\' paddles cross the outrigger decks', () => {
+    // Seats 2 and 3 kneel beside the decks, and the rules put the decks' stations 1.1 m out. Listed in the report.
+    const inTheWay = hits(3, ['paddle'], true).filter((hit) => hit.seat >= 2).map((hit) => hit.part);
+        for (const part of inTheWay) expect(['outrigger_port', 'outrigger_starboard', 'workbench', 'smoker', 'planter', 'forge', 'fishing_rig']).toContain(part);
+  });
+});
