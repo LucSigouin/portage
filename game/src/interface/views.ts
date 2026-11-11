@@ -7,14 +7,14 @@
  * control carries the intent the model gave it.
  */
 import type {
-  BuildRowModel, ButtonModel, ConfirmModel, CostRowModel, DebugModel, HotbarSlotModel, HudModel, InterfaceIntent,
+  BuildRowModel, ButtonModel, ConfirmModel, CostRowModel, CrewRowModel, DebugModel, HotbarSlotModel, HudModel, InterfaceIntent,
   ItemSlotModel, LobbyModel, MapMarkerModel, ObjectiveRowModel, PanelModel, PromptModel, QuestRowModel, RecipeRowModel,
   SaveSlotModel, SettingRowModel, ToastModel,
 } from '../client/contracts.ts';
 import { control, h } from './dom.ts';
 import type { ViewChild, ViewNode } from './dom.ts';
 import type { ItemId } from '../data/index.ts';
-import { ICON, SEAL, itemIcon, logotype, waterGauge } from './icons.ts';
+import { ICON, SEAL, itemIcon, logotype, toqueIcon, waterGauge } from './icons.ts';
 
 const icon = (markup: string, className = ''): ViewNode => h('i.iw-i', { class: className, html: markup, 'aria-hidden': 'true' });
 
@@ -77,7 +77,36 @@ export function lobbyView(lobby: LobbyModel): ViewNode[] {
 
 const METER_ICON = { hunger: ICON.hunger, thirst: ICON.thirst, energy: ICON.energy } as const;
 
-/** Top left: the three meters, the water in the hull and the canoe's status lines. */
+/**
+ * The crew list, hung under the vitals card: one row a player. Their toque in their own colour,
+ * their label, three small meters in the order of the big ones above, where they are and how far.
+ * A low meter is marked three ways: its bar is ringed in rust, the row gets a rust mark, and the
+ * words say which. Nothing in it moves.
+ */
+export function crewView(crew: CrewRowModel[], patterned: boolean): ViewNode {
+  return h('div.iw-crew.iw-paper', { key: 'crew', role: 'group', 'aria-label': 'Crew' },
+    h('i.iw-tape'),
+    crew.map((mate) => h('div.iw-mate', {
+      key: mate.playerId, 'data-player': mate.playerId, 'data-where': mate.where,
+      class: classes(mate.you && 'iw-you', mate.lowText !== '' && 'iw-low'),
+    },
+    icon(toqueIcon(mate.color), 'iw-mate-toque'),
+    h('span.iw-mate-name', null, mate.label, mate.you ? h('small.iw-kind', null, 'you') : null),
+    h('span.iw-mate-meters', null, mate.meters.map((meter) => h('span.iw-bar', {
+      key: meter.id, role: 'img', 'aria-label': `${meter.label} ${meter.value}`, title: `${meter.label} ${meter.value}`,
+      class: classes(`iw-bar-${meter.id}`, patterned && `iw-${meter.pattern}`, meter.low && 'iw-low'),
+    },
+    h('i', { style: `--v:${meter.value / 100}` }),
+    meter.cap < 100 ? h('u', { style: `--v:${meter.cap / 100}` }) : null))),
+    mate.lowText !== '' ? h('b.iw-mate-alert', { key: 'alert', 'aria-hidden': 'true' }, '!')
+      : mate.where === 'asleep' ? icon(ICON.moon, 'iw-mate-asleep') : null,
+    h('span.iw-mate-place', null,
+      h('span', null, mate.placeText),
+      mate.distanceText ? h('span.iw-mate-far', null, mate.distanceText) : null,
+      mate.lowText !== '' ? h('b.iw-mate-low', null, mate.lowText) : null))));
+}
+
+/** Top left: the three meters, the water in the hull and the canoe's status lines. With a crew, the crew list under them. */
 export function vitalsView(hud: HudModel, patterned: boolean): ViewNode[] {
   const water = hud.water;
   return [h('div.iw-vitals.iw-paper', { key: 'vitals' },
@@ -95,7 +124,8 @@ export function vitalsView(hud: HudModel, patterned: boolean): ViewNode[] {
         h('b', null, water.label),
         h('span', null, `${water.value}%`, icon(ICON[water.trend], 'iw-trend-holder'), water.trend))) : null,
     hud.canoeLines.length > 0 ? h('div.iw-canoe-lines', { key: 'canoe' }, hud.canoeLines.map((line, index) =>
-      h('div', { key: index, class: `iw-tone-${line.tone}` }, line.text))) : null)];
+      h('div', { key: index, class: `iw-tone-${line.tone}` }, line.text))) : null,
+    hud.crew.length > 1 ? crewView(hud.crew, patterned) : null)];
 }
 
 /** Top right: the field notes. The day, the place, the weather and the tracked quest. */
@@ -351,7 +381,12 @@ function questView(quest: QuestRowModel): ViewNode {
       h('span.iw-count', null, quest.statusText),
       quest.giverText ? h('span.iw-giver', null, quest.giverText) : null,
       h('small', null, quest.description),
-      quest.done ? null : objectivesView(quest.objectives)),
+      quest.done ? null : objectivesView(quest.objectives),
+      // What handing it in gives, each item with its drawing.
+      quest.rewards.length > 0 ? h('div.iw-costs.iw-rewards', { key: 'rewards' },
+        h('span.iw-rewards-label', null, 'Reward'),
+        quest.rewards.map((item, index) => h('span.iw-cost', { key: index },
+          itemIconView(item.itemId), item.name, ' ', h('b', null, `× ${item.count}`)))) : null),
     quest.track ? h('div.iw-actions', null, buttonView(quest.track, 'button.iw-btn.iw-small')) : null);
 }
 
@@ -361,8 +396,12 @@ function questLogView(panel: Extract<PanelModel, { id: 'quest_log' }>): ViewNode
 }
 
 const MARKER_ICON: Record<MapMarkerModel['kind'], string> = {
-  player: ICON.you, canoe: ICON.canoe, respawn: ICON.camp, quest: ICON.flag, survivor: ICON.person,
+  player: ICON.you, canoe: ICON.canoe, respawn: ICON.camp, quest: ICON.flag, survivor: ICON.person, crew: ICON.person,
 };
+
+/** A crewmate is marked by their toque, in their colour. Everything else has its own drawing. */
+const markerIcon = (marker: MapMarkerModel): ViewNode =>
+  icon(marker.kind === 'crew' && marker.color ? toqueIcon(marker.color) : MARKER_ICON[marker.kind]);
 
 function mapView(panel: Extract<PanelModel, { id: 'map' }>): ViewNode[] {
   const chart = h('div.iw-chart', { class: panel.fullChart ? 'iw-full-chart' : '' },
@@ -382,10 +421,12 @@ function mapView(panel: Extract<PanelModel, { id: 'map' }>): ViewNode[] {
         island.name, island.bearingText ? h('small', null, island.bearingText) : null),
     ]),
     panel.markers.map((marker, index) => h('span.iw-marker', {
-      key: `marker-${index}`, class: `iw-marker-${marker.kind}`, style: `left:${percent(marker.left)};top:${percent(marker.top)}`, title: marker.label,
-    }, icon(MARKER_ICON[marker.kind]))));
+      key: `marker-${index}`, class: `iw-marker-${marker.kind}`, title: marker.label,
+      // Crewmates who share a spot fan out sideways by their place in the crew, so none hides another.
+      style: `left:${percent(marker.left)};top:${percent(marker.top)}${marker.kind === 'crew' ? `;--n:${marker.crewIndex ?? 0}` : ''}`,
+    }, markerIcon(marker))));
   const legend = h('ul.iw-legend', null, panel.markers.map((marker, index) =>
-    h('li', { key: index }, icon(MARKER_ICON[marker.kind]), h('span', null, marker.label))));
+    h('li', { key: index, class: marker.kind === 'crew' ? 'iw-legend-crew' : '' }, markerIcon(marker), h('span', null, marker.label))));
   return sheet(panel, 'mid', panel.summary, h('div.iw-body.iw-map-body', { key: 'body' }, chart, legend));
 }
 

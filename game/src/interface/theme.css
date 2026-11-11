@@ -1909,6 +1909,165 @@ html.iw-document {
   white-space: normal;
 }
 
+/* ---------- the crew ----------
+   A card hung under the vitals, drawn only for a crew of two or more. One row a player: their
+   toque in their own colour, their label, three small meters in the order of the big ones above,
+   and where they are. Nothing here moves: no transition, no animation. */
+.iw-crew {
+  --tilt: 0.5deg;
+  position: absolute;
+  left: 0;
+  top: calc(100% + 1.05rem);
+  width: 100%;
+  padding: 0.55rem 0.95rem 0.42rem;
+}
+.iw-vitals .iw-crew .iw-tape {
+  top: -0.5rem;
+  left: auto;
+  right: 1.3rem;
+  transform: rotate(3deg);
+}
+.iw-mate {
+  display: grid;
+  grid-template-columns: 1.3rem 1fr auto;
+  column-gap: 0.42rem;
+  align-items: center;
+}
+.iw-mate + .iw-mate {
+  margin-top: 0.2rem;
+  padding-top: 0.24rem;
+  border-top: 0.09rem dashed var(--iw-ink-faint);
+}
+/* The toque carries the crew member's colour at full strength, to match the one on their head. */
+.iw-toque .iw-wash {
+  opacity: 1;
+}
+.iw-mate-toque .iw-ico {
+  width: 1.3rem;
+  height: 1.3rem;
+}
+.iw-mate-name {
+  padding-top: 0.2rem;
+  font-family: var(--iw-hand);
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+.iw-mate-name .iw-kind {
+  margin-left: 0.4rem;
+  font-weight: 400;
+}
+.iw-mate-meters {
+  display: flex;
+  gap: 0.3rem;
+}
+.iw-mate-meters .iw-bar {
+  display: block;
+  width: 1.75rem;
+  height: 0.58rem;
+}
+/* A low meter is ringed in rust, heavier than the pen. */
+.iw-mate-meters .iw-bar.iw-low::before {
+  border: 0.16rem solid var(--iw-rust-deep);
+}
+.iw-mate-place {
+  grid-column: 2 / 4;
+  grid-row: 2;
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 0.5rem;
+  font-family: var(--iw-hand);
+  font-size: 0.82rem;
+  line-height: 1.15;
+  color: var(--iw-ink-soft);
+}
+.iw-mate-alert,
+.iw-mate-asleep {
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: center;
+}
+.iw-mate-alert {
+  display: grid;
+  place-items: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  padding-top: 0.14rem;
+  font-family: var(--iw-hand);
+  font-weight: 700;
+  font-size: 0.84rem;
+  line-height: 1;
+  color: var(--iw-paper-bright);
+  background: var(--iw-rust-fill);
+  border-radius: 50% 45% 55% 48%;
+}
+.iw-mate-asleep .iw-ico {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+/* How far off they are, at the right edge under the meters. Beside a long island name it drops a line, whole. */
+.iw-mate-far {
+  margin-left: auto;
+  white-space: nowrap;
+}
+/* What is low, in words, on a line of its own: it never has to share one with a long island name. */
+.iw-mate-low {
+  flex-basis: 100%;
+  color: var(--iw-rust-deep);
+}
+
+/* A crewmate somewhere else, on the compass: their toque at their bearing. Two who share a bearing
+   sit side by side, by their place in the crew. */
+.iw-mark-crew {
+  margin-left: calc((var(--n, 0) - 1.5) * 0.44rem);
+}
+.iw-mark-crew .iw-ico {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+/* Behind you: pinned to the end of the strip, with the way to turn. */
+.iw-mark-crew.iw-off-left::before,
+.iw-mark-crew.iw-off-right::after {
+  position: absolute;
+  bottom: 0.1rem;
+  font-family: var(--iw-hand);
+  font-weight: 700;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+.iw-mark-crew.iw-off-left::before {
+  content: '\2039';
+  right: 100%;
+}
+.iw-mark-crew.iw-off-right::after {
+  content: '\203a';
+  left: 100%;
+}
+
+/* And on the map: the same toque at their place, above the marks that were already there. */
+.iw-marker-crew {
+  z-index: 3;
+  transform: translate(calc(-50% + (var(--n, 0) - 1.5) * 0.62rem), -62%);
+}
+
+/* What a quest gives, in the quest log: the word, then each item with its drawing. */
+.iw-rewards {
+  align-items: center;
+  margin-top: 0.4rem;
+}
+.iw-rewards-label {
+  margin-right: 0.1rem;
+  font-family: var(--iw-hand);
+  font-size: 0.84rem;
+  color: var(--iw-ink-soft);
+}
+
+/* The lobby's words wait for their faces (see `mount`): written once, in place, they never move. */
+.iw.iw-faces-pending .iw-lobby-col {
+  visibility: hidden;
+}
+
 /* For anyone who has asked their system for less motion: the few short transitions go too. */
 @media (prefers-reduced-motion: reduce) {
   .iw *,

@@ -16,7 +16,7 @@ import './theme.css';
 import type { CompassModel, GameInterface, InterfaceIntent, InterfaceModel, SettingId } from '../client/contracts.ts';
 import { intentOf, reconcile } from './dom.ts';
 import type { ViewNode } from './dom.ts';
-import { FILTER_DEFINITIONS, ICON } from './icons.ts';
+import { FILTER_DEFINITIONS, ICON, toqueIcon } from './icons.ts';
 import { paperTexture, tornPageOutline } from './paper.ts';
 import { confirmView, debugView, hintView, hotbarView, lobbyView, notesView, panelView, promptView, toastsView, vitalsView } from './views.ts';
 
@@ -34,6 +34,11 @@ const COMPASS_PIN = 84;
 
 const MARK_ICON: Record<string, string> = { quest: ICON.flag, canoe: ICON.canoe, respawn: ICON.camp };
 
+/** The four faces of the notebook. */
+const FACES = ['1em "IM Fell English"', 'italic 1em "IM Fell English"', '1em "Kalam"', '700 1em "Kalam"'];
+/** The longest the lobby waits for them, the same three seconds a browser holds text back for a face. */
+const FACE_WAIT_MILLISECONDS = 3000;
+
 function element(className: string, parent: HTMLElement, tag = 'div'): HTMLElement {
   const created = document.createElement(tag);
   created.className = className;
@@ -50,7 +55,7 @@ class CompassStrip {
   private readonly track: HTMLElement;
   private readonly letters: HTMLElement;
   private readonly marks: HTMLElement;
-  private readonly markElements = new Map<string, { root: HTMLElement; text: HTMLElement; position: string; label: string }>();
+  private readonly markElements = new Map<string, { root: HTMLElement; text: HTMLElement | null; position: string; label: string }>();
   private heading = Number.NaN;
   private lettersSignature = '';
 
@@ -105,8 +110,16 @@ class CompassStrip {
       if (!entry) {
         const root = element(`iw-mark iw-mark-${mark.kind}`, this.marks);
         const holder = element('iw-i', root, 'i');
-        holder.innerHTML = MARK_ICON[mark.kind] ?? ICON.flag;
-        entry = { root, text: element('iw-mark-chip', root, 'span'), position: '', label: '' };
+        if (mark.kind === 'crew') {
+          // A crewmate: their toque in their colour, and no chip. The crew list says who and how far.
+          holder.innerHTML = toqueIcon(mark.color ?? '');
+          root.dataset.player = mark.id;
+          root.style.setProperty('--n', String(mark.crewIndex ?? 0));
+          entry = { root, text: null, position: '', label: '' };
+        } else {
+          holder.innerHTML = MARK_ICON[mark.kind] ?? ICON.flag;
+          entry = { root, text: element('iw-mark-chip', root, 'span'), position: '', label: '' };
+        }
         this.markElements.set(mark.id, entry);
       }
       // Whole degrees here too, for the same reason.
@@ -123,7 +136,8 @@ class CompassStrip {
       const label = mark.distanceText ? `${mark.label} · ${mark.distanceText}` : mark.label;
       if (label !== entry.label) {
         entry.label = label;
-        entry.text.textContent = label;
+        if (entry.text) entry.text.textContent = label;
+        else entry.root.title = label;
       }
     }
     for (const [id, entry] of this.markElements) {
@@ -142,6 +156,7 @@ export class InkInterface implements GameInterface {
   private hud: HTMLElement | null = null;
   private compass: CompassStrip | null = null;
   private hovered: Element | null = null;
+  private faceTimer: ReturnType<typeof setTimeout> | null = null;
 
   // What was last applied, so a frame that changes nothing writes nothing.
   private scale = 0;
@@ -201,9 +216,16 @@ export class InkInterface implements GameInterface {
     window.addEventListener('keydown', (event) => this.onKeyDown(event), { capture: true, signal: this.abort.signal });
 
     // Fetch the two faces now, not when the first panel that needs the italic opens.
-    for (const face of ['1em "IM Fell English"', 'italic 1em "IM Fell English"', '1em "Kalam"', '700 1em "Kalam"']) {
-      void document.fonts?.load(face);
-    }
+    // Until they are in, the lobby's words are not written at all. A stand-in face is cut wider, so
+    // a menu written in it and then in its own face moved as the fonts arrived. Written once, it never moves.
+    root.classList.add('iw-faces-pending');
+    const written = (): void => {
+      this.root?.classList.remove('iw-faces-pending');
+      if (this.faceTimer !== null) clearTimeout(this.faceTimer);
+      this.faceTimer = null;
+    };
+    this.faceTimer = setTimeout(written, FACE_WAIT_MILLISECONDS);
+    void Promise.allSettled(FACES.map((face) => document.fonts?.load(face))).then(written);
   }
 
   // --- Pointer and form controls ---------------------------------------------------
@@ -376,7 +398,7 @@ export class InkInterface implements GameInterface {
       this.hudShown = hud !== null;
       this.hud.hidden = !hud;
     }
-    this.draw('vitals', hud ? JSON.stringify([hud.meters, hud.water, hud.canoeLines, model.patternedMeters]) : '',
+    this.draw('vitals', hud ? JSON.stringify([hud.meters, hud.water, hud.canoeLines, model.patternedMeters, hud.crew]) : '',
       () => vitalsView(hud!, model.patternedMeters));
     this.draw('notes', hud ? JSON.stringify([hud.clockText, hud.night, hud.weatherText, hud.stormWarning, hud.placeText, hud.tracker]) : '',
       () => notesView(hud!));
@@ -435,10 +457,12 @@ export class InkInterface implements GameInterface {
 
   dispose(): void {
     this.abort.abort();
+    if (this.faceTimer !== null) clearTimeout(this.faceTimer);
+    this.faceTimer = null;
     document.documentElement.classList.remove('iw-document');
     document.documentElement.style.removeProperty('--iw-scale');
     if (this.root) {
-      this.root.classList.remove('iw', 'iw-by-keys', 'iw-paused');
+      this.root.classList.remove('iw', 'iw-by-keys', 'iw-paused', 'iw-faces-pending');
       this.root.textContent = '';
     }
     this.parts.clear();

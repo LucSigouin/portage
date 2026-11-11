@@ -3,9 +3,10 @@ import {
   ATTACHMENTS, BOTTLES, HULL_TIERS, ISLANDS_BY_ID, NODES_BY_ID, QUESTS, RECIPES, REGIONS_BY_ID, WEATHER,
 } from '../../data/index.ts';
 import type { ItemId } from '../../data/index.ts';
-import type { GameEvent, GameState } from '../../sim/index.ts';
+import type { GameEvent, GameState, PlayerId } from '../../sim/index.ts';
 import { selectTimeOfDay } from '../../sim/index.ts';
 import { countedName, itemName, needsText } from './format.ts';
+import { crewMark } from './hud.ts';
 import type { ToastModel, Tone } from './types.ts';
 
 export interface ToastInput {
@@ -17,13 +18,41 @@ export interface ToastInput {
 
 const toast = (text: string, tone: Tone = 'info', itemId?: ItemId): ToastInput => (itemId ? { text, tone, itemId } : { text, tone });
 
-/** One event as a toast, or null when it needs no words (the HUD already shows it). */
-export function toastForEvent(event: GameEvent, state: GameState): ToastInput | null {
+/**
+ * True for an event whose note belongs to the whole crew, whoever caused it. Tools and key items
+ * are the crew's the moment one player has them, so the news is everyone's.
+ */
+export function isCrewNote(event: GameEvent): boolean {
+  return event.type === 'item_gained' && (event.container === 'belt' || event.container === 'key_items');
+}
+
+/**
+ * Who a crew note is about, as the reader sees it: "You", or the finder's label. Null when playing
+ * alone (there is nobody else to tell apart) and when the event names no player.
+ */
+function finderName(event: GameEvent, state: GameState, readerId: PlayerId): string | null {
+  if (state.players.length < 2 || event.playerId === undefined) return null;
+  return event.playerId === readerId ? 'You' : crewMark(event.playerId).label;
+}
+
+/**
+ * One event as a toast, or null when it needs no words (the HUD already shows it).
+ * `readerId` is the player reading it. `made` is true for a tool that came off a bench this frame.
+ */
+export function toastForEvent(event: GameEvent, state: GameState, readerId: PlayerId = 0, made = false): ToastInput | null {
   switch (event.type) {
-    case 'item_gained':
-      if (event.container === 'belt') return toast(`New tool: ${itemName(event.itemId)}`, 'good', event.itemId);
-      if (event.container === 'key_items') return toast(`Found: ${itemName(event.itemId)}`, 'good', event.itemId);
+    case 'item_gained': {
+      const finder = isCrewNote(event) ? finderName(event, state, readerId) : null;
+      if (event.container === 'belt') {
+        return toast(finder
+          ? `${finder} ${made ? 'made' : 'found'} a new tool: ${itemName(event.itemId)}`
+          : `New tool: ${itemName(event.itemId)}`, 'good', event.itemId);
+      }
+      if (event.container === 'key_items') {
+        return toast(`${finder ? `${finder} found` : 'Found'}: ${itemName(event.itemId)}`, 'good', event.itemId);
+      }
       return toast(`+${event.count} ${itemName(event.itemId)}`, 'info', event.itemId);
+    }
     case 'item_lost':
       return toast(`-${event.count} ${itemName(event.itemId)}`, 'warning', event.itemId);
     case 'item_left_behind':
@@ -112,8 +141,18 @@ export function toastForEvent(event: GameEvent, state: GameState): ToastInput | 
 /**
  * A frame's events as toasts. Gains of the same item add up into one line,
  * and what a capsize took is told once, by the washed-ashore toast.
+ * `readerId` is the player reading them: it only changes how a crew note names its finder.
+ * `frame` is everything that happened this frame, when `events` is only the part one player hears.
  */
-export function toastsFromEvents(events: readonly GameEvent[], state: GameState): ToastInput[] {
+export function toastsFromEvents(
+  events: readonly GameEvent[], state: GameState, readerId: PlayerId = 0, frame: readonly GameEvent[] = events,
+): ToastInput[] {
+  // A tool that a recipe turned out this frame was made, not found. The bench note is the maker's
+  // own, so it is looked for in the whole frame, not in what this reader hears.
+  const madeBy = new Set<string>();
+  for (const event of frame) {
+    if (event.type === 'crafted') madeBy.add(`${event.playerId}:${RECIPES[event.recipeId].output.itemId}`);
+  }
   const washedAshore = events.some((event) => event.type === 'washed_ashore');
   const gains = new Map<string, number>();
   for (const event of events) {
@@ -131,10 +170,20 @@ export function toastsFromEvents(events: readonly GameEvent[], state: GameState)
       toasts.push(toast(`+${gains.get(event.itemId)} ${itemName(event.itemId)}`, 'info', event.itemId));
       continue;
     }
-    const built = toastForEvent(event, state);
+    const made = event.type === 'item_gained' && madeBy.has(`${event.playerId}:${event.itemId}`);
+    const built = toastForEvent(event, state, readerId, made);
     if (built) toasts.push(built);
   }
   return toasts;
+}
+
+/**
+ * The notes one player reads this frame: their own, the ones nobody in particular caused, and
+ * the crew's (a new tool, a key item), whoever found it.
+ */
+export function toastsForPlayer(events: readonly GameEvent[], state: GameState, playerId: PlayerId): ToastInput[] {
+  const heard = events.filter((event) => event.playerId === undefined || event.playerId === playerId || isCrewNote(event));
+  return toastsFromEvents(heard, state, playerId, events);
 }
 
 export const TOAST_SECONDS: Readonly<Record<Tone, number>> = { info: 3.5, good: 5, warning: 5, danger: 7 };

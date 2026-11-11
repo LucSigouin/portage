@@ -419,6 +419,18 @@ export const SEAL = '<svg class="iw-seal" viewBox="0 0 40 40" aria-hidden="true"
 const escapeText = (text: string): string => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /** The logotype: the title in a Fell italic, roughened like ink on cold-press paper, underlined by a paddle laid flat. */
+/**
+ * A crew member's toque, washed in their own colour: the toque the look puts on their head.
+ * It stands for them in the crew list, on the compass and on the map.
+ */
+export const toqueIcon = (colour: string): string =>
+  `<svg class="iw-ico iw-toque" viewBox="0 0 24 24" aria-hidden="true"><g class="iw-wash" fill="${colour}">`
+  + '<circle cx="12" cy="4.6" r="2.1"/><path d="M5.2 15.4c0-5.3 2.8-8.8 6.800-8.800s6.800 3.500 6.800 8.800Z"/>'
+  + '<path d="M4 15.200h16v4.600H4Z"/></g><g class="iw-pen"><circle cx="12" cy="4.600" r="2.100"/>'
+  + '<path d="M5.200 15.200c0-5.200 2.800-8.600 6.800-8.600s6.800 3.400 6.800 8.600"/>'
+  + '<path d="M4.600 15.200h14.800c.6 0 1 .4 1 1v2.800c0 .6-.4 1-1 1H4.600c-.6 0-1-.4-1-1v-2.800c0-.6.4-1 1-1Z"/>'
+  + '<path d="M8 15.400v4.200M12 15.400v4.200M16 15.400v4.200"/></g></svg>';
+
 export function logotype(title: string): string {
   return `<svg class="iw-logo" viewBox="0 0 560 216" role="img" aria-label="${escapeText(title)}"><g filter="url(#iw-inkbleed)">`
     + `<text x="2" y="124" class="iw-logo-word">${escapeText(title)}</text>`

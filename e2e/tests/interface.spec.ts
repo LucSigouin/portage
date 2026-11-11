@@ -8,7 +8,12 @@
  * - a slider drag and the keyboard focus survive frames that redraw the panel (the DOM is diffed, not rebuilt);
  * - with the inventory open the interface adds under half a millisecond a frame, and the whole frame's work stays under 6 ms;
  * - every row that names an item shows that item's icon, sharp and inside its card at every size;
- * - nothing on screen moves by itself, and opening a panel moves nothing else.
+ * - nothing on screen moves by itself, and opening a panel moves nothing else;
+ * - with a crew: a row a player in the crew card, each following its own player; a toque in each
+ *   crewmate's colour at their place on the compass and the map; the card clear of the middle of
+ *   the view and of every other card; a crewmate's new tool told on this screen;
+ * - alone: no crew card or mark, and the cards the same pixels as with a crew;
+ * - the lobby menu is written once its faces are in, and never moves.
  *
  * Needs the dev server on http://localhost:5220, or PORTAGE_URL.
  */
@@ -25,7 +30,8 @@ test.use({
 });
 test.setTimeout(600_000);
 
-type Step = { intent: Record<string, unknown> } | { key: string };
+/** `stage` is a script run in the page with `portage` in hand, to put the crew where a view needs them. */
+type Step = { intent: Record<string, unknown> } | { key: string } | { stage: string };
 
 interface View {
   name: string;
@@ -74,6 +80,50 @@ const MENUS: View[] = [
   { name: 'credits at the Beacon', query: '?shot=beacon', steps: [open('credits')], shows: '.iw-panel-credits' },
 ];
 
+/** Put one player ashore on an island, a few metres east of its middle. Used by the staging scripts below. */
+const PUT_ASHORE = `
+  const data = await import('/src/data/index.ts');
+  const game = portage.session.game;
+  const put = (player, islandId, east) => {
+    const centre = data.ISLANDS_BY_ID[islandId].center;
+    Object.assign(player, { mode: 'foot', seat: null, asleep: false, islandId, position: { x: centre.x + east, y: 1, z: centre.z } });
+  };
+`;
+/** You and player 4 in the canoe; player 2 asleep on Cabin Roofs; player 3 worn out on Home Knoll. */
+const SPLIT_CREW = `${PUT_ASHORE}
+  put(game.players[1], 'cabin_roofs', 4);
+  put(game.players[2], 'home_knoll', 6);
+  game.players[1].asleep = true;
+  game.players[2].energy = 9;
+`;
+/** The most the crew card ever has to hold: everyone else far off on the island with the longest name, every meter low. */
+const CREW_IN_TROUBLE = `${PUT_ASHORE}
+  const longest = data.ISLANDS.reduce((first, second) => (second.name.length > first.name.length ? second : first));
+  for (const player of game.players.slice(1)) {
+    put(player, longest.id, 0);
+    Object.assign(player, { hunger: 5, thirst: 5, energy: 5 });
+  }
+`;
+/** Player 3 makes the crew's first knife. */
+const CREWMATE_MAKES_A_KNIFE = `
+  const sim = await import('/src/sim/index.ts');
+  const game = portage.session.game;
+  game.players[2].backpack.push({ itemId: 'stone', count: 2 }, { itemId: 'driftwood', count: 1 }, { itemId: 'fiber', count: 2 });
+  if (!sim.dispatch(game, { type: 'craft', recipeId: 'stone_knife' }, 2).ok) throw new Error('the knife was not made');
+`;
+
+/** The HUD with a crew (`?crew=N`): the crew card, the crewmates' marks, a crew note. */
+const CREW: View[] = [
+  { name: 'crew of 2, afloat', query: '?shot=play&crew=2', shows: '.iw-crew' },
+  { name: 'crew of 3, ashore', query: '?shot=island&crew=3', shows: '.iw-crew' },
+  { name: 'crew of 4, afloat', query: '?shot=play&crew=4', shows: '.iw-crew' },
+  { name: 'crew of 4, ashore', query: '?shot=island&crew=4', shows: '.iw-crew' },
+  { name: 'crew of 4, split up', query: '?shot=play&crew=4', steps: [{ stage: SPLIT_CREW }], shows: '.iw-mark-crew' },
+  { name: 'crew of 4, everyone in trouble', query: '?shot=play&crew=4', steps: [{ stage: CREW_IN_TROUBLE }], shows: '.iw-mate-alert' },
+  { name: 'crew of 4, on the map', query: '?shot=play&crew=4', steps: [{ stage: SPLIT_CREW }, open('map')], shows: '.iw-marker-crew' },
+  { name: 'a crew note in play', query: '?at=quest1&crew=3', steps: [{ stage: CREWMATE_MAKES_A_KNIFE }], shows: '.iw-toast' },
+];
+
 /** Views with something for the keyboard to work: a lobby, a panel or a dialog. `tab` where the game leaves Tab alone. */
 const SURFACES: (View & { tab: boolean })[] = [
   { ...SHOTS[0]!, tab: true },
@@ -107,6 +157,11 @@ const frames = (page: Page, count = 2): Promise<void> => page.evaluate((wanted) 
   step(wanted);
 }), count);
 
+/** Run a staging script in the page: an async body with `portage` in hand. */
+const stage = (page: Page, script: string): Promise<void> => page.evaluate(
+  (body) => new (Object.getPrototypeOf(async () => {}).constructor)('portage', body)((window as any).portage) as Promise<void>, script,
+);
+
 async function show(page: Page, view: View): Promise<void> {
   await page.goto(`${BASE}/${view.query}`);
   await page.waitForFunction(() => (window as any).portage?.app?.lastModel != null);
@@ -116,6 +171,7 @@ async function show(page: Page, view: View): Promise<void> {
   }
   for (const step of view.steps ?? []) {
     if ('key' in step) await page.keyboard.press(step.key);
+    else if ('stage' in step) await stage(page, step.stage);
     else await page.evaluate((intent) => (window as any).portage.session.handleIntent(intent), step.intent);
     await frames(page, 3);
   }
@@ -131,7 +187,7 @@ const session = <T>(page: Page, read: string): Promise<T> =>
 
 test('every staged shot renders with a clean console, from this site only, and at rest', async ({ page }) => {
   const problems = watch(page);
-  for (const view of [...SHOTS, ...MENUS]) {
+  for (const view of [...SHOTS, ...MENUS, ...CREW]) {
     await show(page, view);
     const state = await page.evaluate(() => ({
       // Nothing may still be animating once the page has settled: no loops, no shimmer.
@@ -191,7 +247,7 @@ function layoutProblems(): string[] {
     }
     const scroller = parent.closest('.iw-body');
     const scrollerBox = scroller?.getBoundingClientRect();
-    const card = parent.closest('.iw-panel, .iw-vitals, .iw-notes, .iw-prompt, .iw-toast, .iw-hint, .iw-debug, .iw-chart, .iw-mark-chip');
+    const card = parent.closest('.iw-panel, .iw-crew, .iw-vitals, .iw-notes, .iw-prompt, .iw-toast, .iw-hint, .iw-debug, .iw-chart, .iw-mark-chip');
     // A line of handwriting is boxed taller than it is drawn (the face has long ascenders), so allow that much above and below.
     const slack = Number.parseFloat(getComputedStyle(parent).fontSize) * 0.45;
     const cardBox = card?.getBoundingClientRect();
@@ -217,7 +273,7 @@ for (const size of [{ width: 1280, height: 720 }, { width: 1920, height: 1080 },
   test(`nothing scrolls sideways and no text is clipped at ${size.width}x${size.height}`, async ({ page }) => {
     const problems = watch(page);
     await page.setViewportSize(size);
-    for (const view of [...SHOTS, ...MENUS]) {
+    for (const view of [...SHOTS, ...MENUS, ...CREW]) {
       await show(page, view);
       expect(await page.evaluate(layoutProblems), `${view.name} at ${size.width}x${size.height}`).toEqual([]);
     }
@@ -278,7 +334,7 @@ function contrastProblems(): string[] {
 }
 
 test('all text on paper passes WCAG AA contrast, on solid ground, never drawn faint', async ({ page }) => {
-  for (const view of [...SHOTS, ...MENUS]) {
+  for (const view of [...SHOTS, ...MENUS, ...CREW]) {
     await show(page, view);
     expect(await page.evaluate(contrastProblems), view.name).toEqual([]);
   }
@@ -796,9 +852,9 @@ function itemIconProblems(): { problems: string[]; named: number; smallest: numb
   return { problems, named: named.length, smallest };
 }
 
-test('every row that names an item shows its icon: hotbar, inventory, crafting, builder and loot notes, at every size', async ({ page }) => {
+test('every row that names an item shows its icon: hotbar, inventory, crafting, builder, quest rewards and loot notes, at every size', async ({ page }) => {
   const problems = watch(page);
-  const views = ['play', 'inventory', 'crafting', 'builder', 'upgraded'].map((name) => SHOTS.find((shot) => shot.name === name)!);
+  const views = ['play', 'inventory', 'crafting', 'builder', 'upgraded', 'quests'].map((name) => SHOTS.find((shot) => shot.name === name)!);
   for (const size of [{ width: 1280, height: 720 }, { width: 1920, height: 1080 }, { width: 2560, height: 1440 }, { width: 3840, height: 2160 }]) {
     await page.setViewportSize(size);
     for (const view of views) {
@@ -868,6 +924,7 @@ test('nothing redraws itself, and opening a panel moves nothing else', async ({ 
   await samePixels(SHOTS.find((shot) => shot.name === 'play')!, ['.iw-vitals', '.iw-notes', '.iw-hotbar', '.iw-compass', '.iw-hint']);
   await samePixels(SHOTS.find((shot) => shot.name === 'inventory')!, ['.iw-panel']);
   await samePixels(SHOTS.find((shot) => shot.name === 'lobby')!, ['.iw-lobby-col']);
+  await samePixels(CREW.find((view) => view.name === 'crew of 4, split up')!, ['.iw-crew', '.iw-compass']);
 
   // Live play: the cards stay exactly where they are when a panel opens over them, and when it closes.
   await show(page, { name: 'play', query: '?at=quest1', shows: '.iw-vitals' });
@@ -896,4 +953,305 @@ test('nothing redraws itself, and opening a panel moves nothing else', async ({ 
     expect(await sheet(), `${tab} tab`).toBe(audio);
   }
   expect(problems).toEqual([]);
+});
+
+// --- Crew --------------------------------------------------------------------------
+
+const SIZES = [{ width: 1280, height: 720 }, { width: 1920, height: 1080 }, { width: 2560, height: 1440 }, { width: 3840, height: 2160 }];
+
+/** `#rrggbb` as the browser reports a colour. */
+const asRgb = (hex: string): string => `rgb(${[1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16)).join(', ')})`;
+
+interface CrewMarkData { label: string; toque: string }
+const crewMarksOf = (page: Page): Promise<CrewMarkData[]> =>
+  page.evaluate(async () => ((await import('/src/data/index.ts' as string)) as { CREW_MARKS: CrewMarkData[] }).CREW_MARKS);
+
+/** Run in the page: the crew card as drawn, a row a player. */
+function crewRows(): { label: string; you: boolean; place: string; low: boolean; alert: boolean; lowBars: boolean[]; fills: string[]; toque: string; wash: string }[] {
+  return [...document.querySelectorAll('.iw-crew .iw-mate')].map((row) => ({
+    label: row.querySelector('.iw-mate-name')!.firstChild!.textContent ?? '',
+    you: row.classList.contains('iw-you') && row.querySelector('.iw-mate-name .iw-kind')?.textContent === 'you',
+    place: row.querySelector('.iw-mate-place')!.textContent ?? '',
+    low: row.classList.contains('iw-low'),
+    alert: row.querySelector('.iw-mate-alert') !== null,
+    lowBars: [...row.querySelectorAll('.iw-bar')].map((bar) => bar.classList.contains('iw-low')),
+    fills: [...row.querySelectorAll<HTMLElement>('.iw-bar > i')].map((fill) => fill.style.getPropertyValue('--v')),
+    toque: getComputedStyle(row.querySelector('.iw-toque .iw-wash')!).fill,
+    wash: getComputedStyle(row.querySelector('.iw-toque .iw-wash')!).opacity,
+  }));
+}
+
+test('the crew list: no card alone, a row a player for 2, 3 and 4, each row following its own player', async ({ page }) => {
+  const problems = watch(page);
+  await show(page, SHOTS.find((shot) => shot.name === 'play')!);
+  const marks = await crewMarksOf(page);
+  expect(await page.locator('.iw-crew, .iw-mate, .iw-toque').count(), 'alone: nothing of the crew is drawn').toBe(0);
+
+  for (const size of [2, 3, 4]) {
+    await show(page, { name: `crew of ${size}`, query: `?shot=play&crew=${size}`, shows: '.iw-crew' });
+    const rows = await page.evaluate(crewRows);
+    expect(rows.map((row) => row.label), `crew of ${size}: labels`).toEqual(marks.slice(0, size).map((mark) => mark.label));
+    // The chip is the toque colour the look dresses that player in, at full strength.
+    expect(rows.map((row) => row.toque), `crew of ${size}: colours`).toEqual(marks.slice(0, size).map((mark) => asRgb(mark.toque)));
+    expect(rows.every((row) => row.wash === '1')).toBe(true);
+    expect(rows.map((row) => row.you), `crew of ${size}: you`).toEqual(rows.map((_, index) => index === 0));
+    expect(rows.every((row) => row.place === 'Aboard' && !row.low && !row.alert)).toBe(true);
+  }
+
+  // Each row is its own player: change one player and only that row changes.
+  const before = await page.evaluate(crewRows);
+  await stage(page, 'Object.assign(portage.session.game.players[2], { hunger: 80, thirst: 40, energy: 5 });');
+  await frames(page, 3);
+  let rows = await page.evaluate(crewRows);
+  expect(rows[2]).toMatchObject({ low: true, alert: true, lowBars: [false, false, true], fills: ['0.8', '0.4', '0.05'], place: 'Aboardlow energy' });
+  expect([rows[0], rows[1], rows[3]]).toEqual([before[0], before[1], before[3]]);
+
+  await stage(page, `${PUT_ASHORE} put(game.players[1], 'cabin_roofs', 4);`);
+  await frames(page, 3);
+  rows = await page.evaluate(crewRows);
+  expect(rows[1]!.place).toMatch(/^Ashore · Cabin Roofs\d+ m$/);
+  await stage(page, 'portage.session.game.players[1].asleep = true;');
+  await frames(page, 3);
+  rows = await page.evaluate(crewRows);
+  expect(rows[1]!.place).toMatch(/^Asleep · Cabin Roofs\d+ m$/);
+  expect(await page.locator('.iw-mate[data-player="1"] .iw-mate-asleep svg').count()).toBe(1);
+  expect([rows[0], rows[3]]).toEqual([before[0], before[3]]);
+  // What is drawn is what the model holds, row for row.
+  const model = await session<{ label: string; placeText: string; distanceText: string; lowText: string }[]>(page, 'portage.app.lastModel.hud.crew');
+  expect(rows.map((row) => `${row.label}|${row.place}`)).toEqual(
+    model.map((row) => `${row.label}|${row.placeText}${row.distanceText}${row.lowText}`),
+  );
+
+  // A crewmate's new tool is told on this screen, with who made it and the tool's icon.
+  await show(page, CREW.find((view) => view.name === 'a crew note in play')!);
+  await expect(page.locator('.iw-toast', { hasText: 'Player 3 made a new tool: Stone knife' })).toBeVisible();
+  await expect(page.locator('.iw-toast [data-item="stone_knife"] svg.iw-ico')).toBeVisible();
+  expect(problems).toEqual([]);
+});
+
+/** Run in the page: what the crew card overlaps or covers. Empty when it is clear of everything. */
+function crewCardProblems(): string[] {
+  const problems: string[] = [];
+  const card = document.querySelector('.iw-crew')?.getBoundingClientRect();
+  if (!card) return ['no crew card'];
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  if (card.left < 0 || card.top < 0 || card.right > width || card.bottom > height) problems.push('the crew card runs off the screen');
+  // The middle of the play view is the canoe and the water ahead of it: the card keeps to the left quarter.
+  if (card.right > width / 4) problems.push(`the crew card reaches ${Math.round((card.right / width) * 100)}% across the view`);
+  const vitals = document.querySelector('.iw-vitals')!.getBoundingClientRect();
+  if (card.top < vitals.bottom) problems.push('the crew card is not under the vitals card');
+  if (Math.abs(card.left - vitals.left) > 0.5 || Math.abs(card.width - vitals.width) > 0.5) problems.push('the crew card is not lined up with the vitals card');
+  for (const selector of ['.iw-vitals', '.iw-notes', '.iw-strip', '.iw-mark-chip', '.iw-hotbar', '.iw-hint', '.iw-prompt', '.iw-toast', '.iw-debug']) {
+    for (const other of document.querySelectorAll(selector)) {
+      const box = other.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) continue;
+      if (card.left < box.right && card.right > box.left && card.top < box.bottom && card.bottom > box.top) problems.push(`the crew card overlaps ${selector}`);
+    }
+  }
+  return problems;
+}
+
+test('the crew card hangs under the vitals, clear of the middle of the view and of every other card, at every size', async ({ page }) => {
+  const problems = watch(page);
+  for (const size of SIZES) {
+    await page.setViewportSize(size);
+    for (const name of ['crew of 2, afloat', 'crew of 4, ashore', 'crew of 4, split up', 'crew of 4, everyone in trouble']) {
+      await show(page, CREW.find((view) => view.name === name)!);
+      // The busiest the left edge gets: the notes queue full, on top of everything else.
+      await stage(page, 'for (let note = 1; note <= 6; note += 1) portage.app.toasts.add({ text: `A note, number ${note}`, tone: "info" });');
+      await frames(page, 3);
+      expect(await page.locator('.iw-toast').count()).toBe(6);
+      expect(await page.evaluate(crewCardProblems), `${name} at ${size.width}x${size.height}`).toEqual([]);
+    }
+  }
+  expect(problems).toEqual([]);
+});
+
+test('crewmates on the compass and the map: a toque in their colour at their place', async ({ page }) => {
+  const problems = watch(page);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await show(page, CREW.find((view) => view.name === 'crew of 4, split up')!);
+  const marks = await crewMarksOf(page);
+
+  // The compass: each crewmate who is somewhere else, at the bearing the model gives, in their colour.
+  const compass = (): Promise<{ id: string; at: number; middle: number; colour: string; side: string }[]> => page.evaluate(() => {
+    const strip = document.querySelector('.iw-strip')!.getBoundingClientRect();
+    const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+    return [...document.querySelectorAll<HTMLElement>('.iw-mark-crew')].map((mark) => {
+      const box = mark.querySelector('svg')!.getBoundingClientRect();
+      const fan = (Number(mark.style.getPropertyValue('--n')) - 1.5) * 0.44 * rem;
+      return {
+        id: mark.dataset.player!,
+        at: Number(mark.style.getPropertyValue('--at')),
+        // Where on the strip the toque sits, in degrees from dead ahead, with its sideways fan taken out.
+        middle: ((box.left + box.width / 2 - fan) - (strip.left + strip.width / 2)) / (strip.width / 180),
+        colour: getComputedStyle(mark.querySelector('.iw-toque .iw-wash')!).fill,
+        side: mark.classList.contains('iw-off-left') ? 'left' : mark.classList.contains('iw-off-right') ? 'right' : '',
+      };
+    });
+  });
+  const modelMarks = (): Promise<{ id: string; relativeDegrees: number; color: string; label: string }[]> =>
+    session(page, 'portage.app.lastModel.hud.compass.marks.filter((mark) => mark.kind === "crew")');
+  const pinned = (relative: number): number => Math.max(-84, Math.min(84, Math.round(relative)));
+  const check = async (wanted: string[]): Promise<void> => {
+    const [drawn, model] = [await compass(), await modelMarks()];
+    expect(model.map((mark) => mark.id)).toEqual(wanted);
+    expect(drawn.map((mark) => mark.id)).toEqual(wanted);
+    drawn.forEach((mark, index) => {
+      const from = model[index]!;
+      expect(mark.at, `${from.label}: bearing`).toBe(pinned(from.relativeDegrees));
+      expect(Math.abs(mark.middle - mark.at), `${from.label}: drawn at its bearing`).toBeLessThan(0.75);
+      expect(mark.colour).toBe(asRgb(from.color));
+      expect(from.color).toBe(marks[Number(from.id.slice(5))]!.toque);
+      expect(mark.side).toBe(Math.abs(Math.round(from.relativeDegrees)) > 84 ? (from.relativeDegrees < 0 ? 'left' : 'right') : '');
+    });
+  };
+  await check(['crew-1', 'crew-2']);
+  // No chip of words under a toque: the crew list says who and how far.
+  expect(await page.locator('.iw-mark-crew .iw-mark-chip').count()).toBe(0);
+  const first = await compass();
+  // Move a crewmate and their toque moves with them.
+  await stage(page, `${PUT_ASHORE} put(game.players[1], 'birch_islet', 0);`);
+  await frames(page, 3);
+  await check(['crew-1', 'crew-2']);
+  expect((await compass())[0]!.at).not.toBe(first[0]!.at);
+  await stage(page, `${PUT_ASHORE} put(game.players[1], 'cabin_roofs', 4);`);
+  await frames(page, 3);
+
+  // The map: the same toques, each at its player's place on the chart.
+  await page.evaluate(() => (window as any).portage.session.handleIntent({ type: 'open_panel', panel: 'map' }));
+  await frames(page, 3);
+  const chart = await page.evaluate(() => {
+    const box = document.querySelector('.iw-chart')!.getBoundingClientRect();
+    const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+    return {
+      box: { left: box.left, top: box.top, width: box.width, height: box.height },
+      markers: [...document.querySelectorAll<HTMLElement>('.iw-marker-crew')].map((marker) => {
+        const drawn = marker.querySelector('svg')!.getBoundingClientRect();
+        return {
+          title: marker.title,
+          middle: drawn.left + drawn.width / 2 - (Number(marker.style.getPropertyValue('--n')) - 1.5) * 0.62 * rem,
+          top: drawn.top, bottom: drawn.bottom, size: drawn.width,
+          colour: getComputedStyle(marker.querySelector('.iw-toque .iw-wash')!).fill,
+        };
+      }),
+      legend: [...document.querySelectorAll('.iw-legend-crew')].map((row) => [row.textContent, getComputedStyle(row.querySelector('.iw-toque .iw-wash')!).fill]),
+    };
+  });
+  const places = await session<{ id: number; x: number; z: number }[]>(page,
+    'portage.session.game.players.slice(1, 3).map((player) => ({ id: player.id, x: player.position.x, z: player.position.z }))');
+  const bounds = await page.evaluate(async () => ((await import('/src/client/viewmodels/index.ts' as string)) as any).MAP_BOUNDS as Record<string, number>);
+  expect(chart.markers.map((marker) => marker.title)).toEqual([marks[1]!.label, marks[2]!.label]);
+  chart.markers.forEach((marker, index) => {
+    const place = places[index]!;
+    const x = chart.box.left + ((place.x - bounds.minimumX!) / (bounds.maximumX! - bounds.minimumX!)) * chart.box.width;
+    const y = chart.box.top + ((place.z - bounds.minimumZ!) / (bounds.maximumZ! - bounds.minimumZ!)) * chart.box.height;
+    expect(Math.abs(marker.middle - x), `${marker.title}: across the chart`).toBeLessThan(1);
+    // The toque sits on its player's spot: the spot is inside the drawing.
+    expect(y, `${marker.title}: down the chart`).toBeGreaterThan(marker.top);
+    expect(y, `${marker.title}: down the chart`).toBeLessThan(marker.bottom);
+    expect(marker.size).toBeGreaterThanOrEqual(15);
+    expect(marker.colour).toBe(asRgb(marks[place.id]!.toque));
+  });
+  // Two islands, two places: far enough apart on the chart to tell at a glance.
+  expect(Math.abs(chart.markers[0]!.middle - chart.markers[1]!.middle)).toBeGreaterThan(40);
+  expect(chart.legend).toEqual([[marks[1]!.label, asRgb(marks[1]!.toque)], [marks[2]!.label, asRgb(marks[2]!.toque)]]);
+
+  // Everyone back in the canoe: no toque left on the compass or the map.
+  await stage(page, 'for (const player of portage.session.game.players) Object.assign(player, { mode: "canoe", islandId: null, asleep: false, position: { ...portage.session.game.canoe.position } });');
+  await frames(page, 3);
+  expect(await page.locator('.iw-mark-crew, .iw-marker-crew, .iw-legend-crew').count()).toBe(0);
+  expect(problems).toEqual([]);
+});
+
+test('alone, the HUD is the HUD it was: no crew card or mark, and its cards the same pixels as with a crew', async ({ page }) => {
+  const problems = watch(page);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  const CARDS = ['.iw-vitals', '.iw-notes', '.iw-compass', '.iw-hotbar'];
+  /** The cards of one view, the scene hidden, each with a little margin for its wavering border and tape. */
+  const pictures = async (query: string, hideCrew: boolean): Promise<Buffer[]> => {
+    await show(page, { name: query, query, shows: '.iw-vitals' });
+    await page.addStyleTag({ content: `#world { visibility: hidden; }${hideCrew ? ' .iw-crew { display: none; }' : ''}` });
+    await page.waitForTimeout(400);
+    const shots: Buffer[] = [];
+    for (const selector of CARDS) {
+      const box = (await page.locator(selector).first().boundingBox())!;
+      shots.push(await page.screenshot({ clip: {
+        x: Math.max(0, Math.floor(box.x - 10)), y: Math.max(0, Math.floor(box.y - 12)), width: Math.ceil(box.width + 20), height: Math.ceil(box.height + 24),
+      } }));
+    }
+    return shots;
+  };
+  for (const shot of ['play', 'island']) {
+    const alone = await pictures(`?shot=${shot}`, false);
+    expect(await page.locator('.iw-crew, .iw-mate, .iw-toque, .iw-mark-crew, .iw-marker-crew').count(), `${shot}: alone`).toBe(0);
+    const hud = await session<{ crew: unknown[]; marks: string[] }>(page,
+      '({ crew: portage.app.lastModel.hud.crew, marks: portage.app.lastModel.hud.compass.marks.map((mark) => mark.kind) })');
+    expect(hud.crew).toEqual([]);
+    expect(hud.marks).not.toContain('crew');
+    // With a crew of four beside you, the same cards are the same pixels once the crew card is taken away.
+    const crewed = await pictures(`?shot=${shot}&crew=4`, true);
+    CARDS.forEach((selector, index) => expect(alone[index]!.equals(crewed[index]!), `${shot}: ${selector} differs with a crew`).toBe(true));
+  }
+  expect(problems).toEqual([]);
+});
+
+// --- Lobby -------------------------------------------------------------------------
+
+test('the lobby menu is written once its faces are in, and never moves', async ({ page }) => {
+  // Hold the web fonts back, the way a slow first load does.
+  let release = (): void => {};
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  let asked = 0;
+  await page.route('**/*.woff2', async (route) => {
+    asked += 1;
+    await held;
+    await route.continue();
+  });
+  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.iw-lobby-col .iw-mi', { state: 'attached' });
+
+  // From here on, every frame: is the menu showing, are its faces in, and where is every word of it.
+  await page.evaluate(() => {
+    const frames: { shown: boolean; faces: boolean; places: string }[] = [];
+    (window as any).lobbyFrames = frames;
+    const look = (): void => {
+      const column = document.querySelector('.iw-lobby-col');
+      if (column) {
+        frames.push({
+          shown: getComputedStyle(column).visibility === 'visible',
+          faces: ['1em "IM Fell English"', 'italic 1em "IM Fell English"', '1em "Kalam"', '700 1em "Kalam"'].every((face) => document.fonts.check(face)),
+          places: JSON.stringify([...column.querySelectorAll('.iw-logo-row, .iw-tagline, .iw-menu, .iw-mi, .iw-mi .iw-label, .iw-mi .iw-n')].map((part) => {
+            const box = part.getBoundingClientRect();
+            return [box.x, box.y, box.width, box.height].map((value) => Math.round(value * 100) / 100);
+          })),
+        });
+      }
+      requestAnimationFrame(look);
+    };
+    requestAnimationFrame(look);
+  });
+  await page.waitForTimeout(700);
+  const waiting = await page.evaluate(() => (window as any).lobbyFrames.slice() as { shown: boolean; faces: boolean; places: string }[]);
+  expect(asked, 'the page asked for its fonts').toBeGreaterThan(0);
+  expect(waiting.length, 'frames seen while the fonts were held').toBeGreaterThan(5);
+  expect(waiting.every((frame) => !frame.faces), 'the fonts are still held').toBe(true);
+  // Not one frame of the menu in a stand-in face.
+  expect(waiting.filter((frame) => frame.shown).length, 'frames that showed the menu before its faces were in').toBe(0);
+
+  release();
+  await page.evaluate(() => document.fonts.ready);
+  await expect(page.locator('.iw-lobby-col')).toBeVisible();
+  await page.waitForTimeout(600);
+  const all = await page.evaluate(() => (window as any).lobbyFrames.slice() as { shown: boolean; faces: boolean; places: string }[]);
+  const shown = all.filter((frame) => frame.shown);
+  expect(shown.length, 'frames that showed the menu').toBeGreaterThan(5);
+  expect(shown.every((frame) => frame.faces), 'the menu only ever showed in its own faces').toBe(true);
+  // Every frame the player could see has every word of the menu in the same place.
+  expect(new Set(shown.map((frame) => frame.places)).size, 'different layouts of the menu the player saw').toBe(1);
+  // And it is the stand-in face that would have moved it: hidden, the words were laid out somewhere else.
+  expect(waiting[waiting.length - 1]!.places).not.toBe(shown[0]!.places);
+  // The menu is there to use.
+  await expect(page.getByRole('button', { name: 'New Game' })).toBeVisible();
 });
