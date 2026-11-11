@@ -20,10 +20,11 @@
       "B2 built: look B drawn at the screen's full size, with clean pen lines and more drawn detail. Same menus, lobby and HUD.",
       "Luc picked B2 on 2026-11-11. The game gets built in that look."
     ],
-    "running": [],
-    "waiting": [
-      { "text": "Luc: approve the build plan for the real look (in chat)", "href": "side-by-side.html" }
-    ]
+    "running": [
+      "Step 1 of 3: look B2 wired into the real game (worker Rex), and the menus and HUD on real game data (worker Ryder). Ends with the first 10 minutes playable in B2.",
+      "Next: step 2, the content (4 hulls, 19 attachments, 15 islands). Then step 3, weather, night and finish."
+    ],
+    "waiting": []
   },
   "addresses": [
     { "label": "Tailscale (Luc's private device network, never changes)", "url": "http://100.110.210.9:5230/" },
