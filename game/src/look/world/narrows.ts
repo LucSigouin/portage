@@ -178,8 +178,8 @@ export const NARROWS: Partial<Record<LandmarkKind, LandmarkBuilder>> = {
     ladder(builder, [4.2, crest(-31.2), -31.2], [4.9, deck + 0.3, -31.2], [0, 0, 1], 0.5, PAL.iron, 0.35, 0.025);
     // Lamp standards along the north parapet, and a warning at each end of the spillway.
     for (let z = -120; z <= 120; z += 40) {
-      builder.beam([-4.6, crest(z) + 1.1, z], [-4.6, crest(z) + 4.6, z], 0.05, PAL.iron, PEN, 4);
-      builder.beam([-4.6, crest(z) + 4.6, z], [-3.6, crest(z) + 4.75, z], 0.035, PAL.iron, PEN, 4);
+      builder.beam([-5.2, crest(z) + 0.2, z], [-5.2, crest(z) + 4.6, z], 0.05, PAL.iron, PEN, 4);
+      builder.beam([-5.2, crest(z) + 4.6, z], [-3.6, crest(z) + 4.75, z], 0.035, PAL.iron, PEN, 4);
       builder.box(0.5, 0.14, 0.24, PAL.iron, { pos: [-3.4, crest(z) + 4.7, z], kind: KIND.METAL });
     }
     for (const z of [-38, 38]) {
@@ -258,6 +258,7 @@ export const NARROWS: Partial<Record<LandmarkKind, LandmarkBuilder>> = {
     for (const x of [-1.5, 1.5]) builder.beam([x, -2.6, 3.2], [x, 0.1, 3.2], 0.07, PAL.woodDark, { kind: KIND.BARK }, 6);
     builder.cyl(0.11, 0.11, 1.4, PAL.rust, { pos: [1.2, 3.6, -0.8], kind: KIND.METAL }, 8);
     builder.cone(0.2, 0.16, PAL.rustDark, { pos: [1.2, 4.38, -0.8], kind: KIND.METAL }, 8);
+    builder.beam([0, 3.9, 1.6], [0, 6.4, 1.6], 0.02, PAL.iron, PEN, 4);
     if (!detail) return;
     builder.box(0.9, 1.85, 0.1, TONE.door, { pos: [-0.8, 1.05, 2.03], kind: KIND.WOOD });
     builder.box(0.9, 0.05, 1, PAL.moss, { pos: [-1.1, 3.38, 0.6], rot: [0, 0.2, 0.575], kind: KIND.PLAIN });
@@ -267,7 +268,6 @@ export const NARROWS: Partial<Record<LandmarkKind, LandmarkBuilder>> = {
     builder.beam([-1.5, 1.1, 3.25], [1.5, 1.1, 3.25], 0.03, PAL.woodDark, PEN, 4);
     // Split wood under the eave, an aerial on the ridge, a lantern by the door.
     for (let log = 0; log < 9; log += 1) builder.beam([-2.12, 0.25 + Math.floor(log / 3) * 0.2, -1.2 + (log % 3) * 0.22], [-2.6, 0.25 + Math.floor(log / 3) * 0.2, -1.2 + (log % 3) * 0.22], 0.1, log % 2 ? PAL.woodLight : PAL.wood, { r2: 0.1, kind: KIND.WOOD }, 6);
-    builder.beam([0, 3.9, 1.6], [0, 6.4, 1.6], 0.02, PAL.iron, PEN, 4);
     builder.beam([0, 6.3, 1.6], [0, 3.95, -1.9], 0.008, PAL.iron, PEN, 4);
     builder.cyl(0.07, 0.07, 0.16, PAL.glow, { pos: [-0.15, 1.9, 2.12], glow: 0.7, flat: true, kind: KIND.PLAIN }, 7);
   },
