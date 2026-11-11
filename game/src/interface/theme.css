@@ -1974,6 +1974,9 @@ html.iw-document {
 .iw-mate-place {
   grid-column: 2 / 4;
   grid-row: 2;
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 0.5rem;
   font-family: var(--iw-hand);
   font-size: 0.82rem;
   line-height: 1.15;
@@ -2003,9 +2006,14 @@ html.iw-document {
   width: 0.95rem;
   height: 0.95rem;
 }
+/* How far off they are, at the right edge under the meters. Beside a long island name it drops a line, whole. */
+.iw-mate-far {
+  margin-left: auto;
+  white-space: nowrap;
+}
 /* What is low, in words, on a line of its own: it never has to share one with a long island name. */
 .iw-mate-low {
-  display: block;
+  flex-basis: 100%;
   color: var(--iw-rust-deep);
 }
 

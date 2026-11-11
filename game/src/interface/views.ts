@@ -79,7 +79,7 @@ const METER_ICON = { hunger: ICON.hunger, thirst: ICON.thirst, energy: ICON.ener
 
 /**
  * The crew list, hung under the vitals card: one row a player. Their toque in their own colour,
- * their label, three small meters in the order of the big ones above, and where they are.
+ * their label, three small meters in the order of the big ones above, where they are and how far.
  * A low meter is marked three ways: its bar is ringed in rust, the row gets a rust mark, and the
  * words say which. Nothing in it moves.
  */
@@ -101,8 +101,8 @@ export function crewView(crew: CrewRowModel[], patterned: boolean): ViewNode {
     mate.lowText !== '' ? h('b.iw-mate-alert', { key: 'alert', 'aria-hidden': 'true' }, '!')
       : mate.where === 'asleep' ? icon(ICON.moon, 'iw-mate-asleep') : null,
     h('span.iw-mate-place', null,
-      mate.placeText,
-      mate.distanceText ? ` · ${mate.distanceText}` : null,
+      h('span', null, mate.placeText),
+      mate.distanceText ? h('span.iw-mate-far', null, mate.distanceText) : null,
       mate.lowText !== '' ? h('b.iw-mate-low', null, mate.lowText) : null))));
 }
 
