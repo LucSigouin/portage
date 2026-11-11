@@ -105,33 +105,34 @@ describe('hero windows', () => {
 });
 
 describe('who the heroes are', () => {
-  // (players are read through crewOf only: the shape of the player state is changing)
-  const afloat = createGame(7);
-  type Member = ReturnType<typeof crewOf>['local'];
-  const aboard: Member = { ...crewOf(afloat).local, mode: 'canoe' };
-  const mate = (dx: number): Member => ({ ...aboard, mode: 'foot', position: { x: aboard.position.x + dx, y: 1, z: aboard.position.z } });
+  const look = camera();
 
   it('the canoe with everyone aboard is one hero, and each person ashore is their own', () => {
+    const afloat = createGame(7, { crew: 4 });
     const view = new CanoeView();
-    const local = aboard;
-    view.sync(afloat, { local, others: [] }, 0, 0, true, true);
+    view.sync(afloat, crewOf(afloat), 0, 0, true, true);
     expect(view.heroes()).toEqual([view.group]);
-    // Three more aboard: still one hero, four figures in the hull.
-    view.sync(afloat, { local, others: [local, local, local] }, 0, 0, true, false);
-    expect(view.heroes()).toEqual([view.group]);
-    const seated: THREE.Object3D[] = [];
-    view.group.traverse((object) => { if (object.parent && object.parent.rotation.y === Math.PI && object.children.length > 10) seated.push(object); });
-    expect(seated.length).toBe(4);
-    expect(new Set(seated.map((figure) => figure.position.z.toFixed(2))).size).toBe(4);
+    // Four aboard: one hero, four figures in the hull, each at their own place.
+    expect(view.figures().map((figure) => figure.seat)).toEqual([0, 1, 2, 3]);
+    for (const figure of view.figures()) {
+      let inside = false;
+      view.group.traverse((object) => { if (object === view.figureOf(figure.id)) inside = true; });
+      expect(inside).toBe(true);
+    }
+    expect(new Set(view.figures().map((figure) => figure.position[2].toFixed(2))).size).toBe(4);
     // Two of them step ashore: three heroes.
-    view.sync(afloat, { local, others: [local, mate(3), mate(6)] }, 0, 0, true, false);
+    for (const [player, dx] of [[afloat.players[2], 3], [afloat.players[3], 6]] as const) {
+      Object.assign(player, { mode: 'foot', seat: null, position: { x: afloat.canoe.position.x + dx, y: 1, z: afloat.canoe.position.z } });
+    }
+    view.sync(afloat, crewOf(afloat), 0, 0, true, false);
     expect(view.heroes().length).toBe(3);
     expect(view.heroes()[0]).toBe(view.group);
-    // The crew shrinks: the spare figures are hidden, so they get no window.
-    view.sync(afloat, { local, others: [] }, 0, 0, true, false);
+    // The crew shrinks: the figures of those who left are hidden, so they get no window.
+    afloat.players.length = 2;
+    view.sync(afloat, crewOf(afloat), 0, 0, true, false);
+    expect(view.figuresShown()).toBe(2);
     view.group.updateMatrixWorld();
     view.ashore.updateMatrixWorld();
-    const look = camera();
     look.position.set(afloat.canoe.position.x, 6, afloat.canoe.position.z + 8);
     look.lookAt(afloat.canoe.position.x, 0, afloat.canoe.position.z);
     look.updateMatrixWorld();
@@ -140,8 +141,9 @@ describe('who the heroes are', () => {
   });
 
   it('the local figure is inside the canoe hero when aboard', () => {
+    const afloat = createGame(7);
     const view = new CanoeView();
-    view.sync(afloat, { local: aboard, others: [] }, 0, 0, true, true);
+    view.sync(afloat, crewOf(afloat), 0, 0, true, true);
     let inside = false;
     view.group.traverse((object) => { if (object === view.localFigure()) inside = true; });
     expect(inside).toBe(true);

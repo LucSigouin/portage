@@ -7,6 +7,8 @@ export interface Post {
   uniforms: Record<string, IUniform>;
   /** The pen's settings: uLineW, uWobble, uBoil (off, always), uBoilTime. Shared by the world's pen and the heroes'. */
   pen: Record<string, IUniform<number>>;
+  /** 1 thins the pen on small heroes (see `heroPen`). 0 keeps the full pen on every hero. */
+  heroPen: IUniform<number>;
   reflection: Texture;
   /** The world's drawing size in pixels. */
   resolution: Vector2;
@@ -40,3 +42,11 @@ export interface Post {
   dispose(): void;
 }
 export function createPost(renderer: WebGLRenderer, camera: Camera): Post;
+
+/**
+ * The pen on a small hero. `start`: metres of world across the window's height at the hero's depth, up to which
+ * the pen is full. `fall`: how fast it thins past that. `floor`: the share of its width it never goes under.
+ */
+export const HERO_PEN: { start: number; fall: number; floor: number };
+/** The share of its full width the pen keeps on a hero, where the window's height covers `span` metres of world. */
+export function heroPen(span: number): number;
