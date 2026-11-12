@@ -85,7 +85,7 @@ export const fireboxPart: AttachmentBuilder = (context) => {
   b.torus(0.036, 0.006, IRON, { pos: [-0.11, y + 0.185, centre], id: THIN, kind: KIND.PLAIN }, 8);
   // a poker laid on the slab
   b.beam([-0.27, y + 0.012, centre - 0.045], [0.27, y + 0.012, centre - 0.05], 0.007, IRON, { id: THIN, kind: KIND.PLAIN }, 4);
-  return only(b.mesh());
+  return { ...only(b.mesh()), lamp: [0, y + 0.05, centre + 0.05] };
 };
 
 /** The map table: a chart board across the rails, the lens on its arm, the lodestone hung over a bearing ring. */

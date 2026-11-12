@@ -5,6 +5,8 @@ import * as THREE from 'three';
 
 export const WAVE_COUNT = 4;
 export const REGION_COUNT = 4;
+// The most the wave sum reaches per point of roughness, metres: the amplitudes of the rules' WAVE_TABLE, added up.
+export const WAVE_AMPLITUDE = 0.177;
 
 const vec4s = (count) => Array.from({ length: count }, () => new THREE.Vector4());
 

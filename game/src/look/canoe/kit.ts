@@ -31,6 +31,8 @@ export interface AttachmentPiece {
   object: THREE.Object3D;
   /** Called every frame: sails fill, lamps light. `time` is the look's paint time in seconds. */
   update?(canoe: CanoeState, time: number): void;
+  /** Where its flame is, in canoe space, if it has one: the look lights the night from there (lamps.ts). */
+  lamp?: [number, number, number];
 }
 
 export type AttachmentBuilder = (context: AttachmentContext) => AttachmentPiece;

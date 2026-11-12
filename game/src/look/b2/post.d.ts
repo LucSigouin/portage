@@ -36,7 +36,7 @@ export interface Post {
    * heroes: the group (a child of the scene) drawn apart at the canvas's size, inside heroWindows. Null leaves it in the world.
    */
   render(
-    scene: Scene, camera: PerspectiveCamera, water: Mesh, overlay?: Scene | null, reflect?: boolean,
+    scene: Scene, camera: PerspectiveCamera, water: Mesh, overlay?: Scene | Scene[] | null, reflect?: boolean,
     onPass?: ((pass: number) => void) | null, heroes?: Object3D | null, heroWindows?: PostWindow[],
   ): void;
   dispose(): void;

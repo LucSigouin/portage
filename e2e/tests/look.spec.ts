@@ -20,7 +20,7 @@
  * Needs the dev server (PORTAGE_URL, default http://localhost:5221).
  *
  * PORTAGE_LOOK_BREAK adds switches to every address, to prove each check can fail:
- * `&rung=8` (size), `&boil=1` (steadiness), `&bench=24` (frame rate), `&hero=0` (hero size and sharpness),
+ * `&rung=9` (size), `&boil=1` (steadiness), `&bench=24` (frame rate), `&hero=0` (hero size and sharpness),
  * `&heropen=0` (the far figure). The crew checks are broken in the source: see game/LOOK.md.
  */
 import { expect, test } from '@playwright/test';
@@ -340,12 +340,12 @@ test('zoomed fully out on an island it holds 55 frames a second with the ladder 
 
 // The heroes: the crew and the canoe. Whatever the world is drawn at, they are drawn at the window's own pixels.
 for (const [name, width, height, query, zoomOut] of [
-  ['on the ladder\'s last rung', 1920, 1080, 'shot=island&live=1&rung=8&hold=1', false],
-  ['on the last rung, zoomed fully out', 1920, 1080, 'shot=island&live=1&rung=8&hold=1', true],
-  ['on the last rung, afloat', 1920, 1080, 'shot=play&live=1&rung=8&hold=1', false],
-  ['at 3840×2160 on the last rung', 3840, 2160, 'shot=island&live=1&rung=8&hold=1', true],
+  ['on the ladder\'s last rung', 1920, 1080, 'shot=island&live=1&rung=9&hold=1', false],
+  ['on the last rung, zoomed fully out', 1920, 1080, 'shot=island&live=1&rung=9&hold=1', true],
+  ['on the last rung, afloat', 1920, 1080, 'shot=play&live=1&rung=9&hold=1', false],
+  ['at 3840×2160 on the last rung', 3840, 2160, 'shot=island&live=1&rung=9&hold=1', true],
   ['at 5120×2160, past the pixel budget', 5120, 2160, 'shot=island&live=1&hold=1', false],
-  ['at 5120×2160 on the last rung, zoomed fully out', 5120, 2160, 'shot=island&live=1&rung=8&hold=1', true],
+  ['at 5120×2160 on the last rung, zoomed fully out', 5120, 2160, 'shot=island&live=1&rung=9&hold=1', true],
 ] as const) {
   test(`the heroes are drawn at the window's size ${name}`, async ({ page }) => {
     await page.setViewportSize({ width, height });
@@ -384,15 +384,15 @@ for (const [name, width, height, zoomOut] of [
   test(`the player is as sharp on the last rung as on the first (${name})`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     const strength: Record<string, number> = {};
-    for (const rung of [0, 8]) {
+    for (const rung of [0, 9]) {
       await open(page, `shot=island&rung=${rung}&hold=1`);
       if (zoomOut) await zoomFullyOut(page);
       strength[rung] = await edgeStrength(page, await playerCrop(page));
       expect((await probe(page)).rung).toBe(rung);
     }
-    console.log(`player crop, ${name}: edge strength ${strength[0].toFixed(1)} on rung 0, ${strength[8].toFixed(1)} on rung 8 (${Math.round((strength[8] / strength[0]) * 100)}%)`);
+    console.log(`player crop, ${name}: edge strength ${strength[0].toFixed(1)} on rung 0, ${strength[9].toFixed(1)} on rung 9 (${Math.round((strength[9] / strength[0]) * 100)}%)`);
     expect(strength[0]).toBeGreaterThan(20);
-    expect(strength[8]).toBeGreaterThanOrEqual(strength[0] * 0.93);
+    expect(strength[9]).toBeGreaterThanOrEqual(strength[0] * 0.93);
   });
 }
 
@@ -430,7 +430,7 @@ for (const [name, query, crew, stray, windowsAtLeast] of [
 ] as const) {
   test(`the whole crew is drawn (${name})`, async ({ page }) => {
     const problems = watchConsole(page);
-    await open(page, `${query}&rung=8&hold=1`);
+    await open(page, `${query}&rung=9&hold=1`);
     if (stray) {
       await page.evaluate(() => { (window as unknown as Hooks).portage.session.game.players[2].position.x -= 4; });
       await page.waitForTimeout(300);
@@ -570,7 +570,7 @@ for (const [width, height] of [[1920, 1080], [5120, 2160]] as const) {
     const shares: Record<string, { ink: number; coat: number; scarf: number }> = {};
     const pen: Record<string, number> = {};
     for (const [name, query, zoomOut] of [['near', '', false], ['far', '', true], ['far, full pen', '&heropen=0', true]] as const) {
-      await open(page, `shot=island&rung=8&hold=1${query}`);
+      await open(page, `shot=island&rung=9&hold=1${query}`);
       if (zoomOut) await zoomFullyOut(page);
       shares[name] = await paintShares(page, await playerCrop(page));
       pen[name] = (await probe(page)).hero.pen;

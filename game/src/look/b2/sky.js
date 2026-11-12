@@ -10,7 +10,9 @@ in vec3 vDir;
 layout(location = 0) out vec4 oColor;
 uniform float uTime;
 uniform int uPass;
-uniform float uFogDensity, uOvercast, uSunGlow;
+uniform float uFogDensity, uOvercast, uSunGlow, uStars, uStorm, uVeil;
+uniform vec4 uAhead;
+uniform vec3 uAheadColor;
 uniform vec3 uFogColor, uSkyTop, uSkyLow, uCloud, uCloudLight, uSunColor, uSunDir, uFarTint;
 ${NOISE}
 const float TAU = 6.28318530718;
@@ -48,6 +50,38 @@ void main(){
   c *= 1. - .05 * (smoothstep(ce, ce + .03, cl) - smoothstep(ce + .03, ce + .1, cl)) * smoothstep(.05, .28, el);
   float cl2 = fbm(cp * 2.6 + vec2(-uTime * .004, 11.));
   c = mix(c, uCloudLight, smoothstep(.6, .63, cl2) * .35 * smoothstep(.03, .2, el) * (1. - uOvercast));
+
+  // a storm's cloud hangs low and heavy: a second, darker wash under the first, down to the ridges
+  if (uStorm > 0.) {
+    float sc = fbm(cp * .62 + vec2(uTime * .009, 21.));
+    float low = smoothstep(.4, .43, sc) * smoothstep(.02, .12, el);
+    c = mix(c, uCloud * .8, low * uStorm * .7);
+    c *= 1. - .06 * uStorm * (low - smoothstep(.43, .5, sc) * smoothstep(.02, .12, el));
+  }
+
+  // what is coming: the next weather's cloud stands on the upwind horizon and climbs as its time nears.
+  // (fb: the pixel's size in elevation, taken here so no screen derivative sits inside the branch)
+  float fb = fwidth(el) * 1.5 + 1e-6;
+  if (uAhead.z > 0.) {
+    float toward = dot(normalize(d.xz + 1e-5), uAhead.xy);     // 1 looking upwind
+    float top = uAhead.z * mix(.07, .8, smoothstep(-.6, 1., toward)) * mix(1., .2, uAhead.w) * (.72 + .56 * fbm(circ * 2.1 + 40.));
+    float bank = clamp((top - el) / fb + .5, 0., 1.);
+    // one wash with a wet edge along its top
+    c = mix(c, uAheadColor * (1. - .07 * (1. - smoothstep(0., .02, top - el))), bank * .92);
+  }
+
+  // stars: ink-dot points fixed on the dome, a few of them bigger. They do not twinkle. Cloud hides them.
+  // (fs: a pixel's size in star cells, taken here so no screen derivative sits inside the branch)
+  vec2 sg = cp * 26.;
+  float fs = length(fwidth(sg)) * .7071;
+  if (uStars > 0.) {
+    vec2 si = floor(sg);
+    float sr = hash12(si);
+    vec2 sp = vec2(hash12(si + 7.3), hash12(si + 31.1)) * .6 + .2;
+    float rad = max(.03 + .07 * step(.992, sr), fs * .8);       // never under a pixel across: a point that small would shimmer as the view turns
+    float star = (1. - smoothstep(rad - fs, rad + fs, distance(fract(sg), sp))) * step(.93, sr) * mix(.4, 1., fract(sr * 37.));
+    c = mix(c, uSunColor, star * uStars * (1. - cm) * smoothstep(.05, .16, el));
+  }
 
   // the sun, seen through mist
   float sd = dot(d, uSunDir);
@@ -91,6 +125,8 @@ void main(){
       c = mix(c, mix(${glsl(PAL.ink)}, uFogColor, .45), clamp(1.2 - abs(d) / fe, 0., 1.) * .55);
     }
   }
+  // fog weather closes the sky: the ridges and the far shore go into it, and the height keeps only a little of its own tone
+  c = mix(c, uFogColor, uVeil * mix(.97, .55, smoothstep(0., .45, el)));
   if (el < 0.) c = uFogColor;
 
   oColor = vec4(c, 1.);
@@ -102,7 +138,7 @@ export function createSky() {
     glslVersion: THREE.GLSL3,
     uniforms: {
       uTime: GU.uTime, uPass: GU.uPass, uFogDensity: GU.uFogDensity, uFogColor: GU.uFogColor, tNoise: GU.tNoise,
-      uOvercast: GU.uOvercast, uSunGlow: GU.uSunGlow, uSkyTop: GU.uSkyTop, uSkyLow: GU.uSkyLow, uCloud: GU.uCloud,
+      uOvercast: GU.uOvercast, uSunGlow: GU.uSunGlow, uStars: GU.uStars, uStorm: GU.uStorm, uVeil: GU.uVeil, uAhead: GU.uAhead, uAheadColor: GU.uAheadColor, uSkyTop: GU.uSkyTop, uSkyLow: GU.uSkyLow, uCloud: GU.uCloud,
       uCloudLight: GU.uCloudLight, uSunColor: GU.uSunColor, uSunDir: GU.uSunDir, uFarTint: GU.uFarTint,
     },
     vertexShader: /* glsl */ `
