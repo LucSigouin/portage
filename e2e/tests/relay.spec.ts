@@ -171,8 +171,9 @@ test('friends join by a link: host, copy, open, name, in the canoe; they move, d
     return context;
   };
 
+  // (Five windows are open by the end. Small ones: this computer has stalled under less.)
   // --- The host clicks "Host a crew" and copies the link -----------------------------
-  const hostContext = await open();
+  const hostContext = await open(SMALL);
   const host = await arrive(hostContext, `${BASE}/`, problems, 'host');
   await expect(host.page.getByRole('button', { name: 'Host a crew' })).toBeVisible();
   const shown = await hostByClicks(host.page, 'Luc', false);
@@ -194,7 +195,7 @@ test('friends join by a link: host, copy, open, name, in the canoe; they move, d
   ]);
 
   // --- A second profile opens the link, types a name, and is in the canoe ---------------
-  const samContext = await open();
+  const samContext = await open(SMALL);
   let sam = await arrive(samContext, link, problems, 'sam');
   const joinCard = sam.page.locator('.iw-panel-crew_join');
   await expect(joinCard).toBeVisible();
