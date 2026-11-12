@@ -199,7 +199,9 @@
     {"label": "Browser tests", "value": "86"},
     {"label": "Lines of game code", "value": "36,000"},
     {"label": "Issues", "value": "12, 4 closed"},
-    {"label": "Deploys", "value": "5"}
+    {"label": "Deploys", "value": "5"},
+    {"label": "Agent hours", "value": "27, over 31 on the clock"},
+    {"label": "Cost at API list prices", "value": "about $637"}
   ],
   "left": [
     {"what": "Friends join by a link: relay, Host and Join buttons", "hours": "4"},
