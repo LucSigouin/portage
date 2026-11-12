@@ -13,7 +13,7 @@
     {"label": "Stage", "value": "About three quarters of version 1"},
     {"label": "Tests", "value": "815 unit, 86 in a browser"},
     {"label": "Running", "value": "Nothing. Stopped here, as you asked"},
-    {"label": "Not live yet", "value": "Weather, night and co-op groundwork. Say go"},
+    {"label": "Live now", "value": "Weather, night and co-op groundwork, since Nov 11"},
     {"label": "Waiting on you", "value": "Play it, and say what feels off"}
   ],
   "steps": [
@@ -135,8 +135,8 @@
     {
       "when": "Nov 11", "title": "Live on sigouin.net", "state": "done",
       "asked": "I want to host it on my website.",
-      "built": ["sigouin.net/portage, three deploys", "Private GitHub repo with 11 issues", "One command builds, tests, uploads and checks"],
-      "proof": ["Every live file hashes the same as the build", "The live game takes a click and a key press"],
+      "built": ["sigouin.net/portage, four deploys", "Private GitHub repo with 11 issues", "One command builds, tests, uploads and checks"],
+      "proof": ["Every live file hashes the same as the build", "The live game takes a click and a key press", "Two tabs played one game on the live site"],
       "snags": ["Cloudflare login had expired", "I misread the sign-in: one failed run, nothing published"],
       "pictures": [],
       "report": ""
