@@ -190,6 +190,7 @@ void main(){
   // (three world-anchored sets, 60 degrees apart; whichever lies across the view is drawn,
   //  so the marks stay level on the page whatever way the canoe points)
   vec2 st = vec2(0.);
+  vec2 st1 = vec2(0.);
   for (int k = 0; k < 6; k++) {
     vec2 along = DIRS[k];
     vec2 across = vec2(-along.y, along.x);
@@ -201,7 +202,12 @@ void main(){
     if (wgt + fineW < .01) continue;
     vec2 Pr = vec2(dot(P, along), dot(P, across)) + float(k) * 19.3;
     float pxW = abs(dot(dPx, across)) + abs(dot(dPy, across)) + (abs(dot(dPx, along)) + abs(dot(dPy, along))) * .15;
-    if (wgt > .01) st += wgt * (strokes(Pr, 1., t, pxW) + strokes(Pr + 31.7, 3.6, t * .8, pxW) + strokes(Pr + 77.1, 13., t * .6, pxW));
+    if (wgt > .01) {
+      // (the set a metre across is kept apart as well: near the eye a gale whitens it, see the whitecaps)
+      vec2 metre = wgt * strokes(Pr, 1., t, pxW);
+      st1 += metre;
+      st += metre + wgt * (strokes(Pr + 31.7, 3.6, t * .8, pxW) + strokes(Pr + 77.1, 13., t * .6, pxW));
+    }
     if (fineW > .01) st += fineW * strokes(Pr + 11.3, .4, t * 1.1, pxW) * .7;
   }
   if (uWeatherDetail > .5) {
@@ -224,9 +230,13 @@ void main(){
       // (the marks are the ripple strokes' own, bigger and all white, laid along the crests of the chop's longest wave)
       vec2 run = normalize(uWave[1].xy);
       vec2 Pc = vec2(dot(P, vec2(-run.y, run.x)), dot(P, run));
-      vec2 caps = strokes(Pc + 53.1, 2.7, t * .6, pxR) + strokes(Pc + 19.4, 4.6, t * .5, pxR);
+      // (up close the big marks are bands ten pixels thick. Within 8 m of the eye the wind whitens the pen's own ripple
+      //  strokes instead, the set a metre across: a pen stroke's weight, and no stroke drawn twice. The middle set takes over
+      //  by 18 m, and from 30 to 48 m the biggest comes in)
+      float capMid = smoothstep(8., 18., dist);
+      vec2 caps = capMid * strokes(Pc + 53.1, 2.7, t * .6, pxR) + smoothstep(30., 48., dist) * strokes(Pc + 19.4, 4.6, t * .5, pxR);
       float rough = clamp((waterRoughness(vWorld.z) - 1.) / 3., 0., 1.);
-      foam = max(foam, clamp(caps.x + caps.y, 0., 1.) * blow * mix(.6, 1., rough) * mix(.75, 1., onCrest));
+      foam = max(foam, clamp(caps.x + caps.y + (1. - capMid) * (st1.x + st1.y), 0., 1.) * blow * mix(.6, 1., rough) * mix(.75, 1., onCrest));
     }
   }
   c = mix(c, uInkBlue, clamp(st.x, 0., 1.) * .72);
@@ -244,8 +254,10 @@ void main(){
     float lv = best + (w2 - .5) * .06;
     float la = fwidth(lv) * 1.2 + .004;
     float pool = smoothstep(-la, la, lv - .07) * .4 + smoothstep(-la, la, lv - .36) * .6;
-    // the lit water is a thin wash of the lamp's colour; the white strokes and the foam in it catch the light
-    vec3 lit = mix(c, ${glsl('#9aa9ad')} * tint, .36) + tint * clamp(st.y + foam, 0., 1.) * .34;
+    // the lit water is a thin wash of the lamp's colour, and the pen marks in it carry the light: the white strokes and the
+    // foam catch it, and the dark ripple strokes are drawn in lamp light instead. A pool of marks, not one flat wash.
+    vec3 lit = mix(c, ${glsl('#9aa9ad')} * tint, .26) + tint * clamp(st.y + foam, 0., 1.) * .34;
+    lit = mix(lit, tint * .9, clamp(st.x, 0., 1.) * .6);
     c = mix(c, lit, pool * uDark);
   }
   // pigment granulation in the wash, drifting with the water

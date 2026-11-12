@@ -7,7 +7,7 @@ import type { LandmarkKind } from '../../data/index.ts';
 import { KIND } from '../b2/detail.js';
 import type { Triple } from '../b2/geo.js';
 import { PAL } from '../b2/palette.js';
-import { PEN, TONE, gable, gableEnd, ladder, lattice, pane, siteOf } from './kit.ts';
+import { LANDMARK_SUNK, PEN, TONE, gable, gableEnd, ladder, lattice, pane, siteOf } from './kit.ts';
 import type { LandmarkBuilder } from './kit.ts';
 import { boom } from './reach.ts';
 
@@ -21,14 +21,23 @@ export const DAM_HALF = 140;
 export const NARROWS: Partial<Record<LandmarkKind, LandmarkBuilder>> = {
   /**
    * One span of the railway bridge: a through truss with a curved top chord, on a pier at each end.
-   * No floor: the rules' ground is the deck, and world/dressing.ts lays the track on it.
+   * No floor: the rules' ground is the deck, and world/dressing.ts lays the track on it. So the span follows its
+   * own ground: every joint stands as high over the deck as on a level span, and each pier comes up to its chord.
+   * The island table has three, and the ground falls away under the outer two: each is drawn on its own site
+   * (`FITTED_KINDS` in landmarks.ts).
    */
   truss_span: (builder, detail) => {
+    const site = siteOf('truss_span');
     const half = TRUSS_SPAN / 2;
     const tops = [1.2, 7, 8.7, 9.7, 10.3, 10.5, 10.3, 9.7, 8.7, 7, 1.2];
-    const at = (side: number, joint: number, top: boolean): Triple => [side * 3.3, top ? tops[joint] : 1.2, -half + joint * 8];
+    // How far the deck stands over (or under) the span's own middle, along it. Never under the water.
+    const rise = (z: number): number => Math.max(site.ground(0, z), site.water + 0.6) - LANDMARK_SUNK;
+    const at = (side: number, joint: number, top: boolean): Triple => [side * 3.3, (top ? tops[joint] : 1.2) + rise(-half + joint * 8), -half + joint * 8];
     for (const side of [-1, 1]) {
-      builder.box(0.45, 0.55, TRUSS_SPAN, STEEL, { pos: [side * 3.3, 1.2, 0], kind: KIND.METAL, axis: 2 });
+      // The bottom chord, bay by bay along the deck (end to end in two lengths from far off).
+      for (let joint = 0; joint < 10; joint += detail ? 1 : 5) {
+        builder.plank(at(side, joint, false), at(side, joint + (detail ? 1 : 5), false), 0.45, 0.55, STEEL, { kind: KIND.METAL, axis: 2 });
+      }
       for (let joint = 0; joint < 10; joint += 1) {
         builder.beam(at(side, joint, true), at(side, joint + 1, true), 0.24, STEEL, { kind: KIND.METAL }, 5);
         if (joint === 0) continue;
@@ -41,18 +50,19 @@ export const NARROWS: Partial<Record<LandmarkKind, LandmarkBuilder>> = {
       builder.beam(at(-1, joint, true), at(1, joint, true), 0.1, STEEL, PEN, 4);
       if (detail && joint < 9) builder.beam(at(joint % 2 ? -1 : 1, joint, true), at(joint % 2 ? 1 : -1, joint + 1, true), 0.06, STEEL, PEN, 4);
     }
-    // The piers: one broad, one deep, so two spans meeting on one never share a face.
-    builder.box(9.4, 10, 2.6, TONE.concrete, { pos: [0, -4.05, -half + 0.2], kind: KIND.STONE });
-    builder.box(8.2, 10, 3.6, TONE.concreteDark, { pos: [0, -4.1, half - 0.2], kind: KIND.STONE });
+    // The piers: one broad, one deep, so two spans meeting on one never share a face. Each comes up under its end of the chord.
+    builder.box(9.4, 10, 2.6, TONE.concrete, { pos: [0, -4.05 + rise(-half), -half + 0.2], kind: KIND.STONE });
+    builder.box(8.2, 10, 3.6, TONE.concreteDark, { pos: [0, -4.1 + rise(half), half - 0.2], kind: KIND.STONE });
     if (!detail) return;
     for (const end of [1, 9]) {
-      builder.box(6.8, 0.9, 0.25, STEEL, { pos: [0, tops[end] - 0.7, -half + end * 8], kind: KIND.METAL });
-      for (const side of [-1, 1]) builder.beam([side * 3.3, tops[end] - 1.1, -half + end * 8], [side * 1.8, tops[end] - 0.3, -half + end * 8], 0.07, STEEL, PEN, 4);
+      const z = -half + end * 8;
+      builder.box(6.8, 0.9, 0.25, STEEL, { pos: [0, tops[end] - 0.7 + rise(z), z], kind: KIND.METAL });
+      for (const side of [-1, 1]) builder.beam([side * 3.3, tops[end] - 1.1 + rise(z), z], [side * 1.8, tops[end] - 0.3 + rise(z), z], 0.07, STEEL, PEN, 4);
     }
-    builder.stencil('BR 14', [1, tops[9] - 0.9, half - 8 + 0.14], [-1, 0, 0], [0, 1, 0], 0.4, PAL.cream);
+    builder.stencil('BR 14', [1, tops[9] - 0.9 + rise(half - 8), half - 8 + 0.14], [-1, 0, 0], [0, 1, 0], 0.4, PAL.cream);
     for (const side of [-1, 1]) {
-      for (let joint = 1; joint < 10; joint += 1) builder.box(0.5, 0.7, 0.7, '#4f5a61', { pos: [side * 3.3, tops[joint] - 0.1, -half + joint * 8], kind: KIND.METAL });
-      for (const [z, long] of [[-22, 1.1], [-3, 0.8], [14, 1.4], [29, 0.9]]) builder.box(0.02, long, 1.2, PAL.rustLight, { pos: [side * 3.54, 1.2 - long / 2 + 0.2, z + side * 3], flat: true, kind: KIND.PLAIN });
+      for (let joint = 1; joint < 10; joint += 1) builder.box(0.5, 0.7, 0.7, '#4f5a61', { pos: [side * 3.3, tops[joint] - 0.1 + rise(-half + joint * 8), -half + joint * 8], kind: KIND.METAL });
+      for (const [z, long] of [[-22, 1.1], [-3, 0.8], [14, 1.4], [29, 0.9]]) builder.box(0.02, long, 1.2, PAL.rustLight, { pos: [side * 3.54, 1.2 - long / 2 + 0.2 + rise(z + side * 3), z + side * 3], flat: true, kind: KIND.PLAIN });
     }
   },
 

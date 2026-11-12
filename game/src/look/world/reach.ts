@@ -42,16 +42,31 @@ export function boom(builder: Builder, from: Triple, to: Triple, halfFrom: numbe
   }
 }
 
-/** A car crushed flat for the stack: a slab of body, what is left of the cab, dark slots where the glass was. */
-function crushedCar(builder: Builder, x: number, y: number, z: number, turn: number, tilt: number, tone: string, detail: boolean, squash = 1): void {
+/** How long a wrecked car is, how high it stands from sill to roof, and how far apart two are stacked, metres. */
+export const CAR = { length: 4.1, height: 0.89, stacked: 0.93 } as const;
+
+/**
+ * A wrecked car for the stack, squashed but still a car from the shore: a body, a band of dark glass between
+ * pillars under a dented roof, two wheels a side with their hubs, bumpers, lamps, and a door the pen draws round.
+ * Its origin is the middle of the body. `door` is the door's colour, when it came off another car.
+ */
+function wreckedCar(builder: Builder, x: number, y: number, z: number, turn: number, tilt: number, tone: string, detail: boolean, door = tone): void {
   moved(builder, new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(tilt, turn, tilt * 0.6)).setPosition(x, y, z), () => {
-    builder.box(4.1, 0.5 * squash, 1.75, tone, { pos: [0, 0, 0], kind: KIND.METAL });
-    builder.box(2, 0.26 * squash + 0.04, 1.6, tone, { pos: [-0.25, 0.25 * squash + 0.13 * squash, 0], kind: KIND.METAL });
+    builder.box(CAR.length, 0.5, 1.75, tone, { pos: [0, 0, 0], kind: KIND.METAL });
+    // The cab: glass all round, the roof pressed down on it a little askew.
+    builder.box(1.9, 0.3, 1.56, TONE.glassDark, { pos: [-0.3, 0.4, 0], flat: true, kind: KIND.PLAIN });
+    builder.box(2, 0.09, 1.66, tone, { pos: [-0.3, 0.595, 0], rot: [0, 0, 0.03], kind: KIND.METAL });
+    for (const end of [-1.35, 1.3]) {
+      builder.cyl(0.32, 0.32, 1.8, TONE.tyre, { pos: [end, -0.1, 0], rot: [Math.PI / 2, 0, 0], kind: KIND.PLAIN }, detail ? 10 : 6);
+      if (detail) builder.cyl(0.14, 0.14, 1.84, PAL.tin, { pos: [end, -0.1, 0], rot: [Math.PI / 2, 0, 0], flat: true, kind: KIND.PLAIN }, 8);
+    }
     if (!detail) return;
-    builder.box(1.7, 0.1 * squash + 0.03, 1.64, TONE.glassDark, { pos: [-0.25, 0.25 * squash + 0.12 * squash, 0], flat: true, kind: KIND.PLAIN });
-    for (const end of [-1.35, 1.3]) builder.cyl(0.33, 0.33, 1.79, TONE.tyre, { pos: [end, -0.2 * squash, 0], rot: [Math.PI / 2, 0, 0], kind: KIND.PLAIN }, 8);
-    builder.box(0.08, 0.14, 1.8, PAL.tin, { pos: [2.07, -0.08, 0], kind: KIND.METAL });
-    builder.box(0.08, 0.14, 1.8, PAL.tin, { pos: [-2.07, -0.08, 0], kind: KIND.METAL });
+    for (const pillar of [-1.22, -0.35, 0.62]) builder.box(0.1, 0.32, 1.62, tone, { pos: [pillar, 0.4, 0], rot: [0, 0, pillar > 0 ? -0.35 : pillar < -1 ? 0.25 : 0], kind: KIND.METAL });
+    builder.box(0.95, 0.38, 1.77, door, { pos: [-0.82, 0.02, 0], kind: KIND.METAL });
+    for (const end of [-1, 1]) {
+      builder.box(0.08, 0.14, 1.8, PAL.tin, { pos: [end * 2.07, -0.1, 0], kind: KIND.METAL });
+      for (const side of [-1, 1]) builder.box(0.05, 0.13, 0.26, end > 0 ? PAL.cream : TONE.towerRed, { pos: [end * 2.06, 0.1, side * 0.58], flat: true, kind: KIND.PLAIN });
+    }
   });
 }
 
@@ -129,21 +144,28 @@ export const REACH: Partial<Record<LandmarkKind, LandmarkBuilder>> = {
     });
   },
 
-  /** The yard's stack: crushed cars four high, a pickup thrown on top, tyres, a loose hood. */
+  /**
+   * The yard's stack: wrecked cars three high and two high, nose to tail, a pickup thrown on the short pile,
+   * tyres, a loose hood. The rules' junk heap stands in the gap between the piles.
+   */
   scrap_stack: (builder, detail) => {
-    const tones = [PAL.rust, '#6b7a84', '#b08a4a', PAL.rustDark, '#b9b3a2', PAL.slate, PAL.rustLight, '#8f9aa0'];
-    for (let level = 0; level < 4; level += 1) {
-      crushedCar(builder, -0.4 + (level % 2) * 0.3, 0.32 + level * 0.8, -1.5, 0.04 * (level - 1.5), 0.02 * (level % 3 - 1), tones[level], detail, 0.9);
-      if (level < 3) crushedCar(builder, 0.5 - (level % 2) * 0.35, 0.32 + level * 0.8, 1.2, 3.14 + 0.05 * (1 - level), 0.02 * (level % 2), tones[level + 4], detail, 0.9);
-    }
-    // The pickup: a cab and a bed, nose down off the short stack.
-    moved(builder, new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(0.1, 0.25, -0.3)).setPosition(1, 2.95, 1.25), () => {
+    const rest = 0.36;
+    const tall = [[PAL.rust, PAL.rust], ['#6b7a84', '#b9b3a2'], ['#b08a4a', '#b08a4a']];
+    const short = [['#b9b3a2', '#b9b3a2'], [PAL.slate, PAL.rustLight]];
+    tall.forEach(([tone, door], level) => wreckedCar(builder, -0.4 + (level % 2) * 0.3, rest + level * CAR.stacked, -1.5, (level % 2) * Math.PI + 0.04 * (level - 1), 0.02 * (level % 3 - 1), tone, detail, door));
+    short.forEach(([tone, door], level) => wreckedCar(builder, 0.5 - (level % 2) * 0.35, rest + level * CAR.stacked, 1.2, (1 - level % 2) * Math.PI + 0.05 * (1 - level), 0.02 * (level % 2), tone, detail, door));
+    // The pickup: a cab and a bed, nose down off the short pile.
+    moved(builder, new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(0.1, 0.25, -0.3)).setPosition(1, rest + 2 * CAR.stacked + 0.42, 1.25), () => {
       builder.box(4.4, 0.7, 1.8, '#7a8f7c', { pos: [0, 0, 0], kind: KIND.METAL });
       builder.box(1.5, 0.75, 1.7, '#7a8f7c', { pos: [0.4, 0.7, 0], kind: KIND.METAL });
+      for (const end of [-1.35, 1.5]) builder.cyl(0.4, 0.4, 1.86, TONE.tyre, { pos: [end, -0.3, 0], rot: [Math.PI / 2, 0, 0], kind: KIND.PLAIN }, detail ? 10 : 6);
       if (!detail) return;
       builder.box(1.52, 0.4, 1.5, TONE.glassDark, { pos: [0.4, 0.8, 0], flat: true, kind: KIND.PLAIN });
+      builder.box(1.1, 0.42, 1.74, TONE.glassDark, { pos: [0.4, 0.78, 0], flat: true, kind: KIND.PLAIN });
       builder.box(1.9, 0.3, 1.5, '#55655a', { pos: [-1.15, 0.36, 0], flat: true, kind: KIND.PLAIN });
-      for (const end of [-1.35, 1.5]) builder.cyl(0.4, 0.4, 1.86, TONE.tyre, { pos: [end, -0.3, 0], rot: [Math.PI / 2, 0, 0], kind: KIND.PLAIN }, 8);
+      for (const end of [-1.35, 1.5]) builder.cyl(0.17, 0.17, 1.9, PAL.tin, { pos: [end, -0.3, 0], rot: [Math.PI / 2, 0, 0], flat: true, kind: KIND.PLAIN }, 8);
+      builder.box(0.08, 0.16, 1.84, PAL.tin, { pos: [2.22, -0.18, 0], kind: KIND.METAL });
+      for (const side of [-1, 1]) builder.box(0.05, 0.16, 0.3, PAL.cream, { pos: [2.21, 0.12, side * 0.6], flat: true, kind: KIND.PLAIN });
     });
     for (let tyre = 0; tyre < (detail ? 5 : 3); tyre += 1) {
       builder.torus(0.42, 0.17, TONE.tyre, { pos: [3.4 + (tyre % 2) * 0.12, 0.17 + tyre * 0.33, -1.9 + (tyre % 3) * 0.08], rot: [Math.PI / 2, 0, 0], kind: KIND.PLAIN }, 10);
@@ -152,7 +174,7 @@ export const REACH: Partial<Record<LandmarkKind, LandmarkBuilder>> = {
     builder.torus(0.42, 0.17, TONE.tyre, { pos: [3.9, 0.42, -0.6], rot: [0.2, 0.5, 0], kind: KIND.PLAIN }, 10);
     builder.box(1.5, 0.05, 1.3, PAL.ochre, { pos: [-3.3, 0.5, 0.6], rot: [0.5, 0.4, 1.1], kind: KIND.METAL });
     builder.box(1.1, 0.9, 0.06, PAL.slate, { pos: [3.2, 0.5, 1.9], rot: [-0.25, 0.9, 0], kind: KIND.METAL });
-    builder.beam([-1.6, 3.4, -1.4], [-2.4, 4.6, -1.9], 0.04, PAL.iron, { kind: KIND.METAL }, 5);
+    builder.beam([-1.6, 3.1, -1.4], [-2.4, 4.3, -1.9], 0.04, PAL.iron, { kind: KIND.METAL }, 5);
     builder.beam([-3.1, 0, -2.2], [-2.7, 1.9, -1.9], 0.06, PAL.rust, { kind: KIND.METAL }, 5);
   },
 

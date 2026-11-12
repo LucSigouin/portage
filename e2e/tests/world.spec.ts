@@ -6,7 +6,8 @@
  * - each view costs no more triangles than its budget, and no more than the stand-ins did (far islands are cheap);
  * - with a still camera not one pixel of the land changes at three islands, paused (the camp and its smoke,
  *   the church, the Beacon's summit) and while playing (the camp, the church, the orchard and farmhouse);
- * - a used-up node is drawn used up: what it gave is gone from the picture, and it was there before.
+ * - a used-up node is drawn used up: what it gave is gone from the picture, and it was there before;
+ * - the staged view of the Beacon (`?shot=beacon`) has the lit tower in it: its lamp shows, in the frame.
  *
  * Needs the dev server (PORTAGE_URL, default http://localhost:5222).
  *
@@ -253,3 +254,49 @@ test('a used-up node is drawn used up: what it gave is gone, and it was there be
   expect(freshShare).toBeGreaterThan(0.04);
   expect(spentShare).toBeLessThan(0.002);
 });
+
+test('the staged view of the Beacon has the lit tower in it: the lamp shows, well inside the frame', async ({ page }) => {
+  const problems = watchConsole(page);
+  await page.goto(`${BASE}/?shot=beacon&hold=1${BREAK}`);
+  await page.waitForFunction(() => {
+    const view = (window as unknown as { portage?: { worldView?: { probe?: () => { drawingWidth: number } } } }).portage?.worldView;
+    return view?.probe !== undefined && view.probe().drawingWidth > 0;
+  });
+  await page.addStyleTag({ content: '#interface { visibility: hidden !important; }' });
+  await page.waitForTimeout(1200);
+  // Where the lamp is on the page, from the look's own camera. The island's name would hang over it: marks off.
+  const lamp = await page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const view: any = (window as any).portage.worldView;
+    view.marks.scene.visible = false;
+    const at = view.beacon.position.clone().project(view.camera);
+    return { lit: view.beacon.visible as boolean, x: (at.x * 0.5 + 0.5) * window.innerWidth, y: (0.5 - at.y * 0.5) * window.innerHeight, ahead: at.z < 1 };
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  });
+  await page.waitForTimeout(400);
+  expect(lamp.lit, 'the Beacon is lit in this view').toBe(true);
+  expect(lamp.ahead).toBe(true);
+  expect(lamp.x).toBeGreaterThan(200);
+  expect(lamp.x).toBeLessThan(1720);
+  // (its rays reach 30 pixels over it: 70 keeps them inside the painted sheet)
+  expect(lamp.y).toBeGreaterThan(70);
+  expect(lamp.y).toBeLessThan(700);
+  // The lamp is the flat lamp colour whatever the light (PAL.glow, 255 217 138): warm and bright. Fog, sky or a tree there would not be.
+  const png = await page.screenshot({ clip: { x: Math.round(lamp.x) - 3, y: Math.round(lamp.y) - 3, width: 7, height: 7 } });
+  const colour = await page.evaluate(async (base64) => {
+    const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = canvas.getContext('2d')!;
+    context.drawImage(bitmap, 0, 0);
+    const { data } = context.getImageData(0, 0, bitmap.width, bitmap.height);
+    const sum = [0, 0, 0];
+    for (let offset = 0; offset < data.length; offset += 4) for (let channel = 0; channel < 3; channel += 1) sum[channel] += data[offset + channel];
+    return sum.map((value) => value / (data.length / 4));
+  }, png.toString('base64'));
+  console.log(`?shot=beacon: the lamp at ${lamp.x.toFixed(0)}, ${lamp.y.toFixed(0)} of 1920 by 1080, drawn ${colour.map((value) => value.toFixed(0)).join(' ')}`);
+  expect(colour[0], 'bright').toBeGreaterThan(215);
+  expect(colour[0] - colour[2], 'warm').toBeGreaterThan(60);
+  expect(problems).toEqual([]);
+});
+
