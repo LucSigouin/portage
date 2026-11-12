@@ -8,6 +8,7 @@
  *   fully out on an island with the ladder still on rung 0;
  * - the heroes (the crew and the canoe) are drawn at the window's size on the ladder's last rung and
  *   on a 5120×2160 window, and the player is as sharp on the last rung as on the first;
+ * - what is aboard below the waterline is drawn, not painted over by the world's water (`&floor=0.05` puts the floor there);
  * - the chip is timed at load: a chip too slow for any rung starts on the last one with no change shown, this
  *   machine starts at the top, and `&chiptest=0` leaves the test out;
  * - the ladder climbs back after a slow spell, and never changes twice within ten seconds;
@@ -23,7 +24,7 @@
  *
  * PORTAGE_LOOK_BREAK adds switches to every address, to prove each check can fail:
  * `&rung=11` (size), `&boil=1` (steadiness), `&bench=24` (frame rate), `&hero=0` (hero size and sharpness),
- * `&heropen=0` (the far figure). The crew checks are broken in the source: see game/LOOK.md.
+ * `&heropen=0` (the far figure), `&hullwater=1` (the hull floor). The crew checks are broken in the source: see game/LOOK.md.
  */
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
@@ -417,6 +418,33 @@ for (const [name, width, height, zoomOut] of [
     expect(same).toBeGreaterThanOrEqual(SAME_ON_THE_LAST_RUNG);
   });
 }
+
+/** A capture of the biggest hero window: the canoe and whoever is aboard. */
+async function canoeCrop(page: Page): Promise<Buffer> {
+  const windows = (await probe(page)).hero.windows;
+  const big = windows.reduce((best, each) => (each.w * each.h > best.w * best.h ? each : best), windows[0]);
+  await page.addStyleTag({ content: '#interface { visibility: hidden !important; }' });
+  return page.screenshot({ clip: { x: big.x, y: page.viewportSize()!.height - big.y - big.h, width: big.w, height: big.h } });
+}
+
+test('what is aboard below the waterline is drawn, not painted over by the water', async ({ page }) => {
+  // The floor you see is 5 cm above the waterline today, so nothing aboard is under the water and the fix changes no pixel.
+  // `&floor=0.05` draws the floor 5 cm above the keel, 10 cm under the water. `&hullwater=1` leaves the world's water in the hull, as it was.
+  const crops: Record<string, Buffer> = {};
+  for (const [name, query] of [['today', ''], ['today, water left in', '&hullwater=1'], ['low floor', '&floor=0.05'], ['low floor, water left in', '&floor=0.05&hullwater=1']]) {
+    await open(page, `shot=play&hold=1${query}`);
+    crops[name] = await canoeCrop(page);
+  }
+  const today = await differingPixels(page, crops.today, crops['today, water left in']);
+  const low = await differingPixels(page, crops['low floor'], crops['low floor, water left in']);
+  const moved = await differingPixels(page, crops.today, crops['low floor']);
+  console.log(`hull floor: today the water left in changes ${today.different} of ${today.total} pixels of the canoe's window; with the floor 5 cm above the keel it paints over ${low.different}; `
+    + `the lower floor itself changes ${moved.different}`);
+  expect(today.different).toBe(0);
+  // 1,456 measured: the water's patch inside the hull.
+  expect(low.different).toBeGreaterThan(500);
+  expect(moved.different).toBeGreaterThan(500);
+});
 
 test('the chip is timed at load: a slow chip starts on its rung with no change shown, a fast one at the top', async ({ page }) => {
   // A small window, so this machine has room to spare whoever else is using the chip.

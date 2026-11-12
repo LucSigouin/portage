@@ -163,6 +163,7 @@ PORTAGE_URL=http://localhost:5221 npm --prefix e2e test       # browser: bot, ke
 - 55 fps afloat, with the full canoe, mid-game, and zoomed fully out on an island at rung 0
 - the heroes at the window's size on rung 11 (the world at half size) and at 5120×2160
 - the player as sharp on rung 11 as on rung 0, in a crop of the player: at least 30% of the crop is pixel for pixel the same on both rungs (39 to 51% measured: that is the player; 2 to 5% with `&hero=0`), and its edges keep 85% of their strength (90 to 97% measured: the world in the crop is softer; 48 to 70% with `&hero=0`)
+- what is aboard below the waterline is drawn: with `&floor=0.05` the water left in the hull (`&hullwater=1`) paints over 1,456 pixels of the canoe's window, and with today's floor 0
 - the chip test at load: 24 times the work starts on rung 11 with no change, this machine at the top, `&chiptest=0` leaves it out
 - the ladder climbing back after a slow spell, never twice within ten seconds
 - the whole crew drawn (real players, `?crew=N`), each at their own seat on every hull tier
@@ -190,7 +191,7 @@ PORTAGE_URL=http://localhost:5221 npm --prefix e2e test       # browser: bot, ke
 
 `tests/look/crew.test.ts` checks the same from the figures themselves, with no graphics card: clothes by id, seats against the rules on all four tiers, nobody inside another or the hull, each pose by its flag, and the pen's law.
 
-`PORTAGE_LOOK_BREAK='&hero=0'` (or `&rung=11`, `&boil=1`, `&bench=24`, `&heropen=0`) makes the matching checks fail. Run it when you change them. The crew checks have no switch: break the line in `canoe.ts` they guard (the outfit, the seat, the flag) and watch them fail. The weather checks likewise: feed the rain real time instead of paint time, dip `uDark` every 20th frame, pulse `uWet`, hand `weatherGoals` a clear sky, never light the lantern, snap `easeWeather`, zero `ahead`, swap rung 1, leave the copy of a hero window's depth out of `behind` (or leave `uBehind` at 1 there, or drop the world's depth test from the stroke's shader), drop the line that draws the ripple strokes in lamp light, set `capMid = 1.`.
+`PORTAGE_LOOK_BREAK='&hero=0'` (or `&rung=11`, `&boil=1`, `&bench=24`, `&heropen=0`, `&hullwater=1`) makes the matching checks fail. Run it when you change them. The crew checks have no switch: break the line in `canoe.ts` they guard (the outfit, the seat, the flag) and watch them fail. The weather checks likewise: feed the rain real time instead of paint time, dip `uDark` every 20th frame, pulse `uWet`, hand `weatherGoals` a clear sky, never light the lantern, snap `easeWeather`, zero `ahead`, swap rung 1, leave the copy of a hero window's depth out of `behind` (or leave `uBehind` at 1 there, or drop the world's depth test from the stroke's shader), drop the line that draws the ripple strokes in lamp light, set `capMid = 1.`.
 
 ## Debug switches
 
@@ -205,6 +206,8 @@ PORTAGE_URL=http://localhost:5221 npm --prefix e2e test       # browser: bot, ke
 | `&benchpass=<pass>` | With `bench`: only that pass (`reflection`, `colour`, `ink`, `composite`, `hero`) |
 | `&hero=0` | Leave the heroes in the world, as it was. Only to prove the sharpness tests can fail |
 | `&heropen=0` | The full pen on every hero, however small. Only to prove the far-figure tests can fail |
+| `&hullwater=1` | Leave the world's water inside the hull, as it was. Only to prove the floor check can fail |
+| `&floor=N` | Draw the hull's floor N metres above the keel (today: 5 cm above the waterline). For the floor check, and to try a lower floor |
 | `?crew=N` | The client's switch, not the look's: a real crew of N (2 to 4), the extra players idle |
 | `&stall=N` | Hold every frame N milliseconds: a slow spell, to watch the ladder |
 | `&boil=1` | Line boil on. Only to prove the steadiness test can fail |

@@ -331,12 +331,32 @@ const HERO_INK_TEXEL_BUDGET = 9.5e6; // a hero window gets two ink texels a pixe
 // The world's ink and depth under a hero window, copied into the hero's own buffers before the heroes are drawn.
 // Depth is smoothed between the world's texels (it is linear across a flat surface, so a waterline or a
 // footprint stays a clean line however small the world was drawn). Ink ids are never blended.
+//
+// The world is drawn without the canoe, so its water runs straight through where the hull is. Whatever of the
+// world lies inside the hull (insideHull: the hull's own shape, makeHullShape in canoe.js, at its inner skin) is
+// taken out of the way here, so the floor and whatever is aboard below the waterline are drawn, not painted over.
 const PREFILL = /* glsl */ `
 precision highp float;
 uniform sampler2D tAux, tDepth;
 uniform vec2 uARes;
 uniform vec4 uRect;
+uniform mat4 uHullFromClip; // the whole view's clip space to the hull's own space (keel at y = 0, bow along z)
+uniform vec4 uHull; // half length, half beam, depth amidships, scale against B2's hull. Half length 0: no hull
 varying vec2 vUv;
+bool insideHull(vec2 uv, float depth){
+  if (uHull.x <= 0. || depth >= 1.) return false;
+  vec4 p = uHullFromClip * vec4(uv * 2. - 1., depth * 2. - 1., 1.);
+  p.xyz /= p.w;
+  float a = abs(p.z) / uHull.x;
+  if (a >= .98) return false;
+  const float inset = .024; // the inner skin: inside the outer planking's flat faces everywhere, and no water is left showing against the skin
+  float keel = .05 * a * a + .3 * uHull.w * pow(max(0., (a - .84) / .16), 2.) + inset;
+  float sheer = uHull.z + .3 * uHull.w * pow(a, 2.8);
+  if (p.y <= keel || p.y >= sheer) return false;
+  float c = pow(1. - (p.y - keel) / (sheer - keel), 1. / .9);
+  float halfBeam = max(.004, uHull.y * pow(max(0., 1. - pow(a, 2.3)), .6) - inset);
+  return abs(p.x) < halfBeam * pow(max(0., 1. - c * c), .5 * (.65 + .75 * a * a));
+}
 void main(){
   vec2 uv = uRect.xy + vUv * uRect.zw;
   ivec2 top = ivec2(uARes) - 1;
@@ -347,7 +367,8 @@ void main(){
   float d10 = texelFetch(tDepth, clamp(i + ivec2(1, 0), ivec2(0), top), 0).x;
   float d01 = texelFetch(tDepth, clamp(i + ivec2(0, 1), ivec2(0), top), 0).x;
   float d11 = texelFetch(tDepth, clamp(i + ivec2(1, 1), ivec2(0), top), 0).x;
-  gl_FragDepth = mix(mix(d00, d10, f.x), mix(d01, d11, f.x), f.y);
+  float depth = mix(mix(d00, d10, f.x), mix(d01, d11, f.x), f.y);
+  gl_FragDepth = insideHull(uv, depth) ? 1. : depth;
   gl_FragColor = texelFetch(tAux, clamp(ivec2(uv * uARes), ivec2(0), top), 0);
 }`;
 
@@ -478,7 +499,18 @@ export function createPost(renderer, camera) {
     tDepth: { value: aux.depthTexture },
     uARes: uniforms.uARes,
     uRect: heroUniforms.uRect,
+    uHullFromClip: { value: new THREE.Matrix4() },
+    uHull: { value: new THREE.Vector4() },
   };
+  const hullFromWorld = new THREE.Matrix4();
+  // The hull the heroes hold, if any: buildHull marks its mesh (userData.hull). Looked for once a frame.
+  function findHull(heroes) {
+    let found = null;
+    heroes.traverseVisible((object) => {
+      if (!found && object.userData.hull) found = object;
+    });
+    return found;
+  }
   const prefillMaterial = new THREE.ShaderMaterial({
     uniforms: prefillUniforms,
     vertexShader: 'varying vec2 vUv; void main(){ vUv = position.xy * .5 + .5; gl_Position = vec4(position.xy, 0., 1.); }',
@@ -523,6 +555,8 @@ export function createPost(renderer, camera) {
     heroRoomW: 0, heroRoomH: 0, heroInkScale: 2, heroWindows: [], heroFine: 0, heroDrawnW: 0, heroDrawnH: 0,
   };
   const bench = { draws: 1, pass: '', discard: false };
+  // ?hullwater=1 leaves the world's water inside the hull, as it was. Only to prove the floor check can fail.
+  const hullWater = { keep: false };
   const clearColour = new THREE.Color();
   // ?bench: a pass drawn again over itself is dropped by the driver unless something reads it first. This reads it.
   const keepTarget = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: false });
@@ -615,6 +649,7 @@ export function createPost(renderer, camera) {
     resolution: uniforms.uRes.value,
     state,
     bench,
+    hullWater,
     // w, h: the world's drawing size. reflScale: reflection size against the drawing. inkMax: most ink texels per pixel, each way.
     // sheetW, sheetH: the window's size in pixels (the canvas). fine: the world's fine strokes, 0 or 1.
     setSize(w, h, reflScale = 1, inkMax = 2, sheetW = w, sheetH = h, fine = 1) {
@@ -737,6 +772,15 @@ export function createPost(renderer, camera) {
         const clearAlpha = renderer.getClearAlpha();
         renderer.setClearColor(0x000000, 0);
         fitHeroBuffers(heroWindows);
+        // where the hull is, for the prefill: from the whole view's clip space (before any window's view offset) to the hull's own space
+        const hull = hullWater.keep ? null : findHull(heroes);
+        if (hull) {
+          const { halfLength, halfBeam, depth, scale } = hull.userData.hull;
+          prefillUniforms.uHull.value.set(halfLength, halfBeam, depth, scale);
+          prefillUniforms.uHullFromClip.value.copy(hullFromWorld.copy(hull.matrixWorld).invert()).multiply(cam.matrixWorld).multiply(cam.projectionMatrixInverse);
+        } else {
+          prefillUniforms.uHull.value.set(0, 0, 0, 0);
+        }
         for (let draw = times('hero'); draw > 0; draw -= 1) for (const win of heroWindows) drawHeroWindow(heroes, cam, win, behind);
         renderer.setClearColor(clearColour, clearAlpha);
         GU.uSc.value = state.h / 1080;

@@ -277,6 +277,8 @@ export class InkWashWorldView implements WorldView {
     post.heroPen.value = switches.get('heropen') === '0' ? 0 : 1;
     post.bench.draws = this.benchDraws;
     post.bench.pass = switches.get('benchpass') ?? '';
+    // ?hullwater=1 leaves the world's water inside the hull, as it was. It exists so the floor check can be seen to fail.
+    post.hullWater.keep = switches.get('hullwater') === '1';
     const sky = createSky();
     this.sky = sky;
     const water = createWater(post.reflection, post.resolution);
