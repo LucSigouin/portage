@@ -31,6 +31,7 @@
     ],
     "running": [],
     "waiting": [
+      { "text": "The workbench: every step so far, in point form. Made for your phone.", "href": "workbench.html" },
       "Luc: say go to publish the crew HUD to sigouin.net/portage. The live copy has the canoe and the valley, not the crew list yet.",
       { "text": "Luc: see the crew list with four aboard.", "href": "game/?shot=play&crew=4" },
       { "text": "Luc: the starting canoe is now weathered grey, not red, so the rebuilt hull reads as a step up. Keep or bring the red back?", "href": "game/?shot=play" },
