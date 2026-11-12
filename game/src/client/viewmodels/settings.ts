@@ -71,7 +71,8 @@ export function settingsRows(settings: Settings, tab: SettingsTabId): SettingRow
         choice('gameplay.difficulty', 'Difficulty', settings.gameplay.difficulty, limits.difficulties,
           (difficulty) => (difficulty === 'relaxed' ? 'Relaxed (meters drain 40% slower)' : 'Standard')),
         choice('gameplay.autosaveIntervalSeconds', 'Autosave', settings.gameplay.autosaveIntervalSeconds, limits.autosaveIntervals,
-          (seconds) => (seconds === 0 ? 'On landing, sleeping, quests and tools only' : `Every ${seconds / 60} min, and on landing, sleeping, quests and tools`)),
+          // A milestone: a landing, a night slept, a quest completed, a new tool. (Naming all four made the row too wide for its sheet.)
+          (seconds) => (seconds === 0 ? 'At each milestone only' : `Every ${seconds / 60} min, and at each milestone`)),
         toggle('gameplay.hints', 'Show hints', settings.gameplay.hints),
       ];
     case 'accessibility':
