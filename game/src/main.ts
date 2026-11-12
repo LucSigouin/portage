@@ -76,6 +76,8 @@ function boot(): void {
   if (!worldElement || !interfaceElement) throw new Error('index.html is missing #world or #interface');
 
   const parameters = parseDebugParameters(window.location.search);
+  // `?perf=1`: the performance readout. It plays in a storage that forgets, so saves and settings are never touched.
+  const perf = new URLSearchParams(window.location.search).get('perf') === '1';
   const worldView = createWorldView();
   const gameInterface = createGameInterface();
   const audio = createAudio();
@@ -85,7 +87,7 @@ function boot(): void {
     worldView,
     gameInterface,
     audio,
-    storage: parameters.sandbox ? createMemoryStorage() : browserStorage(),
+    storage: parameters.sandbox || perf ? createMemoryStorage() : browserStorage(),
     stats: () => loop?.stats ?? { framesPerSecond: 0, frameMilliseconds: 0, workMilliseconds: 0 },
     forceFrameRate: parameters.showFrameRate,
   });
@@ -201,6 +203,7 @@ function boot(): void {
     // A handle for the console and for browser tests.
     (window as unknown as { portage: unknown }).portage = { app, session, worldView, loop, followVisibility };
     loop?.start();
+    if (perf) void import('./client/perf/readout.ts').then((readout) => readout.runPerfReadout(app, worldView, loop));
     // `?join=ROOM&name=...`: ask the host tab for a seat. The lobby shows until it answers.
     if (parameters.join !== null) {
       session.joinGame(joinTabRoom(parameters.join, randomHex(8)), { name: parameters.name, key: crewKey(parameters.join, parameters.name) });

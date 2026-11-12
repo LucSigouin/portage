@@ -1,0 +1,96 @@
+/* The performance readout (`?perf=1`). It borrows the interface's classes (`iw`, `iw-paper`, `iw-panel`,
+   `iw-btn`, `iw-tape`, `iw-sub`) and adds only where its two pieces sit. Nothing here moves. */
+.pf-root {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  /* Over the whole window, so the mouse cannot turn the camera or press a menu during the run. */
+  pointer-events: auto;
+}
+/* Finished: a plain sheet of paper behind the readout. The game has stopped drawing. */
+.pf-root.pf-done {
+  background-color: var(--iw-paper-deep);
+  background-image: var(--iw-tex);
+  background-size: 256px 256px;
+}
+
+/* While it measures: a small card, clear of the HUD's corners, the compass and the hotbar. */
+.pf-card {
+  --tilt: 0.3deg;
+  align-self: start;
+  margin-top: 24vh;
+  min-width: 24rem;
+  padding: 1.3rem 2.2rem 1rem;
+  text-align: center;
+}
+.pf-card h2 {
+  font-style: italic;
+  font-size: 1.7rem;
+  line-height: 1.1;
+}
+.pf-card .pf-line {
+  margin: 0.5rem 0 0.2rem;
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+.pf-card .pf-tape {
+  top: -0.5rem;
+  left: calc(50% - 1.8rem);
+  transform: rotate(-2deg);
+}
+
+.pf-sheet {
+  height: 90vh;
+}
+.pf-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 0.9rem;
+}
+.iw .pf-text {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0.7rem 0.9rem;
+  resize: none;
+  font: 0.86rem / 1.4 var(--iw-serif);
+  color: var(--iw-ink);
+  background: var(--iw-paper-bright);
+  border: 0.09rem solid var(--iw-ink-soft);
+  border-radius: 0.4rem 0.28rem 0.5rem 0.24rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--iw-ink-soft) transparent;
+  pointer-events: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.iw .pf-text:focus-visible {
+  outline: 0.14rem solid var(--iw-rust);
+  outline-offset: 0.1rem;
+}
+.pf-send {
+  font-size: 1.5rem;
+  font-style: italic;
+}
+.pf-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.pf-note {
+  text-align: right;
+}
+.iw .pf-copy {
+  flex: none;
+  padding-left: 2.2rem;
+  padding-right: 2.2rem;
+  font-size: 1.3rem;
+}
+.iw .pf-copy:focus-visible {
+  outline: 0.14rem solid var(--iw-ink);
+  outline-offset: 0.16rem;
+}

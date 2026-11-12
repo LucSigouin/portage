@@ -133,8 +133,8 @@ export interface LookProbe {
     pools: number;
     glows: number;
   };
-  /** The frame-rate ladder: every change this session, and the best rung it may still climb to. */
-  ladder: { changes: LadderChange[]; bestAllowed: number };
+  /** The frame-rate ladder: every change this session, the best rung it may still climb to, and the seconds of frames it has seen (the clock of `changes[].at`). */
+  ladder: { changes: LadderChange[]; bestAllowed: number; seconds: number };
   /** Rungs shed by the frame-rate ladder, and what the look draws now. */
   rung: number;
   quality: Quality;
@@ -812,7 +812,7 @@ export class InkWashWorldView implements WorldView {
         pools: GU.uLamp.value.filter((lamp) => lamp.w > 0).length,
         glows: this.glows.mesh.count,
       },
-      ladder: { changes: this.ladder.changes.map((change) => ({ ...change })), bestAllowed: this.ladder.bestAllowed },
+      ladder: { changes: this.ladder.changes.map((change) => ({ ...change })), bestAllowed: this.ladder.bestAllowed, seconds: this.ladder.seconds },
       rung: this.ladder.rung,
       quality: { ...this.quality },
       shed: shedNote(this.ceiling, this.quality),
