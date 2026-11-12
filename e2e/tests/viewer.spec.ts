@@ -128,7 +128,8 @@ const digest = (page: Page, name: string): Promise<string> =>
 
 test('every entry opens with a clean console and draws something', async ({ page }) => {
   const problems = watchConsole(page);
-  await openViewer(page);
+  // the grid is off, so what is counted is the thing and nothing else
+  await openViewer(page, '?grid=0');
   const ids = (await probe(page)).ids;
   expect(ids.length).toBeGreaterThan(150);
   const bare: string[] = [];
