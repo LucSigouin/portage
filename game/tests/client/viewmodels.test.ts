@@ -209,6 +209,14 @@ describe('the HUD', () => {
     expect(dispatch(state, { type: 'disembark' }).ok).toBe(true);
     run(state, {}, 0.1);
     expect(buildHudModel(state, settings, 0).hint ?? '').not.toContain('bail');
+    // Bailed dry afloat, then ashore somewhere that is not Home Knoll: the quest is still open, its bail step is not.
+    const elsewhere = newGame();
+    elsewhere.canoe.waterLevel = 0;
+    run(elsewhere, {}, 0.1);
+    standOn(elsewhere, 'birch_islet');
+    run(elsewhere, {}, 0.1);
+    expect(elsewhere.quests.bail_out).toMatchObject({ status: 'active', progress: [1, 0] });
+    expect(buildHudModel(elsewhere, settings, 0).hint ?? '').not.toContain('bail');
     // A thirsty player is told about the thirst first, and with hints off nobody is told anything.
     const dry = newGame();
     standOn(dry, 'home_knoll');
