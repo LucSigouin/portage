@@ -11,7 +11,7 @@
   ],
   "name": "Portage",
   "pitch": "A browser survival-crafting game. The valley flooded. You have a leaky canoe, and you bolt what you build onto it.",
-  "updated": "2026-11-11, night",
+  "updated": "2026-11-11, end of day",
   "status": {
     "done": [
       "Rules engine. Runs with no screen. 179 tests pass. A bot finishes the whole main quest.",
@@ -27,19 +27,21 @@
       "Live on the web at https://sigouin.net/portage/ . Anyone with the link can play; search engines are asked not to list it.",
       "The canoe: four hull tiers you can tell apart, all 19 attachments drawn for this hull, and the three survivors as their own figures.",
       "The valley: every landmark and scavenge node drawn, all 15 islands told apart by outline, 21% fewer triangles.",
-      "The HUD has a crew: a crew list with each player's colour, place and meters, crewmates on the compass and the map, notes for the whole crew, reward icons in the quest log. 692 tests pass, plus 74 browser tests."
+      "The HUD has a crew: a crew list with each player's colour, place and meters, crewmates on the compass and the map, notes for the whole crew, reward icons in the quest log.",
+      "Weather and night: rain, storm, fog, stars, light from the lantern, the campfire and the Beacon, and the sky showing what is coming. Nothing flashes.",
+      "Co-op groundwork: players who drop and come back, a host and guests kept in step, two tabs on one computer playing one game. 815 tests pass, plus 86 browser tests."
     ],
     "running": [],
     "waiting": [
       { "text": "The workbench: every step so far, in point form. Made for your phone.", "href": "workbench.html" },
-      "Luc: say go to publish the crew HUD to sigouin.net/portage. The live copy has the canoe and the valley, not the crew list yet.",
-      { "text": "Luc: see the crew list with four aboard.", "href": "game/?shot=play&crew=4" },
-      { "text": "Luc: the starting canoe is now weathered grey, not red, so the rebuilt hull reads as a step up. Keep or bring the red back?", "href": "game/?shot=play" },
-      { "text": "Luc: look over the fully fitted canoe.", "href": "game/?shot=upgraded&live=1" },
-      { "text": "Luc: look over the islands. Paddle up to one and watch for the detail changing.", "href": "game/?at=quest8" },
-      { "text": "Luc: look over the 54 item icons in the crafting panel.", "href": "game/?shot=crafting" },
+      "Stopped here on 2026-11-11, as Luc asked. Nothing is running.",
+      "Luc: say go to publish weather, night and the co-op groundwork to sigouin.net/portage. The live copy has neither yet.",
+      { "text": "Luc: watch a storm at night. Does it feel calm?", "href": "game/?shot=storm&live=1" },
+      { "text": "Luc: try co-op in two tabs. Open this one first (the host).", "href": "game/?host=lake&name=Luc" },
+      { "text": "Then this one in a second tab (the guest).", "href": "game/?join=lake&name=Sam" },
+      { "text": "Luc: the starting canoe is weathered grey, not red. Keep or bring the red back?", "href": "game/?shot=play" },
       "Luc: invite the guys to the private GitHub repo (github.com/LucSigouin/portage, Settings, Collaborators).",
-      "Next: weather and night, a speed pass, then co-op networking. Luc picks the order."
+      "Next, when you say: the relay so friends join by a link, speed on big screens, loose ends, balance, a scored review."
     ]
   },
   "addresses": [
@@ -261,6 +263,8 @@
             { "title": "Report: the crew drawn properly", "href": "docs/report-crewfit.html", "see": "Seats, colours, paddling, bailing, sleeping, walking, and the finer pen on a far-away player.", "from": "../scratch/portage/crewfit-report.md" },
             { "title": "Report: the canoe", "href": "docs/report-canoe.html", "see": "Four hull tiers, 19 attachments, three survivors, and the collisions left with a crew of four.", "from": "../scratch/portage/canoe-report.md" },
             { "title": "Report: the crew HUD", "href": "docs/report-crewhud.html", "see": "The crew list, crew marks on compass and map, crew notes, and what networking will need from the HUD.", "from": "../scratch/portage/crewhud-report.md" },
+            { "title": "Report: weather and night", "href": "docs/report-weather.html", "see": "Rain, storm, fog, night and lamp light: what was built, what was left out so nothing flashes, and what each costs.", "from": "../scratch/portage/weather-report.md" },
+            { "title": "Report: co-op groundwork", "href": "docs/report-crewnet.html", "see": "Players who come and go, host and guest in step, two tabs playing together, and what the relay job needs.", "from": "../scratch/portage/crewnet-report.md" },
             { "title": "Report: the valley", "href": "docs/report-world.html", "see": "Every landmark and scavenge node, 15 islands told apart, and what each view costs to draw.", "from": "../scratch/portage/world-report.md" },
             { "title": "Guide: how the canoe is drawn", "href": "docs/look-canoe.html", "see": "For workers: hulls, attachments, seats and the checks that guard them.", "from": "game/LOOK-canoe.md" },
             { "title": "Guide: how the valley is drawn", "href": "docs/look-world.html", "see": "For workers: landmarks, nodes, island dressing and detail by distance.", "from": "game/LOOK-world.md" }

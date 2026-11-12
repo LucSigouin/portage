@@ -25,8 +25,10 @@ Done:
 - The canoe: four hull tiers you can tell apart, all 19 attachments, the three survivors.
 - The valley: every landmark and scavenge node drawn, all 15 islands told apart by their outline.
 - A crew list in the HUD, crewmates on the compass and the map, and notes for the whole crew.
+- Weather and night: rain, storm, fog, stars, and light from the lantern, the campfire and the Beacon. Nothing flashes.
+- Co-op groundwork: two tabs on one computer play one game (`?host=lake&name=Luc` in one, `?join=lake&name=Sam` in the other).
 
-Next: weather and night, a speed pass, then co-op you join by a link.
+Next: a relay so friends join by a link, speed on big screens, loose ends, balance, a scored review.
 
 ## Run it
 
