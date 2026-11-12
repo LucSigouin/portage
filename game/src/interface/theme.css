@@ -687,6 +687,11 @@ html.iw-document {
   border: 0.09rem dashed var(--iw-ink-soft);
   border-radius: 0.5rem 0.3rem 0.55rem 0.3rem;
 }
+/* The line to the host has stalled: the same slip, in the warning ink, ruled solid. It stands still. */
+.iw-line-note {
+  color: var(--iw-rust-deep);
+  border: 0.09rem solid var(--iw-rust-deep);
+}
 
 /* ---------- toasts: slips of paper down the left edge ---------- */
 .iw-toasts {

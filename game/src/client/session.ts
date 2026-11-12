@@ -29,7 +29,7 @@ import { failureText, keyLabel, refusalText } from './viewmodels/format.ts';
 import { GuestLink, HostLink } from '../net/index.ts';
 import type { Transport } from '../net/index.ts';
 import type { CrewLobby } from './crewlobby.ts';
-import { JOIN_PROBLEM_TEXT, LEAVE_TEXT } from './viewmodels/crew.ts';
+import { HOST_BACK_TEXT, JOIN_PROBLEM_TEXT, LEAVE_TEXT } from './viewmodels/crew.ts';
 import { applySettingChange } from './viewmodels/settings.ts';
 import type { Tone } from './viewmodels/types.ts';
 
@@ -111,6 +111,8 @@ export class Session {
   host: HostLink | null = null;
   /** The link to the host while this session is a guest. Then `game` is the host's state, a beat behind, and nothing here changes it. */
   guest: GuestLink | null = null;
+  /** True while this session is a guest in a game and has had no word from the host for a moment: a note stands on the screen. */
+  hostQuiet = false;
   /**
    * The crew lobby: hosting a room on the relay and joining one. Null in a game
    * built without a relay address: then the lobby has no crew entries and none of it runs.
@@ -354,6 +356,7 @@ export class Session {
   private leaveHost(): void {
     this.guest?.close();
     this.guest = null;
+    this.hostQuiet = false;
     this.hostId = null;
     this.localPlayerId = 0;
     if (!this.game) return;
@@ -469,6 +472,11 @@ export class Session {
     if (!view) {
       this.driftBackdrop(frameSeconds);
       return [];
+    }
+    // No word from the host: a note stands on the screen for as long as that lasts. When it ends, say so once.
+    if (guest.hostQuiet !== this.hostQuiet) {
+      this.hostQuiet = guest.hostQuiet;
+      if (!this.hostQuiet && this.game !== null) this.notice(HOST_BACK_TEXT, 'good');
     }
     const arrived = this.game === null || this.localPlayerId !== guest.playerId;
     const playedBefore = this.game?.playedSeconds ?? view.playedSeconds;

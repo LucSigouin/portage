@@ -248,6 +248,26 @@ test('friends join by a link: host, copy, open, name, in the canoe; they move, d
   expect(await read(sam.page)).toMatchObject({ role: 'guest', localPlayerId: 1, screen: 'game' });
   expect(sam.sockets.filter((address) => address.includes('/room/')), 'the guest dialled again').toHaveLength(2);
 
+  // --- The guest's line stalls: the socket stays open and nothing crosses it -------------------
+  const backToast = sam.page.locator('.iw-toast', { hasText: 'Back with the crew.' });
+  await expect(backToast, 'the note from the drop above has gone').toHaveCount(0, { timeout: 15_000 });
+  const lineNote = sam.page.locator('.iw-line-note');
+  await expect(lineNote).toHaveCount(0);
+  await samContext.setOffline(true);
+  await expect(lineNote, 'a standing note says the host is unheard').toHaveText('No word from the host. Waiting…', { timeout: 8000 });
+  // It stands, and it stands still: four seconds on it is there, on the same spot.
+  const noteBox = await lineNote.boundingBox();
+  await sam.page.waitForTimeout(4000);
+  await expect(lineNote).toHaveText('No word from the host. Waiting…');
+  expect(await lineNote.boundingBox()).toEqual(noteBox);
+  expect(await lineNote.evaluate((element) => getComputedStyle(element).animationName + '|' + getComputedStyle(element).transitionDuration)).toBe('none|0s');
+  if (SHOTS) await sam.page.screenshot({ path: `${SHOTS}/line-stalled.png` });
+  await samContext.setOffline(false);
+  await expect(lineNote, 'the note goes when the host is heard again').toHaveCount(0, { timeout: 30_000 });
+  await expect(backToast).toBeVisible();
+  await expect(host.page.locator('.iw-crew .iw-mate.iw-away')).toHaveCount(0, { timeout: 15_000 });
+  expect((await read(host.page)).players[1]).toMatchObject({ name: 'Sam', connected: true, driftwood: 3 });
+
   // --- The guest closes the window and opens the link again: the same player ------------------
   await sam.page.close({ runBeforeUnload: true });
   await expect(host.page.locator('.iw-crew .iw-mate.iw-away'), 'the guest shows as away').toHaveCount(1, { timeout: 25_000 });

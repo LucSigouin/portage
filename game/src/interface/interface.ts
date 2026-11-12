@@ -18,7 +18,9 @@ import { intentOf, reconcile } from './dom.ts';
 import type { ViewNode } from './dom.ts';
 import { FILTER_DEFINITIONS, ICON, toqueIcon } from './icons.ts';
 import { paperTexture, tornPageOutline } from './paper.ts';
-import { confirmView, debugView, hintView, hotbarView, lobbyView, notesView, panelView, promptView, toastsView, vitalsView } from './views.ts';
+import {
+  confirmView, debugView, hintView, hotbarView, lineNoteView, lobbyView, notesView, panelView, promptView, toastsView, vitalsView,
+} from './views.ts';
 
 type PartName = 'lobby' | 'vitals' | 'notes' | 'hint' | 'prompt' | 'hotbar' | 'toasts' | 'panel' | 'confirm' | 'debug';
 
@@ -452,7 +454,9 @@ export class InkInterface implements GameInterface {
       () => vitalsView(hud!, model.patternedMeters));
     this.draw('notes', hud ? JSON.stringify([hud.clockText, hud.night, hud.weatherText, hud.stormWarning, hud.placeText, hud.tracker]) : '',
       () => notesView(hud!));
-    this.draw('hint', hud?.hint ?? '', () => hintView(hud!.hint!));
+    // One standing slip under the prompt: the line's trouble when there is any, the tip otherwise.
+    const lineNote = hud?.lineNote ?? null;
+    this.draw('hint', lineNote !== null ? `line|${lineNote}` : hud?.hint ?? '', () => (lineNote !== null ? lineNoteView(lineNote) : hintView(hud!.hint!)));
     this.draw('prompt', hud?.prompt ? JSON.stringify(hud.prompt) : '', () => promptView(hud!.prompt!));
     this.draw('hotbar', hud ? JSON.stringify(hud.hotbar) : '', () => hotbarView(hud!.hotbar));
     if (hud) this.compass.update(hud.compass);

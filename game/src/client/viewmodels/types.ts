@@ -149,6 +149,11 @@ export interface HudModel {
   canoeLines: { text: string; tone: Tone }[];
   /** A one-line tip, when the hints setting is on and one applies. */
   hint: string | null;
+  /**
+   * How the line to the host is doing, when a guest needs telling: no word from the host. It stands where the tip
+   * does, in its place, for as long as it is true, whatever the hints setting. Null for a host and alone.
+   */
+  lineNote: string | null;
 }
 
 export interface ToastModel {

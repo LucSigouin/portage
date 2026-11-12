@@ -193,6 +193,7 @@ export class App {
       game: session.game,
       playerId: session.localPlayerId,
       hostId: session.hostId,
+      hostQuiet: session.hostQuiet,
       paused: session.paused,
       cameraYaw: this.camera.yaw,
       toasts: this.toasts.models(),

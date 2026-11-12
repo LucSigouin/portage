@@ -18,7 +18,7 @@ export { COMMAND_WAIT_SECONDS, HostLink, STALE_INPUT_SECONDS } from './host.ts';
 export type { HostOptions, HostStats } from './host.ts';
 export { ROOM_PATTERN, hostTabRoom, joinTabRoom } from './tabs.ts';
 export type { ChannelLike } from './tabs.ts';
-export { GuestLink, HOST_SILENCE_SECONDS, blendStates } from './guest.ts';
+export { GuestLink, HOST_QUIET_SECONDS, HOST_SILENCE_SECONDS, blendStates } from './guest.ts';
 export type { CommandOutcome, GuestOptions, GuestStatus } from './guest.ts';
 export {
   WALK_AHEAD_STEPS, WALK_BACKLOG_STEPS, WALK_CUT_METRES, WALK_EASE_SECONDS, WALK_RUNS_SENT, WalkPredictor, WalkStream, WalkTimeline,

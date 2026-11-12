@@ -9,7 +9,7 @@ import type { App } from '../../src/client/app.ts';
 import { createSilentAudio } from '../../src/client/contracts.ts';
 import type { AudioEngine, GameInterface, InterfaceModel, WorldView } from '../../src/client/contracts.ts';
 import type { SessionSignal } from '../../src/client/session.ts';
-import { createLoopbackPair } from '../../src/net/index.ts';
+import { HOST_QUIET_SECONDS, createLoopbackPair } from '../../src/net/index.ts';
 import type { HostLink, LoopbackConditions, LoopbackPair } from '../../src/net/index.ts';
 import { FIXED_STEP, dispatch, drainEvents, hashState } from '../../src/sim/index.ts';
 import type { GameEvent, GameState } from '../../src/sim/index.ts';
@@ -252,6 +252,43 @@ describe('nothing pauses a shared game', () => {
 });
 
 describe('leaving and coming back', () => {
+  it('tells a guest whose line has stalled, for as long as it has, and once when the crew is back', () => {
+    const { host, guest, pair, game, tick } = table();
+    tick(1);
+    const hud = () => guest.models.at(-1)!.hud!;
+    const QUIET = 'No word from the host. Waiting…';
+    expect(hud().lineNote).toBeNull();
+    // The note is not a tip: it shows with the hints setting off.
+    guest.app.session.updateSettings({ ...guest.app.session.settings, gameplay: { ...guest.app.session.settings.gameplay, hints: false } });
+
+    // The line stalls. The socket stays open and nothing crosses it, either way.
+    pair.conditions.loss = 1;
+    tick(HOST_QUIET_SECONDS - 0.2);
+    expect(hud().lineNote, 'a hiccup shorter than the wait says nothing').toBeNull();
+    tick(0.4);
+    expect(hud().lineNote).toBe(QUIET);
+    expect(guest.app.session.screen).toBe('game');
+    // It stands. A toast would be gone by now (the longest lasts seven seconds), and the host has marked Sam away.
+    tick(10);
+    expect(hud().lineNote).toBe(QUIET);
+    expect(game.players[1]!.connected).toBe(false);
+    expect(guest.toasts()).not.toContain('Back with the crew.');
+    // The host's own screen never carries it.
+    expect(host.models.at(-1)!.hud!.lineNote).toBeNull();
+
+    // The line clears: the note goes, and the guest is told once.
+    pair.conditions.loss = 0;
+    tick(1);
+    expect(hud().lineNote).toBeNull();
+    expect(guest.toasts()).toContain('Back with the crew.');
+    expect(guest.signals.filter((signal) => signal.type === 'notice' && signal.text === 'Back with the crew.')).toHaveLength(1);
+    expect(game.players[1]!.connected).toBe(true);
+    // And a line that is fine says nothing more.
+    tick(8);
+    expect(hud().lineNote).toBeNull();
+    expect(guest.signals.filter((signal) => signal.type === 'notice' && signal.text === 'Back with the crew.')).toHaveLength(1);
+  });
+
   it('a guest who quits is back in the lobby with nothing kept, and shows as away on the host', () => {
     const { host, guest, game, tick } = table();
     tick(1);

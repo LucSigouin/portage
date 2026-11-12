@@ -151,6 +151,11 @@ export function hintView(hint: string): ViewNode[] {
   return [h('div.iw-hint', { key: 'hint' }, hint)];
 }
 
+/** The line to the host has stalled: a slip that stands where the tip does until the host is heard again. It does not move. */
+export function lineNoteView(note: string): ViewNode[] {
+  return [h('div.iw-hint.iw-line-note', { key: 'line-note', role: 'status' }, note)];
+}
+
 export function promptView(prompt: PromptModel): ViewNode[] {
   return [h('div.iw-prompt.iw-paper', { key: 'prompt', class: classes(`iw-prompt-${prompt.mode}`, prompt.keyLabel === '' && 'iw-prompt-keyless') },
     prompt.keyLabel === '' ? null : h('span.iw-key', null, prompt.keyLabel),

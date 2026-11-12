@@ -72,7 +72,7 @@ function hudHtml(hud: HudModel, patterned: boolean): string {
     + `<div class="gb-top-right"><div class="gb-line">${escapeHtml(hud.clockText)}${hud.night ? ' (night)' : ''}</div>`
     + `<div class="gb-line ${hud.stormWarning ? 'gb-danger' : ''}">${escapeHtml(hud.weatherText)}</div>`
     + `<div class="gb-line">${escapeHtml(hud.placeText)}</div>${tracker}</div>`
-    + `<div class="gb-bottom">${hud.hint ? `<div class="gb-hint">${escapeHtml(hud.hint)}</div>` : ''}${prompt}`
+    + `<div class="gb-bottom">${hud.lineNote ?? hud.hint ? `<div class="gb-hint">${escapeHtml(hud.lineNote ?? hud.hint ?? '')}</div>` : ''}${prompt}`
     + `<div class="gb-hotbar">${hotbar}</div></div>`;
 }
 

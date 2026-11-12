@@ -38,6 +38,8 @@ export interface InterfaceModelInput {
   playerId?: PlayerId;
   /** The player whose browser runs a shared game, for the crew list's host tag. Null or absent when the game is not shared. */
   hostId?: PlayerId | null;
+  /** True on a guest's screen while it has had no word from the host: the HUD says so until it has. */
+  hostQuiet?: boolean;
   paused: boolean;
   /** Bearing the camera looks along, radians. */
   cameraYaw: number;
@@ -119,7 +121,7 @@ export function buildInterfaceModel(input: InterfaceModelInput): InterfaceModel 
     patternedMeters: settings.accessibility.patternedMeters,
     paused: input.paused,
     lobby: panels.screen === 'lobby' ? buildLobbyModel(input.slots, input.latestSlot, input.crew ?? null) : null,
-    hud: game ? buildHudModel(game, settings, input.cameraYaw, input.playerId ?? 0, input.hostId ?? null) : null,
+    hud: game ? buildHudModel(game, settings, input.cameraYaw, input.playerId ?? 0, input.hostId ?? null, input.hostQuiet ?? false) : null,
     toasts: input.toasts,
     panel: beneath ? buildPanelModel(beneath, input) : null,
     openPanels: [...panels.stack],

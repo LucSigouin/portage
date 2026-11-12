@@ -7,6 +7,7 @@ import {
   selectMeters, selectTimeOfDay, selectWeather,
 } from '../../sim/index.ts';
 import type { GameState, PlayerId, PlayerState, QuestView, TimeOfDay } from '../../sim/index.ts';
+import { HOST_QUIET_TEXT } from './crew.ts';
 import { SLEEP_FROM_TEXT, bearingDegrees, cardinalName, distanceText, durationText, primaryKey } from './format.ts';
 import type {
   CompassMarkModel, CompassModel, CrewRowModel, HotbarSlotModel, HudModel, MeterModel, ObjectiveRowModel, PromptModel,
@@ -240,10 +241,11 @@ function buildHint(state: GameState, settings: Settings, playerId: PlayerId): st
 
 /**
  * The HUD of one player (`playerId`, player 0 by default). `cameraYaw` is the
- * bearing the camera looks along; the compass turns with it.
+ * bearing the camera looks along; the compass turns with it. `hostQuiet` is true
+ * on a guest's screen while the host is unheard.
  */
 export function buildHudModel(
-  state: GameState, settings: Settings, cameraYaw: number, playerId: PlayerId = 0, hostId: PlayerId | null = null,
+  state: GameState, settings: Settings, cameraYaw: number, playerId: PlayerId = 0, hostId: PlayerId | null = null, hostQuiet = false,
 ): HudModel {
   const player = playerOf(state, playerId);
   const time = selectTimeOfDay(state, playerId);
@@ -268,5 +270,6 @@ export function buildHudModel(
     placeText: island ?? REGIONS_BY_ID[player.regionId].name,
     canoeLines: buildCanoeLines(state, playerId),
     hint: buildHint(state, settings, playerId),
+    lineNote: hostQuiet ? HOST_QUIET_TEXT : null,
   };
 }
