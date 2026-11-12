@@ -16,6 +16,7 @@ import { makeHullShape } from '../../src/look/b2/canoe.js';
 import type { Crew as Figure } from '../../src/look/b2/canoe.js';
 import { CanoeView } from '../../src/look/canoe.ts';
 import { deckInner, deckSpan } from '../../src/look/canoe/deck-parts.ts';
+import { BARK_LAPS, buildMends } from '../../src/look/canoe/mends.ts';
 import { crewOf } from '../../src/look/crew.ts';
 import { boxTouchesTriangle, slabsOf, trianglesOf } from './canoe-geometry.ts';
 import type { Triangles } from './canoe-geometry.ts';
@@ -456,5 +457,48 @@ describe('changing sides', () => {
     // Neighbours along the hull still work opposite sides.
     const side = (seat: number): number => view.figures().find((figure) => figure.seat === seat)!.side;
     expect([side(0), side(2), side(3), side(1)]).toEqual([side(0), -side(0), side(0), -side(0)]);
+  });
+});
+
+describe('the patched hull', () => {
+  const extras = (tier: number): number => {
+    const state = fitted(tier, 1);
+    state.canoe.attachments = [];
+    const view = new CanoeView();
+    view.sync(state, crewOf(state), 0, 0, true, true);
+    return (view as unknown as { tiers: Map<number, { group: THREE.Group }> }).tiers.get(tier)!.group.children.length;
+  };
+
+  it('is the only hull that wears bark over its rails: that is what tells it from the leaky one from astern', () => {
+    expect(extras(1)).toBe(extras(0) + 1);
+    expect(extras(2)).toBe(extras(0));
+    expect(extras(3)).toBe(extras(0));
+  });
+
+  it('has every lap of bark lying on a rail, on both sides, and a sheet on the bow deck', () => {
+    const shape = makeHullShape(HULL_TIERS[1].dimensions);
+    const position = buildMends(shape).geometry.getAttribute('position');
+    const sides = { port: 0, starboard: 0, deck: 0 };
+    for (let index = 0; index < position.count; index += 1) {
+      const [x, y, z] = [position.getX(index), position.getY(index), position.getZ(index)];
+      if (z > 0.78 * shape.HL) {
+        // the sheet: on the deck, inside the rails
+        expect(Math.abs(x)).toBeLessThan(shape.halfBeamAt(z));
+        expect(Math.abs(y - shape.sheerAt(z))).toBeLessThan(0.06);
+        sides.deck += 1;
+        continue;
+      }
+      // a lap: within a hand of the rail it is folded over, never proud of it by more than 6 cm
+      expect(Math.abs(Math.abs(x) - shape.halfBeamAt(z)), `x ${x.toFixed(2)} at z ${z.toFixed(2)}`).toBeLessThan(0.075);
+      expect(y - shape.sheerAt(z), `y ${y.toFixed(2)} at z ${z.toFixed(2)}`).toBeGreaterThan(-0.1);
+      expect(y - shape.sheerAt(z), `y ${y.toFixed(2)} at z ${z.toFixed(2)}`).toBeLessThan(0.065);
+      sides[x > 0 ? 'port' : 'starboard'] += 1;
+    }
+    expect(sides.port).toBeGreaterThan(100);
+    expect(sides.starboard).toBeGreaterThan(100);
+    expect(sides.deck).toBeGreaterThan(20);
+    // None lies where the lone paddler's blade crosses the rail: from 0.54 m astern of the stern seat to 0.78 m ahead of it.
+    const seat = -0.3107 * HULL_TIERS[1].dimensions.length;
+    for (const [, z, length] of BARK_LAPS) expect(z - length / 2, `lap at ${z}`).toBeGreaterThan(seat + 0.78);
   });
 });

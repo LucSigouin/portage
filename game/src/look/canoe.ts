@@ -23,6 +23,7 @@ import type { AttachmentPiece } from './attachments.ts';
 import { buildBilge, buildHull, buildStarterKit, createCrew, makeHullShape } from './b2/canoe.js';
 import type { Crew as Figure, HullShape } from './b2/canoe.js';
 import { deckInner, deckSpan } from './canoe/deck-parts.ts';
+import { buildMends } from './canoe/mends.ts';
 
 interface TierMeshes {
   shape: HullShape;
@@ -41,6 +42,8 @@ const STRIDE_METRES = 1.5;
 const SEAT_LIFT = 0.035;
 /** A sleeper ashore lies this far above the ground: their back rests on it. */
 const LYING_LIFT = 0.16;
+/** The hull tier that is the leaky boat mended. */
+const PATCHED_TIER = 1;
 /** The share of a stroke that is the pull; the rest is the recovery. The figure's own split (`paddle` in b2/canoe.js). */
 const PULL_SHARE = 0.46;
 /** A paddle from grip to blade tip, as the figure's is built. */
@@ -159,6 +162,8 @@ export class CanoeView {
       const kit = buildStarterKit(shape);
       const bilge = buildBilge(shape);
       group.add(buildHull(shape, tier), kit, bilge);
+      // The patched hull is told from the leaky one by its bark, where the paddling camera sees it.
+      if (tier === PATCHED_TIER) group.add(buildMends(shape));
       group.position.y = -HULL_TIERS[tier].dimensions.draft;
       meshes = { shape, group, kit, kitCrewed: null, bilge };
       this.tiers.set(tier, meshes);
