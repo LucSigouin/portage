@@ -14,6 +14,7 @@ import type { Transport } from '../../src/net/index.ts';
 import { hashState } from '../../src/sim/index.ts';
 import { key } from './rig.ts';
 import { ADDRESS, CODE, FakeRelay, HOST_KEY, createRelayRig } from './relay-rig.ts';
+import type { FakeSocket } from './relay-rig.ts';
 
 beforeEach(() => void vi.useFakeTimers());
 afterEach(() => void vi.useRealTimers());
@@ -174,6 +175,66 @@ describe('a game through the relay', () => {
     await seconds(0.5);
     expect(transports).toHaveLength(1);
     expect(heard).toEqual([{ asking: 2 }]);
+  });
+});
+
+describe('the wire itself', () => {
+  it('carries every message, in order and unchanged, each way, and what was sent is what was said at the time', async () => {
+    const relay = new FakeRelay();
+    const room = new RelayHostRoom({ address: ADDRESS, code: CODE, key: HOST_KEY, open: relay.open });
+    const toGuest: Transport[] = [];
+    const heardByHost: unknown[] = [];
+    room.setAccept((transport) => {
+      toGuest.push(transport);
+      transport.receive((message) => void heardByHost.push(message));
+    });
+    const wire = new RelayGuestWire({ address: ADDRESS, code: CODE, open: relay.open });
+    const heardByGuest: unknown[] = [];
+    wire.receive((message) => void heardByGuest.push(message));
+    await seconds(0.1);
+
+    // Three from the guest in one breath: one socket frame, three messages for the host.
+    const live = { n: 1, list: [1, 2, 3], text: 'héron "quoted" \\ 🛶' };
+    const framesBefore = relay.frames.guest;
+    wire.send(live);
+    live.n = 99;
+    wire.send({ n: 2 });
+    wire.send({ n: 3, nested: { deep: [null, true, 1.5] } });
+    await seconds(0.1);
+    expect(heardByHost).toEqual([{ n: 1, list: [1, 2, 3], text: 'héron "quoted" \\ 🛶' }, { n: 2 }, { n: 3, nested: { deep: [null, true, 1.5] } }]);
+    expect(relay.frames.guest - framesBefore).toBe(1);
+
+    // And three back from the host, changed after sending: the guest hears what was said, not what it became.
+    const state = { step: 1, players: [{ x: 1 }] };
+    const hostFramesBefore = relay.frames.host;
+    toGuest[0]!.send(state);
+    state.step = 2;
+    state.players[0]!.x = 50;
+    toGuest[0]!.send(state);
+    toGuest[0]!.send({ last: true });
+    await seconds(0.1);
+    expect(heardByGuest).toEqual([{ step: 1, players: [{ x: 1 }] }, { step: 2, players: [{ x: 50 }] }, { last: true }]);
+    expect(relay.frames.host - hostFramesBefore).toBe(1);
+  });
+
+  it('closes the socket of a window that does not leave by itself when the host lets it go', async () => {
+    const rig = createRelayRig();
+    await rig.run(0.2);
+    // A window that joins and then stops listening: it will not close its own socket when told to leave.
+    const stuck = rig.relay.open(`${ADDRESS}/room/${CODE}?role=guest`, [RELAY_PROTOCOL]) as FakeSocket;
+    await rig.run(0.1);
+    stuck.send(JSON.stringify([{ v: 1, type: 'join', name: 'Sam', key: key('Sam') }]));
+    await rig.run(0.5);
+    expect(rig.game.players[1]).toMatchObject({ name: 'Sam', connected: true });
+    expect(rig.relay.rooms.get(CODE)!.size).toBe(2);
+    // The same player arrives from another window. The host gives it the seat and lets the first go.
+    const second = rig.join('Sam', key('Sam'));
+    await rig.run(1);
+    expect([second.link.status, second.link.playerId]).toEqual(['playing', 1]);
+    expect(stuck.alive, 'the relay closed the socket the host let go').toBe(false);
+    expect(stuck.closedWith).toEqual({ code: 4401, reason: 'dropped' });
+    expect(rig.relay.rooms.get(CODE)!.size).toBe(2);
+    expect([...rig.room.guests]).toEqual([2]);
   });
 });
 
