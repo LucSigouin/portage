@@ -15,7 +15,7 @@ import type { AttachmentPiece } from '../../src/look/attachments.ts';
 import { makeHullShape } from '../../src/look/b2/canoe.js';
 import type { Crew as Figure } from '../../src/look/b2/canoe.js';
 import { CanoeView } from '../../src/look/canoe.ts';
-import { deckInner } from '../../src/look/canoe/deck-parts.ts';
+import { deckInner, deckSpan } from '../../src/look/canoe/deck-parts.ts';
 import { crewOf } from '../../src/look/crew.ts';
 import { boxTouchesTriangle, slabsOf, trianglesOf } from './canoe-geometry.ts';
 import type { Triangles } from './canoe-geometry.ts';
@@ -341,27 +341,38 @@ describe('a kneeler beside an outrigger deck', () => {
       each(view, state, time);
     }
   }
+  /** Sixteen points down a kneeler's paddle at this moment, grip to blade tip, in canoe space (the canoe lies at the origin). */
+  const along = (view: CanoeView, playerId: number): THREE.Vector3[] => {
+    const paddle = figureOf(view, playerId).paddler.paddle;
+    return Array.from({ length: 16 }, (_, index) => paddle.localToWorld(new THREE.Vector3(0, (-PADDLE_LENGTH * index) / 15, 0)));
+  };
   /** How far out from the centreline a kneeler's paddle reaches at this moment: its blade tip, and its grip. */
   const reach = (view: CanoeView, playerId: number): { tip: number; grip: number } => {
-    const paddle = figureOf(view, playerId).paddler.paddle;
-    const tip = paddle.localToWorld(new THREE.Vector3(0, -PADDLE_LENGTH, 0));
-    const grip = paddle.localToWorld(new THREE.Vector3(0, 0, 0));
-    return { tip: Math.abs(tip.x), grip: Math.abs(grip.x) };
+    const points = along(view, playerId);
+    return { tip: Math.abs(points[15].x), grip: Math.abs(points[0].x) };
   };
 
   for (const tier of [2, 3]) {
-    it(`keeps the whole paddle between the two decks on hull tier ${tier}: paddling, resting, starting and stopping`, () => {
-      // The planks' inner ends are ragged by up to 5 cm.
+    it(`keeps the paddle between the two decks on hull tier ${tier}, wherever a deck runs beside it: paddling, resting, starting and stopping`, () => {
+      // The planks' inner ends are ragged by up to 5 cm. A blade is 9 cm to each side of its shaft, so a paddle is
+      // beside a deck from 9 cm before the deck's forward edge to 9 cm past its aft one. Ahead of the decks and
+      // astern of them there is open water, and a paddle may reach as far out as it likes.
       const edge = deckInner(HULL_TIERS[tier].dimensions.beam / 2) - 0.05;
+      const runs = deckSpan(tier);
       let furthest = 0;
+      let beside = 0;
       watch(tier, null, 12, (view, state) => {
         for (const player of state.players.filter((one) => (one.seat ?? 0) >= 2)) {
-          const { tip, grip } = reach(view, player.id);
-          furthest = Math.max(furthest, tip, grip);
+          for (const point of along(view, player.id)) {
+            if (point.z < runs.forward - 0.09 || point.z > runs.aft + 0.09) continue;
+            beside += 1;
+            furthest = Math.max(furthest, Math.abs(point.x));
+          }
         }
       }, (state, time) => {
         for (const player of state.players) player.paddling = Math.floor(time / 1.3) % 2 === 0;
       });
+      expect(beside).toBeGreaterThan(1000);
       expect(furthest).toBeGreaterThan(0.5);
       expect(furthest).toBeLessThan(edge);
     });
