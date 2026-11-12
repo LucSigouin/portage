@@ -1005,6 +1005,47 @@ html.iw-document {
   margin-top: 1rem;
   gap: 1rem;
 }
+/* The cut: a long panel's body goes on below its bottom edge, and nothing said so. A pen rule under the body,
+   with two words on it, says so. It takes no room (no height: the rule and the words hang in the gap above the
+   footer), it is shown while there is more below and gone at the end, and it stands still: no transition, no
+   animation, nothing that fades. */
+.iw-cut {
+  flex: none;
+  position: relative;
+  height: 0;
+  pointer-events: none;
+}
+.iw-cut[hidden] {
+  display: none;
+}
+.iw-cut::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  border-top: 0.115rem solid var(--iw-ink);
+  filter: url(#iw-rough);
+}
+/* The words hang under the rule, in the gap above the footer: nothing of the panel is covered by them. */
+.iw-cut-words {
+  position: absolute;
+  left: 50%;
+  top: 0.16rem;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--iw-hand);
+  font-size: 0.86rem;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--iw-ink);
+}
+.iw-cut-words .iw-caret {
+  width: 0.7rem;
+  height: 0.7rem;
+}
 .iw-body h3 {
   display: flex;
   align-items: baseline;

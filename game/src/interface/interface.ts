@@ -214,6 +214,10 @@ export class InkInterface implements GameInterface {
     root.addEventListener('input', (event) => this.onInput(event), options);
     root.addEventListener('pointerover', (event) => this.onPointerOver(event), options);
     root.addEventListener('pointerdown', () => this.setKeyboardNavigation(false), options);
+    // A panel's body was scrolled (scroll does not bubble: it is caught on the way down), or the window changed size:
+    // the cut mark under it may be due, or done.
+    root.addEventListener('scroll', () => this.markCut(), { capture: true, passive: true, signal: this.abort.signal });
+    window.addEventListener('resize', () => this.markCut(), options);
     // Before the game's own key handler, to decide which keys work the menus.
     window.addEventListener('keydown', (event) => this.onKeyDown(event), { capture: true, signal: this.abort.signal });
 
@@ -223,6 +227,8 @@ export class InkInterface implements GameInterface {
     root.classList.add('iw-faces-pending');
     const written = (): void => {
       this.root?.classList.remove('iw-faces-pending');
+      // Words in their own face are another height than in a stand-in.
+      this.markCut();
       if (this.faceTimer !== null) clearTimeout(this.faceTimer);
       this.faceTimer = null;
     };
@@ -417,6 +423,22 @@ export class InkInterface implements GameInterface {
     }
   }
 
+  // --- The cut mark -----------------------------------------------------------------
+
+  /**
+   * Show the pen mark under the open panel's body while the body goes on below its bottom edge, and hide it when
+   * it does not: a panel that fits, or one scrolled to its end. Only ever a flag on a still mark: nothing moves.
+   */
+  private markCut(): void {
+    const veil = this.parts.get('panel')?.element;
+    const mark = veil?.querySelector<HTMLElement>('.iw-cut');
+    if (!veil || !mark) return;
+    const body = veil.querySelector<HTMLElement>('.iw-body');
+    // A pixel or two of rounding is not a cut.
+    const more = body !== null && !veil.hidden && body.scrollHeight - body.clientHeight - body.scrollTop > 2;
+    if (mark.hidden === more) mark.hidden = !more;
+  }
+
   // --- Drawing ----------------------------------------------------------------------
 
   private draw(name: PartName, signature: string, build: () => ViewNode[]): boolean {
@@ -432,7 +454,8 @@ export class InkInterface implements GameInterface {
   update(model: InterfaceModel): void {
     const root = this.root;
     if (!root || !this.hud || !this.compass) return;
-    if (model.uiScale !== this.scale) {
+    const rescaled = model.uiScale !== this.scale;
+    if (rescaled) {
       this.scale = model.uiScale;
       document.documentElement.style.setProperty('--iw-scale', String(model.uiScale));
     }
@@ -470,6 +493,10 @@ export class InkInterface implements GameInterface {
       veil.hidden = !panel;
       for (const slider of veil.querySelectorAll<HTMLInputElement>('input[type="range"]')) this.fillSlider(slider);
       this.capturing = panel?.id === 'settings' && panel.bindings.some((binding) => binding.slots.some((slot) => slot.capturing));
+      // What the panel holds changed, so how far it runs may have.
+      this.markCut();
+    } else if (rescaled) {
+      this.markCut();
     }
     if ((panel?.id === 'dialogue') !== this.dialogue) {
       this.dialogue = panel?.id === 'dialogue';

@@ -191,6 +191,14 @@ export function debugView(debug: DebugModel): ViewNode[] {
 
 type PanelSize = 'wide' | 'mid' | 'narrow';
 
+/**
+ * The cut mark: a pen rule and two words under a panel's body, for when the body goes on below its bottom edge
+ * (a long panel in a short window). It is in every sheet, hidden. The interface shows it while there is more
+ * below and hides it at the end (`InkInterface.markCut`). It takes no room and it never moves.
+ */
+const cutMarkView = (): ViewNode => h('div.iw-cut', { key: 'cut', hidden: true, 'aria-hidden': 'true' },
+  h('span.iw-cut-words', null, icon(ICON.caret), 'more below', icon(ICON.caret)));
+
 /** The sheet every full panel is written on: taped corners, a title, a body that scrolls, a way out. */
 function sheet(
   panel: PanelModel, size: PanelSize, subtitle: string, body: ViewChild, footerStart: ViewChild = null,
@@ -200,6 +208,7 @@ function sheet(
     size === 'wide' ? h('i.iw-tape.iw-b') : null,
     h('header', null, h('h2', null, panel.title), subtitle ? h('span.iw-sub', null, subtitle) : null),
     body,
+    cutMarkView(),
     h('footer', null, footerStart ?? h('span'), buttonView(panel.close, 'button.iw-btn.iw-go')))];
 }
 
@@ -473,6 +482,7 @@ function crewSheet(panel: PanelModel, body: ViewChild, actions: ButtonModel[], q
     h('i.iw-tape.iw-a'),
     h('header', null, h('h2', null, panel.title)),
     h('div.iw-body', { key: 'body' }, body),
+    cutMarkView(),
     h('footer', null,
       quiet ? buttonView(quiet, 'button.iw-btn.iw-quiet', true, 'quiet') : h('span'),
       h('div.iw-actions', null,
