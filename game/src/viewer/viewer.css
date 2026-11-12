@@ -412,3 +412,15 @@ body {
     max-height: 22rem;
   }
 }
+
+/* The tape on a card: the theme places it only inside its own panels. */
+.vw .iw-paper > .iw-tape.iw-a {
+  top: -0.55rem;
+  left: 2.4rem;
+  transform: rotate(-3deg);
+}
+.vw .iw-paper > .iw-tape.iw-b {
+  top: -0.55rem;
+  right: 2.4rem;
+  transform: rotate(4deg);
+}

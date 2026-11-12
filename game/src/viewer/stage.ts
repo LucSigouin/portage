@@ -46,7 +46,7 @@ export function fitDistance(subject: Subject, aspect: number): number {
   const radius = Math.max(0.05, size.length() / 2);
   const vertical = (FIELD_OF_VIEW * RADIANS) / 2;
   const horizontal = Math.atan(Math.tan(vertical) * aspect);
-  return (radius / Math.sin(Math.min(vertical, horizontal))) * 1.12;
+  return (radius / Math.sin(Math.min(vertical, horizontal))) * 0.8;
 }
 
 export class Stage {

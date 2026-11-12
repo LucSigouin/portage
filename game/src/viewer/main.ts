@@ -477,7 +477,7 @@ class Viewer {
     const rows: [string, string][] = entry.flat
       ? [['Size', '24 × 24 drawing units'], ['Triangles', 'none: a flat drawing'], ['Draw calls', 'none: SVG']]
       : [
-          ['Size (m)', `${metres(size.x)} across × ${metres(size.y)} high × ${metres(size.z)} long`],
+          ['Size', `${metres(size.x)} × ${metres(size.y)} × ${metres(size.z)} m`], ['', 'across × high × long'],
           ['Triangles', subject.triangles.toLocaleString('en-US')],
           ['Draw calls', `${subject.drawCalls.toLocaleString('en-US')} per pass`],
         ];
