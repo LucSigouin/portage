@@ -340,6 +340,10 @@ function alongAround(g, length, girth) {
 
 // Single animated piece (limb, puff…) as its own mesh with the ink material.
 let pieceCount = 0;
+// The viewer builds in the order a person clicks, so it starts the count again before each thing (viewer/canonical.ts). The game never calls this.
+export function resetPieceCount() {
+  pieceCount = 0;
+}
 export function piece(geom, color, glow = 0, id = nextId(), kind = KIND.PLAIN) {
   const g = geom.index ? geom.toNonIndexed() : geom.clone();
   const n = g.attributes.position.count;

@@ -8,22 +8,42 @@
  * water runs between hull and deck.
  */
 import { ATTACHMENTS } from '../../data/index.ts';
+import { seatTransformForHull } from '../../sim/index.ts';
 import {
   BAMBOO, BERRY, BOLT, BRASS, CLAY, CLAY_DARK, EMBER, FISH, IRON, KIND, LEATHER, PAL, RIG, ROPE, SOOT, STEEL, THIN, WATER,
   hullOf, lashing, line, only, partBuilder, plate,
 } from './kit.ts';
-import type { AttachmentBuilder, AttachmentContext } from './kit.ts';
+import type { AttachmentBuilder, AttachmentContext, Triple } from './kit.ts';
 
-/** The deck: how far it runs fore and aft of the mount, the well between hull and deck, and the float's share of the outer edge. */
-export const DECK = { halfLength: 1.0, well: 0.31, kerb: 0.28 };
+/**
+ * The deck: how far it runs fore and aft of the mount, the well between hull and deck, the nearest its inner edge
+ * comes to the centreline, and the float's share of the outer edge.
+ */
+export const DECK = { halfLength: 1.0, well: 0.31, inner: 0.835, kerb: 0.28 };
+
+/**
+ * Where a deck's inner edge is, out from the centreline. A paddle's width out from the hull, and never nearer than
+ * `DECK.inner`: a kneeler's paddle laid across the gunwales has to lie between the two decks, on the narrow hull too.
+ */
+export const deckInner = (halfBeam: number): number => Math.max(halfBeam + DECK.well, DECK.inner);
+
+/** Where an outrigger's aft spar crosses the gunwale: between the aft kneeler's back and the stern paddler's reach. */
+function aftSpar(hullTier: number): number {
+  const seat = (number: number): number => seatTransformForHull(hullTier, number).position[2];
+  return (seat(2) + 0.22 + seat(0) - 0.77) / 2;
+}
+
+/** How far a deck runs along the hull, in canoe space: its forward edge, and its aft one, which reaches the aft spar. */
+export function deckSpan(hullTier: number): { forward: number; aft: number } {
+  return { forward: -DECK.halfLength, aft: Math.max(DECK.halfLength, aftSpar(hullTier) + 0.07) };
+}
 
 /** Where an outrigger's two spars cross the gunwale: each in a gap between two paddlers. */
 export function sparStations(context: AttachmentContext, side: -1 | 1): { forward: number; aft: number } {
   const hull = hullOf(context);
   // The forward one crosses the whole hull beside the thwart; port's and starboard's lie side by side.
   const forward = (hull.seat(3) + 0.22 + hull.seat(2) - 0.63) / 2 - 0.045 + side * 0.055;
-  const aft = (hull.seat(2) + 0.22 + hull.seat(0) - 0.77) / 2;
-  return { forward, aft };
+  return { forward, aft: aftSpar(context.hullTier) };
 }
 
 export function outriggerPart(side: -1 | 1): AttachmentBuilder {
@@ -33,7 +53,7 @@ export function outriggerPart(side: -1 | 1): AttachmentBuilder {
     const floatX = Math.abs(context.mount[0]);
     const deckY = ATTACHMENTS.workbench.transform.position[1];
     const sparY = deckY - 0.08;
-    const inner = context.halfBeam + DECK.well;
+    const inner = deckInner(context.halfBeam);
     const outer = floatX - DECK.kerb;
     const { forward, aft } = sparStations(context, side);
     const floatY = side < 0 ? 0.02 : 0.06;
@@ -60,7 +80,7 @@ export function outriggerPart(side: -1 | 1): AttachmentBuilder {
     }
 
     // two stringers ride on the spars and carry the deck planks, which run athwart
-    const end = Math.max(DECK.halfLength, aft + 0.07);
+    const end = deckSpan(context.hullTier).aft;
     for (const x of [inner + 0.035, outer - 0.035]) b.beam([side * x, sparY, -DECK.halfLength], [side * x, sparY, end], 0.034, PAL.wood, {}, 6);
     const tones = [PAL.wood, PAL.woodLight, '#bfa27a', '#c4b89f', PAL.wood, '#a98658', PAL.woodLight, '#b7a88c', '#c9ad80', PAL.wood];
     const count = 10;
@@ -131,6 +151,15 @@ export const workbenchPart: AttachmentBuilder = (context) => {
     b.beam([face, top + 0.2, z + chisel], [face, top + 0.3, z + chisel], 0.012, PAL.ochre, {}, 5);
     b.beam([face, top + 0.08, z + chisel], [face, top + 0.2, z + chisel], 0.006, STEEL, { kind: KIND.METAL }, 4);
   }
+  // the board's back, which is all that shows from outboard: two battens, a bow saw on its pegs, a coil of line
+  const back = board + out * 0.018;
+  for (const rise of [0.06, 0.29]) b.box(0.016, 0.034, 0.62, PAL.woodDark, { pos: [back - out * 0.004, top + rise, z] });
+  const bow: Triple[] = [[back, top + 0.1, z - 0.25], [back, top + 0.235, z - 0.2], [back, top + 0.235, z + 0.02], [back, top + 0.1, z + 0.07]];
+  for (let span = 0; span < 3; span += 1) b.beam(bow[span], bow[span + 1], 0.011, PAL.woodLight, {}, 5);
+  b.beam([back, top + 0.11, z - 0.245], [back, top + 0.11, z + 0.065], 0.005, STEEL, { id: THIN, flat: true, kind: KIND.PLAIN }, 4);
+  for (const peg of [-0.2, 0.02]) b.tack(back + out * 0.006, top + 0.25, z + peg, 0.011);
+  for (let turn = 0; turn < 2; turn += 1) b.torus(0.062 - turn * 0.014, 0.011, ROPE, { pos: [back + out * (0.004 + turn * 0.008), top + 0.155, z + 0.2], rot: [0, Math.PI / 2, 0.3 * turn], kind: KIND.ROPE }, 12);
+  b.tack(back + out * 0.012, top + 0.215, z + 0.2, 0.011);
   // vice on the forward end
   b.box(0.13, 0.1, 0.05, IRON, { pos: [x - out * 0.08, top + 0.075, z - 0.3], kind: KIND.METAL });
   b.box(0.13, 0.1, 0.04, '#5c5f6a', { pos: [x - out * 0.08, top + 0.075, z - 0.39], kind: KIND.METAL });
