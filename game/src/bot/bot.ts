@@ -582,9 +582,13 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
       yield NEUTRAL_INPUT;
     }
     if (lapse(habits.wasteEvery) && player.backpack.length > 0) {
+      // Careless with the everyday, not with the one battery: what only a couple of places give is kept.
       const dropped = player.backpack[roll(player.backpack.length)];
-      log(`careless: dropped ${dropped.count} ${dropped.itemId}`);
-      send({ type: 'discard', from: 'backpack', itemId: dropped.itemId, count: dropped.count });
+      const common = (NODE_SOURCES.get(dropped.itemId) ?? []).filter((source) => source.guaranteed).length >= 6 || RECIPE_FOR.has(dropped.itemId);
+      if (common) {
+        log(`careless: dropped ${dropped.count} ${dropped.itemId}`);
+        send({ type: 'discard', from: 'backpack', itemId: dropped.itemId, count: dropped.count });
+      }
     }
     if (lapse(habits.wanderEvery) && player.islandId) {
       const spots = NODES_BY_ISLAND[player.islandId].filter((other) => other.reach === 'foot');
@@ -644,10 +648,10 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
     };
   };
 
-  function* backOff(seconds: number): Generator<StepInput> {
+  function* backOff(seconds: number, metres = 9): Generator<StepInput> {
     if (canoe.sailRaised) send({ type: 'set_sail', raised: false });
     const start = { x: canoe.position.x, z: canoe.position.z };
-    for (let tick = 0; tick < seconds * 60 && distance(canoe.position, start) < 9; tick += 1) {
+    for (let tick = 0; tick < seconds * 60 && distance(canoe.position, start) < metres; tick += 1) {
       yield { ...NEUTRAL_INPUT, paddle: -1 };
     }
   }
@@ -742,7 +746,9 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
   function* paddleTo(islandId: IslandId, mayDivert = true): Generator<StepInput, IslandId> {
     const landing = islandLanding(islandId);
     for (let attempt = 0; attempt < 6; attempt += 1) {
-      if (canoe.beached) yield* backOff(8);
+      // Still grounding after three tries: back off farther each time, for room to turn.
+      const further = Math.max(0, attempt - 2);
+      if (canoe.beached) yield* backOff(8 + 10 * further, 9 + 15 * further);
       const route = findWaterPath(canoe.position, landing.approach, limits());
       if (!route) throw new BotStuck(`no water route to ${islandId} at stability ${limits().stability}`);
       let grounded = false;
