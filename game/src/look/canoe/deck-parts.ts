@@ -13,7 +13,7 @@ import {
   BAMBOO, BERRY, BOLT, BRASS, CLAY, CLAY_DARK, EMBER, FISH, IRON, KIND, LEATHER, PAL, RIG, ROPE, SOOT, STEEL, THIN, WATER,
   hullOf, lashing, line, only, partBuilder, plate,
 } from './kit.ts';
-import type { AttachmentBuilder, AttachmentContext } from './kit.ts';
+import type { AttachmentBuilder, AttachmentContext, Triple } from './kit.ts';
 
 /**
  * The deck: how far it runs fore and aft of the mount, the well between hull and deck, the nearest its inner edge
@@ -151,6 +151,15 @@ export const workbenchPart: AttachmentBuilder = (context) => {
     b.beam([face, top + 0.2, z + chisel], [face, top + 0.3, z + chisel], 0.012, PAL.ochre, {}, 5);
     b.beam([face, top + 0.08, z + chisel], [face, top + 0.2, z + chisel], 0.006, STEEL, { kind: KIND.METAL }, 4);
   }
+  // the board's back, which is all that shows from outboard: two battens, a bow saw on its pegs, a coil of line
+  const back = board + out * 0.018;
+  for (const rise of [0.06, 0.29]) b.box(0.016, 0.034, 0.62, PAL.woodDark, { pos: [back - out * 0.004, top + rise, z] });
+  const bow: Triple[] = [[back, top + 0.1, z - 0.25], [back, top + 0.235, z - 0.2], [back, top + 0.235, z + 0.02], [back, top + 0.1, z + 0.07]];
+  for (let span = 0; span < 3; span += 1) b.beam(bow[span], bow[span + 1], 0.011, PAL.woodLight, {}, 5);
+  b.beam([back, top + 0.11, z - 0.245], [back, top + 0.11, z + 0.065], 0.005, STEEL, { id: THIN, flat: true, kind: KIND.PLAIN }, 4);
+  for (const peg of [-0.2, 0.02]) b.tack(back + out * 0.006, top + 0.25, z + peg, 0.011);
+  for (let turn = 0; turn < 2; turn += 1) b.torus(0.062 - turn * 0.014, 0.011, ROPE, { pos: [back + out * (0.004 + turn * 0.008), top + 0.155, z + 0.2], rot: [0, Math.PI / 2, 0.3 * turn], kind: KIND.ROPE }, 12);
+  b.tack(back + out * 0.012, top + 0.215, z + 0.2, 0.011);
   // vice on the forward end
   b.box(0.13, 0.1, 0.05, IRON, { pos: [x - out * 0.08, top + 0.075, z - 0.3], kind: KIND.METAL });
   b.box(0.13, 0.1, 0.04, '#5c5f6a', { pos: [x - out * 0.08, top + 0.075, z - 0.39], kind: KIND.METAL });
