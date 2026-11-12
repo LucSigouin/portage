@@ -257,14 +257,17 @@ export function stageShot(name: ShotName, seed: number = BOT_SEED): StagedShot {
     }
     case 'beacon': {
       const state = gameAfterQuest(seed, 'the_beacon');
-      // Afloat off the landing at dusk, looking up at the lit tower.
-      floatAt(state, 0, -1085, 0);
+      // Afloat off the landing at dusk, looking up at the lit tower. Inside the Fog, north of the wall's banks: the
+      // wall's second row reaches z = -1105 (world/dressing.ts), and from inside a bank the tower is not in the picture.
+      // A little east of the tower's line, so the mast does not stand in front of it.
+      floatAt(state, 14, -1128, 0);
       state.canoe.waterLevel = 0;
       setClock(state, 21.2);
       setWeather(state, 'clear');
       if (!state.canoe.lanternLit) dispatch(state, { type: 'toggle_lantern' });
       settle(state, 1);
-      return game(state, null, { pitch: 0.07, distance: 9 });
+      // From 13 m back the lamp and its rays sit clear of the frame, and the eye is still north of the fog.
+      return game(state, null, { pitch: 0.07, distance: 13 });
     }
   }
 }

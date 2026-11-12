@@ -13,18 +13,18 @@
  */
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ISLANDS, ISLANDS_BY_ID, NODES_BY_ISLAND, NODE_TYPES, spotPosition } from '../../src/data/index.ts';
+import { ISLANDS, ISLANDS_BY_ID, NODES_BY_ISLAND, NODE_TYPES, REGIONS_BY_ID, spotPosition } from '../../src/data/index.ts';
 import type { IslandDefinition, LandmarkDefinition, LandmarkKind, NodeTypeId } from '../../src/data/index.ts';
 import { terrainHeight } from '../../src/sim/index.ts';
 import { PAL, inkMaterial } from '../../src/look/b2/palette.js';
-import { LANDMARK_KINDS, landmarkFarGeometry, landmarkGeometry } from '../../src/look/landmarks.ts';
+import { LANDMARK_HEIGHT, LANDMARK_KINDS, landmarkFarGeometry, landmarkGeometry } from '../../src/look/landmarks.ts';
 import { ATTIC_HEIGHT, NODE_TYPE_IDS, nodeGeometry } from '../../src/look/nodes.ts';
 import { floraFor } from '../../src/look/presets.ts';
 import { buildIslandProps, instancedMesh, treeWatcher } from '../../src/look/props.ts';
-import { scatterIsland } from '../../src/look/scatter.ts';
+import { hashText, scatterIsland, seededRandom } from '../../src/look/scatter.ts';
 import { buildIslandTerrain, islandWatcher } from '../../src/look/terrain.ts';
 import { CLOSE_DRESSING, FINE_GROUND, FINE_LANDMARKS, FINE_TREES, clearDistance, noteEye } from '../../src/look/world/distance.ts';
-import { dressIsland, fogNormal } from '../../src/look/world/dressing.ts';
+import { FOG_HEAPS, dressIsland, fogBanks, fogNormal } from '../../src/look/world/dressing.ts';
 import { DAY, NIGHT } from '../../src/look/daylight.ts';
 import { LANDMARK_SUNK, TONE, siteOf } from '../../src/look/world/kit.ts';
 import { CAR } from '../../src/look/world/reach.ts';
@@ -322,6 +322,70 @@ function skyline(island: IslandDefinition): number[] {
   });
   return bins;
 }
+
+describe('the fog wall', () => {
+  const beacon = ISLANDS_BY_ID.the_beacon;
+  const dam = ISLANDS_BY_ID.dam_crest;
+  const tower = spotPosition(beacon, beacon.landmarks.find((landmark) => landmark.kind === 'radio_tower')!.spot);
+  const foot = terrainHeight(tower.x, tower.z);
+  const head = foot + LANDMARK_HEIGHT.radio_tower!;
+  // The banks as the Beacon's dressing really lays them: read back from the instances it made. Each heap is an ellipsoid.
+  const dressing = dressIsland(beacon);
+  const drawn = dressing.always.children.find((child) => (child as THREE.InstancedMesh).isInstancedMesh && (child as THREE.InstancedMesh).count === dressing.counts.fog_heap) as THREE.InstancedMesh;
+  const banks = Array.from({ length: drawn.count }, (_, index) => {
+    const matrix = new THREE.Matrix4();
+    drawn.getMatrixAt(index, matrix);
+    const [place, turn, size] = [new THREE.Vector3(), new THREE.Quaternion(), new THREE.Vector3()];
+    matrix.decompose(place, turn, size);
+    return { x: place.x, y: place.y, z: place.z, scale: size.x };
+  });
+  /** True when nothing of the fog lies on the line from `eye` to `mark`. */
+  const clear = (eye: THREE.Vector3, mark: THREE.Vector3): boolean => {
+    for (const bank of banks) {
+      for (const heap of FOG_HEAPS) {
+        // In the heap's own space it is the unit sphere: does the line from the eye to the mark cross it?
+        const into = (point: THREE.Vector3): THREE.Vector3 => new THREE.Vector3(
+          (point.x - bank.x - heap.at[0] * bank.scale) / (heap.reach[0] * bank.scale),
+          (point.y - bank.y - heap.at[1] * bank.scale) / (heap.reach[1] * bank.scale),
+          (point.z - bank.z - heap.at[2] * bank.scale) / (heap.reach[2] * bank.scale),
+        );
+        const [from, to] = [into(eye), into(mark)];
+        const along = to.clone().sub(from);
+        const nearest = Math.max(0, Math.min(1, -from.dot(along) / along.lengthSq()));
+        if (from.clone().addScaledVector(along, nearest).lengthSq() < 1) return false;
+      }
+    }
+    return true;
+  };
+  // Where a walker's eye is on the dam: along its crest, 2.5 m over the ground.
+  const eyes = [-0.6, -0.2, 0.3, 0.6].map((along) => {
+    const spot = spotPosition(dam, { along, across: 0 });
+    return new THREE.Vector3(spot.x, terrainHeight(spot.x, spot.z) + 2.5, spot.z);
+  });
+
+  it('is laid by one rule, two rows along the region\'s edge and bigger banks behind', () => {
+    const ruled = fogBanks(REGIONS_BY_ID.fog.southEdgeZ, seededRandom(hashText('fog')));
+    expect(banks.length).toBe(ruled.length);
+    expect(banks.length).toBeGreaterThan(40);
+    const edge = REGIONS_BY_ID.fog.southEdgeZ;
+    expect(banks.filter((bank) => bank.z > edge - 60).length).toBeGreaterThan(15);
+  });
+
+  it('leaves the head of the Beacon\'s tower standing over it from the dam, lamp and top third', () => {
+    for (const eye of eyes) {
+      expect(clear(eye, new THREE.Vector3(tower.x, head + 1.2, tower.z)), `the lamp from ${eye.x.toFixed(0)}`).toBe(true);
+      expect(clear(eye, new THREE.Vector3(tower.x, head - LANDMARK_HEIGHT.radio_tower! / 3, tower.z)), `a third down the tower from ${eye.x.toFixed(0)}`).toBe(true);
+    }
+  });
+
+  it('is still a wall: from the dam it hides the Beacon\'s shore and the foot of its hill', () => {
+    const shore = spotPosition(beacon, beacon.landing);
+    for (const eye of eyes) {
+      expect(clear(eye, new THREE.Vector3(shore.x, 1, shore.z)), `the landing from ${eye.x.toFixed(0)}`).toBe(false);
+      expect(clear(eye, new THREE.Vector3(tower.x, foot * 0.4, tower.z + beacon.radiusZ * 0.6)), `the hill's foot from ${eye.x.toFixed(0)}`).toBe(false);
+    }
+  });
+});
 
 describe('the 15 islands', () => {
   it('each has its own outline from the water', () => {

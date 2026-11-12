@@ -59,9 +59,11 @@ Rules in `dressIsland`, all from data, none by name:
 | marsh ground, or the Fog | drowned snags in the shallows |
 | a reed bed | herons in the shallows, standing still |
 | the start island | one great pine over the camp |
-| a fog-wall region | the fog wall along its edge, and banks along the valley walls behind |
+| a fog-wall region | the fog wall along its edge, and banks along the valley walls behind (`fogBanks`) |
 
 `floraFor` in `presets.ts` bends the trees the same way: a grove is all birch, cottage lots and yards are cleared, a marina keeps its pines, a lookout stands in pine.
+
+Fog lies low on the water: a bank is four times as broad as it is tall (`FOG_HEAPS`). The wall's two rows are low enough that from the dam's crest the head of the Beacon's tower stands over them, and high enough to hide the island's shore. Two tests cast those sight lines through the banks as drawn: change a size and run them. The staged `?shot=beacon` floats north of the wall (z = -1128): from inside a bank the tower is not in its own picture.
 
 The fog heaps wear one normal (`fogNormal`). A paddler crosses the wall, so a heap is seen from inside, and with real normals the inside is the shadow tone: dark fog. The one normal lies square to the light by day and by night, so both sides take the plain wash. Never turn a heap (`yaw: 0`).
 
@@ -90,7 +92,7 @@ PORTAGE_URL=http://localhost:5222 npm --prefix e2e test -- world.spec.ts look.sp
 
 `tests/look/world.test.ts`, no graphics card: every landmark kind and node type is a real drawing, the dam and dock fit the rules' ground, the dressing follows the island table, the 15 skylines differ, detail drops with distance and comes back, the cottages stand on their walls and show what is under them.
 
-`e2e/tests/world.spec.ts`, real graphics card: 15 island views with a clean console, every landmark and node at the rules' place, each view inside its triangle budget, 0 changed land pixels at three islands paused and playing, a used-up node drawn used up.
+`e2e/tests/world.spec.ts`, real graphics card: 15 island views with a clean console, every landmark and node at the rules' place, each view inside its triangle budget, 0 changed land pixels at three islands paused and playing, a used-up node drawn used up, the lit tower in the staged Beacon view.
 
 Each view's budget is in `TRIANGLES` in the spec. Redraw something and it grows: measure, and raise the number on purpose.
 
@@ -110,6 +112,9 @@ Each view's budget is in `TRIANGLES` in the spec. Redraw something and it grows:
 | `treeWatcher` always fine; `islandWatcher` never far | detail by distance |
 | `FINE_GROUND` of 42 km | the 15 views (budget) |
 | `world/spent.ts`: `HIDE` empty, or `aGone != 0.` | a used-up node |
+| `FOG_HEAPS`: the old heap (`at: [0, 0.2, 0], reach: [1.7, 0.85, 1.1]`) | the tower's head over the fog |
+| `fogBanks`: rows of size 4 and 5 | the fog is still a wall |
+| `staging.ts`: the beacon view back at `floatAt(state, 0, -1085, 0)` | e2e: the staged view of the Beacon has the lit tower in it |
 | `shallows.ts`: `holed` never true, or the south gable stove in only to `y < 0.2` | the cottages show the cache |
 | `COTTAGE_EAVES = -0.6` (the roof back on the ground) | the cottages stand on their walls |
 | `ATTIC_HEIGHT = 2.9` | the attic's cupola stands through the ridge |
