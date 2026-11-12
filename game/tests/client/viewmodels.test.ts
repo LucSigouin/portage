@@ -282,6 +282,35 @@ describe('the panels', () => {
     expect(buildCraftingPanel(state).stations.find((station) => station.name === 'Fire')!.inReach).toBe(true);
   });
 
+  it('says where dirty water comes from on the recipe that is short of it, with the inventory key as it is bound', () => {
+    const state = newGame();
+    standOn(state, 'home_knoll');
+    teleportToCamp(state, 'home_knoll');
+    const recipes = (bindings = settings.controls.keyBindings) => buildCraftingPanel(state, 0, bindings).stations.flatMap((station) => station.recipes);
+    const boil = (bindings = settings.controls.keyBindings) => recipes(bindings).find((recipe) => recipe.recipeId === 'clean_water')!;
+    expect(boil()).toMatchObject({ name: 'Boil water', missingText: 'Needs 1 more dirty water', sourceText: 'Scoop it at the water, from the inventory (Tab).' });
+    // Nothing else is short of dirty water, so nothing else says it.
+    expect(recipes().filter((recipe) => recipe.sourceText !== '').map((recipe) => recipe.recipeId)).toEqual(['clean_water']);
+    // The key is read from the bindings, not typed in.
+    const rebound = { ...settings.controls.keyBindings, inventory: ['KeyI'] };
+    expect(boil(rebound).sourceText).toBe('Scoop it at the water, from the inventory (I).');
+    // The whole interface model passes the player's own bindings through.
+    const model = buildInterfaceModel({
+      panels: reducePanels(createPanelState('game'), { type: 'open', panel: 'crafting' }, { canoeBeached: true }).state,
+      settings: { ...settings, controls: { ...settings.controls, keyBindings: rebound } },
+      game: state, paused: false, cameraYaw: 0, toasts: [], slots: [], latestSlot: null, currentSlot: null, now: 0, capture: null,
+      bindingNotice: '', progressText: '', debug: null,
+    });
+    if (model.panel?.id !== 'crafting') throw new Error('expected the crafting panel');
+    expect(model.panel.stations.flatMap((station) => station.recipes).find((recipe) => recipe.recipeId === 'clean_water')!.sourceText)
+      .toBe('Scoop it at the water, from the inventory (I).');
+    // With the water in the pack the line is gone, and the words were true: it was scooped at the water.
+    standOn(state, 'home_knoll');
+    expect(dispatch(state, { type: 'fill_water', count: 1 }).ok).toBe(true);
+    teleportToCamp(state, 'home_knoll');
+    expect(boil()).toMatchObject({ missingText: '', sourceText: '', craft: { enabled: true } });
+  });
+
   it('offers "make all" only when more than one can be made, and hides untaught recipes', () => {
     const state = newGame();
     standOn(state, 'home_knoll');

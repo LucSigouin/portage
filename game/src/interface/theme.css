@@ -1774,6 +1774,12 @@ html.iw-document {
   line-height: 1.25;
   color: var(--iw-rust-deep);
 }
+/* Where a missing thing comes from: the same hand, in plain ink, under what is missing. */
+.iw-source {
+  font-family: var(--iw-hand);
+  font-size: 0.86rem;
+  line-height: 1.25;
+}
 .iw-blocked {
   margin: 0 0 0.6rem;
   padding: 0.4rem 0.8rem 0.25rem;

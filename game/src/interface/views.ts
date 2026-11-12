@@ -346,7 +346,8 @@ function recipeView(recipe: RecipeRowModel): ViewNode {
       recipe.known ? null : h('small.iw-kind', null, 'not learned'),
       h('small', null, recipe.description),
       costsView(recipe.inputs),
-      recipe.missingText ? h('p.iw-missing', null, recipe.missingText) : null),
+      recipe.missingText ? h('p.iw-missing', null, recipe.missingText) : null,
+      recipe.sourceText ? h('p.iw-source', null, recipe.sourceText) : null),
     h('div.iw-actions', null,
       buttonView(recipe.craft, 'button.iw-btn.iw-small', false, 'one'),
       recipe.craftAll ? buttonView(recipe.craftAll, 'button.iw-btn.iw-small', true, 'all') : null));

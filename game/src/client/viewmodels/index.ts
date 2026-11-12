@@ -94,7 +94,7 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
     case 'inventory':
       return game ? { ...frame, ...buildInventoryPanel(game, playerId) } : null;
     case 'crafting':
-      return game ? { ...frame, ...buildCraftingPanel(game, playerId) } : null;
+      return game ? { ...frame, ...buildCraftingPanel(game, playerId, input.settings.controls.keyBindings) } : null;
     case 'canoe_builder':
       return game ? { ...frame, ...buildCanoeBuilderPanel(game, playerId) } : null;
     case 'quest_log':

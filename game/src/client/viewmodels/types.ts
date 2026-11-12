@@ -254,6 +254,11 @@ export interface RecipeRowModel {
   inputs: CostRowModel[];
   /** "Needs 3 more plank, hammer", or an empty string when craftable. */
   missingText: string;
+  /**
+   * Where a missing ingredient comes from, when it comes from nowhere a player would look: dirty water is scooped,
+   * and the button for it is in the inventory. An empty string otherwise.
+   */
+  sourceText: string;
   craft: ButtonModel;
   /** Present when more than one can be made. */
   craftAll: ButtonModel | null;

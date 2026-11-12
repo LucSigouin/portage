@@ -9,7 +9,9 @@ import {
 } from '../../sim/index.ts';
 import type { Command, Container, GameState, InventoryView, ItemStack, Missing, PlayerId, QuestView } from '../../sim/index.ts';
 import type { InterfaceIntent } from '../intents.ts';
-import { cardinalName, countedName, distanceText, itemName, needsText } from './format.ts';
+import { DEFAULT_KEY_BINDINGS } from '../../settings/index.ts';
+import type { KeyBindings } from '../../settings/index.ts';
+import { cardinalName, countedName, distanceText, itemName, needsText, primaryKey } from './format.ts';
 import { crewElsewhere, crewTag, objectiveRows } from './hud.ts';
 import type {
   BuildRowModel, ButtonModel, CostRowModel, ItemSlotModel, MapIslandModel, MapMarkerModel, PanelModel,
@@ -109,7 +111,15 @@ export function buildInventoryPanel(state: GameState, playerId: PlayerId = 0): P
 
 const STATION_ORDER: readonly StationId[] = ['hands', 'fire', 'bench', 'smoker', 'forge'];
 
-export function buildCraftingPanel(state: GameState, playerId: PlayerId = 0): PanelBody<'crafting'> {
+/**
+ * Where dirty water comes from, for a recipe that is short of it. It grows nowhere and no node gives it: it is
+ * scooped with the bailing can, standing at the water or aboard, and the button for that is in the inventory.
+ * (A button on the recipe's own row would be refused at a camp fire: the fire is inland, and scooping needs the water.)
+ */
+const scoopText = (bindings: KeyBindings): string => `Scoop it at the water, from the inventory (${primaryKey(bindings, 'inventory')}).`;
+
+/** `bindings` are the keys as they are bound now, for the words that name one. */
+export function buildCraftingPanel(state: GameState, playerId: PlayerId = 0, bindings: KeyBindings = DEFAULT_KEY_BINDINGS): PanelBody<'crafting'> {
   const inventory = selectInventory(state, playerId);
   const availability = selectCraftableRecipes(state, playerId);
   return {
@@ -137,6 +147,7 @@ export function buildCraftingPanel(state: GameState, playerId: PlayerId = 0): Pa
               })),
             ] : [],
             missingText,
+            sourceText: entry.known && entry.missing.items.some((item) => item.itemId === 'dirty_water') ? scoopText(bindings) : '',
             craft: button('Make', command({ type: 'craft', recipeId: recipe.id, count: 1 }), entry.craftable, missingText || null),
             craftAll: entry.maximumCount > 1
               ? button(`Make ${entry.maximumCount}`, command({ type: 'craft', recipeId: recipe.id, count: entry.maximumCount }))

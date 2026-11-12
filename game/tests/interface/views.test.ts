@@ -250,6 +250,16 @@ describe('the Ink & Wash views', () => {
     expect(hintView('Hold R to bail.')[0]!.classes).not.toContain('iw-line-note');
   });
 
+  it('writes where a missing ingredient comes from under what is missing, and nothing when there is nothing to say', () => {
+    const crafting = structuredClone(models.find(({ name }) => name === 'shot crafting')!.model);
+    if (crafting.panel?.id !== 'crafting') throw new Error('expected the crafting panel');
+    const recipes = crafting.panel.stations.flatMap((station) => station.recipes);
+    for (const recipe of recipes) recipe.sourceText = '';
+    expect(collectText(panelView(crafting.panel))).not.toContain('Scoop it');
+    recipes.find((recipe) => recipe.recipeId === 'clean_water')!.sourceText = 'Scoop it at the water, from the inventory (Tab).';
+    expect(collectText(panelView(crafting.panel))).toContain('Scoop it at the water, from the inventory (Tab).');
+  });
+
   it('draws the same model the same way: no clock, no randomness', () => {
     for (const { model } of models) {
       expect(JSON.stringify(viewsOf(model))).toBe(JSON.stringify(viewsOf(structuredClone(model))));
