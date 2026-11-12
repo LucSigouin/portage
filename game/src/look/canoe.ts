@@ -22,6 +22,7 @@ import { buildAttachment } from './attachments.ts';
 import type { AttachmentPiece } from './attachments.ts';
 import { buildBilge, buildHull, buildStarterKit, createCrew, makeHullShape } from './b2/canoe.js';
 import type { Crew as Figure, HullShape } from './b2/canoe.js';
+import { deckInner, deckSpan } from './canoe/deck-parts.ts';
 
 interface TierMeshes {
   shape: HullShape;
@@ -40,6 +41,14 @@ const STRIDE_METRES = 1.5;
 const SEAT_LIFT = 0.035;
 /** A sleeper ashore lies this far above the ground: their back rests on it. */
 const LYING_LIFT = 0.16;
+/** The share of a stroke that is the pull; the rest is the recovery. The figure's own split (`paddle` in b2/canoe.js). */
+const PULL_SHARE = 0.46;
+/** A paddle from grip to blade tip, as the figure's is built. */
+const PADDLE_LENGTH = 1.485;
+/** A paddler changes sides early in the recovery, with the hands drawn back: this share of the stroke clock. */
+const SIDE_CHANGE = [PULL_SHARE, 0.6] as const;
+/** A paddle's tip stays this far inside the inner edge of an outrigger's deck (the planks' ends are ragged by 5 cm). */
+const DECK_CLEARANCE = 0.08;
 
 export interface StrokeEvent { x: number; z: number; strength: number; size: number }
 
@@ -117,6 +126,7 @@ export class CanoeView {
   private strokes = 0;
   private lastHeading = 0;
   private localId = 0;
+  private readonly shaft = new THREE.Vector3();
 
   constructor() {
     // B2's hull points +z with its keel at y = 0. Turn it to the game's bow.
@@ -282,6 +292,13 @@ export class CanoeView {
       .filter((player) => seatOf(player) !== null)
       .sort((first, second) => seatTransformForHull(this.tier, seatOf(second) as number).position[2] - seatTransformForHull(this.tier, seatOf(first) as number).position[2]);
 
+    // An outrigger's deck leaves a kneeler only the well between hull and deck to paddle in.
+    const decks = { port: canoe.attachments.includes('outrigger_port'), starboard: canoe.attachments.includes('outrigger_starboard') };
+    const anyDeck = decks.port || decks.starboard;
+    const wellEdge = deckInner(this.halfBeam(state)) - DECK_CLEARANCE;
+    const deckRuns = deckSpan(this.tier);
+    const changing = this.phase >= SIDE_CHANGE[0] && this.phase <= SIDE_CHANGE[1];
+
     const events: StrokeEvent[] = [];
     const crossed = (mark: number): boolean => previous < mark && this.phase >= mark;
     for (const player of players) {
@@ -297,14 +314,22 @@ export class CanoeView {
         root.rotation.set(-seat.rotation[0], seat.rotation[1], -seat.rotation[2]);
         // Counted along the hull from the stern, every second one works (and rests) their paddle on the other side.
         const across = fromStern.indexOf(player) % 2 ? -1 : 1;
-        member.side = this.side * across;
+        // A paddler changes sides between strokes, early in the recovery, when the hands are drawn back over their
+        // own lap. Never across the catch: there the leading hand is furthest forward, over whatever is ahead.
+        if (!member.seated || member.effort < 0.05 || changing) member.side = this.side * across;
         const kneel = member.seat >= 2 ? 1 : 0;
         const more = kneel || across < 0 || member.bailing > 0 || member.asleep > 0
           ? { kneel, floor: seat.position[1] + SEAT_LIFT + shape.HULL.draft, bail: member.bailing, bailPhase: member.bailPhase, sleep: member.asleep, restSide: across }
           : null;
+        // A kneeler beside a deck brings the blade back through the water the way it went: the pull run backwards,
+        // the blade turned edge on. The figure's own recovery swings the blade out wide, under the deck.
+        const hemmed = kneel === 1 && anyDeck;
+        const back = hemmed && this.phase > PULL_SHARE ? (this.phase - PULL_SHARE) / (1 - PULL_SHARE) : 0;
         // The side eases over a fifth of a second. A figure seated for the first time takes its side at once.
-        const stroke = figure.paddle(member.seated ? seconds : 1, this.phase, member.effort, member.side, more);
+        const stroke = figure.paddle(member.seated ? seconds : 1, back > 0 ? PULL_SHARE * (1 - back) : this.phase, member.effort, member.side, more);
         member.seated = true;
+        if (back > 0) figure.paddler.paddle.rotateY(Math.sin(back * Math.PI) * member.effort * (Math.PI / 2));
+        if (anyDeck) this.clearOfDecks(figure, decks, wellEdge, deckRuns);
         if (member.effort > 0.6 && seconds > 0) {
           if (crossed(0.03) || crossed(0.44)) events.push({ x: stroke.blade.x, z: stroke.blade.z, strength: 0.95, size: 0.9 });
           if (crossed(0.2)) events.push({ x: stroke.blade.x, z: stroke.blade.z, strength: 0.7, size: 0.6 });
@@ -332,6 +357,26 @@ export class CanoeView {
       if (!players.some((player) => player.id === playerId)) member.figure.root.visible = false;
     }
     return events;
+  }
+
+  /**
+   * A paddle beside an outrigger deck never lies in it. Where its tip would pass the inner ends of the deck's planks
+   * (a paddle laid across the gunwales does), it is drawn inboard along its own shaft until the tip is short of
+   * them: the hands keep their hold, and it lies between the two decks. Past a deck's ends the pull fades out over
+   * a quarter metre, so nothing jumps.
+   */
+  private clearOfDecks(figure: Figure, decks: { port: boolean; starboard: boolean }, wellEdge: number, deckRuns: { forward: number; aft: number }): void {
+    const paddle = figure.paddler.paddle;
+    const shaft = this.shaft.set(0, -1, 0).applyQuaternion(paddle.quaternion);
+    // The figure sits in the hull's own space: port is +x there, and z runs the other way from canoe space.
+    const tipX = figure.root.position.x + paddle.position.x + shaft.x * PADDLE_LENGTH;
+    const tipZ = -(figure.root.position.z + paddle.position.z + shaft.z * PADDLE_LENGTH);
+    const over = Math.abs(tipX) - wellEdge;
+    if (over <= 0 || !(tipX > 0 ? decks.port : decks.starboard)) return;
+    // A blade is 9 cm to each side of its shaft.
+    const past = Math.min(1, Math.max(0, (Math.max(deckRuns.forward - tipZ, tipZ - deckRuns.aft) - 0.12) / 0.25));
+    const beside = 1 - past * past * (3 - 2 * past);
+    paddle.position.addScaledVector(shaft, -beside * Math.min(0.4, over / Math.max(0.3, Math.abs(shaft.x))));
   }
 
   /** Every crew figure in the picture, by player id: where it is, what it is doing, what it wears. */

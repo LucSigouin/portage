@@ -15,6 +15,7 @@ import type { AttachmentPiece } from '../../src/look/attachments.ts';
 import { makeHullShape } from '../../src/look/b2/canoe.js';
 import type { Crew as Figure } from '../../src/look/b2/canoe.js';
 import { CanoeView } from '../../src/look/canoe.ts';
+import { deckInner } from '../../src/look/canoe/deck-parts.ts';
 import { crewOf } from '../../src/look/crew.ts';
 import { boxTouchesTriangle, slabsOf, trianglesOf } from './canoe-geometry.ts';
 import type { Triangles } from './canoe-geometry.ts';
@@ -235,7 +236,8 @@ describe('pieces with a state', () => {
 });
 
 describe('the fully fitted long canoe with a crew of four', () => {
-  type Pose = 'rest' | 'paddle' | 'bail' | 'sleep';
+  /** `stopstart`: paddling, laying the paddle down and taking it up again, every 1.3 s. */
+  type Pose = 'rest' | 'paddle' | 'stopstart' | 'bail' | 'sleep';
   interface Hit { pose: Pose; seat: number; part: AttachmentId; limb: string }
 
   /** Every place a crew member's body is inside a piece, over a few seconds of that pose. `paddles` checks the paddles instead. */
@@ -244,7 +246,7 @@ describe('the fully fitted long canoe with a crew of four', () => {
     for (const pose of poses) {
       const state = fitted(tier, crew);
       for (const player of state.players) {
-        player.paddling = pose === 'paddle';
+        player.paddling = pose === 'paddle' || pose === 'stopstart';
         player.bailing = pose === 'bail';
         player.asleep = pose === 'sleep';
       }
@@ -255,8 +257,9 @@ describe('the fully fitted long canoe with a crew of four', () => {
         id: state.canoe.attachments[index], triangles: trianglesOf(holder),
       }));
       // Long enough for the paddles to change sides twice.
-      const seconds = pose === 'paddle' ? 9 : pose === 'bail' ? 2.6 : 0.4;
+      const seconds = pose === 'paddle' ? 9 : pose === 'stopstart' ? 5.2 : pose === 'bail' ? 2.6 : 0.4;
       for (let time = 0; time < seconds; time += 1 / 12) {
+        if (pose === 'stopstart') for (const player of state.players) player.paddling = Math.floor(time / 1.3) % 2 === 0;
         view.sync(state, crewOf(state), 1 / 12, time, true, false);
         view.group.updateMatrixWorld(true);
         for (const player of state.players) {
@@ -284,12 +287,12 @@ describe('the fully fitted long canoe with a crew of four', () => {
   }
   const told = (list: Hit[]): string[] => list.map((hit) => `${hit.pose} seat ${hit.seat} in ${hit.part}`).sort();
 
-  it('seats nobody inside a piece: at rest, paddling, bailing or asleep', () => {
-    const found = hits(3, ['rest', 'paddle', 'bail', 'sleep']);
-    // One is left that the drawing cannot solve. The rules put the firebox 41 cm behind the bow seat and 44 cm
-    // ahead of the forward kneeler: paddling, that kneeler's leading hand passes over the firebox's aft lip.
-    // The firebox is drawn 9 cm deep and 10 cm tall to keep it to that. It is in the report, with the numbers.
-    expect(told(found), found.map((hit) => `${hit.part} ${hit.limb}`).join('; ')).toEqual(['paddle seat 3 in firebox']);
+  it('seats nobody inside a piece: at rest, paddling, starting and stopping, bailing or asleep', () => {
+    // The rules put the firebox 41 cm behind the bow seat and 44 cm ahead of the forward kneeler, so it is drawn
+    // low. That kneeler's hands are clear of it through the stroke. They used to cross it when the paddle changed
+    // sides at the catch: the change is made early in the recovery now, with the hands drawn back (canoe.ts).
+    const found = hits(3, ['rest', 'paddle', 'stopstart', 'bail', 'sleep']);
+    expect(told(found), found.map((hit) => `${hit.part} ${hit.limb}`).join('; ')).toEqual([]);
   });
 
   it('lets the two seated paddlers swing their paddles clear of every piece', () => {
@@ -308,9 +311,97 @@ describe('the fully fitted long canoe with a crew of four', () => {
     expect([...new Set(found.map((hit) => `seat ${hit.seat} in ${hit.part}`))].sort()).toEqual(['seat 1 in firebox']);
   });
 
-  it('knows the one thing the drawing cannot solve: the kneelers\' paddles cross the outrigger decks', () => {
-    // Seats 2 and 3 kneel beside the decks, and the rules put the decks' stations 1.1 m out. Listed in the report.
-    const inTheWay = hits(3, ['paddle'], true).filter((hit) => hit.seat >= 2).map((hit) => hit.part);
-        for (const part of inTheWay) expect(['outrigger_port', 'outrigger_starboard', 'workbench', 'smoker', 'planter', 'forge', 'fishing_rig']).toContain(part);
+  it('lets the two kneelers swing their paddles clear of every piece too, the outrigger decks included', () => {
+    // Seats 2 and 3 kneel beside the decks. Paddling, at rest, and laying the paddle down and taking it up.
+    const inTheWay = hits(3, ['paddle', 'rest', 'stopstart'], true).filter((hit) => hit.seat >= 2);
+    expect(told(inTheWay), inTheWay.map((hit) => `${hit.part} ${hit.limb}`).join('; ')).toEqual([]);
+  });
+
+  it('on the ribbed hull, three or four paddles are clear of every piece as well', () => {
+    for (const crew of [3, 4]) {
+      const inTheWay = hits(2, ['paddle', 'rest', 'stopstart'], true, crew);
+      expect(told(inTheWay), `crew of ${crew}: ${inTheWay.map((hit) => `${hit.part} ${hit.limb}`).join('; ')}`).toEqual([]);
+    }
+  });
+});
+
+describe('a kneeler beside an outrigger deck', () => {
+  const PADDLE_LENGTH = 1.485;
+  /** Run a crew of four through a spell of paddling, and hand every frame to `each`. */
+  function watch(tier: number, attachments: AttachmentId[] | null, seconds: number, each: (view: CanoeView, state: GameState, time: number) => void, drive?: (state: GameState, time: number) => void): void {
+    const state = fitted(tier, 4);
+    if (attachments) state.canoe.attachments = attachments;
+    for (const player of state.players) player.paddling = true;
+    const view = new CanoeView();
+    view.sync(state, crewOf(state), 0, 0, true, true);
+    for (let time = 0; time < seconds; time += 1 / 30) {
+      drive?.(state, time);
+      view.sync(state, crewOf(state), 1 / 30, time, true, false);
+      view.group.updateMatrixWorld(true);
+      each(view, state, time);
+    }
+  }
+  /** How far out from the centreline a kneeler's paddle reaches at this moment: its blade tip, and its grip. */
+  const reach = (view: CanoeView, playerId: number): { tip: number; grip: number } => {
+    const paddle = figureOf(view, playerId).paddler.paddle;
+    const tip = paddle.localToWorld(new THREE.Vector3(0, -PADDLE_LENGTH, 0));
+    const grip = paddle.localToWorld(new THREE.Vector3(0, 0, 0));
+    return { tip: Math.abs(tip.x), grip: Math.abs(grip.x) };
+  };
+
+  for (const tier of [2, 3]) {
+    it(`keeps the whole paddle between the two decks on hull tier ${tier}: paddling, resting, starting and stopping`, () => {
+      // The planks' inner ends are ragged by up to 5 cm.
+      const edge = deckInner(HULL_TIERS[tier].dimensions.beam / 2) - 0.05;
+      let furthest = 0;
+      watch(tier, null, 12, (view, state) => {
+        for (const player of state.players.filter((one) => (one.seat ?? 0) >= 2)) {
+          const { tip, grip } = reach(view, player.id);
+          furthest = Math.max(furthest, tip, grip);
+        }
+      }, (state, time) => {
+        for (const player of state.players) player.paddling = Math.floor(time / 1.3) % 2 === 0;
+      });
+      expect(furthest).toBeGreaterThan(0.5);
+      expect(furthest).toBeLessThan(edge);
+    });
+  }
+
+  it('with no outrigger fitted, a kneeler keeps the figure\'s own stroke: the blade swings out wide on the way back', () => {
+    let furthest = 0;
+    watch(3, [], 6, (view, state) => {
+      for (const player of state.players.filter((one) => (one.seat ?? 0) >= 2)) furthest = Math.max(furthest, reach(view, player.id).tip);
+    });
+    expect(furthest).toBeGreaterThan(1);
+  });
+});
+
+describe('changing sides', () => {
+  it('happens early in the recovery, with the hands drawn back: never across the catch', () => {
+    const state = fitted(3, 4);
+    for (const player of state.players) player.paddling = true;
+    const view = new CanoeView();
+    view.sync(state, crewOf(state), 0, 0, true, true);
+    const phaseOf = (): number => (view as unknown as { phase: number }).phase;
+    let sides = view.figures().map((figure) => figure.side);
+    const changes: number[] = [];
+    for (let time = 0; time < 20; time += 1 / 30) {
+      // A hard turn begun at the catch asks for the outside of the turn at once: the worst moment to swing a paddle over.
+      if (time > 9 && time < 9.6) state.canoe.heading += 0.02;
+      if (time > 14.1 && time < 14.7) state.canoe.heading -= 0.02;
+      view.sync(state, crewOf(state), 1 / 30, time, true, false);
+      const now = view.figures().map((figure) => figure.side);
+      if (now.some((side, index) => side !== sides[index])) changes.push(phaseOf());
+      sides = now;
+    }
+    // Every third stroke, and the two turns.
+    expect(changes.length).toBeGreaterThanOrEqual(4);
+    for (const phase of changes) {
+      expect(phase).toBeGreaterThanOrEqual(0.46);
+      expect(phase).toBeLessThanOrEqual(0.6 + 0.78 / 30);
+    }
+    // Neighbours along the hull still work opposite sides.
+    const side = (seat: number): number => view.figures().find((figure) => figure.seat === seat)!.side;
+    expect([side(0), side(2), side(3), side(1)]).toEqual([side(0), -side(0), side(0), -side(0)]);
   });
 });

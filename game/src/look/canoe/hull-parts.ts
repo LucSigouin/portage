@@ -58,34 +58,51 @@ export const cargoRackPart: AttachmentBuilder = (context) => {
   return only(b.mesh());
 };
 
-/** The firebox: a clay-lined iron box on a stone slab, a pot on top, the draught glowing aft. */
+/** Nothing on the firebox stands higher than this above its mount: the lowest a paddling hand comes over it. */
+export const FIREBOX_TOP = 0.028;
+
+/**
+ * The firebox: a clay-lined iron hearth on a stone slab, its coals glowing up through a grate, the draught
+ * glowing aft. It takes the floor from under the bow paddler's back to where the forward kneeler dips a bailing
+ * tin, and it lies under that kneeler's hands: so it is broad and low, and what tells it is its top, which is
+ * what shows from astern.
+ */
 export const fireboxPart: AttachmentBuilder = (context) => {
   const b = partBuilder(context, 107);
+  const hull = hullOf(context);
   const [, y, z] = context.mount;
-  // the slab takes the room between the bow paddler's back and the kneeler's knees: a hand and a half
-  const centre = z - 0.105;
-  b.box(0.58, 0.05, 0.11, PAL.granite, { pos: [0, y - 0.025, centre], kind: KIND.STONE });
-  for (const side of [-1, 1]) b.box(0.1, 0.04, 0.1, PAL.graniteDark, { pos: [side * 0.33, y - 0.03, centre], rot: [0, side * 0.15, 0], kind: KIND.STONE });
-  const box = b.box(0.48, 0.085, 0.09, IRON, { pos: [0, y + 0.0425, centre], kind: KIND.METAL });
-  b.box(0.51, 0.018, 0.1, CLAY, { pos: [0, y + 0.092, centre], kind: KIND.PLAIN });
-  for (const side of [-1, 1]) for (const rise of [0.02, 0.062]) b.tack(side * 0.225, y + rise, centre + 0.047, 0.009, STEEL);
-  // draught slots on the aft face, the fire door to port
-  for (const slot of [-0.16, -0.08, 0, 0.08, 0.16]) b.box(0.045, 0.05, 0.012, EMBER, { pos: [slot, y + 0.04, centre + 0.046], glow: 1, flat: true, id: box });
-  b.box(0.012, 0.06, 0.07, SOOT, { pos: [-0.242, y + 0.043, centre], flat: true, kind: KIND.PLAIN });
-  b.box(0.014, 0.03, 0.05, PAL.glow, { pos: [-0.244, y + 0.04, centre], glow: 1, flat: true });
-  // the pot, its lid and bail
-  b.cyl(0.055, 0.048, 0.075, PAL.tin, { pos: [0.13, y + 0.138, centre], kind: KIND.METAL }, 10);
-  b.cyl(0.058, 0.058, 0.012, IRON, { pos: [0.13, y + 0.18, centre], kind: KIND.METAL }, 10);
-  b.sphere(0.013, PAL.woodDark, { pos: [0.13, y + 0.194, centre] }, 6);
-  b.torus(0.055, 0.005, IRON, { pos: [0.13, y + 0.17, centre], rot: [0, 0, 0], id: THIN, kind: KIND.PLAIN }, 10);
-  for (const side of [-1, 1]) b.torus(0.03, 0.006, STEEL, { pos: [side * 0.248, y + 0.055, centre], rot: [0, Math.PI / 2, 0], kind: KIND.METAL }, 8);
-  // the kettle beside it
-  const kettle = b.sphere(0.05, PAL.tin, { pos: [-0.11, y + 0.14, centre], scale: [1, 0.8, 0.9], kind: KIND.METAL }, 9);
-  b.cone(0.016, 0.07, PAL.tin, { pos: [-0.175, y + 0.155, centre], rot: [0, 0, 1.0], id: kettle, kind: KIND.METAL }, 6);
-  b.torus(0.036, 0.006, IRON, { pos: [-0.11, y + 0.185, centre], id: THIN, kind: KIND.PLAIN }, 8);
-  // a poker laid on the slab
-  b.beam([-0.27, y + 0.012, centre - 0.045], [0.27, y + 0.012, centre - 0.05], 0.007, IRON, { id: THIN, kind: KIND.PLAIN }, 4);
-  return { ...only(b.mesh()), lamp: [0, y + 0.05, centre + 0.05] };
+  const centre = z - 0.13;
+  const [width, depth] = [0.5, 0.14];
+  const slab = y - 0.04;
+  const rim = y + FIREBOX_TOP - 0.008;
+  const [fore, aft] = [centre - depth / 2, centre + depth / 2];
+  // the slab, from the floor up, and a loose stone at each end
+  b.box(width + 0.12, slab - hull.floor, depth + 0.02, PAL.granite, { pos: [0, (slab + hull.floor) / 2, centre], kind: KIND.STONE });
+  for (const side of [-1, 1]) b.box(0.07, 0.035, 0.11, PAL.graniteDark, { pos: [side * (width / 2 + 0.065), slab + 0.0175, centre + side * 0.01], rot: [0, side * 0.15, 0], kind: KIND.STONE });
+  // the iron box, and its clay lining showing as a rim round the open top
+  const box = b.box(width, rim - 0.012 - slab, depth, IRON, { pos: [0, (rim - 0.012 + slab) / 2, centre], kind: KIND.METAL });
+  for (const end of [fore + 0.0125, aft - 0.0125]) b.box(width + 0.02, 0.012, 0.025, CLAY, { pos: [0, rim - 0.006, end], kind: KIND.PLAIN });
+  for (const side of [-1, 1]) b.box(0.035, 0.012, depth - 0.05, CLAY, { pos: [side * (width / 2 - 0.0075), rim - 0.006, centre], kind: KIND.PLAIN });
+  // the fire: a bed of soot, coals in two heats, and the iron grate over them
+  const [bedWidth, bedDepth] = [width - 0.05, depth - 0.05];
+  b.box(bedWidth, 0.006, bedDepth, SOOT, { pos: [0, rim - 0.011, centre], flat: true, kind: KIND.PLAIN });
+  const coals: [number, number, number, boolean][] = [
+    [-0.17, -0.012, 0.034, false], [-0.1, 0.014, 0.04, true], [-0.035, -0.014, 0.036, true], [0.03, 0.012, 0.042, false],
+    [0.095, -0.012, 0.038, true], [0.16, 0.013, 0.034, false], [-0.2, 0.02, 0.022, true], [0.205, -0.02, 0.022, true],
+  ];
+  for (const [cx, cz, radius, bright] of coals) {
+    b.sphere(radius, bright ? PAL.glow : EMBER, { pos: [cx, rim - 0.008, centre + cz], scale: [1, 0.2, 0.85], glow: bright ? 1 : 0.9, flat: true }, 7);
+  }
+  for (const bar of [-0.18, -0.09, 0, 0.09, 0.18]) b.beam([bar, rim + 0.002, fore + 0.012], [bar, rim + 0.002, aft - 0.012], 0.006, IRON, { id: THIN, flat: true, kind: KIND.PLAIN }, 4);
+  // draught slots on the aft face, the fire door to port, a carrying ring at each end, rivets
+  for (const slot of [-0.17, -0.085, 0, 0.085, 0.17]) b.box(0.05, 0.022, 0.012, EMBER, { pos: [slot, slab + 0.022, aft], glow: 1, flat: true, id: box });
+  for (const side of [-1, 1]) for (const rise of [0.012, 0.036]) b.tack(side * (width / 2 - 0.02), slab + rise, aft + 0.002, 0.008, STEEL);
+  b.box(0.012, 0.036, 0.08, SOOT, { pos: [-width / 2 - 0.002, slab + 0.024, centre], flat: true, kind: KIND.PLAIN });
+  b.box(0.014, 0.018, 0.05, PAL.glow, { pos: [-width / 2 - 0.004, slab + 0.022, centre], glow: 1, flat: true });
+  for (const side of [-1, 1]) b.torus(0.02, 0.005, STEEL, { pos: [side * (width / 2 + 0.008), slab + 0.03, centre + 0.035], rot: [0, Math.PI / 2, 0], kind: KIND.METAL }, 8);
+  // the poker, laid on the slab's aft lip
+  b.beam([-0.27, slab + 0.007, aft + 0.004], [0.27, slab + 0.007, aft + 0.005], 0.005, IRON, { id: THIN, kind: KIND.PLAIN }, 4);
+  return { ...only(b.mesh()), lamp: [0, rim, centre] };
 };
 
 /** The map table: a chart board across the rails, the lens on its arm, the lodestone hung over a bearing ring. */
