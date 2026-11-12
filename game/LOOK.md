@@ -162,7 +162,7 @@ PORTAGE_URL=http://localhost:5221 npm --prefix e2e test       # browser: bot, ke
 - full-size drawing, 0 changed land pixels, canoe on the drawn water, clean console
 - 55 fps afloat, with the full canoe, mid-game, and zoomed fully out on an island at rung 0
 - the heroes at the window's size on rung 11 (the world at half size) and at 5120×2160
-- the player as sharp on rung 11 as on rung 0 (edges measured in a crop of the player)
+- the player as sharp on rung 11 as on rung 0, in a crop of the player: at least 30% of the crop is pixel for pixel the same on both rungs (39 to 51% measured: that is the player; 2 to 5% with `&hero=0`), and its edges keep 85% of their strength (90 to 97% measured: the world in the crop is softer; 48 to 70% with `&hero=0`)
 - the chip test at load: 24 times the work starts on rung 11 with no change, this machine at the top, `&chiptest=0` leaves it out
 - the ladder climbing back after a slow spell, never twice within ten seconds
 - the whole crew drawn (real players, `?crew=N`), each at their own seat on every hull tier

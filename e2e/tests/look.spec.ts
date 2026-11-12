@@ -383,6 +383,12 @@ for (const [name, width, height, query, zoomOut] of [
   });
 }
 
+/**
+ * The share of the player's crop that must be pixel for pixel the same on rung 11 as on rung 0.
+ * Measured: 39 to 51% (the rest is the world round the player). With the heroes left in the world (`&hero=0`): 2 to 5%.
+ */
+const SAME_ON_THE_LAST_RUNG = 0.3;
+
 for (const [name, width, height, zoomOut] of [
   ['near', 1920, 1080, false],
   ['zoomed fully out', 1920, 1080, true],
@@ -391,15 +397,24 @@ for (const [name, width, height, zoomOut] of [
   test(`the player is as sharp on the last rung as on the first (${name})`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     const strength: Record<string, number> = {};
+    const crops: Record<string, Buffer> = {};
     for (const rung of [0, 11]) {
       await open(page, `shot=island&rung=${rung}&hold=1`);
       if (zoomOut) await zoomFullyOut(page);
-      strength[rung] = await edgeStrength(page, await playerCrop(page));
+      crops[rung] = await playerCrop(page);
+      strength[rung] = await edgeStrength(page, crops[rung]);
       expect((await probe(page)).rung).toBe(rung);
     }
-    console.log(`player crop, ${name}: edge strength ${strength[0].toFixed(1)} on rung 0, ${strength[11].toFixed(1)} on rung 11 (${Math.round((strength[11] / strength[0]) * 100)}%)`);
+    // The player is drawn at the window's size whatever the world is drawn at. So on the last rung the pixels of
+    // the player are the very same pixels as on the first: only the world round them in the crop is softer.
+    const changed = await differingPixels(page, crops[0], crops[11]);
+    const same = 1 - changed.different / changed.total;
+    console.log(`player crop, ${name}: edge strength ${strength[0].toFixed(1)} on rung 0, ${strength[11].toFixed(1)} on rung 11 (${Math.round((strength[11] / strength[0]) * 100)}%); `
+      + `${(same * 100).toFixed(1)}% of the crop's ${changed.total} pixels are the same on both rungs`);
     expect(strength[0]).toBeGreaterThan(20);
-    expect(strength[11]).toBeGreaterThanOrEqual(strength[0] * 0.93);
+    // The world behind the player is in the crop too, and at half size its lines are softer: that is the few percent.
+    expect(strength[11]).toBeGreaterThanOrEqual(strength[0] * 0.85);
+    expect(same).toBeGreaterThanOrEqual(SAME_ON_THE_LAST_RUNG);
   });
 }
 
