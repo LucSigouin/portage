@@ -376,13 +376,14 @@ test('holds 55 frames a second in a storm, at night, and in a storm at night, on
 
 test('the heroes are drawn at the window\'s size with the full pen in a storm at night, on the last rung', async ({ page }) => {
   const problems = watchConsole(page);
-  await open(page, 'shot=night&live=1&rung=9&hold=1');
+  await open(page, 'shot=night&live=1&rung=11&hold=1');
   await stage(page, "W('storm'); H(23.5);", true, 1200);
   const look = await probe(page);
   console.log(`storm at night, rung ${look.rung}: world ${look.drawingWidth}×${look.drawingHeight}, canvas ${look.canvasWidth}×${look.canvasHeight}, `
     + `${look.hero.windows.length} hero window(s) at ${look.hero.pixelsPerCanvasPixel} pixel a canvas pixel, ink ${look.hero.inkScale}×, fine ${look.hero.fine}`);
-  expect(look.rung).toBe(9);
-  expect(look.drawingHeight).toBeLessThan(1080);
+  expect(look.rung).toBe(11);
+  // The last rung: the world at half size, the heroes at the window's.
+  expect([look.drawingWidth, look.drawingHeight]).toEqual([960, 540]);
   expect([look.canvasWidth, look.canvasHeight]).toEqual([1920, 1080]);
   expect(look.hero.windows.length).toBeGreaterThan(0);
   expect(look.hero.pixelsPerCanvasPixel).toBe(1);

@@ -9,10 +9,15 @@ import { KIND } from './detail.js';
 
 const B2_LENGTH = 5.6;
 
+// ?floor=N draws the floor you see N metres above the keel. Without it the floor is 5 cm above the waterline.
+// It exists for the check that what is aboard below the waterline is drawn (PREFILL in post.js), and to try a
+// lower floor: everything that stands on the floor moves with it, and the flat of the floor gets narrower.
+const FLOOR_SWITCH = typeof location === 'undefined' ? 0 : Number(new URLSearchParams(location.search).get('floor')) || 0;
+
 // dims: { length, beam, depth, draft } in metres (HULL_TIERS[tier].dimensions)
 export function makeHullShape(dims) {
   const k = dims.length / B2_LENGTH;
-  const HULL = { L: dims.length, B: dims.beam, D: dims.depth, draft: dims.draft, seatZ: -1.74 * k, bowSeatZ: 1.45 * k, seatY: 0.3 * (dims.depth / 0.4), k, floor: dims.draft + 0.05 };
+  const HULL = { L: dims.length, B: dims.beam, D: dims.depth, draft: dims.draft, seatZ: -1.74 * k, bowSeatZ: 1.45 * k, seatY: 0.3 * (dims.depth / 0.4), k, floor: FLOOR_SWITCH > 0 ? FLOOR_SWITCH : dims.draft + 0.05 };
   const HL = HULL.L / 2;
   const hullHW = (t) => (HULL.B / 2) * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(t), 2.3)), 0.6);
   const hullSheer = (t) => HULL.D + 0.3 * k * Math.pow(Math.abs(t), 2.8);
@@ -325,7 +330,10 @@ export function buildHull(shape, tier = 0) {
     });
     for (const z of [-0.36 * HL, 0, 0.36 * HL]) b.box(0.52, 0.012, 0.05, PAL.woodDark, { pos: [0, HULL.floor + 0.024, z] });
   }
-  return b.mesh();
+  const mesh = b.mesh();
+  // The hero pass (post.js) takes the world's water out from inside this shape: see PREFILL there.
+  mesh.userData.hull = { halfLength: HL, halfBeam: HULL.B / 2, depth: HULL.D, scale: HULL.k };
+  return mesh;
 }
 
 
