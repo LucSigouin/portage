@@ -17,7 +17,7 @@ Not deployed. It runs on this computer only, until Luc says go.
 - Carries the host's messages to one guest or to all, and a guest's to the host. It never reads them.
 - Stamps who a guest's frame is from. A guest cannot pose as another, and never hears another.
 - Knows who is host, who joined, who left. The host's key gets the room back after a drop. Nobody else's does.
-- Stores nothing: no game, no names, no keys on disk. One alarm time per live room, removed when the room empties.
+- Stores nothing of the game: no state, no names, no keys on disk. Per live room it keeps one alarm time and the idle count (two small values), removed when the room empties.
 - Logs nothing (`observability` is off, and the code has no log line).
 - Has no secrets. Nothing to rotate.
 
@@ -52,9 +52,10 @@ WRANGLER_SEND_METRICS=false relay/node_modules/.bin/wrangler dev --cwd relay --p
 npm --prefix relay run check
 ```
 
-- `tests/room.test.ts`: the room's rules by themselves. 23 tests.
-- `tests/worker.test.ts`: the real Worker, run locally by wrangler on ports 8793 and 8794, dialled with real WebSockets. 10 tests, about 40 s.
+- `tests/room.test.ts`: the room's rules by themselves. 25 tests.
+- `tests/worker.test.ts`: the real Worker, run locally by wrangler on ports 8793, 8794 and 8795, dialled with real WebSockets. 11 tests, about 75 s.
   One of them waits 12 s for the room to be put to sleep and checks that it wakes whole.
+  One runs the idle cap with looks 13 s apart, longer than the room's sleep, so each look is a new waking: 55 s.
 - The game's side: `game/tests/net/relay.test.ts` and `game/tests/client/crewlobby.test.ts` (both ends against `src/room.ts`, in memory), and `e2e/tests/relay.spec.ts` (two browser profiles through this Worker).
 
 ### The browser spec
@@ -126,7 +127,7 @@ Figures read from Cloudflare's own pages on 2026-11-11 and read again twice on 2
 - Measured through this Worker with four players paddling (`e2e/tests/relay.spec.ts` prints it): host 18 frames a second, each guest 15 to 19. All four: 64 to 73 a second over six runs (69 and 71 on 2026-11-12).
 - One hour, four players, at 73: 262,800 frames, 13,140 requests (13% of the day), 461 GB-s (3.5% of the day).
 - So the free plan carries about 7.5 hours of four-player play a day, or about 16 hours with two players.
-- The idle alarm is one row written every ten minutes a room is open. The free plan allows 100,000 rows a day: nothing.
+- The idle cap writes at most three small rows every ten minutes a room is open (the alarm, the count, and a mark that a frame went through), and reads one each time a room wakes. The free plan allows 100,000 rows written a day: nothing.
 - Past the limit, Cloudflare's words: "further operations of that type will fail with an error". The relay stops until midnight UTC.
 - The Free plan also allows 10 ms of processor time a request. The relay does a few string operations a frame. Local mode does not enforce that limit, so it is not measured here.
 - Where a connection comes from is only as honest as a browser. A script can lie about it. The caps are what protect the relay.

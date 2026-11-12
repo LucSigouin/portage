@@ -11,7 +11,8 @@
   "durable_objects": {
     "bindings": [{ "name": "ROOMS", "class_name": "Room" }]
   },
-  // The Free plan only runs SQLite-backed Durable Objects. The relay never writes to that storage.
+  // The Free plan only runs SQLite-backed Durable Objects. The relay keeps one thing there: a room's idle count,
+  // so it outlives the room's sleep. Nothing of the game.
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
   "vars": {
     // Where a connection may come from. `*` stands for any port.

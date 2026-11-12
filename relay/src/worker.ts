@@ -1,18 +1,21 @@
 /**
  * The Portage relay on Cloudflare: a Worker in front, one Durable Object per
  * room behind it. All it does is pass frames between the sockets of a room
- * (`room.ts`). It reads no game message, keeps nothing on disk and logs nothing.
+ * (`room.ts`). It reads no game message and logs nothing. On disk it keeps one
+ * thing per live room: the idle count, two small values, gone when the room empties.
  *
  * Address: `<anything>/room/<CODE>?role=host|guest`, as a WebSocket. The part
  * before `/room/` is free, so the same Worker answers on its own address and
  * on a route such as `sigouin.net/portage/relay/*`.
  *
  * Sockets are taken with the hibernation API: a room nobody is talking in
- * costs no running time, and comes back from its sockets' attachments.
+ * costs no running time, and comes back from its sockets' attachments. Its
+ * memory does not come back: about ten seconds of quiet and it is gone. So
+ * the idle count lives in the room's storage and is read on waking.
  */
 import { DurableObject } from 'cloudflare:workers';
 import { CLOSE, RELAY_PROTOCOL, ROOM_CODE_PATTERN, RoomLogic, originAllowed } from './room.ts';
-import type { SeatRecord, Wire } from './room.ts';
+import type { IdleCount, SeatRecord, Wire } from './room.ts';
 
 export interface Env {
   ROOMS: DurableObjectNamespace<Room>;
@@ -42,18 +45,43 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
+/** Where the idle count is kept in the room's storage. */
+const IDLE_SLOT = 'idle';
+const NO_COUNT: IdleCount = { quietSweeps: 0, sawFrame: false };
+
 export class Room extends DurableObject<Env> {
   private readonly logic = new RoomLogic();
   private readonly wires = new Map<WebSocket, Wire>();
+  /** The idle count as the storage has it, so it is written only when it changes. */
+  private kept: IdleCount = NO_COUNT;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     // Waking from sleep: the sockets are still open. Each carries what the room knew about it.
     const now = Date.now();
-    for (const socket of ctx.getWebSockets()) {
+    const sockets = ctx.getWebSockets();
+    for (const socket of sockets) {
       const record = socket.deserializeAttachment() as SeatRecord | null;
       if (record) this.logic.restore(this.wire(socket), record, now);
     }
+    // The idle count is not on any socket: it is read back from storage before anything else runs here.
+    // A room kept only in memory counted from nothing at every look, and a silent one was never closed.
+    if (sockets.length > 0) {
+      void ctx.blockConcurrencyWhile(async () => {
+        const kept = await ctx.storage.get<IdleCount>(IDLE_SLOT);
+        if (!kept) return;
+        this.logic.restoreIdle(kept);
+        this.kept = this.logic.idle;
+      });
+    }
+  }
+
+  /** Write the idle count down, if it is not what the storage already holds. */
+  private async keepIdle(): Promise<void> {
+    const idle = this.logic.idle;
+    if (idle.quietSweeps === this.kept.quietSweeps && idle.sawFrame === this.kept.sawFrame) return;
+    this.kept = idle;
+    await this.ctx.storage.put(IDLE_SLOT, idle);
   }
 
   private wire(socket: WebSocket): Wire {
@@ -99,18 +127,26 @@ export class Room extends DurableObject<Env> {
     const record = this.logic.connect(this.wire(server), url.searchParams.get('role'), key, Date.now());
     if (record) {
       server.serializeAttachment(record);
-      if (wasEmpty) await this.ctx.storage.setAlarm(Date.now() + this.sweepMilliseconds);
+      if (wasEmpty) {
+        // A new room starts with nothing kept: a count left by an earlier one under this code is not its own.
+        this.kept = NO_COUNT;
+        await this.ctx.storage.deleteAll();
+        await this.ctx.storage.setAlarm(Date.now() + this.sweepMilliseconds);
+      }
     }
     return new Response(null, { status: 101, webSocket: client, headers: { 'Sec-WebSocket-Protocol': RELAY_PROTOCOL } });
   }
 
-  override webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): void {
+  override async webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
     if (typeof message !== 'string') {
       this.gone(socket);
       socket.close(CLOSE.badRequest, 'text-only');
       return;
     }
     this.logic.message(this.wire(socket), message, Date.now());
+    // The first frame since the last look is written down, once: the room may sleep before the next look,
+    // and a room that forgot the frame would count that look as a quiet one.
+    if (!this.logic.empty) await this.keepIdle();
   }
 
   override async webSocketClose(socket: WebSocket, code: number, reason: string): Promise<void> {
@@ -134,15 +170,21 @@ export class Room extends DurableObject<Env> {
     this.wires.delete(socket);
   }
 
-  /** The last socket left: leave nothing behind, not even the alarm. */
+  /** The last socket left: leave nothing behind, not the count and not even the alarm. */
   private async rest(): Promise<void> {
     if (!this.logic.empty) return;
+    this.kept = NO_COUNT;
     await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
   }
 
   override async alarm(): Promise<void> {
-    if (this.logic.sweep()) await this.ctx.storage.setAlarm(Date.now() + this.sweepMilliseconds);
-    else await this.rest();
+    if (!this.logic.sweep()) {
+      await this.rest();
+      return;
+    }
+    // The count goes to storage before the room can sleep again: the next look may be a new waking.
+    await this.keepIdle();
+    await this.ctx.storage.setAlarm(Date.now() + this.sweepMilliseconds);
   }
 }

@@ -10,18 +10,25 @@ import type { LocalRelay } from './support.ts';
 
 const PORT = 8793;
 const QUICK_PORT = 8794;
+const SLOW_PORT = 8795;
+/** Seconds between looks on the slow relay: longer than the ten seconds after which a quiet Durable Object is put to sleep. */
+const SLOW_LOOK_SECONDS = 13;
 const HOST_KEY = 'host-key-0123456789';
 const OTHER_KEY = 'other-key-0123456789';
 
 let relay: LocalRelay;
 /** The same Worker with the idle look every second, so the idle cap can be seen in a test. */
 let quick: LocalRelay;
+/** And with looks further apart than the room's sleep, as they are for real (ten minutes): each look is a new waking. */
+let slow: LocalRelay;
 
 before(async () => {
-  [relay, quick] = await Promise.all([startRelay(PORT), startRelay(QUICK_PORT, { IDLE_SWEEP_SECONDS: '1' })]);
+  [relay, quick, slow] = await Promise.all([
+    startRelay(PORT), startRelay(QUICK_PORT, { IDLE_SWEEP_SECONDS: '1' }), startRelay(SLOW_PORT, { IDLE_SWEEP_SECONDS: String(SLOW_LOOK_SECONDS) }),
+  ]);
 });
 after(async () => {
-  await Promise.all([relay?.stop(), quick?.stop()]);
+  await Promise.all([relay?.stop(), quick?.stop(), slow?.stop()]);
 });
 
 describe('the Worker\'s door', () => {
@@ -241,5 +248,46 @@ describe('an idle room on the real Worker', () => {
     assert.deepEqual(await late.letGo(), { code: CLOSE.noRoom, reason: 'no-room' });
     busyHost.socket.close();
     busyGuest.socket.close();
+  });
+
+  it('is closed on the real timing too: looks further apart than the room\'s sleep, each one a new waking', async () => {
+    // Two rooms. Nothing ever goes through the first. One frame goes through the second, early, and then nothing.
+    const silent = freshCode();
+    const spoke = freshCode();
+    const silentHost = dial(SLOW_PORT, silent, 'host', { key: HOST_KEY });
+    const spokeHost = dial(SLOW_PORT, spoke, 'host', { key: HOST_KEY });
+    await silentHost.until(1);
+    await spokeHost.until(1);
+    const silentGuest = dial(SLOW_PORT, silent, 'guest');
+    const spokeGuest = dial(SLOW_PORT, spoke, 'guest');
+    await silentGuest.until(1);
+    await spokeGuest.until(1);
+    const started = Date.now();
+    const since = (): number => (Date.now() - started) / 1000;
+    await pause(1000);
+    spokeGuest.send([{ said: 'once' }]);
+    await spokeHost.until(3);
+
+    // The silent room: closed at the third look. With the count in memory it was still open at 110 s.
+    const looks = LIMITS.quietSweeps * SLOW_LOOK_SECONDS;
+    assert.deepEqual(await silentHost.letGo((looks + 12) * 1000), { code: CLOSE.idle, reason: 'idle' });
+    const silentSeconds = since();
+    assert.deepEqual(await silentGuest.letGo(), { code: CLOSE.idle, reason: 'idle' });
+    assert.ok(silentSeconds > looks - 3 && silentSeconds < looks + 10, `the silent room closed after ${silentSeconds.toFixed(1)} s, due at ${looks}`);
+
+    // The other room slept after its one frame, and its first look still knew of it: it gets one look more.
+    assert.equal(spokeHost.socket.readyState, WebSocket.OPEN, 'the room a frame went through is closed one look later, not with the silent one');
+    assert.equal(spokeGuest.socket.readyState, WebSocket.OPEN);
+    assert.deepEqual(await spokeHost.letGo((SLOW_LOOK_SECONDS + 12) * 1000), { code: CLOSE.idle, reason: 'idle' });
+    const spokeSeconds = since();
+    assert.deepEqual(await spokeGuest.letGo(), { code: CLOSE.idle, reason: 'idle' });
+    assert.ok(spokeSeconds > silentSeconds + SLOW_LOOK_SECONDS - 4 && spokeSeconds < looks + SLOW_LOOK_SECONDS + 10,
+      `the room that spoke once closed after ${spokeSeconds.toFixed(1)} s, the silent one after ${silentSeconds.toFixed(1)} s`);
+
+    // Both codes are nobody's now, and nothing of either room is left to find.
+    for (const code of [silent, spoke]) {
+      const late = dial(SLOW_PORT, code, 'guest');
+      assert.deepEqual(await late.letGo(), { code: CLOSE.noRoom, reason: 'no-room' });
+    }
   });
 });

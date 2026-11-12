@@ -4,7 +4,7 @@ import { describe, it } from 'node:test';
 import {
   CLOSE, LIMITS, MAXIMUM_GUESTS, ROOM_CODE_ALPHABET, ROOM_CODE_PATTERN, RoomLogic, makeRoomCode, originAllowed, readRoomCode,
 } from '../src/room.ts';
-import type { SeatRecord, Wire } from '../src/room.ts';
+import type { IdleCount, SeatRecord, Wire } from '../src/room.ts';
 
 interface FakeWire extends Wire {
   frames: unknown[];
@@ -284,6 +284,58 @@ describe('an idle room', () => {
     assert.deepEqual(host.closed, { code: CLOSE.idle, reason: 'idle' });
     assert.deepEqual(guests[0]!.closed, { code: CLOSE.idle, reason: 'idle' });
     assert.equal(room.empty, true);
+  });
+
+  it('keeps its count through a sleep only if the count is handed back: on memory alone a silent room is never closed', () => {
+    const { records } = openRoom(1);
+    // What a Durable Object does at a look, when it slept since the last one: a new room, built from its sockets' records.
+    const wake = (kept: IdleCount | null): { room: RoomLogic; wires: FakeWire[] } => {
+      const room = new RoomLogic();
+      const wires = [fakeWire(), fakeWire()];
+      room.restore(wires[0]!, records[0]!, 0);
+      room.restore(wires[1]!, records[1]!, 0);
+      if (kept) room.restoreIdle(kept);
+      return { room, wires };
+    };
+    // On memory alone every look is the first: ten looks, and the silent room is still open.
+    for (let look = 0; look < 10; look += 1) {
+      const { room, wires } = wake(null);
+      assert.equal(room.sweep(), true);
+      assert.equal(wires[0]!.closed, null);
+    }
+    // With the count kept and handed back, the third look closes it.
+    let kept: IdleCount = { quietSweeps: 0, sawFrame: false };
+    for (let look = 1; look < LIMITS.quietSweeps; look += 1) {
+      const { room, wires } = wake(kept);
+      assert.equal(room.sweep(), true);
+      assert.equal(wires[0]!.closed, null);
+      kept = room.idle;
+      assert.deepEqual(kept, { quietSweeps: look, sawFrame: false });
+    }
+    const last = wake(kept);
+    assert.equal(last.room.sweep(), false);
+    assert.deepEqual(last.wires.map((wire) => wire.closed), [{ code: CLOSE.idle, reason: 'idle' }, { code: CLOSE.idle, reason: 'idle' }]);
+  });
+
+  it('remembers through a sleep that a frame went by: the look after it starts the count over', () => {
+    const { room, guests, records } = openRoom(1);
+    room.sweep();
+    room.sweep();
+    assert.deepEqual(room.idle, { quietSweeps: 2, sawFrame: false });
+    room.message(guests[0]!, '[1]', 1);
+    assert.deepEqual(room.idle, { quietSweeps: 2, sawFrame: true });
+    // The room sleeps and wakes for its look with the count it was keeping.
+    const woken = new RoomLogic();
+    const wires = [fakeWire(), fakeWire()];
+    woken.restore(wires[0]!, records[0]!, 0);
+    woken.restore(wires[1]!, records[1]!, 0);
+    woken.restoreIdle(room.idle);
+    assert.equal(woken.sweep(), true);
+    assert.deepEqual(woken.idle, { quietSweeps: 0, sawFrame: false });
+    assert.equal(wires[0]!.closed, null);
+    // A count that is not a count is read as none.
+    woken.restoreIdle({ quietSweeps: Number.NaN, sawFrame: 'yes' } as unknown as IdleCount);
+    assert.deepEqual(woken.idle, { quietSweeps: 0, sawFrame: false });
   });
 
   it('with nobody in it needs no more looks', () => {
