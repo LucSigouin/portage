@@ -7,6 +7,9 @@
  * - `?crew=N` (2 to 4): a new game with N-1 extra players sitting idle beside the local one, to see
  *   the look and the HUD with a crew. Adds the same idle crew to `?at=`, `?shot=` and `?bot=1`.
  * - `&fps=1`: show the frame-rate readout. `&seed=<n>` picks the game's seed.
+ * - `?host=ROOM`: start a game that other tabs of this site can join. `&name=...` names the host.
+ * - `?join=ROOM&name=...`: join it, from another tab or window on the same computer.
+ *   A tester's door (a channel between tabs, no server), not the lobby's.
  */
 export const SHOT_NAMES = [
   'lobby', 'settings', 'play', 'island', 'inventory', 'crafting', 'builder', 'quests', 'map', 'dialogue', 'pause',
@@ -28,6 +31,12 @@ export interface DebugParameters {
   seed: number | null;
   /** Players in the game, 1 to 4. Above 1 the extra ones are idle stand-ins. */
   crew: number;
+  /** The room to host for other tabs, or null. Letters, digits, `_` and `-`, 32 at most. */
+  host: string | null;
+  /** The room to join as a guest, or null. Ignored when `host` is set. */
+  join: string | null;
+  /** The name to play under in a shared game. Cut to 12 letters by the rules. */
+  name: string;
   /** True when a switch replaces the normal game: saves stay untouched. */
   sandbox: boolean;
 }
@@ -49,12 +58,21 @@ export function parseDebugParameters(query: string): DebugParameters {
   const shot = SHOT_NAMES.find((name) => name === shotText) ?? null;
   const bot = flag('bot');
   const crew = Math.max(1, Math.min(4, whole('crew') ?? 1));
+  const room = (name: string): string | null => {
+    const text = values.get(name);
+    return text !== null && /^[A-Za-z0-9_-]{1,32}$/.test(text) ? text : null;
+  };
+  const host = room('host');
+  const join = host === null ? room('join') : null;
   return {
     bot, speed, atQuest, shot,
     live: flag('live'),
     showFrameRate: flag('fps'),
     seed: whole('seed'),
     crew,
-    sandbox: bot || atQuest !== null || shot !== null || crew > 1,
+    host,
+    join,
+    name: (values.get('name') ?? '').slice(0, 40),
+    sandbox: bot || atQuest !== null || shot !== null || crew > 1 || host !== null || join !== null,
   };
 }

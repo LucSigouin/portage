@@ -171,6 +171,7 @@ export class App {
       settings: session.settings,
       game: session.game,
       playerId: session.localPlayerId,
+      hostId: session.hostId,
       paused: session.paused,
       cameraYaw: this.camera.yaw,
       toasts: this.toasts.models(),
@@ -190,6 +191,17 @@ export class App {
       } : null,
     });
     this.gameInterface.update(this.lastModel);
+  }
+
+  /**
+   * A frame nobody sees: a hidden tab that hosts a shared game. The game and
+   * the guests go on; nothing is drawn. The notes it made are there to read
+   * when the tab comes back.
+   */
+  frameUnseen(frameSeconds: number): void {
+    const session = this.session;
+    const events = session.advance(frameSeconds, this.camera.yaw);
+    this.toasts.addAll(toastsForPlayer(events, session.activeState, session.localPlayerId));
   }
 
   /** The tab was hidden or shown: pause and save, and quiet the sound. */

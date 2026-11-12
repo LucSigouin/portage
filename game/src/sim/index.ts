@@ -42,6 +42,15 @@
  * counts for a quest. The night skips only when everyone is asleep. A player
  * at 0 energy fails alone; a capsize fails everyone aboard.
  *
+ * Coming and going: a player can be away (`player.connected` false, set with
+ * `setConnected`). Nobody is ever removed. An away player keeps their seat or
+ * their spot ashore, their backpack and their place in the crew. Their meters
+ * stand still, they cannot fail, no command acts for them (`player_away`),
+ * their backpack is left alone, and the night skips once everyone who is not
+ * away is asleep. A canoe with only away players aboard waits where it is.
+ * `setConnected(state, id, true)` gives them their player back. A player may
+ * carry a `name` (`setPlayerName`, 12 letters at most).
+ *
  * ## Contract
  *
  * - `GameState` is plain JSON. `JSON.stringify(state)` is a save. `step` and
@@ -168,11 +177,12 @@
 
 // --- Core -------------------------------------------------------------------
 export { createGame, step, drainEvents, hashState, FIXED_STEP, NEUTRAL_INPUT, addPlayer } from './step.ts';
+export { setConnected, setPlayerName, cleanPlayerName } from './step.ts';
 export { dispatch } from './commands.ts';
-export { playerOf, playersAboard, eventsFor } from './inventory.ts';
+export { playerOf, playersAboard, connectedPlayers, eventsFor } from './inventory.ts';
 
 // --- State, input, commands, events -----------------------------------------
-export { STATE_VERSION, MAXIMUM_PLAYERS } from './types.ts';
+export { STATE_VERSION, MAXIMUM_PLAYERS, MAXIMUM_NAME_LENGTH } from './types.ts';
 export type {
   GameState, GameOptions, PlayerState, CanoeState, WeatherState, QuestState, NodeState, DialogueState,
   Statistics, ItemStack, Vector3, StepInput, CrewInput, PlayerId, Command, Container, CommandResult, CommandSuccess,

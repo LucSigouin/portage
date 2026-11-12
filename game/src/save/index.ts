@@ -62,7 +62,18 @@ function migrateSoloToCrew(envelope: { version: number; savedAt: number; state: 
   return { version: 2, savedAt: envelope.savedAt, state };
 }
 
-export const SAVE_MIGRATIONS: Record<number, SaveMigration> = { 1: migrateSoloToCrew };
+/**
+ * Version 3 lets players come and go: each player carries a `name` (empty:
+ * the crew mark's label) and `connected`. Everyone in an older save was there.
+ */
+function migrateCrewToComeAndGo(envelope: { version: number; savedAt: number; state: unknown }): { version: number; savedAt: number; state: unknown } {
+  const state = { ...(envelope.state as Record<string, unknown>) };
+  const players = Array.isArray(state.players) ? state.players as Record<string, unknown>[] : [];
+  state.players = players.map((player) => ({ ...player, name: player.name ?? '', connected: player.connected ?? true }));
+  return { version: 3, savedAt: envelope.savedAt, state };
+}
+
+export const SAVE_MIGRATIONS: Record<number, SaveMigration> = { 1: migrateSoloToCrew, 2: migrateCrewToComeAndGo };
 
 export type LoadFailure = 'empty' | 'corrupt' | 'from_newer_version' | 'no_migration';
 

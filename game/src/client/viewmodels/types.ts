@@ -106,12 +106,16 @@ export interface PromptModel {
 /** One crew member in the crew list. Built from that player's own state, nothing else. */
 export interface CrewRowModel {
   playerId: PlayerId;
-  /** "Player 2", from `CREW_MARKS`, until players can type a name. */
+  /** The player's name, or "Player 2" from `CREW_MARKS` when they have none. */
   label: string;
   /** The toque colour the look dresses them in, as `#rrggbb`. */
   color: string;
   /** True for the row of the player this screen belongs to. */
   you: boolean;
+  /** True for the player whose browser runs the game. Always false outside a shared game. */
+  host: boolean;
+  /** True while the player is away. Where they are and their meters still hold: both stand still. */
+  away: boolean;
   where: 'aboard' | 'ashore' | 'asleep';
   /** "Aboard", "Ashore · Home Knoll", "Asleep · Home Knoll". */
   placeText: string;

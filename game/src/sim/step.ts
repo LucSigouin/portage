@@ -1,15 +1,15 @@
 import type { Difficulty } from '../data/types.ts';
 import { TUNING } from '../data/tuning.ts';
 import { ISLANDS, START } from '../data/world.ts';
-import { stepCanoe } from './canoe.ts';
 import type { CrewMember } from './canoe.ts';
 import { stepOnFoot } from './foot.ts';
-import { emit, freeSeat, playersAboard } from './inventory.ts';
+import { connectedPlayers, emit, freeSeat, playerOf } from './inventory.ts';
 import { createQuestStates, updateQuests } from './quests.ts';
 import { seedToRandomState } from './random.ts';
-import { applyCapsize, applyExhaustion, updatePassiveAttachments, updateSurvival } from './survival.ts';
-import { MAXIMUM_PLAYERS, STATE_VERSION } from './types.ts';
-import type { CrewInput, GameEvent, GameOptions, GameState, PlayerState, StepInput } from './types.ts';
+import { applyCapsize, applyExhaustion, skipNightIfCrewAsleep, updatePassiveAttachments, updateSurvival } from './survival.ts';
+import { MAXIMUM_NAME_LENGTH, MAXIMUM_PLAYERS, STATE_VERSION } from './types.ts';
+import type { CrewInput, GameEvent, GameOptions, GameState, PlayerId, PlayerState, StepInput } from './types.ts';
+import { settleCanoe, stepCanoe } from './canoe.ts';
 import { createWeather, rollNextWeather, updateWeather } from './weather.ts';
 import { islandAt, landingBerth, regionAt, waterRoughnessAt, waveHeight } from './world.ts';
 
@@ -33,6 +33,8 @@ export function addPlayer(state: GameState): PlayerState | null {
   const canoe = state.canoe;
   const player: PlayerState = {
     id,
+    name: '',
+    connected: true,
     mode: 'canoe',
     seat: freeSeat(state),
     position: { ...canoe.position },
@@ -54,6 +56,43 @@ export function addPlayer(state: GameState): PlayerState | null {
   state.players.push(player);
   state.players.sort((first, second) => first.id - second.id);
   return player;
+}
+
+/**
+ * A name as the game keeps it: no control characters, single spaces, at most
+ * `MAXIMUM_NAME_LENGTH` letters. Anything may come in; this is what goes on the player.
+ */
+export function cleanPlayerName(name: unknown): string {
+  if (typeof name !== 'string') return '';
+  const tidy = name.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202f\ufeff]/g, ' ').replace(/\s+/g, ' ').trim();
+  return Array.from(tidy).slice(0, MAXIMUM_NAME_LENGTH).join('').trim();
+}
+
+/** Give a player a name (cleaned and cut to length). Empty goes back to the crew mark's label. */
+export function setPlayerName(state: GameState, playerId: PlayerId, name: unknown): void {
+  const player = state.players.find((candidate) => candidate.id === playerId);
+  if (player) player.name = cleanPlayerName(name);
+}
+
+/**
+ * Mark a player away or back. Going away lets go of everything they held (the
+ * paddle, a talk, a bed) and keeps the rest: seat or spot, backpack, meters.
+ * If the ones left are all asleep, the night skips now. Tells the crew, unless
+ * `quiet`. Returns false when there is no such player or nothing changed.
+ */
+export function setConnected(state: GameState, playerId: PlayerId, connected: boolean, quiet = false): boolean {
+  const player = state.players.find((candidate) => candidate.id === playerId);
+  if (!player || player.connected === connected) return false;
+  player.connected = connected;
+  player.paddling = false;
+  player.bailing = false;
+  player.exerting = false;
+  player.running = false;
+  player.asleep = false;
+  player.dialogue = null;
+  if (!quiet) emit(state, { type: 'crew_changed', who: player.id, change: connected ? 'back' : 'away' });
+  if (!connected) skipNightIfCrewAsleep(state, playerOf(state, connectedPlayers(state)[0]?.id ?? player.id));
+  return true;
 }
 
 /**
@@ -153,15 +192,31 @@ function fixedStep(state: GameState, inputs: readonly (StepInput | undefined)[])
   state.playedSeconds += deltaSeconds;
   updateWeather(state, deltaSeconds);
 
-  // A conversation or a bed holds a player still.
+  // A conversation or a bed holds a player still. So does being away.
   const crew: CrewMember[] = state.players.map((player) => ({
     player,
-    input: player.dialogue || player.asleep ? NEUTRAL_INPUT : inputs[player.id] ?? NEUTRAL_INPUT,
+    input: player.dialogue || player.asleep || !player.connected ? NEUTRAL_INPUT : inputs[player.id] ?? NEUTRAL_INPUT,
   }));
   // The canoe is shared: it moves once, for everyone aboard.
   const aboard = crew.filter((member) => member.player.mode === 'canoe');
-  if (aboard.length > 0) stepCanoe(state, aboard, deltaSeconds);
+  if (aboard.some((member) => member.player.connected)) {
+    stepCanoe(state, aboard, deltaSeconds);
+  } else if (aboard.length > 0) {
+    // Only away players aboard: the canoe waits where it is. No drift, no leak, nothing to capsize.
+    state.canoe.speed = 0;
+    state.canoe.bailing = false;
+    state.canoe.takingWater = false;
+    settleCanoe(state, deltaSeconds);
+    for (const { player } of aboard) {
+      player.position.x = state.canoe.position.x;
+      player.position.y = state.canoe.position.y;
+      player.position.z = state.canoe.position.z;
+      player.heading = state.canoe.heading;
+    }
+  }
   for (const { player, input } of crew) {
+    // An away player's meters stand still.
+    if (!player.connected) continue;
     let moving: boolean;
     if (player.mode === 'canoe') {
       moving = input.paddle !== 0;
@@ -178,8 +233,10 @@ function fixedStep(state: GameState, inputs: readonly (StepInput | undefined)[])
   }
 
   // A capsize takes everyone aboard. A player out of energy fails alone.
-  if (state.canoe.waterLevel >= TUNING.canoe.capsizeLevel && playersAboard(state).length > 0) applyCapsize(state);
-  for (const player of state.players) {
+  // An away player cannot fail: a capsize leaves them in their seat, and their energy stands still.
+  const present = connectedPlayers(state);
+  if (state.canoe.waterLevel >= TUNING.canoe.capsizeLevel && present.some((player) => player.mode === 'canoe')) applyCapsize(state);
+  for (const player of present) {
     if (player.energy <= 0) applyExhaustion(state, player);
   }
 }

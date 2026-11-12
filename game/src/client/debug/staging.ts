@@ -12,7 +12,7 @@ import {
 } from '../../data/index.ts';
 import type { IslandId, ItemId, QuestId, WeatherKind } from '../../data/index.ts';
 import {
-  FIXED_STEP, NEUTRAL_INPUT, addPlayer, createGame, dispatch, drainEvents, landingBerth, step, terrainHeight,
+  FIXED_STEP, NEUTRAL_INPUT, addPlayer, createGame, dispatch, drainEvents, landingBerth, setConnected, step, terrainHeight,
 } from '../../sim/index.ts';
 import type { GameState, StepInput } from '../../sim/index.ts';
 import type { OpenablePanelId } from '../intents.ts';
@@ -40,7 +40,7 @@ export function gameAfterQuest(seed: number, questId: QuestId | null): GameState
 }
 
 /**
- * Fill a staged game up to `crew` players. The extra ones are idle stand-ins
+ * Fill a staged game up to `crew` players. The extra ones are away stand-ins
  * beside player 0: in the canoe when player 0 is aboard, standing in a row
  * next to them when they are ashore.
  */
@@ -49,6 +49,8 @@ export function addIdleCrew(state: GameState, crew: number): GameState {
   while (state.players.length < crew) {
     const extra = addPlayer(state);
     if (!extra) break;
+    // Nobody plays a stand-in: they are away, so they never starve and never hold up the night.
+    setConnected(state, extra.id, false, true);
     if (lead.mode !== 'foot') continue;
     // A step to the lead's right for each one, wherever the ground allows.
     const side = lead.heading + Math.PI / 2;

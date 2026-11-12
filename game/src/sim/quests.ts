@@ -1,7 +1,7 @@
 import type { ItemId, NodeId, NpcId, ObjectiveDefinition, QuestId } from '../data/types.ts';
 import { STOCK_FOOD_IDS } from '../data/items.ts';
 import { MAIN_QUESTS, QUESTS, QUEST_LIST } from '../data/quests.ts';
-import { countHeld, countInStacks, emit, grantItems, removeFromStacks } from './inventory.ts';
+import { connectedPlayers, countHeld, countInStacks, emit, grantItems, removeFromStacks } from './inventory.ts';
 import type { GameState, PlayerState, QuestState } from './types.ts';
 
 /** The count at which an objective is done. */
@@ -118,7 +118,8 @@ function setProgress(state: GameState, questId: QuestId, index: number, value: n
  * done): the first player aboard, or the first player.
  */
 function defaultActor(state: GameState): PlayerState {
-  return state.players.find((player) => player.mode === 'canoe') ?? state.players[0];
+  const present = connectedPlayers(state);
+  return present.find((player) => player.mode === 'canoe') ?? present[0] ?? state.players[0];
 }
 
 function completeQuest(state: GameState, questId: QuestId, actor: PlayerState): void {
@@ -129,7 +130,7 @@ function completeQuest(state: GameState, questId: QuestId, actor: PlayerState): 
     // The delivery comes out of the actor's backpack, then the cargo, then the rest of the crew's backpacks.
     let remaining = objective.count - removeFromStacks(actor.backpack, objective.itemId, objective.count);
     if (remaining > 0) remaining -= removeFromStacks(state.canoe.cargo, objective.itemId, remaining);
-    for (const player of state.players) {
+    for (const player of connectedPlayers(state)) {
       if (remaining > 0 && player !== actor) remaining -= removeFromStacks(player.backpack, objective.itemId, remaining);
     }
     emit(state, { type: 'item_lost', itemId: objective.itemId, count: objective.count });

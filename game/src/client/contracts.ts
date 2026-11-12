@@ -16,6 +16,13 @@
  * events plus the crew-wide ones. The world view gets every event, and reads
  * the players through `crewOf(state)` in `look/crew.ts`.
  *
+ * A game can be shared (`src/net/`). The host's session steps it and sends it
+ * out; a guest's session steps nothing and shows what the host says, a beat
+ * behind and smoothed (`Session.guest`). Either way the three parts below get
+ * the same things in the same order: a state, the frame's events, the local
+ * player. On a guest the state is a new object most frames, and `step` 1 of
+ * the frame is "ask the host's link" instead of "step the simulation".
+ *
  * None of them holds game rules or changes game state. To swap the greybox
  * for the real thing, implement the interface and pass it to `createApp` in
  * `src/main.ts`. Nothing else changes.
@@ -55,7 +62,10 @@ export interface FrameInfo {
   simulatedSeconds: number;
   /** Real seconds since the app started. For idle motion: flags, smoke, the lobby. */
   elapsedSeconds: number;
-  /** True while the simulation is frozen: a full panel, the pause menu, a hidden tab. */
+  /**
+   * True while the simulation is frozen: a full panel, the pause menu, a hidden tab.
+   * Never true while two or more players are playing: then panels open over a world that runs on.
+   */
   paused: boolean;
   /**
    * True while a panel or a menu covers the play view: inventory, map, pause,

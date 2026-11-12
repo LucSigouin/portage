@@ -1,0 +1,22 @@
+// Two windows, one game: a picture of each. Usage: node crew-shot.mjs <base url> <out folder>
+import { chromium } from '@playwright/test';
+const [base, out] = process.argv.slice(2);
+const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+const room = `shot-${Date.now().toString(36)}`;
+const inGame = (page) => page.waitForFunction(() => window.portage?.session.screen === 'game', undefined, { timeout: 30000 });
+const host = await context.newPage();
+await host.goto(`${base}/?host=${room}&name=Luc`);
+await inGame(host);
+const guest = await context.newPage();
+await guest.goto(`${base}/?join=${room}&name=Sam`);
+await inGame(guest);
+await guest.keyboard.down('w');
+await guest.waitForTimeout(2500);
+await guest.screenshot({ path: `${out}/crew-guest.png` });
+await host.screenshot({ path: `${out}/crew-host.png` });
+await guest.keyboard.up('w');
+await guest.close({ runBeforeUnload: true });
+await host.waitForSelector('.iw-mate.iw-away', { timeout: 20000 });
+await host.screenshot({ path: `${out}/crew-host-away.png` });
+await browser.close();

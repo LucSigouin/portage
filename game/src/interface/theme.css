@@ -1958,6 +1958,11 @@ html.iw-document {
   margin-left: 0.4rem;
   font-weight: 400;
 }
+/* An away player: the toque and the meters are washed out. The words keep their full ink. */
+.iw-mate.iw-away .iw-mate-toque,
+.iw-mate.iw-away .iw-mate-meters {
+  opacity: 0.4;
+}
 .iw-mate-meters {
   display: flex;
   gap: 0.3rem;

@@ -4,7 +4,7 @@ import { WEATHER } from '../data/weather.ts';
 import { beachCanoe, settleCanoe } from './canoe.ts';
 import { clearSpot, disembarkSpot, shoreSpotBeside } from './interact.ts';
 import {
-  addToStacks, atCanoe, campInReach, cargoSlots, emit, freeSeat, hasAttachment, playersAboard,
+  addToStacks, atCanoe, campInReach, cargoSlots, connectedPlayers, emit, freeSeat, hasAttachment, playersAboard,
 } from './inventory.ts';
 import { notifySlept, updateQuests } from './quests.ts';
 import type { FailCause, GameState, ItemStack, PlayerState } from './types.ts';
@@ -159,16 +159,27 @@ export function sleepBlocked(state: GameState, player: PlayerState): SleepBlock 
  */
 export function sleep(state: GameState, player: PlayerState): number {
   player.asleep = true;
-  if (!state.players.every((member) => member.asleep)) return 0;
+  return skipNightIfCrewAsleep(state, player);
+}
 
-  for (const member of state.players) {
+/**
+ * Skip to dawn if everyone who is not away is asleep (and someone is). The
+ * night never waits for an away player, and passes them by: their meters
+ * stand still. `actor` is the one whose lying down, or leaving, settled it.
+ * Returns the hours slept, or 0.
+ */
+export function skipNightIfCrewAsleep(state: GameState, actor: PlayerState): number {
+  const sleepers = connectedPlayers(state);
+  if (sleepers.length === 0 || !sleepers.every((member) => member.asleep)) return 0;
+
+  for (const member of sleepers) {
     const camp = campInReach(member);
     if (camp?.camp?.sleep) state.respawnCampIslandId = camp.id;
   }
   const seconds = secondsUntilDawn(state.time);
-  skipTime(state, seconds, TUNING.survival.sleepDrainMultiplier, state.players);
+  skipTime(state, seconds, TUNING.survival.sleepDrainMultiplier, sleepers);
   const hours = seconds / hourSeconds;
-  for (const member of state.players) {
+  for (const member of sleepers) {
     const starving = member.hunger <= 0 || member.thirst <= 0;
     member.energy = starving ? TUNING.survival.starvingEnergyCap : 100;
     member.asleep = false;
@@ -176,7 +187,7 @@ export function sleep(state: GameState, player: PlayerState): number {
   }
   emit(state, { type: 'autosave_requested', reason: 'sleeping' });
   notifySlept(state);
-  updateQuests(state, player);
+  updateQuests(state, actor);
   return hours;
 }
 
@@ -278,10 +289,10 @@ function washAshore(state: GameState, cause: FailCause, victims: readonly Player
   updateQuests(state);
 }
 
-/** The canoe went under: everyone aboard washes ashore with it. */
+/** The canoe went under: everyone aboard washes ashore with it. An away player stays in their seat and rides along. */
 export function applyCapsize(state: GameState): void {
   emit(state, { type: 'capsized' });
-  washAshore(state, 'capsized', playersAboard(state));
+  washAshore(state, 'capsized', playersAboard(state).filter((player) => player.connected));
 }
 
 /**
@@ -291,12 +302,15 @@ export function applyCapsize(state: GameState): void {
  *
  * Two cases take the canoe along, as a capsize would: a crew of one (the solo
  * rule), and the last player aboard a canoe that is afloat, which would
- * otherwise drift off empty and strand the rest.
+ * otherwise drift off empty and strand the rest. Away players do not count
+ * in either: the only one still playing is alone.
  */
 export function applyExhaustion(state: GameState, player: PlayerState): void {
   emit(state, { type: 'exhausted' }, player);
-  const lastAboardAfloat = player.mode === 'canoe' && !state.canoe.beached && playersAboard(state).length === 1;
-  if (state.players.length === 1 || lastAboardAfloat) {
+  const present = connectedPlayers(state);
+  const lastAboardAfloat = player.mode === 'canoe' && !state.canoe.beached
+    && present.filter((member) => member.mode === 'canoe').length === 1;
+  if (present.length <= 1 || lastAboardAfloat) {
     washAshore(state, 'exhausted', [player]);
     return;
   }

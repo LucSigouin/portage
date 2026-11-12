@@ -65,6 +65,7 @@ const FAILURE_TEXT: Record<FailureReason, string> = {
   nothing_in_reach: 'Nothing to do here.',
   tool_not_owned: 'You do not have that tool.',
   nothing_to_claim: 'Nothing waiting.',
+  player_away: 'That player is away.',
   invalid_amount: 'That is not an amount.',
 };
 

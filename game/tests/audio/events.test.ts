@@ -16,7 +16,7 @@ describe('event cues', () => {
   it('maps every event type, and nothing else', () => {
     // SAMPLE_EVENTS is compiler-checked against the event union; the table must match it key for key.
     expect(Object.keys(EVENT_CUES).sort()).toEqual([...EVENT_TYPES].sort());
-    expect(EVENT_TYPES.length).toBe(43);
+    expect(EVENT_TYPES.length).toBe(44);
   });
 
   it('gives every event a known cue or a deliberate silence', () => {
@@ -27,8 +27,8 @@ describe('event cues', () => {
     }
   });
 
-  it('keeps silent only the three bookkeeping events', () => {
-    expect([...SILENT_EVENTS].sort()).toEqual(['autosave_requested', 'rewards_pending', 'weather_changed']);
+  it('keeps silent only the four bookkeeping events', () => {
+    expect([...SILENT_EVENTS].sort()).toEqual(['autosave_requested', 'crew_changed', 'rewards_pending', 'weather_changed']);
   });
 
   it('plays a voice on the effects bus for every event that has a cue', async () => {

@@ -31,6 +31,11 @@ export function playersAboard(state: GameState): PlayerState[] {
   return state.players.filter((player) => player.mode === 'canoe');
 }
 
+/** Everyone who is not away, in id order. */
+export function connectedPlayers(state: GameState): PlayerState[] {
+  return state.players.filter((player) => player.connected);
+}
+
 /** The lowest free seat in the canoe. */
 export function freeSeat(state: GameState): number {
   for (let seat = 0; seat < MAXIMUM_PLAYERS; seat += 1) {
@@ -151,7 +156,8 @@ export function countHeld(state: GameState, itemId: ItemId): number {
   if (category === 'tool') return hasTool(state, itemId as ToolId) ? 1 : 0;
   if (!isStackable(itemId)) return state.keyItems[itemId] ?? 0;
   let total = countInStacks(state.canoe.cargo, itemId);
-  for (const player of state.players) total += countInStacks(player.backpack, itemId);
+  // An away player's backpack is theirs to come back to: it does not count and is never drawn on.
+  for (const player of connectedPlayers(state)) total += countInStacks(player.backpack, itemId);
   return total;
 }
 

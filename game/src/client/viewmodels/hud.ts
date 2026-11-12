@@ -48,6 +48,18 @@ export function crewMark(playerId: PlayerId): { label: string; color: string } {
   return { label: mark.label, color: mark.toque };
 }
 
+/** A crew member as the crew reads them: their own name if they gave one, else their mark's label, and their toque colour. */
+export function crewTag(player: PlayerState): { label: string; color: string } {
+  const mark = crewMark(player.id);
+  return { label: player.name || mark.label, color: mark.color };
+}
+
+/** The name the crew reads for a player id: their own name, else their mark's label. */
+export function crewName(state: GameState, playerId: PlayerId): string {
+  const player = state.players.find((candidate) => candidate.id === playerId);
+  return player ? crewTag(player).label : crewMark(playerId).label;
+}
+
 /** The crewmates of `playerId` who are somewhere else, each with the distance and bearing to them. */
 export function crewElsewhere(state: GameState, playerId: PlayerId): { player: PlayerState; distance: number; bearing: number }[] {
   const viewer = playerOf(state, playerId);
@@ -70,7 +82,7 @@ function crewPlace(player: PlayerState): Pick<CrewRowModel, 'where' | 'placeText
 }
 
 /** The crew list: one row a player, in player order. Empty when playing alone. */
-function buildCrew(state: GameState, playerId: PlayerId): CrewRowModel[] {
+function buildCrew(state: GameState, playerId: PlayerId, hostId: PlayerId | null): CrewRowModel[] {
   if (state.players.length < 2) return [];
   const viewer = playerOf(state, playerId);
   const elsewhere = crewElsewhere(state, playerId);
@@ -79,8 +91,10 @@ function buildCrew(state: GameState, playerId: PlayerId): CrewRowModel[] {
     const away = elsewhere.find((entry) => entry.player.id === player.id);
     return {
       playerId: player.id,
-      ...crewMark(player.id),
+      ...crewTag(player),
       you: player.id === viewer.id,
+      host: hostId !== null && player.id === hostId,
+      away: !player.connected,
       ...crewPlace(player),
       distanceText: away ? distanceText(away.distance) : '',
       meters,
@@ -164,7 +178,7 @@ function buildCompass(state: GameState, cameraYaw: number, trackedQuestId: strin
   }
   // A crewmate somewhere else: a mark in their colour at their bearing, to find them by.
   for (const { player, distance, bearing } of crewElsewhere(state, playerId)) {
-    const { label, color } = crewMark(player.id);
+    const { label, color } = crewTag(player);
     marks.push({ ...mark(`crew-${player.id}`, 'crew', label, bearing, distance), color, crewIndex: state.players.indexOf(player) });
   }
   const heading = hundredths((cameraYaw * 180) / Math.PI) % 360;
@@ -223,7 +237,9 @@ function buildHint(state: GameState, settings: Settings, playerId: PlayerId): st
  * The HUD of one player (`playerId`, player 0 by default). `cameraYaw` is the
  * bearing the camera looks along; the compass turns with it.
  */
-export function buildHudModel(state: GameState, settings: Settings, cameraYaw: number, playerId: PlayerId = 0): HudModel {
+export function buildHudModel(
+  state: GameState, settings: Settings, cameraYaw: number, playerId: PlayerId = 0, hostId: PlayerId | null = null,
+): HudModel {
   const player = playerOf(state, playerId);
   const time = selectTimeOfDay(state, playerId);
   const weather = selectWeather(state);
@@ -231,7 +247,7 @@ export function buildHudModel(state: GameState, settings: Settings, cameraYaw: n
   const island = player.mode === 'foot' && player.islandId ? ISLANDS_BY_ID[player.islandId].name : null;
   const nextName = WEATHER[weather.nextKind].name.toLowerCase();
   return {
-    crew: buildCrew(state, playerId),
+    crew: buildCrew(state, playerId, hostId),
     meters: buildMeters(state, playerId),
     water: buildWaterGauge(state, playerId),
     hotbar: buildHotbar(state, settings, playerId),

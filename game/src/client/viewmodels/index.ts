@@ -33,6 +33,8 @@ export interface InterfaceModelInput {
   game: GameState | null;
   /** The player this screen belongs to: the HUD and the panels are theirs. Player 0 when left out. */
   playerId?: PlayerId;
+  /** The player whose browser runs a shared game, for the crew list's host tag. Null or absent when the game is not shared. */
+  hostId?: PlayerId | null;
   paused: boolean;
   /** Bearing the camera looks along, radians. */
   cameraYaw: number;
@@ -108,7 +110,7 @@ export function buildInterfaceModel(input: InterfaceModelInput): InterfaceModel 
     patternedMeters: settings.accessibility.patternedMeters,
     paused: input.paused,
     lobby: panels.screen === 'lobby' ? buildLobbyModel(input.slots, input.latestSlot) : null,
-    hud: game ? buildHudModel(game, settings, input.cameraYaw, input.playerId ?? 0) : null,
+    hud: game ? buildHudModel(game, settings, input.cameraYaw, input.playerId ?? 0, input.hostId ?? null) : null,
     toasts: input.toasts,
     panel: beneath ? buildPanelModel(beneath, input) : null,
     openPanels: [...panels.stack],
