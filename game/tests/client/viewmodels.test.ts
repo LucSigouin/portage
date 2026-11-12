@@ -184,6 +184,42 @@ describe('the HUD', () => {
     expect(Object.entries(sources).filter(([, text]) => text.includes(clock)).map(([path]) => path)).toEqual([]);
   });
 
+  it('ashore with the bail step still open, says that bailing is done aboard, with both keys as they are bound', () => {
+    const state = newGame();
+    // A new game: the canoe is half full, and the first quest asks for it to be bailed.
+    expect(state.canoe.waterLevel).toBeGreaterThan(10);
+    expect(buildHudModel(state, settings, 0).tracker!.objectives[0]).toMatchObject({ text: 'Bail the canoe nearly dry', done: false });
+    expect(buildHudModel(state, settings, 0).hint).toBe('Hold R to bail.');
+    // The player lands first, as the review did. The water is still aboard and the step is still open.
+    standOn(state, 'home_knoll');
+    state.canoe.waterLevel = 60;
+    run(state, {}, 0.1);
+    expect(state.players[0].mode).toBe('foot');
+    expect(buildHudModel(state, settings, 0).tracker!.objectives[0]!.done).toBe(false);
+    expect(buildHudModel(state, settings, 0).hint).toBe('Board (F), then hold R to bail.');
+    // Both keys are read from the bindings.
+    const rebound = { ...settings, controls: { ...settings.controls, keyBindings: { ...settings.controls.keyBindings, interact: ['KeyG'], bail: ['KeyB'] } } };
+    expect(buildHudModel(state, rebound, 0).hint).toBe('Board (G), then hold B to bail.');
+    // And the words are true: boarded and bailing, the water goes down and the step is done.
+    expect(dispatch(state, { type: 'board' }).ok).toBe(true);
+    run(state, { bail: true }, 25);
+    expect(state.canoe.waterLevel).toBeLessThanOrEqual(10);
+    expect(buildHudModel(state, settings, 0).tracker?.objectives.find((objective) => objective.text === 'Bail the canoe nearly dry')?.done ?? true).toBe(true);
+    // Ashore again with the step done, nothing more is said about bailing.
+    expect(dispatch(state, { type: 'disembark' }).ok).toBe(true);
+    run(state, {}, 0.1);
+    expect(buildHudModel(state, settings, 0).hint ?? '').not.toContain('bail');
+    // A thirsty player is told about the thirst first, and with hints off nobody is told anything.
+    const dry = newGame();
+    standOn(dry, 'home_knoll');
+    dry.canoe.waterLevel = 60;
+    run(dry, {}, 0.1);
+    dry.players[0].thirst = 10;
+    expect(buildHudModel(dry, settings, 0).hint).toContain('Thirsty.');
+    dry.players[0].thirst = 100;
+    expect(buildHudModel(dry, { ...settings, gameplay: { ...settings.gameplay, hints: false } }, 0).hint).toBeNull();
+  });
+
   it('gives a hint only when the setting is on and one applies', () => {
     const state = newGame();
     expect(buildHudModel(state, settings, 0).hint).toBe('Hold R to bail.');

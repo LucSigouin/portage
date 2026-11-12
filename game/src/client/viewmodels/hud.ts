@@ -1,5 +1,5 @@
 /** The HUD: meters, water gauge, hotbar, quest tracker, compass, prompt and status lines. */
-import { ISLANDS_BY_ID, ITEMS, REGIONS_BY_ID, WEATHER } from '../../data/index.ts';
+import { ISLANDS_BY_ID, ITEMS, QUEST_LIST, REGIONS_BY_ID, WEATHER } from '../../data/index.ts';
 import { CREW_MARKS } from '../../data/crew.ts';
 import type { Settings } from '../../settings/index.ts';
 import {
@@ -222,6 +222,12 @@ function buildCanoeLines(state: GameState, playerId: PlayerId): { text: string; 
   return lines;
 }
 
+/** True while a quest the crew has been given still asks for the canoe to be bailed. */
+function bailStepOpen(state: GameState): boolean {
+  return QUEST_LIST.some((quest) => state.quests[quest.id].status === 'active'
+    && quest.objectives.some((objective, index) => objective.type === 'bail' && state.quests[quest.id].progress[index] < 1));
+}
+
 function buildHint(state: GameState, settings: Settings, playerId: PlayerId): string | null {
   if (!settings.gameplay.hints) return null;
   const bindings = settings.controls.keyBindings;
@@ -234,6 +240,10 @@ function buildHint(state: GameState, settings: Settings, playerId: PlayerId): st
   if (meters.low.thirst) return `Thirsty. Drink from the inventory (${primaryKey(bindings, 'inventory')}); boil water at a fire first.`;
   if (meters.low.hunger) return `Hungry. Eat from the inventory (${primaryKey(bindings, 'inventory')}).`;
   if (meters.low.energy) return 'Worn out. Stand still to rest, or sleep at a camp.';
+  // Ashore with the bail step still open: the tracker asks for it, and bailing is done from inside the canoe.
+  if (!aboard && bailStepOpen(state)) {
+    return `Board (${primaryKey(bindings, 'interact')}), then hold ${primaryKey(bindings, 'bail')} to bail.`;
+  }
   if (!aboard && player.backpack.length >= 8) return 'Backpack full. Stow it in the canoe from the inventory.';
   if (state.pendingRewards.length > 0) return `Rewards are waiting. Make room, then claim them in the inventory (${primaryKey(bindings, 'inventory')}).`;
   return null;
