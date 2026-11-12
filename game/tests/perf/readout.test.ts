@@ -69,7 +69,8 @@ describe('the spread of frame times', () => {
 
 describe('what the frame-rate cap lets through', () => {
   it('agrees with the game\'s own loop on every common screen', () => {
-    for (const hertz of [50, 59.94, 60, 75, 90, 100, 120, 144, 165, 240]) {
+    // 60.02, 61 and 65 Hz are a touch quicker than the cap: only the loop's tolerance lets every refresh through.
+    for (const hertz of [50, 59.94, 60, 60.02, 61, 65, 75, 90, 100, 120, 130, 144, 165, 240]) {
       const refresh = 1000 / hertz;
       // The real loop, on a fake screen that refreshes exactly on time.
       let callback: ((timestamp: number) => void) | null = null;
