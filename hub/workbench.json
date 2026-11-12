@@ -1,0 +1,221 @@
+{
+  "_how": [
+    "The words and numbers of the workbench page. Edit this file, then run: node hub/build.mjs && node hub/check.mjs",
+    "Every line is meant to be read in a glance: keep bullets under about 12 words.",
+    "steps[].state is done, running or next. pictures[].src is a path from the portage folder, or a path inside the site (shots/...)."
+  ],
+  "title": "Portage",
+  "subtitle": "The workbench: every step so far",
+  "updated": "2026-11-11, night",
+  "ask": "A flooded world and all you have is a canoe. Scavenge islands, craft, and build a crazy impressive canoe.",
+  "now": [
+    { "label": "Play it", "value": "sigouin.net/portage", "href": "https://sigouin.net/portage/" },
+    { "label": "Stage", "value": "About two thirds of version 1" },
+    { "label": "Tests", "value": "692 unit, 74 in a browser" },
+    { "label": "Running", "value": "Weather and night. Co-op groundwork." },
+    { "label": "Waiting on you", "value": "Play it, and say what feels off" }
+  ],
+  "steps": [
+    {
+      "when": "Nov 10", "title": "The rules", "state": "done",
+      "asked": "A survival crafting game where you start with a canoe.",
+      "built": ["12 main quests, 8 side quests", "Hunger, thirst, energy, storms, capsizing", "Crafting, 4 hulls, 19 attachments", "Runs with no screen at all"],
+      "proof": ["A bot plays from first bail to the Beacon"],
+      "snags": [],
+      "pictures": [],
+      "report": "docs/report-rules-engine.html"
+    },
+    {
+      "when": "Nov 10", "title": "A playable grey-box, with sound", "state": "done",
+      "asked": "It needs a nice lobby screen and menu with settings and everything.",
+      "built": ["The whole game in plain grey shapes", "Lobby, saves, settings, every key rebindable", "Every sound made in code"],
+      "proof": ["367 tests, 10 browser tests pressing real keys"],
+      "snags": ["Nobody has listened to the sound yet"],
+      "pictures": [],
+      "report": "docs/report-client-greybox.html"
+    },
+    {
+      "when": "Nov 10", "title": "Three looks to choose from", "state": "done",
+      "asked": "Figure out the art style.",
+      "built": ["A Cutbank, B Ink & Wash, C Blue Hour", "Same scene in each, scored on six points"],
+      "proof": ["Scores: 50, 50 and 45 out of 60", "You picked B"],
+      "snags": [],
+      "pictures": [
+        { "src": "shots/look-a-play.jpg", "alt": "Look A, Cutbank" },
+        { "src": "shots/look-b-play.jpg", "alt": "Look B, Ink & Wash" },
+        { "src": "shots/look-c-play.jpg", "alt": "Look C, Blue Hour" }
+      ],
+      "report": "review.html"
+    },
+    {
+      "when": "Nov 11", "title": "B2: the look made sharp and still", "state": "done",
+      "asked": "Remove the rippling effect, it's making me sick. And it's blurry.",
+      "built": ["The moving line effect is off for good", "Draws at the screen's full size", "More pen detail inside the washes"],
+      "proof": ["0 land pixels move with a still camera", "Sharp at 1080p, 1440p and 4K", "You picked B2"],
+      "snags": [],
+      "pictures": [{ "src": "shots/look-b2-play.jpg", "alt": "Look B2, the pick" }],
+      "report": "compare-b.html"
+    },
+    {
+      "when": "Nov 11", "title": "The look and the menus in the real game", "state": "done",
+      "asked": "Let's plan to build B2.",
+      "built": ["The real game drawn in B2", "Ink & Wash lobby, menus and HUD"],
+      "proof": ["477 tests, 31 browser tests", "The bot finishes the game in the new look"],
+      "snags": ["A frame-rate test failed on a busy Mac. Rule changed, then break-tested"],
+      "pictures": [{ "src": "../scratch/portage/step1/merged/lobby.png", "alt": "The lobby" }],
+      "report": "docs/report-step1-look.html"
+    },
+    {
+      "when": "Nov 11", "title": "A player that never goes blurry", "state": "done",
+      "asked": "The player should never derender or go blurry.",
+      "built": ["Crew and canoe always drawn at full size", "Picture quality climbs back after a slow spell", "A far-away player gets a finer pen"],
+      "proof": ["Found the cause: the whole picture shrank to 62%", "Player keeps 96 to 99% of its sharpness"],
+      "snags": ["The game did not get faster"],
+      "pictures": [{ "src": "../scratch/portage/crewfit/far-figure-5120x2160-rung8-x3.png", "alt": "A far-away player, before and after" }],
+      "report": "docs/report-sharp.html"
+    },
+    {
+      "when": "Nov 11", "title": "Rules for a crew of four", "state": "done",
+      "asked": "Is this possible to do co-op? 4 players at once?",
+      "built": ["Up to 4 players, one shared canoe", "Tools belong to the whole crew", "F is the action key, the lantern is L", "Scavenging takes one press"],
+      "proof": ["Solo plays the identical game on six seeds", "Old saves still load"],
+      "snags": ["One press did not shorten the game: 106 to 110 minutes"],
+      "pictures": [{ "src": "../scratch/portage/step1/merged/crew-of-four-real.png", "alt": "Four in the canoe" }],
+      "report": "docs/report-crew.html"
+    },
+    {
+      "when": "Nov 11", "title": "Item icons", "state": "done",
+      "asked": "Icons make it easy to remember.",
+      "built": ["54 drawn icons, one per item", "Shown in every panel that names an item"],
+      "proof": ["Removing one drawing fails 6 checks"],
+      "snags": ["Five may not read well: bellows, lodestone, spruce gum, roast roots, dried apple"],
+      "pictures": [{ "src": "../scratch/portage/icons/contact-sheet.png", "alt": "All 54 icons" }],
+      "report": "docs/report-icons.html"
+    },
+    {
+      "when": "Nov 11", "title": "The crew, drawn properly", "state": "done",
+      "asked": "",
+      "built": ["Each player in their own seat and colours", "Paddling, bailing, sleeping and walking for themselves"],
+      "proof": ["Two players' screens match pixel for pixel", "A drifting canoe shows nobody paddling"],
+      "snags": [],
+      "pictures": [{ "src": "../scratch/portage/crewfit/extra-two-bailing-two-asleep.png", "alt": "Two bailing, two asleep" }],
+      "report": "docs/report-crewfit.html"
+    },
+    {
+      "when": "Nov 11", "title": "The canoe", "state": "done",
+      "asked": "A crazy impressive canoe with other things on it.",
+      "built": ["4 hull tiers you can tell apart", "All 19 attachments, drawn for this hull", "Odile, Wren and Tink as their own figures"],
+      "proof": ["24 checks, each seen to fail when broken", "60 fps fully fitted with four aboard"],
+      "snags": ["The starting canoe is now grey, not red: your call", "The hull's floor is drawn 5 cm shallow", "Kneelers' paddles cross the outrigger decks"],
+      "pictures": [
+        { "src": "../scratch/portage/canoe/1-hull-tiers.png", "alt": "The four hull tiers" },
+        { "src": "../scratch/portage/step1/merged/live-upgraded-crew4.png", "alt": "The fully fitted canoe, live" }
+      ],
+      "report": "docs/report-canoe.html"
+    },
+    {
+      "when": "Nov 11", "title": "The valley", "state": "done",
+      "asked": "Scavenge islands for stock food and tools.",
+      "built": ["Every landmark: steeple, silos, pylons, bridge, dam", "All 22 scavenge node types", "15 islands, each known by its outline"],
+      "proof": ["0 land pixels move at four islands", "21% fewer triangles to draw"],
+      "snags": ["Cabin roofs and the scrap stack are weak", "Nobody has watched it in motion"],
+      "pictures": [{ "src": "../scratch/portage/world/after/islands-after.png", "alt": "All 15 islands" }],
+      "report": "docs/report-world.html"
+    },
+    {
+      "when": "Nov 11", "title": "A HUD for the crew", "state": "done",
+      "asked": "",
+      "built": ["Crew list: colour, place, three small meters", "Crewmates on the compass and the map", "Notes for everyone: who made which tool"],
+      "proof": ["Solo HUD is the same pixels as before"],
+      "snags": ["A pixel test failed 1 run in 4: the graphics chip, not the game"],
+      "pictures": [{ "src": "../scratch/portage/crewhud/crew4-split-compass.png", "alt": "The crew list" }],
+      "report": "docs/report-crewhud.html"
+    },
+    {
+      "when": "Nov 11", "title": "Live on sigouin.net", "state": "done",
+      "asked": "I want to host it on my website.",
+      "built": ["sigouin.net/portage, three deploys", "Private GitHub repo with 11 issues", "One command builds, tests, uploads and checks"],
+      "proof": ["Every live file hashes the same as the build", "The live game takes a click and a key press"],
+      "snags": ["Cloudflare login had expired", "I misread the sign-in: one failed run, nothing published"],
+      "pictures": [],
+      "report": ""
+    },
+    {
+      "when": "Nov 11", "title": "Weather and night", "state": "running",
+      "asked": "",
+      "built": ["Rain, storm, fog and night on screen", "Light from the lantern, the campfire, the Beacon"],
+      "proof": [],
+      "snags": [],
+      "pictures": [],
+      "report": ""
+    },
+    {
+      "when": "Nov 11", "title": "Co-op groundwork", "state": "running",
+      "asked": "How do I invite people?",
+      "built": ["Players who drop and come back", "A host and guests kept in step", "Two windows on one computer playing together"],
+      "proof": [],
+      "snags": [],
+      "pictures": [],
+      "report": ""
+    }
+  ],
+  "calls": [
+    "3D, camera behind the canoe",
+    "Desktop first, phone later",
+    "Light survival, no enemies",
+    "Look B2: Ink & Wash, sharp",
+    "Nothing on screen may shimmer",
+    "The player never goes blurry",
+    "Fable 5.2 only",
+    "Co-op: rules now, network after",
+    "One shared canoe, crew of four",
+    "A found tool works for everyone",
+    "F acts, L is the lantern",
+    "Scavenging takes one press",
+    "Private repo, public play link"
+  ],
+  "snags": [
+    "Wrong model alias at the start. Caught and switched to Fable 5.2",
+    "The hub address died when the Mac changed networks. Now on Tailscale",
+    "One worker got three jobs in one. Jobs are cut smaller now",
+    "An internet outage stalled a worker for 30 minutes",
+    "My deploy smoke test matched the wrong words. It reads the panel now",
+    "I misread the Cloudflare sign-in. One failed run, nothing published",
+    "I pushed a hub line its own check rejects. Fixed on the next commit",
+    "One browser test run hung for 10 minutes. Cause not found",
+    "A sound warning on 24 kHz headsets. Fixed"
+  ],
+  "numbers": [
+    { "label": "Commits", "value": "64" },
+    { "label": "Worker runs", "value": "about 20" },
+    { "label": "Unit tests", "value": "692" },
+    { "label": "Browser tests", "value": "74" },
+    { "label": "Lines of game code", "value": "33,000" },
+    { "label": "Issues", "value": "11, 4 closed" },
+    { "label": "Deploys", "value": "3" }
+  ],
+  "left": [
+    { "what": "Friends join by a link: relay and Host button", "hours": "4" },
+    { "what": "Speed on big screens, and the hull floor", "hours": "3" },
+    { "what": "Loose ends on the canoe and the valley", "hours": "2" },
+    { "what": "Balance after a real playtest", "hours": "1" },
+    { "what": "Scored review and one fix round", "hours": "2" },
+    { "what": "Phone controls", "hours": "not in version 1" }
+  ],
+  "yours": [
+    "Play it for 20 minutes",
+    "Listen to the sound",
+    "Zoom out on an island: does the player stay sharp?",
+    "Starting canoe: weathered grey, or red?",
+    "Can you read the 54 icons?",
+    "Paddle up to an island: does anything pop?"
+  ],
+  "links": [
+    { "title": "Play the game", "href": "https://sigouin.net/portage/" },
+    { "title": "A crew of four", "href": "https://sigouin.net/portage/?crew=4" },
+    { "title": "The fully fitted canoe", "href": "https://sigouin.net/portage/?shot=upgraded&live=1" },
+    { "title": "The hub: everything else", "href": "index.html" },
+    { "title": "GitHub repo", "href": "https://github.com/LucSigouin/portage" },
+    { "title": "Issues", "href": "https://github.com/LucSigouin/portage/issues" }
+  ]
+}
