@@ -48,7 +48,7 @@ describe('window size (the heroes)', () => {
 
   it('is never touched by the render scale or the ladder: neither is an input', () => {
     expect(windowPixelRatio.length).toBe(3);
-    for (const rung of [0, 8]) expect(drawingPixelRatio(1920, 1080, 1, 1, qualityAt(qualityCeiling(graphics), rung).resolution)).toBeLessThanOrEqual(windowPixelRatio(1920, 1080, 1));
+    for (const rung of [0, 9]) expect(drawingPixelRatio(1920, 1080, 1, 1, qualityAt(qualityCeiling(graphics), rung).resolution)).toBeLessThanOrEqual(windowPixelRatio(1920, 1080, 1));
   });
 });
 

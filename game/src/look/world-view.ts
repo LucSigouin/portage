@@ -109,6 +109,30 @@ export interface LookProbe {
     /** The local player's figure on the page, in CSS pixels from the top left. Null when off screen. */
     subject: { x: number; y: number; width: number; height: number } | null;
   };
+  /** The weather as drawn: the rules' weather, eased, and what it turned into. */
+  weather: {
+    /** 0 dry, 0.6 steady rain, 1 a full storm. */
+    rain: number;
+    storm: number;
+    /** Fog weather, 0 to 1. */
+    veil: number;
+    overcast: number;
+    visibility: number;
+    /** Metres a second, the way it blows toward. */
+    wind: [number, number];
+    /** How near the next weather is, 0 to 1. */
+    ahead: number;
+    stars: number;
+    /** The share of lamp light that shows: 0 in daylight, 1 at night. */
+    lampShare: number;
+    wet: number;
+    /** Rain strokes drawn now, and how far the rain has fallen (metres, inside its box). */
+    strokes: number;
+    fallen: [number, number, number];
+    /** Lamps throwing a pool (of four slots), and glows drawn. */
+    pools: number;
+    glows: number;
+  };
   /** The frame-rate ladder: every change this session, and the best rung it may still climb to. */
   ladder: { changes: LadderChange[]; bestAllowed: number };
   /** Rungs shed by the frame-rate ladder, and what the look draws now. */
@@ -156,6 +180,8 @@ export class InkWashWorldView implements WorldView {
   private readonly effects = new Effects();
   private readonly glows = new LampGlows();
   private readonly rain = new Rain();
+  /** `&rain=0` leaves the rain's strokes out (the rings, the wet and the sky stay): to prove that in rain the land changes only where a stroke is drawn. */
+  private rainStrokes = true;
   private readonly islands: IslandView[] = [];
   private readonly beacon = new THREE.Group();
   private readonly matrix = new THREE.Matrix4();
@@ -212,6 +238,7 @@ export class InkWashWorldView implements WorldView {
     this.benchDraws = Math.max(1, Math.min(64, Number(switches.get('bench')) || 1));
     this.heroPass = switches.get('hero') !== '0';
     this.stallMilliseconds = Math.max(0, Number(switches.get('stall')) || 0);
+    this.rainStrokes = switches.get('rain') !== '0';
 
     const post = createPost(renderer, this.camera);
     this.post = post;
@@ -657,7 +684,7 @@ export class InkWashWorldView implements WorldView {
     // Where the heroes are on the window: each gets a rectangle of the canvas, drawn at the canvas's own size.
     this.heroes.updateMatrixWorld();
     const windows = this.heroPass ? heroWindows(this.canoe.heroes(), camera, this.canvasWidth, this.canvasHeight, heroMargin(this.canvasHeight)) : [];
-    post.render(this.scene, camera, water.mesh, this.rain.falling ? [this.rain.scene, marks.scene] : marks.scene, this.quality.reflection > 0, (pass) => this.beforePass(pass), this.heroPass ? this.heroes : null, windows);
+    post.render(this.scene, camera, water.mesh, this.rainStrokes && this.rain.falling ? [this.rain.scene, marks.scene] : marks.scene, this.quality.reflection > 0, (pass) => this.beforePass(pass), this.heroPass ? this.heroes : null, windows);
   }
 
   /** Before each pass of the world (2 mirrored, 0 colour, 1 ink): the mirror sees less, and the ink buffer no washes of light. */
@@ -768,6 +795,22 @@ export class InkWashWorldView implements WorldView {
         figures: state && this.stage !== 'lobby' ? this.canoe.figures() : [],
         pen: thinned ? heroPen(2 * Math.tan((this.camera.fov * Math.PI) / 360) * depth) : 1,
         subject: figure && { x: figure.x / ratio, y: (this.canvasHeight - figure.y - figure.h) / ratio, width: figure.w / ratio, height: figure.h / ratio },
+      },
+      weather: {
+        rain: this.weather?.rain ?? 0,
+        storm: this.weather?.storm ?? 0,
+        veil: this.weather?.veil ?? 0,
+        overcast: this.weather?.overcast ?? 0,
+        visibility: this.weather?.visibility ?? 0,
+        wind: [this.weather?.windX ?? 0, this.weather?.windZ ?? 0],
+        ahead: this.weather?.ahead ?? 0,
+        stars: GU.uStars.value,
+        lampShare: GU.uDark.value,
+        wet: GU.uWet.value,
+        strokes: this.rainStrokes ? this.rain.drawn : 0,
+        fallen: [...this.rain.fallen],
+        pools: GU.uLamp.value.filter((lamp) => lamp.w > 0).length,
+        glows: this.glows.mesh.count,
       },
       ladder: { changes: this.ladder.changes.map((change) => ({ ...change })), bestAllowed: this.ladder.bestAllowed },
       rung: this.ladder.rung,

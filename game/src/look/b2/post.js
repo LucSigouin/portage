@@ -742,7 +742,7 @@ export function createPost(renderer, camera) {
       // (one scene, or several in order: the rain's strokes go under the marks)
       for (const layer of overlay ? [overlay].flat() : []) {
         renderer.setRenderTarget(null);
-        renderer.render(layer, cam);
+        for (let draw = times('overlay'); draw > 0; draw -= 1) renderer.render(layer, cam);
       }
     },
     dispose() {

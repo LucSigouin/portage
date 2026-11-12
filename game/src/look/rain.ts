@@ -155,6 +155,16 @@ export class Rain {
     this.scene.add(this.mesh);
   }
 
+  /** How many strokes are drawn now. */
+  get drawn(): number {
+    return Math.round(this.uniforms.uLevel.value * RAIN_STROKES);
+  }
+
+  /** How far the rain has fallen and blown, metres, inside its box. It stands still while the paint time does. */
+  get fallen(): readonly [number, number, number] {
+    return this.shift;
+  }
+
   /** True when there is rain to draw. */
   get falling(): boolean {
     return this.uniforms.uLevel.value > 0.001;

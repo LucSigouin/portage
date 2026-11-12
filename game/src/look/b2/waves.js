@@ -5,8 +5,10 @@ import * as THREE from 'three';
 
 export const WAVE_COUNT = 4;
 export const REGION_COUNT = 4;
-// The most the wave sum reaches per point of roughness, metres: the amplitudes of the rules' WAVE_TABLE, added up.
-export const WAVE_AMPLITUDE = 0.177;
+// The most the chop reaches per point of roughness, metres: the amplitudes of the rules' WAVE_TABLE added up, without
+// its longest wave. (Whitecaps are drawn from the chop: several of its crests are in any view, so the white on the
+// water stays even. The long swell would whiten the whole view at once and clear it again, every few seconds.)
+export const WAVE_CHOP = 0.092;
 
 const vec4s = (count) => Array.from({ length: count }, () => new THREE.Vector4());
 

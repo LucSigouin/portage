@@ -2,7 +2,7 @@
 // brush-broken reflections, white ink foam at the shore and in the wake.
 import * as THREE from 'three';
 import { GU, NOISE, glsl } from './palette.js';
-import { WAVES, WAVE_AMPLITUDE, WAVE_COUNT } from './waves.js';
+import { WAVES, WAVE_CHOP, WAVE_COUNT } from './waves.js';
 
 export const SHORE_ISLANDS = 4; // the water knows the ground of the nearest few islands
 
@@ -213,20 +213,20 @@ void main(){
     }
     float blow = smoothstep(5.5, 9.5, uWind.z);
     if (blow > 0.) {
-      // whitecaps: where the rules' own waves stand highest the crest breaks, in white dry-brush marks that ride the water.
-      // The harder the wind, and the rougher the region, the lower a crest has to be to break.
+      // whitecaps: white dry-brush marks that ride the water, more of them the harder the wind blows and the rougher
+      // the region is, and heavier on the crests of the rules' own chop. Each mark comes and goes on its own slow
+      // time, as the ripple strokes do, so the white on the water stays even: marks that broke only as a crest
+      // passed whitened the whole view and cleared it again every few seconds, and that is a pulse.
+      // (the chop: every wave but the long swell: see waves.js)
       float crest = 0.;
-      for (int i = 0; i < ${WAVE_COUNT}; i++) crest += uWave[i].z * sin(dot(uWave[i].xy, vWorld.xz) + uWave[i].w);
-      crest /= ${WAVE_AMPLITUDE.toFixed(4)};
-      float least = mix(1.05, .4, blow) - (waterRoughness(vWorld.z) - 1.) * .06;
-      float zone = smoothstep(least, least + .2, crest);
-      // (the marks are the ripple strokes' own, bigger and all white, laid along the crests of the longest wave)
-      vec2 run = normalize(uWave[0].xy);
+      for (int i = 1; i < ${WAVE_COUNT}; i++) crest += uWave[i].z * sin(dot(uWave[i].xy, vWorld.xz) + uWave[i].w);
+      float onCrest = smoothstep(-.2, .6, crest / ${WAVE_CHOP.toFixed(4)});
+      // (the marks are the ripple strokes' own, bigger and all white, laid along the crests of the chop's longest wave)
+      vec2 run = normalize(uWave[1].xy);
       vec2 Pc = vec2(dot(P, vec2(-run.y, run.x)), dot(P, run));
-      vec2 caps = strokes(Pc + 53.1, 2.7, t * .6, pxR) + strokes(Pc + 19.4, 4.4, t * .5, pxR);
-      // and at the very top of a crest the white fills in, broken like dry brush
-      float fill = smoothstep(least + .3, least + .5, crest) * smoothstep(.5, .58, vnoise(P * 1.3 + 4.)) * (1. - smoothstep(.25, .8, pxR));
-      foam = max(foam, max(zone * clamp(caps.x + caps.y, 0., 1.), fill * .85));
+      vec2 caps = strokes(Pc + 53.1, 2.7, t * .6, pxR) + strokes(Pc + 19.4, 4.6, t * .5, pxR);
+      float rough = clamp((waterRoughness(vWorld.z) - 1.) / 3., 0., 1.);
+      foam = max(foam, clamp(caps.x + caps.y, 0., 1.) * blow * mix(.6, 1., rough) * mix(.75, 1., onCrest));
     }
   }
   c = mix(c, uInkBlue, clamp(st.x, 0., 1.) * .72);
