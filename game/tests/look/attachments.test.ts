@@ -116,6 +116,36 @@ describe('every attachment', () => {
   });
 });
 
+describe('pieces seen from their plain side', () => {
+  /** How many of a piece's vertices lie where `inside` says, in the mount's own space. */
+  const count = (attachmentId: AttachmentId, inside: (x: number, y: number, z: number, lowest: number) => boolean): number => {
+    let found = 0;
+    const meshes = meshesOf(build(attachmentId, 3).object);
+    const box = new THREE.Box3();
+    for (const mesh of meshes) {
+      mesh.geometry.computeBoundingBox();
+      box.union(mesh.geometry.boundingBox!);
+    }
+    for (const mesh of meshes) {
+      const position = mesh.geometry.getAttribute('position');
+      for (let index = 0; index < position.count; index += 1) {
+        if (inside(position.getX(index), position.getY(index), position.getZ(index), box.min.y)) found += 1;
+      }
+    }
+    return found;
+  };
+
+  it('the workbench shows a saw and a coil of line on the back of its tool board, which is what the port side sees', () => {
+    // The bench is on the port deck: outboard is -x. The board's back is 22 cm out from the mount, the bench top 62 cm up.
+    expect(count('workbench', (x, y) => x < -0.223 && y > 0.66)).toBeGreaterThan(300);
+  });
+
+  it('the radio shack has a window, its name and the lead-in on its aft wall, which is what shows from astern', () => {
+    // The wall is 14 cm aft of the mount, the shack 30 cm wide about a centre 6 cm to starboard, 32 cm tall.
+    expect(count('radio', (x, y, z, lowest) => z > 0.1405 && z < 0.18 && Math.abs(x - 0.06) < 0.15 && y < lowest + 0.31)).toBeGreaterThan(300);
+  });
+});
+
 describe('pieces with a state', () => {
   const visibleVertices = (piece: AttachmentPiece): number =>
     meshesOf(piece.object).reduce((sum, mesh) => {
