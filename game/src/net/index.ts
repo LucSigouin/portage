@@ -3,7 +3,9 @@
  * (`HostLink`); guests send what they hold and what they ask for and show
  * what the host says (`GuestLink`). Messages cross a `Transport`: the
  * loopback pair in tests, the channel between tabs for `?host=` and `?join=`,
- * a relay later. Nothing in here but `tabs.ts` touches the browser.
+ * and the relay on the internet (`relay.ts`, imported by name where it is
+ * used, so a build without a relay carries none of it). Nothing in here but
+ * `tabs.ts` touches the browser.
  */
 export { PROTOCOL_VERSION, readClientMessage, readCommand, readHostMessage, readInput } from './messages.ts';
 export type {

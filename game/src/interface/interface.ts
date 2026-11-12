@@ -231,13 +231,45 @@ export class InkInterface implements GameInterface {
   // --- Pointer and form controls ---------------------------------------------------
 
   private onClick(event: MouseEvent): void {
+    // A field that only shows something (the invite link) is selected whole, ready to copy by hand.
+    if (event.target instanceof HTMLInputElement && event.target.readOnly) event.target.select();
     const button = event.target instanceof Element ? event.target.closest('button') : null;
     if (!button || button.disabled) return;
     const intent = intentOf(button);
     if (!intent) return;
+    const copy = button.dataset.copy;
+    if (copy !== undefined) {
+      // The intent says "copied": it goes out only once the words are on the clipboard.
+      void this.copyText(copy, button).then((copied) => {
+        if (copied) this.emit(intent);
+      });
+      return;
+    }
     this.emit(intent);
     // A click by pointer hands the keyboard back to the game. A press by key keeps its place.
     if (event.detail > 0) button.blur();
+  }
+
+  /**
+   * Put text on the clipboard. Where the browser will not let a script do it
+   * (a page not served over https), the field beside the button is selected
+   * and copied the old way; failing that it stays selected, to copy by hand.
+   */
+  private async copyText(text: string, from: HTMLElement): Promise<boolean> {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      const field = from.closest('.iw-panel')?.querySelector<HTMLInputElement>('input[data-copy-source]');
+      if (!field) return false;
+      field.focus();
+      field.select();
+      try {
+        return document.execCommand('copy');
+      } catch {
+        return false;
+      }
+    }
   }
 
   private onChange(event: Event): void {
@@ -257,7 +289,12 @@ export class InkInterface implements GameInterface {
 
   /** A slider's wash follows the bead while it is dragged. The value is sent when it is let go. */
   private onInput(event: Event): void {
-    if (event.target instanceof HTMLInputElement && event.target.type === 'range') this.fillSlider(event.target);
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    if (target.type === 'range') this.fillSlider(target);
+    // What is typed on a line goes to the model at once, and the model's wording of it comes back next frame.
+    const field = target.dataset.field;
+    if (field === 'name' || field === 'code') this.emit({ type: 'crew_field', field, value: target.value });
   }
 
   private fillSlider(slider: HTMLInputElement): void {
@@ -294,6 +331,11 @@ export class InkInterface implements GameInterface {
     if (!surface) return [];
     return Array.from(surface.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled])'))
       .filter((control) => control.tabIndex >= 0 && control.getClientRects().length > 0);
+  }
+
+  private focusEmptyField(): void {
+    const fields = Array.from(this.topSurface()?.querySelectorAll<HTMLInputElement>('input[data-field]:not([disabled])') ?? []);
+    (fields.find((field) => field.value === '') ?? (this.keyboardNavigation ? this.focusableControls()[0] : undefined))?.focus();
   }
 
   private moveFocus(backwards: boolean): void {
@@ -355,6 +397,13 @@ export class InkInterface implements GameInterface {
       case 'Enter':
       case 'NumpadEnter':
       case 'Space':
+        // Enter on a line that is typed on presses the card's main button.
+        if (event.code !== 'Space' && target instanceof HTMLInputElement && target.dataset.field) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          surface.querySelector<HTMLButtonElement>('button[data-primary]:not([disabled])')?.click();
+          return;
+        }
         // The focused button takes the press. The game must not also act on the key.
         if (onControl && !inField) {
           this.setKeyboardNavigation(true);
@@ -446,6 +495,8 @@ export class InkInterface implements GameInterface {
       // A player steering by key lands on the first control of whatever just opened.
       // Back in play with nothing open, the keyboard is the game's again.
       if (!surface) this.setKeyboardNavigation(false);
+      // A card with a line to type on opens with the caret on the first empty one.
+      else if (surface.startsWith('panel:crew_')) this.focusEmptyField();
       else if (this.keyboardNavigation) this.focusableControls()[0]?.focus();
     } else if (this.pendingTab && this.pendingTab.stack === stack) {
       this.setKeyboardNavigation(true);

@@ -15,10 +15,16 @@ import { parseDebugParameters } from './client/debug/parameters.ts';
 import { createGameInterface } from './interface/index.ts';
 import { createWorldView } from './look/index.ts';
 import { setLocalPlayerId } from './look/crew.ts';
+import { CrewLobby } from './client/crewlobby.ts';
 import { createFrameLoop } from './client/loop.ts';
 import type { FrameLoop } from './client/loop.ts';
 import type { SessionStorage } from './client/session.ts';
 import { hostTabRoom, joinTabRoom } from './net/index.ts';
+import { resolveRelayAddress } from './net/relay.ts';
+import type { SocketLike } from './net/relay.ts';
+
+/** Where the relay is, from the build (`vite.config.ts`). Empty: this build has no relay, and nothing below runs. */
+declare const __PORTAGE_RELAY__: string;
 
 /** Storage that forgets. The debug switches play in it, so real saves are never touched. */
 function createMemoryStorage(): SessionStorage {
@@ -105,6 +111,18 @@ function boot(): void {
       room?.close();
       room = hostTabRoom(roomName, (transport) => link.accept(transport));
     };
+  }
+
+  // The relay: "Host a crew" and "Join a crew" in the lobby. Not with the tab switches, which share a game their own way.
+  const relayAddress = __PORTAGE_RELAY__ && parameters.host === null && parameters.join === null
+    ? resolveRelayAddress(__PORTAGE_RELAY__, window.location.origin) : null;
+  if (relayAddress) {
+    session.crew = new CrewLobby({
+      session, address: relayAddress, pageAddress: window.location.origin + window.location.pathname,
+      open: (address, protocols) => new WebSocket(address, protocols) as unknown as SocketLike, storage: browserStorage(), invite: parameters.invite,
+    });
+    // An invite link lands on the join card, with its code filled in.
+    if (parameters.invite !== null && !parameters.sandbox) session.handleIntent({ type: 'open_panel', panel: 'crew_join' });
   }
 
   worldView.mount(worldElement);

@@ -9,7 +9,7 @@
 import type {
   BuildRowModel, ButtonModel, ConfirmModel, CostRowModel, CrewRowModel, DebugModel, HotbarSlotModel, HudModel, InterfaceIntent,
   ItemSlotModel, LobbyModel, MapMarkerModel, ObjectiveRowModel, PanelModel, PromptModel, QuestRowModel, RecipeRowModel,
-  SaveSlotModel, SettingRowModel, ToastModel,
+  SaveSlotModel, SettingRowModel, TextFieldModel, ToastModel,
 } from '../client/contracts.ts';
 import { control, h } from './dom.ts';
 import type { ViewChild, ViewNode } from './dom.ts';
@@ -443,6 +443,67 @@ function dialogueView(panel: Extract<PanelModel, { id: 'dialogue' }>): ViewNode[
     h('nav.iw-menu.iw-answers', null, panel.options.map(menuItemView)))];
 }
 
+// --- The crew lobby ------------------------------------------------------------------
+
+/** A line the player types on, ruled like the pickers. What is typed goes back as a `crew_field` intent. */
+function textFieldView(field: TextFieldModel): ViewNode {
+  const id = `iw-field-${field.field}`;
+  return h('div.iw-row.iw-field', { key: field.field },
+    h('label.iw-l', { for: id }, field.label),
+    h('input.iw-text', {
+      type: 'text', id, 'data-field': field.field, value: field.value, maxlength: field.maxLength, placeholder: field.placeholder,
+      disabled: !field.enabled, autocomplete: 'off', autocapitalize: field.field === 'code' ? 'characters' : 'words', spellcheck: 'false',
+      class: field.field === 'code' ? 'iw-text-code' : '',
+    }));
+}
+
+/** How the line is doing. Always there, so the card keeps its height when the words come and go. Nothing in it moves. */
+const crewStatusView = (status: string, tone: string): ViewNode =>
+  h('p.iw-crew-status', { key: 'status', role: 'status', class: `iw-tone-${tone}` }, status);
+
+/** The card every crew panel is written on. The first action is the one Enter presses from a field. */
+function crewSheet(panel: PanelModel, body: ViewChild, actions: ButtonModel[], quiet: ButtonModel | null): ViewNode[] {
+  return [h('section.iw-panel.iw-paper.iw-mid.iw-panel-crew', { key: panel.id, class: `iw-panel-${panel.id}`, role: 'dialog', 'aria-label': panel.title },
+    h('i.iw-tape.iw-a'),
+    h('header', null, h('h2', null, panel.title)),
+    h('div.iw-body', { key: 'body' }, body),
+    h('footer', null,
+      quiet ? buttonView(quiet, 'button.iw-btn.iw-quiet', true, 'quiet') : h('span'),
+      h('div.iw-actions', null,
+        actions.map((action, index) => {
+          const view = buttonView(action, index === 0 ? 'button.iw-btn.iw-go' : 'button.iw-btn', true, index);
+          if (index === 0) view.attributes = { ...view.attributes, 'data-primary': '' };
+          return view;
+        }),
+        buttonView(panel.close, 'button.iw-btn', true, 'close'))))];
+}
+
+function crewHostView(panel: Extract<PanelModel, { id: 'crew_host' }>): ViewNode[] {
+  const room = panel.room;
+  return crewSheet(panel, [
+    textFieldView(panel.name),
+    room ? h('div.iw-room', { key: 'room' },
+      h('div.iw-room-code', null, h('span.iw-room-label', null, 'Crew code'), h('b.iw-code', { 'data-room-code': '' }, room.code)),
+      h('div.iw-room-link', null,
+        h('label.iw-room-label', { for: 'iw-invite-link' }, 'Invite link'),
+        h('input.iw-text.iw-text-link', { type: 'text', id: 'iw-invite-link', readonly: true, value: room.link, 'data-copy-source': '' }),
+        control(h('button.iw-btn.iw-small', { type: 'button', 'data-copy': room.link },
+          h('span.iw-label', null, room.copy.label),
+          room.copy.note ? h('small.iw-note', null, room.copy.note) : null), room.copy.intent))) : null,
+    crewStatusView(panel.status, panel.statusTone),
+    panel.lines.map((line, index) => h('p.iw-crew-line', { key: `line-${index}` }, line)),
+  ], panel.actions, panel.stop);
+}
+
+function crewJoinView(panel: Extract<PanelModel, { id: 'crew_join' }>): ViewNode[] {
+  return crewSheet(panel, [
+    textFieldView(panel.code),
+    textFieldView(panel.name),
+    crewStatusView(panel.status, panel.statusTone),
+    panel.lines.map((line, index) => h('p.iw-crew-line', { key: `line-${index}` }, line)),
+  ], [panel.join], panel.cancel);
+}
+
 export function panelView(panel: PanelModel): ViewNode[] {
   switch (panel.id) {
     case 'settings': return settingsView(panel);
@@ -457,6 +518,8 @@ export function panelView(panel: PanelModel): ViewNode[] {
     case 'quest_log': return questLogView(panel);
     case 'map': return mapView(panel);
     case 'dialogue': return dialogueView(panel);
+    case 'crew_host': return crewHostView(panel);
+    case 'crew_join': return crewJoinView(panel);
   }
 }
 

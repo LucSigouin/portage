@@ -44,5 +44,12 @@ export type InterfaceIntent =
   | { type: 'load_game'; slot: number }
   | { type: 'delete_save'; slot: number }
   | { type: 'quit_to_lobby' }
+  // the crew lobby (a game built with a relay address)
+  | { type: 'crew_field'; field: 'name' | 'code'; value: string }
+  | { type: 'crew_open_room' }
+  | { type: 'crew_stop_hosting' }
+  | { type: 'crew_copied' }
+  | { type: 'crew_join' }
+  | { type: 'crew_cancel_join' }
   // feedback only: the pointer moved onto a control
   | { type: 'hover' };

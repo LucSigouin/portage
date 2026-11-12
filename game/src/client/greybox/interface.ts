@@ -186,6 +186,14 @@ function panelBodyHtml(panel: PanelModel): string {
         + '</div>';
     case 'dialogue':
       return `<p class="gb-speech">${escapeHtml(panel.text)}</p><nav class="gb-column">${panel.options.map((option) => buttonHtml(option)).join('')}</nav>`;
+    // The crew lobby is the Ink & Wash interface's. The greybox only says where things stand.
+    case 'crew_host':
+      return `<p>${escapeHtml(panel.status)}</p>${panel.room ? `<p><b>${escapeHtml(panel.room.code)}</b> ${escapeHtml(panel.room.link)}</p>` : ''}`
+        + panel.lines.map((line) => `<p>${escapeHtml(line)}</p>`).join('')
+        + `<nav class="gb-column">${[...panel.actions, ...(panel.stop ? [panel.stop] : [])].map((button) => buttonHtml(button)).join('')}</nav>`;
+    case 'crew_join':
+      return `<p>${escapeHtml(panel.status)}</p>${panel.lines.map((line) => `<p>${escapeHtml(line)}</p>`).join('')}`
+        + `<nav class="gb-column">${[panel.join, ...(panel.cancel ? [panel.cancel] : [])].map((button) => buttonHtml(button)).join('')}</nav>`;
   }
 }
 

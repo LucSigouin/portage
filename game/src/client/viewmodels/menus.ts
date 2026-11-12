@@ -3,7 +3,9 @@ import { MAIN_QUESTS } from '../../data/index.ts';
 import type { SlotSummary } from '../../save/index.ts';
 import type { Settings } from '../../settings/index.ts';
 import type { InterfaceIntent } from '../intents.ts';
+import type { CrewView } from '../crewlobby.ts';
 import type { ConfirmAction } from '../panels.ts';
+import { buildCrewLobbyButtons, buildCrewPauseButton } from './crew.ts';
 import { actionKeys, capitalise, durationText } from './format.ts';
 import type { ButtonModel, ConfirmModel, ControlLineModel, LobbyModel, PanelModel, SaveSlotModel } from './types.ts';
 
@@ -59,7 +61,8 @@ export function buildSaveSlotsPanel(summaries: readonly SlotSummary[], now: numb
   return { id: 'save_slots', slots: summaries.map((summary) => buildSaveSlot(summary, now, currentSlot)) };
 }
 
-export function buildLobbyModel(summaries: readonly SlotSummary[], latestSlot: number | null): LobbyModel {
+/** `crew` is the crew lobby's state, or null in a game built without a relay: then the menu has no crew entries at all. */
+export function buildLobbyModel(summaries: readonly SlotSummary[], latestSlot: number | null, crew: CrewView | null = null): LobbyModel {
   const latest = summaries.find((summary) => summary.slot === latestSlot);
   return {
     title: 'Portage',
@@ -68,6 +71,7 @@ export function buildLobbyModel(summaries: readonly SlotSummary[], latestSlot: n
       button('Continue', { type: 'continue_game' }, latest !== undefined,
         latest ? `Slot ${latest.slot + 1}: day ${latest.day}, ${questText(latest.mainQuestId)}` : 'No saved game yet'),
       button('New Game', { type: 'open_panel', panel: 'save_slots' }, true, 'Pick one of three save slots'),
+      ...(crew ? buildCrewLobbyButtons(crew) : []),
       button('Settings', { type: 'open_panel', panel: 'settings' }),
       button('How to Play', { type: 'open_panel', panel: 'how_to_play' }),
       button('Credits', { type: 'open_panel', panel: 'credits' }),
@@ -75,12 +79,14 @@ export function buildLobbyModel(summaries: readonly SlotSummary[], latestSlot: n
   };
 }
 
-export function buildPausePanel(summary: string): PanelBody<'pause'> {
+export function buildPausePanel(summary: string, crew: CrewView | null = null): PanelBody<'pause'> {
+  const crewButton = crew ? buildCrewPauseButton(crew) : null;
   return {
     id: 'pause',
     summary,
     buttons: [
       button('Resume', { type: 'resume' }),
+      ...(crewButton ? [crewButton] : []),
       button('Settings', { type: 'open_panel', panel: 'settings' }),
       button('How to Play', { type: 'open_panel', panel: 'how_to_play' }),
       button('Save and quit to the lobby', { type: 'quit_to_lobby' }),

@@ -27,7 +27,9 @@ import {
 import type { ConfirmAction, PanelAction, PanelEffect, PanelId, PanelState, ScreenId } from './panels.ts';
 import { failureText, keyLabel, refusalText } from './viewmodels/format.ts';
 import { GuestLink, HostLink } from '../net/index.ts';
-import type { LeaveReason, Transport } from '../net/index.ts';
+import type { Transport } from '../net/index.ts';
+import type { CrewLobby } from './crewlobby.ts';
+import { JOIN_PROBLEM_TEXT, LEAVE_TEXT } from './viewmodels/crew.ts';
 import { applySettingChange } from './viewmodels/settings.ts';
 import type { Tone } from './viewmodels/types.ts';
 
@@ -83,14 +85,6 @@ export const MAXIMUM_STEPS_PER_FRAME = 2400;
 
 const defaultRandomSeed = (): number => Math.floor(Math.random() * 0x7fffffff);
 
-/** Why a guest is back in the lobby, in words. */
-const LEAVE_TEXT: Readonly<Record<LeaveReason, string>> = {
-  full: 'That crew is full.',
-  version: 'The host runs another version of the game. Reload the page.',
-  replaced: 'You joined this game from another window.',
-  closed: 'The host closed the game.',
-};
-
 export class Session {
   settings: Settings;
   panels: PanelState = createPanelState('lobby');
@@ -117,6 +111,11 @@ export class Session {
   host: HostLink | null = null;
   /** The link to the host while this session is a guest. Then `game` is the host's state, a beat behind, and nothing here changes it. */
   guest: GuestLink | null = null;
+  /**
+   * The crew lobby: hosting a room on the relay and joining one. Null in a game
+   * built without a relay address: then the lobby has no crew entries and none of it runs.
+   */
+  crew: CrewLobby | null = null;
   /** The slot the game autosaves into. Null for a staged game that never saves. */
   slot: number | null = null;
   /** The scene behind the lobby: a game nobody plays. */
@@ -285,16 +284,30 @@ export class Session {
     if (state.difficulty !== this.settings.gameplay.difficulty) {
       dispatch(state, { type: 'set_difficulty', difficulty: this.settings.gameplay.difficulty });
     }
-    if (this.onShare) {
-      if (this.playerName !== '') setPlayerName(state, this.localPlayerId, this.playerName);
-      this.host = new HostLink({ game: state, hostPlayerId: this.localPlayerId });
-      this.hostId = this.localPlayerId;
-      this.onShare(this.host);
-    }
+    this.share();
     this.input.releaseAll();
     this.applyPanels({ type: 'show_screen', screen: 'game' });
     this.signal({ type: 'screen_changed', screen: 'game' });
     this.signal({ type: 'game_started', slot });
+  }
+
+  /**
+   * Share the game on the screen, if `onShare` is set and it is not shared
+   * already. Every new game does this by itself; call it after setting
+   * `onShare` in the middle of one.
+   */
+  share(): void {
+    const game = this.game;
+    if (!game || !this.onShare || this.host || this.guest) return;
+    if (this.playerName !== '') setPlayerName(game, this.localPlayerId, this.playerName);
+    this.host = new HostLink({ game, hostPlayerId: this.localPlayerId });
+    this.hostId = this.localPlayerId;
+    this.onShare(this.host);
+  }
+
+  /** Tell the player something in a note. */
+  announce(text: string, tone: Tone = 'info'): void {
+    this.notice(text, tone);
   }
 
   /** Save the running game into its slot right now. */
@@ -333,6 +346,7 @@ export class Session {
   pageClosing(): void {
     this.guest?.close();
     this.stopSharing();
+    this.crew?.pageClosing();
     this.saveNow();
   }
 
@@ -446,8 +460,10 @@ export class Session {
     guest.update(frameSeconds);
     if (guest.status === 'refused' || guest.status === 'closed') {
       const reason = guest.leaveReason ?? 'closed';
+      // When it was the line that went and not the host's doing, the crew lobby knows why.
+      const lineFailure = this.crew?.guestEnded(guest.leaveReason) ?? null;
       this.leaveHost();
-      this.notice(LEAVE_TEXT[reason], 'warning');
+      this.notice(lineFailure !== null ? JOIN_PROBLEM_TEXT[lineFailure] : LEAVE_TEXT[reason], 'warning');
     }
     const view = this.guest?.status === 'playing' ? this.guest.view() : null;
     if (!view) {
@@ -689,6 +705,8 @@ export class Session {
         this.sound('hover');
         break;
       case 'open_panel':
+        // The crew panels belong to the crew lobby: without one they do not open.
+        if ((intent.panel === 'crew_host' || intent.panel === 'crew_join') && !this.crew) break;
         this.applyPanels({ type: 'open', panel: intent.panel });
         break;
       case 'close_panel':
@@ -741,6 +759,34 @@ export class Session {
         break;
       case 'quit_to_lobby':
         this.applyPanels({ type: 'ask_confirm', action: { type: 'quit_to_lobby' } });
+        break;
+      case 'crew_field':
+        this.crew?.setField(intent.field, intent.value);
+        break;
+      case 'crew_open_room':
+        if (!this.crew) break;
+        this.crew.openRoom();
+        this.sound('click');
+        break;
+      case 'crew_stop_hosting':
+        if (!this.crew) break;
+        this.crew.stopHosting();
+        this.sound('close');
+        break;
+      case 'crew_copied':
+        if (!this.crew) break;
+        this.crew.markCopied();
+        this.sound('click');
+        break;
+      case 'crew_join':
+        if (!this.crew) break;
+        this.crew.join();
+        this.sound('click');
+        break;
+      case 'crew_cancel_join':
+        if (!this.crew) break;
+        this.crew.cancelJoin();
+        this.sound('close');
         break;
     }
   }
