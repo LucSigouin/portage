@@ -121,11 +121,11 @@ The rules own the weather. `weather.ts` turns `state.weather` into a handful of 
 | Rings on the water | rain level | `rainRings` in `b2/water.js`. Each cell keeps its own time. A ring is clear at both ends of its life, so none pops |
 | Wet ground | rain level | `uWet` in `b2/palette.js`: what faces the sky darkens |
 | Storm sky | `stormLevel` | the storm palette, and a second darker cloud wash hung low (`b2/sky.js`) |
-| Whitecaps | wind speed (from 5.5 m/s, full at 9.5), region roughness, the chop | `b2/water.js`. White marks in the ripple strokes' own hand. Each keeps its own slow time. Do not tie them to a passing crest alone: that whitened the whole view every few seconds (the brightness test caught it as a pulse) |
+| Whitecaps | wind speed (from 5.5 m/s, full at 9.5), region roughness, the chop | `b2/water.js`. White marks in the ripple strokes' own hand. Each keeps its own slow time. Near the eye the big marks were bands ten pixels thick: within 8 m the wind whitens the pen's own ripple strokes instead (the set a metre across), so nothing is drawn twice. The middle set takes over by 18 m and the biggest comes in from 30 to 48 m. Do not tie them to a passing crest alone: that whitened the whole view every few seconds (the brightness test caught it as a pulse) |
 | Fog | `kind === 'fog'` (`uVeil`) | the sky closes and the ridges and far shore go into it; the foot of a near island softens before its top. The Beacon's fog wall is untouched: 35% visibility, no veil |
 | What is coming | `nextKind`, `secondsRemaining`, the wind | a cloud bank in the next weather's colour stands on the upwind horizon for the last 90 s (the rules' storm warning) and climbs. Slate for a storm, grey for rain, low and pale for fog, light for a clearing |
 | Stars, moon | hour, cloud, fog | fixed on the dome, never under a pixel across, no twinkle |
-| Lamp pools | `canoe.lanternLit` + `lantern_mast`, `firebox` fitted, a camp on the island, `flags.beacon_lit` | `lamps.ts`, `uLamp` in `b2/palette.js` and `b2/water.js`. A warm pool in two flat tones with a hand-wobbled edge. Inside it a thing has its own colours back. Four slots: lantern, firebox, Beacon, nearest camp fire |
+| Lamp pools | `canoe.lanternLit` + `lantern_mast`, `firebox` fitted, a camp on the island, `flags.beacon_lit` | `lamps.ts`, `uLamp` in `b2/palette.js` and `b2/water.js`. A warm pool in two flat tones with a hand-wobbled edge. On the water the wash is thin and the pen marks carry the light: the ripple strokes inside the pool are drawn in the lamp's colour. Inside it a thing has its own colours back. Four slots: lantern, firebox, Beacon, nearest camp fire |
 | Glows | the same | `LampGlows`: a wash on a card facing the eye, round every burning flame. In the mirror, out of the ink buffer |
 
 - Lamp light shows by `lampShareAt`: none in daylight, all of it at night, 40% under a full storm by day.
@@ -174,12 +174,13 @@ PORTAGE_URL=http://localhost:5221 npm --prefix e2e test       # browser: bot, ke
 - the heroes at the window's size with the full pen in a storm at night on rung 9
 - rung 1 sheds the weather's fine work and nothing else
 - a rain stroke stops at what stands in front of it: side on to the canoe from 2.6 m the strokes mark the view round it and not the canoe; looking down at the ground from 1.5 m they mark nothing
+- the lantern's pool is strokes of lamp light (marks in the lamp's colour on the water beside the canoe, none with the lantern out), and the white marks nearest the eye in a storm are no heavier than a pen line (6 pixels at 1080p, under 8: they were 10)
 
 `tests/look/weather.test.ts` checks the numbers with no graphics card: each goal against the rules' weather, the easing, the lamps against their flags, the rain's box, the storm palette, the chop against the rules' wave table.
 
 `tests/look/crew.test.ts` checks the same from the figures themselves, with no graphics card: clothes by id, seats against the rules on all four tiers, nobody inside another or the hull, each pose by its flag, and the pen's law.
 
-`PORTAGE_LOOK_BREAK='&hero=0'` (or `&rung=9`, `&boil=1`, `&bench=24`, `&heropen=0`) makes the matching checks fail. Run it when you change them. The crew checks have no switch: break the line in `canoe.ts` they guard (the outfit, the seat, the flag) and watch them fail. The weather checks likewise: feed the rain real time instead of paint time, dip `uDark` every 20th frame, pulse `uWet`, hand `weatherGoals` a clear sky, never light the lantern, snap `easeWeather`, zero `ahead`, swap rung 1, leave the copy of a hero window's depth out of `behind` (or hold the strokes against the heroes' depth alone).
+`PORTAGE_LOOK_BREAK='&hero=0'` (or `&rung=9`, `&boil=1`, `&bench=24`, `&heropen=0`) makes the matching checks fail. Run it when you change them. The crew checks have no switch: break the line in `canoe.ts` they guard (the outfit, the seat, the flag) and watch them fail. The weather checks likewise: feed the rain real time instead of paint time, dip `uDark` every 20th frame, pulse `uWet`, hand `weatherGoals` a clear sky, never light the lantern, snap `easeWeather`, zero `ahead`, swap rung 1, leave the copy of a hero window's depth out of `behind` (or hold the strokes against the heroes' depth alone), drop the line that draws the ripple strokes in lamp light, set `capMid = 1.`.
 
 ## Debug switches
 

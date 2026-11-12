@@ -12,7 +12,8 @@
  * - it holds 55 frames a second in a storm, at night, and in a storm at night, at 1920×1080 on rung 0;
  * - the heroes are drawn at the window's size with the full pen in a storm at night on the ladder's last rung;
  * - the ladder's first rung sheds the weather's fine work and nothing else;
- * - a rain stroke stops at what stands in front of it: none shows through the canoe and its crew, none through the ground.
+ * - a rain stroke stops at what stands in front of it: none shows through the canoe and its crew, none through the ground;
+ * - the lantern's pool on the water is drawn in strokes of lamp light, and a whitecap near the eye is a pen stroke, not a band.
  *
  * Needs the dev server (PORTAGE_URL, default http://localhost:5221).
  *
@@ -472,6 +473,78 @@ test('a rain stroke stops at what stands in front of it: the canoe and its crew,
   const through = await strokesOn(page, wet, dry, dry, 10);
   console.log(`storm, looking down at the ground from 1.5 m: strokes mark ${(through.elsewhere * 100).toFixed(3)}% of it`);
   expect(through.elsewhere, 'no rain shows through the ground').toBe(0);
+  expect(problems).toEqual([]);
+});
+
+/**
+ * Marks in a capture. `warm`: the share of its pixels that are lamp light (lighter than night water, and redder than blue: night water is bluer than red).
+ * `heaviest`: how thick the heaviest white marks are, in pixels: for every white pixel the shorter of the white runs
+ * through it, across and down (a line's own width, whichever way it lies), and of those the one 98 in 100 are under.
+ */
+async function marksIn(page: Page, clip: { x: number; y: number; width: number; height: number }): Promise<{ warm: number; white: number; heaviest: number }> {
+  const png = await page.screenshot({ clip });
+  return page.evaluate(async (base64) => {
+    const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = canvas.getContext('2d')!;
+    context.drawImage(bitmap, 0, 0);
+    const { data, width, height } = context.getImageData(0, 0, bitmap.width, bitmap.height);
+    const white = new Uint8Array(width * height);
+    let warm = 0;
+    for (let index = 0; index < width * height; index += 1) {
+      const [red, green, blue] = [data[index * 4], data[index * 4 + 1], data[index * 4 + 2]];
+      if (red > 110 && red - blue > 25) warm += 1;
+      if (red > 185 && green > 185 && blue > 185) white[index] = 1;
+    }
+    // The white run through each pixel, across and down.
+    const across = new Uint16Array(width * height);
+    const down = new Uint16Array(width * height);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if (!white[y * width + x] || (x > 0 && white[y * width + x - 1])) continue;
+        let end = x;
+        while (end < width && white[y * width + end]) end += 1;
+        for (let fill = x; fill < end; fill += 1) across[y * width + fill] = end - x;
+      }
+    }
+    for (let x = 0; x < width; x += 1) {
+      for (let y = 0; y < height; y += 1) {
+        if (!white[y * width + x] || (y > 0 && white[(y - 1) * width + x])) continue;
+        let end = y;
+        while (end < height && white[end * width + x]) end += 1;
+        for (let fill = y; fill < end; fill += 1) down[fill * width + x] = end - y;
+      }
+    }
+    const widths: number[] = [];
+    for (let index = 0; index < width * height; index += 1) if (white[index]) widths.push(Math.min(across[index], down[index]));
+    widths.sort((first, second) => first - second);
+    return { warm: warm / (width * height), white: widths.length / (width * height), heaviest: widths.length ? widths[Math.floor(widths.length * 0.98)] : 0 };
+  }, png.toString('base64'));
+}
+
+test('the lantern\'s pool is strokes of lamp light, and a whitecap near the eye is a pen stroke', async ({ page }) => {
+  const problems = watchConsole(page);
+  // 1. Night, the lantern lit: the water beside the canoe carries marks in the lamp's colour. One flat wash had none.
+  await open(page, 'shot=night&hold=1');
+  await stage(page, "W('clear'); H(23.5); game.canoe.lanternLit = true;");
+  const lit = await probe(page);
+  const hero = lit.hero.windows[0];
+  const beside = { x: Math.max(0, hero.x - 320), y: lit.canvasHeight - hero.y - hero.h + Math.round(hero.h * 0.4), width: 300, height: Math.round(hero.h * 0.5) };
+  const pool = await marksIn(page, beside);
+  await stage(page, 'game.canoe.lanternLit = false;');
+  const dark = await marksIn(page, beside);
+  console.log(`night, the water beside the canoe: ${(pool.warm * 100).toFixed(2)}% of it is marks of lamp light with the lantern lit, ${(dark.warm * 100).toFixed(2)}% with it out`);
+  expect(pool.warm).toBeGreaterThan(0.02);
+  expect(dark.warm).toBeLessThan(0.005);
+
+  // 2. A storm by day, the strokes of rain left out: the white marks on the water nearest the eye (the foot of the
+  //    picture, clear of the canoe and its wake) are no heavier than a pen line. They were bands 10 pixels and more thick.
+  await open(page, 'shot=storm&hold=1&rain=0');
+  const near = await marksIn(page, { x: 60, y: 780, width: 620, height: 260 });
+  console.log(`storm, the water nearest the eye: white marks cover ${(near.white * 100).toFixed(2)}% of it, the heaviest ${near.heaviest} pixels thick`);
+  expect(near.white, 'there are whitecaps near the eye').toBeGreaterThan(0.005);
+  expect(near.heaviest).toBeLessThanOrEqual(7);
   expect(problems).toEqual([]);
 });
 
