@@ -475,14 +475,17 @@ test('pictures of the crew lobby at 1920x1080', async ({ browser }) => {
   await host.page.screenshot({ path: `${SHOTS}/9-pause-with-crew-room.png` });
   await host.page.getByRole('button', { name: 'Crew room' }).click();
   await host.page.screenshot({ path: `${SHOTS}/10-room-card-in-game.png` });
+  expect(problems).toEqual([]);
+  // Two windows this size are as many as this computer draws at once: a third stalled it for twenty seconds.
+  // The game in hand is closed before the last picture's window opens.
+  for (const context of [hostContext, guestContext]) await context.close();
 
   const lostContext = await profile(browser, big);
   const lost = await arrive(lostContext, `${BASE}/`, [], 'lost');
   await joinByClicks(lost.page, 'QRT-WXY', 'Dee');
   await expect(lost.page.locator('.iw-panel-crew_join .iw-crew-status')).toHaveText('No crew with that code. Check it with whoever sent it.', { timeout: 15_000 });
   await lost.page.screenshot({ path: `${SHOTS}/11-no-such-room.png` });
-  expect(problems).toEqual([]);
-  for (const context of [hostContext, guestContext, lostContext]) await context.close();
+  await lostContext.close();
 });
 
 test('a build made with no relay has no crew entries, opens no socket, and ignores an invite link', async ({ browser }) => {
