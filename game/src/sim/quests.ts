@@ -111,6 +111,16 @@ export function questGateOpen(state: GameState, questId: QuestId, nodeId: NodeId
 /** True while a quest is open: given to the crew and not yet handed in. */
 const isOpen = (questState: QuestState): boolean => questState.status === 'active' || questState.status === 'ready';
 
+/**
+ * Whether a step is remembered before its quest is given. Everything is, but
+ * three kinds of step belong to the quest's own time: a hand-over (checked
+ * live, when the quest asks), and the tutorial acts craft and sleep ("boil
+ * water", "cook a meal", "sleep at the lean-to"). Those repeat from things
+ * that grow back, so doing them again can never strand a quest.
+ */
+const countsBeforeGiven = (objective: ObjectiveDefinition): boolean =>
+  objective.type !== 'deliver' && objective.type !== 'craft' && objective.type !== 'sleep';
+
 function setProgress(state: GameState, questId: QuestId, index: number, value: number): void {
   const questState = state.quests[questId];
   if (questState.progress[index] === value) return;
@@ -203,9 +213,9 @@ export function updateQuests(state: GameState, actor: PlayerState = defaultActor
       }
       // The one rule: every quest that is not finished keeps its own record from the first moment of the game,
       // whether or not it has been given yet. A step done early is already ticked when the quest arrives.
-      // Only a hand-over is different: it is checked live, and only while the quest is open.
+      // The exceptions are in `countsBeforeGiven`.
       definition.objectives.forEach((objective, index) => {
-        if (objective.type === 'deliver' && !isOpen(questState)) return;
+        if (!isOpen(questState) && !countsBeforeGiven(objective)) return;
         const measured = measuredProgress(state, objective);
         if (measured === null) return;
         // Deliveries are checked live. Everything else latches.
@@ -231,9 +241,10 @@ export function updateQuests(state: GameState, actor: PlayerState = defaultActor
 function advanceEventObjectives(state: GameState, matches: (objective: ObjectiveDefinition) => boolean, amount: number): void {
   for (const definition of QUEST_LIST) {
     const questState = state.quests[definition.id];
-    if (questState.status === 'completed') continue; // a quest not given yet still remembers
+    if (questState.status === 'completed') continue;
     definition.objectives.forEach((objective, index) => {
       if (!matches(objective)) return;
+      if (!isOpen(questState) && !countsBeforeGiven(objective)) return;
       setProgress(state, definition.id, index, Math.min(objectiveRequired(objective), questState.progress[index] + amount));
     });
   }
