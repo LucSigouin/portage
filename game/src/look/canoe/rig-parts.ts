@@ -249,6 +249,14 @@ export const radioPart: AttachmentBuilder = (context) => {
   const set = b.box(0.18, 0.13, 0.03, '#8fa18b', { pos: [centre, deck + 0.15, door - 0.015], kind: KIND.METAL });
   b.cyl(0.035, 0.035, 0.014, PAL.ochre, { pos: [centre - 0.04, deck + 0.16, door - 0.034], rot: [Math.PI / 2, 0, 0], id: set, flat: true, kind: KIND.PLAIN }, 9);
   for (const knob of [0.035, 0.07]) b.cyl(0.012, 0.012, 0.014, PAL.cream, { pos: [centre + knob, deck + 0.13, door - 0.034], rot: [Math.PI / 2, 0, 0], flat: true, kind: KIND.PLAIN }, 6);
+  // the aft wall, which is what shows from astern: a shuttered window, the name stencilled under it, the lead-in
+  const wall = z + 0.01 + depth / 2;
+  b.box(0.13, 0.09, 0.012, SOOT, { pos: [centre - 0.05, deck + 0.215, wall + 0.002], flat: true, kind: KIND.PLAIN });
+  for (const rise of [0.165, 0.265]) b.box(0.16, 0.018, 0.016, PAL.woodDark, { pos: [centre - 0.05, deck + rise, wall + 0.006] });
+  for (const across of [-0.125, 0.025]) b.box(0.018, 0.118, 0.016, PAL.woodDark, { pos: [centre + across, deck + 0.215, wall + 0.006] });
+  b.box(0.012, 0.09, 0.014, PAL.cream, { pos: [centre - 0.05, deck + 0.215, wall + 0.006], flat: true, kind: KIND.PLAIN });
+  b.stencil('RADIO', [centre - 0.118, deck + 0.05, wall + 0.004], [1, 0, 0], [0, 1, 0], 0.062, '#4a3a2c');
+  b.cyl(0.016, 0.016, 0.03, PAL.cream, { pos: [centre + 0.1, deck + 0.25, wall + 0.012], rot: [Math.PI / 2, 0, 0], flat: true, kind: KIND.PLAIN }, 7);
   // a tin roof pitched aft, a coil of spare copper on it, the headset on a peg
   const roof = deck + height + 0.03;
   b.box(width + 0.08, 0.018, depth + 0.1, PAL.tin, { pos: [centre, roof, z + 0.01], rot: [0.22, 0, 0], kind: KIND.METAL });
@@ -261,6 +269,8 @@ export const radioPart: AttachmentBuilder = (context) => {
   const tall = 3.05;
   b.beam(foot, [foot[0], tall, foot[2]], 0.018, '#7b878b', { r2: 0.008, kind: KIND.METAL }, 6);
   for (let ring = 0; ring < 5; ring += 1) b.torus(0.03, 0.008, COPPER, { pos: [foot[0], foot[1] + 0.06 + ring * 0.035, foot[2]], rot: [Math.PI / 2, 0, 0], id: 0.77, kind: KIND.METAL }, 8);
+  // the lead-in: copper from the aerial's foot, over the eave, to the insulator on the aft wall
+  b.tube([[foot[0], foot[1] + 0.07, foot[2] + 0.03], [foot[0], roof - 0.02, wall + 0.075], [centre + 0.1, deck + 0.25, wall + 0.03]], 0.005, COPPER, { steps: 8, id: THIN, flat: true, kind: KIND.PLAIN }, 4);
   for (const [rise, half] of [[2.2, 0.34], [2.5, 0.26], [2.8, 0.18]]) {
     b.beam([foot[0], rise, foot[2] - half], [foot[0], rise, foot[2] + half], 0.011, '#7b878b', { kind: KIND.METAL }, 4);
     b.box(0.045, 0.045, 0.045, IRON, { pos: [foot[0], rise, foot[2]], kind: KIND.METAL });

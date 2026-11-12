@@ -15,6 +15,8 @@ import type { AttachmentPiece } from '../../src/look/attachments.ts';
 import { makeHullShape } from '../../src/look/b2/canoe.js';
 import type { Crew as Figure } from '../../src/look/b2/canoe.js';
 import { CanoeView } from '../../src/look/canoe.ts';
+import { deckInner, deckSpan } from '../../src/look/canoe/deck-parts.ts';
+import { BARK_LAPS, buildMends } from '../../src/look/canoe/mends.ts';
 import { crewOf } from '../../src/look/crew.ts';
 import { boxTouchesTriangle, slabsOf, trianglesOf } from './canoe-geometry.ts';
 import type { Triangles } from './canoe-geometry.ts';
@@ -112,6 +114,36 @@ describe('every attachment', () => {
         expect([holders[index].rotation.x, holders[index].rotation.y, holders[index].rotation.z], attachmentId).toEqual(transform.rotation);
       });
     }
+  });
+});
+
+describe('pieces seen from their plain side', () => {
+  /** How many of a piece's vertices lie where `inside` says, in the mount's own space. */
+  const count = (attachmentId: AttachmentId, inside: (x: number, y: number, z: number, lowest: number) => boolean): number => {
+    let found = 0;
+    const meshes = meshesOf(build(attachmentId, 3).object);
+    const box = new THREE.Box3();
+    for (const mesh of meshes) {
+      mesh.geometry.computeBoundingBox();
+      box.union(mesh.geometry.boundingBox!);
+    }
+    for (const mesh of meshes) {
+      const position = mesh.geometry.getAttribute('position');
+      for (let index = 0; index < position.count; index += 1) {
+        if (inside(position.getX(index), position.getY(index), position.getZ(index), box.min.y)) found += 1;
+      }
+    }
+    return found;
+  };
+
+  it('the workbench shows a saw and a coil of line on the back of its tool board, which is what the port side sees', () => {
+    // The bench is on the port deck: outboard is -x. The board's back is 22 cm out from the mount, the bench top 62 cm up.
+    expect(count('workbench', (x, y) => x < -0.223 && y > 0.66)).toBeGreaterThan(300);
+  });
+
+  it('the radio shack has a window, its name and the lead-in on its aft wall, which is what shows from astern', () => {
+    // The wall is 14 cm aft of the mount, the shack 30 cm wide about a centre 6 cm to starboard, 32 cm tall.
+    expect(count('radio', (x, y, z, lowest) => z > 0.1405 && z < 0.18 && Math.abs(x - 0.06) < 0.15 && y < lowest + 0.31)).toBeGreaterThan(300);
   });
 });
 
@@ -235,7 +267,8 @@ describe('pieces with a state', () => {
 });
 
 describe('the fully fitted long canoe with a crew of four', () => {
-  type Pose = 'rest' | 'paddle' | 'bail' | 'sleep';
+  /** `stopstart`: paddling, laying the paddle down and taking it up again, every 1.3 s. */
+  type Pose = 'rest' | 'paddle' | 'stopstart' | 'bail' | 'sleep';
   interface Hit { pose: Pose; seat: number; part: AttachmentId; limb: string }
 
   /** Every place a crew member's body is inside a piece, over a few seconds of that pose. `paddles` checks the paddles instead. */
@@ -244,7 +277,7 @@ describe('the fully fitted long canoe with a crew of four', () => {
     for (const pose of poses) {
       const state = fitted(tier, crew);
       for (const player of state.players) {
-        player.paddling = pose === 'paddle';
+        player.paddling = pose === 'paddle' || pose === 'stopstart';
         player.bailing = pose === 'bail';
         player.asleep = pose === 'sleep';
       }
@@ -255,8 +288,9 @@ describe('the fully fitted long canoe with a crew of four', () => {
         id: state.canoe.attachments[index], triangles: trianglesOf(holder),
       }));
       // Long enough for the paddles to change sides twice.
-      const seconds = pose === 'paddle' ? 9 : pose === 'bail' ? 2.6 : 0.4;
+      const seconds = pose === 'paddle' ? 9 : pose === 'stopstart' ? 5.2 : pose === 'bail' ? 2.6 : 0.4;
       for (let time = 0; time < seconds; time += 1 / 12) {
+        if (pose === 'stopstart') for (const player of state.players) player.paddling = Math.floor(time / 1.3) % 2 === 0;
         view.sync(state, crewOf(state), 1 / 12, time, true, false);
         view.group.updateMatrixWorld(true);
         for (const player of state.players) {
@@ -284,12 +318,12 @@ describe('the fully fitted long canoe with a crew of four', () => {
   }
   const told = (list: Hit[]): string[] => list.map((hit) => `${hit.pose} seat ${hit.seat} in ${hit.part}`).sort();
 
-  it('seats nobody inside a piece: at rest, paddling, bailing or asleep', () => {
-    const found = hits(3, ['rest', 'paddle', 'bail', 'sleep']);
-    // One is left that the drawing cannot solve. The rules put the firebox 41 cm behind the bow seat and 44 cm
-    // ahead of the forward kneeler: paddling, that kneeler's leading hand passes over the firebox's aft lip.
-    // The firebox is drawn 9 cm deep and 10 cm tall to keep it to that. It is in the report, with the numbers.
-    expect(told(found), found.map((hit) => `${hit.part} ${hit.limb}`).join('; ')).toEqual(['paddle seat 3 in firebox']);
+  it('seats nobody inside a piece: at rest, paddling, starting and stopping, bailing or asleep', () => {
+    // The rules put the firebox 41 cm behind the bow seat and 44 cm ahead of the forward kneeler, so it is drawn
+    // low. That kneeler's hands are clear of it through the stroke. They used to cross it when the paddle changed
+    // sides at the catch: the change is made early in the recovery now, with the hands drawn back (canoe.ts).
+    const found = hits(3, ['rest', 'paddle', 'stopstart', 'bail', 'sleep']);
+    expect(told(found), found.map((hit) => `${hit.part} ${hit.limb}`).join('; ')).toEqual([]);
   });
 
   it('lets the two seated paddlers swing their paddles clear of every piece', () => {
@@ -308,9 +342,163 @@ describe('the fully fitted long canoe with a crew of four', () => {
     expect([...new Set(found.map((hit) => `seat ${hit.seat} in ${hit.part}`))].sort()).toEqual(['seat 1 in firebox']);
   });
 
-  it('knows the one thing the drawing cannot solve: the kneelers\' paddles cross the outrigger decks', () => {
-    // Seats 2 and 3 kneel beside the decks, and the rules put the decks' stations 1.1 m out. Listed in the report.
-    const inTheWay = hits(3, ['paddle'], true).filter((hit) => hit.seat >= 2).map((hit) => hit.part);
-        for (const part of inTheWay) expect(['outrigger_port', 'outrigger_starboard', 'workbench', 'smoker', 'planter', 'forge', 'fishing_rig']).toContain(part);
+  it('lets the two kneelers swing their paddles clear of every piece too, the outrigger decks included', () => {
+    // Seats 2 and 3 kneel beside the decks. Paddling, at rest, and laying the paddle down and taking it up.
+    const inTheWay = hits(3, ['paddle', 'rest', 'stopstart'], true).filter((hit) => hit.seat >= 2);
+    expect(told(inTheWay), inTheWay.map((hit) => `${hit.part} ${hit.limb}`).join('; ')).toEqual([]);
+  });
+
+  it('knows what the drawing cannot solve on the ribbed hull: with three or four aboard, the aft kneeler is inside six pieces', () => {
+    // The rules spread the seats with the hull's length and leave the mounts amidships where they are. On the long
+    // hull the aft kneeler has 32 cm between their back and the stern paddler's knees, for the map table, the
+    // canopy's hoop and the outriggers' aft spar. On the ribbed hull they have 4 cm. In the report, with the numbers.
+    const kneeler = ['seat 2 in canopy', 'seat 2 in cargo_rack', 'seat 2 in fishing_rig', 'seat 2 in map_table', 'seat 2 in outrigger_port', 'seat 2 in outrigger_starboard'];
+    for (const crew of [3, 4]) {
+      const found = hits(2, ['rest', 'paddle', 'stopstart', 'bail', 'sleep'], false, crew);
+      // The fourth, kneeling forward, has the mast's foot at their back as well.
+      expect([...new Set(found.map((hit) => `seat ${hit.seat} in ${hit.part}`))].sort(), `crew of ${crew}`).toEqual(['seat 1 in firebox', ...kneeler, ...(crew === 4 ? ['seat 3 in mast_sail'] : [])]);
+    }
+  });
+
+  it('on the ribbed hull, three or four paddles are clear of every piece as well', () => {
+    for (const crew of [3, 4]) {
+      const inTheWay = hits(2, ['paddle', 'rest', 'stopstart'], true, crew);
+      expect(told(inTheWay), `crew of ${crew}: ${inTheWay.map((hit) => `${hit.part} ${hit.limb}`).join('; ')}`).toEqual([]);
+    }
+  });
+});
+
+describe('a kneeler beside an outrigger deck', () => {
+  const PADDLE_LENGTH = 1.485;
+  /** Run a crew of four through a spell of paddling, and hand every frame to `each`. */
+  function watch(tier: number, attachments: AttachmentId[] | null, seconds: number, each: (view: CanoeView, state: GameState, time: number) => void, drive?: (state: GameState, time: number) => void): void {
+    const state = fitted(tier, 4);
+    if (attachments) state.canoe.attachments = attachments;
+    for (const player of state.players) player.paddling = true;
+    const view = new CanoeView();
+    view.sync(state, crewOf(state), 0, 0, true, true);
+    for (let time = 0; time < seconds; time += 1 / 30) {
+      drive?.(state, time);
+      view.sync(state, crewOf(state), 1 / 30, time, true, false);
+      view.group.updateMatrixWorld(true);
+      each(view, state, time);
+    }
+  }
+  /** Sixteen points down a kneeler's paddle at this moment, grip to blade tip, in canoe space (the canoe lies at the origin). */
+  const along = (view: CanoeView, playerId: number): THREE.Vector3[] => {
+    const paddle = figureOf(view, playerId).paddler.paddle;
+    return Array.from({ length: 16 }, (_, index) => paddle.localToWorld(new THREE.Vector3(0, (-PADDLE_LENGTH * index) / 15, 0)));
+  };
+  /** How far out from the centreline a kneeler's paddle reaches at this moment: its blade tip, and its grip. */
+  const reach = (view: CanoeView, playerId: number): { tip: number; grip: number } => {
+    const points = along(view, playerId);
+    return { tip: Math.abs(points[15].x), grip: Math.abs(points[0].x) };
+  };
+
+  for (const tier of [2, 3]) {
+    it(`keeps the paddle between the two decks on hull tier ${tier}, wherever a deck runs beside it: paddling, resting, starting and stopping`, () => {
+      // The planks' inner ends are ragged by up to 5 cm. A blade is 9 cm to each side of its shaft, so a paddle is
+      // beside a deck from 9 cm before the deck's forward edge to 9 cm past its aft one. Ahead of the decks and
+      // astern of them there is open water, and a paddle may reach as far out as it likes.
+      const edge = deckInner(HULL_TIERS[tier].dimensions.beam / 2) - 0.05;
+      const runs = deckSpan(tier);
+      let furthest = 0;
+      let beside = 0;
+      watch(tier, null, 12, (view, state) => {
+        for (const player of state.players.filter((one) => (one.seat ?? 0) >= 2)) {
+          for (const point of along(view, player.id)) {
+            if (point.z < runs.forward - 0.09 || point.z > runs.aft + 0.09) continue;
+            beside += 1;
+            furthest = Math.max(furthest, Math.abs(point.x));
+          }
+        }
+      }, (state, time) => {
+        for (const player of state.players) player.paddling = Math.floor(time / 1.3) % 2 === 0;
+      });
+      expect(beside).toBeGreaterThan(1000);
+      expect(furthest).toBeGreaterThan(0.5);
+      expect(furthest).toBeLessThan(edge);
+    });
+  }
+
+  it('with no outrigger fitted, a kneeler keeps the figure\'s own stroke: the blade swings out wide on the way back', () => {
+    let furthest = 0;
+    watch(3, [], 6, (view, state) => {
+      for (const player of state.players.filter((one) => (one.seat ?? 0) >= 2)) furthest = Math.max(furthest, reach(view, player.id).tip);
+    });
+    expect(furthest).toBeGreaterThan(1);
+  });
+});
+
+describe('changing sides', () => {
+  it('happens early in the recovery, with the hands drawn back: never across the catch', () => {
+    const state = fitted(3, 4);
+    for (const player of state.players) player.paddling = true;
+    const view = new CanoeView();
+    view.sync(state, crewOf(state), 0, 0, true, true);
+    const phaseOf = (): number => (view as unknown as { phase: number }).phase;
+    let sides = view.figures().map((figure) => figure.side);
+    const changes: number[] = [];
+    for (let time = 0; time < 20; time += 1 / 30) {
+      // A hard turn begun at the catch asks for the outside of the turn at once: the worst moment to swing a paddle over.
+      if (time > 9 && time < 9.6) state.canoe.heading += 0.02;
+      if (time > 14.1 && time < 14.7) state.canoe.heading -= 0.02;
+      view.sync(state, crewOf(state), 1 / 30, time, true, false);
+      const now = view.figures().map((figure) => figure.side);
+      if (now.some((side, index) => side !== sides[index])) changes.push(phaseOf());
+      sides = now;
+    }
+    // Every third stroke, and the two turns.
+    expect(changes.length).toBeGreaterThanOrEqual(4);
+    for (const phase of changes) {
+      expect(phase).toBeGreaterThanOrEqual(0.46);
+      expect(phase).toBeLessThanOrEqual(0.6 + 0.78 / 30);
+    }
+    // Neighbours along the hull still work opposite sides.
+    const side = (seat: number): number => view.figures().find((figure) => figure.seat === seat)!.side;
+    expect([side(0), side(2), side(3), side(1)]).toEqual([side(0), -side(0), side(0), -side(0)]);
+  });
+});
+
+describe('the patched hull', () => {
+  const extras = (tier: number): number => {
+    const state = fitted(tier, 1);
+    state.canoe.attachments = [];
+    const view = new CanoeView();
+    view.sync(state, crewOf(state), 0, 0, true, true);
+    return (view as unknown as { tiers: Map<number, { group: THREE.Group }> }).tiers.get(tier)!.group.children.length;
+  };
+
+  it('is the only hull that wears bark over its rails: that is what tells it from the leaky one from astern', () => {
+    expect(extras(1)).toBe(extras(0) + 1);
+    expect(extras(2)).toBe(extras(0));
+    expect(extras(3)).toBe(extras(0));
+  });
+
+  it('has every lap of bark lying on a rail, on both sides, and a sheet on the bow deck', () => {
+    const shape = makeHullShape(HULL_TIERS[1].dimensions);
+    const position = buildMends(shape).geometry.getAttribute('position');
+    const sides = { port: 0, starboard: 0, deck: 0 };
+    for (let index = 0; index < position.count; index += 1) {
+      const [x, y, z] = [position.getX(index), position.getY(index), position.getZ(index)];
+      if (z > 0.78 * shape.HL) {
+        // the sheet: on the deck, inside the rails
+        expect(Math.abs(x)).toBeLessThan(shape.halfBeamAt(z));
+        expect(Math.abs(y - shape.sheerAt(z))).toBeLessThan(0.06);
+        sides.deck += 1;
+        continue;
+      }
+      // a lap: within a hand of the rail it is folded over, never proud of it by more than 6 cm
+      expect(Math.abs(Math.abs(x) - shape.halfBeamAt(z)), `x ${x.toFixed(2)} at z ${z.toFixed(2)}`).toBeLessThan(0.075);
+      expect(y - shape.sheerAt(z), `y ${y.toFixed(2)} at z ${z.toFixed(2)}`).toBeGreaterThan(-0.1);
+      expect(y - shape.sheerAt(z), `y ${y.toFixed(2)} at z ${z.toFixed(2)}`).toBeLessThan(0.065);
+      sides[x > 0 ? 'port' : 'starboard'] += 1;
+    }
+    expect(sides.port).toBeGreaterThan(100);
+    expect(sides.starboard).toBeGreaterThan(100);
+    expect(sides.deck).toBeGreaterThan(20);
+    // None lies where the lone paddler's blade crosses the rail: from 0.54 m astern of the stern seat to 0.78 m ahead of it.
+    const seat = -0.3107 * HULL_TIERS[1].dimensions.length;
+    for (const [, z, length] of BARK_LAPS) expect(z - length / 2, `lap at ${z}`).toBeGreaterThan(seat + 0.78);
   });
 });
