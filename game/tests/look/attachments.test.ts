@@ -317,6 +317,18 @@ describe('the fully fitted long canoe with a crew of four', () => {
     expect(told(inTheWay), inTheWay.map((hit) => `${hit.part} ${hit.limb}`).join('; ')).toEqual([]);
   });
 
+  it('knows what the drawing cannot solve on the ribbed hull: with three or four aboard, the aft kneeler is inside six pieces', () => {
+    // The rules spread the seats with the hull's length and leave the mounts amidships where they are. On the long
+    // hull the aft kneeler has 32 cm between their back and the stern paddler's knees, for the map table, the
+    // canopy's hoop and the outriggers' aft spar. On the ribbed hull they have 4 cm. In the report, with the numbers.
+    const kneeler = ['seat 2 in canopy', 'seat 2 in cargo_rack', 'seat 2 in fishing_rig', 'seat 2 in map_table', 'seat 2 in outrigger_port', 'seat 2 in outrigger_starboard'];
+    for (const crew of [3, 4]) {
+      const found = hits(2, ['rest', 'paddle', 'stopstart', 'bail', 'sleep'], false, crew);
+      // The fourth, kneeling forward, has the mast's foot at their back as well.
+      expect([...new Set(found.map((hit) => `seat ${hit.seat} in ${hit.part}`))].sort(), `crew of ${crew}`).toEqual(['seat 1 in firebox', ...kneeler, ...(crew === 4 ? ['seat 3 in mast_sail'] : [])]);
+    }
+  });
+
   it('on the ribbed hull, three or four paddles are clear of every piece as well', () => {
     for (const crew of [3, 4]) {
       const inTheWay = hits(2, ['paddle', 'rest', 'stopstart'], true, crew);
