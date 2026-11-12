@@ -8,14 +8,15 @@
  * - all 15 islands have their own outline from the water;
  * - far islands are cheap: trees, landmarks and ground each drop to a coarser drawing with distance, and come back;
  * - a cottage's roof stands on its walls, high enough to carry the outline, the attic's cupola clears its ridge,
- *   and what the rules put under it can be seen from outside.
+ *   and what the rules put under it can be seen from outside;
+ * - the scrap stack is cars: each has glass under a roof, wheels with hubs, lamps at both ends.
  */
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { ISLANDS, ISLANDS_BY_ID, NODES_BY_ISLAND, NODE_TYPES, spotPosition } from '../../src/data/index.ts';
 import type { IslandDefinition, LandmarkDefinition, LandmarkKind, NodeTypeId } from '../../src/data/index.ts';
 import { terrainHeight } from '../../src/sim/index.ts';
-import { inkMaterial } from '../../src/look/b2/palette.js';
+import { PAL, inkMaterial } from '../../src/look/b2/palette.js';
 import { LANDMARK_KINDS, landmarkFarGeometry, landmarkGeometry } from '../../src/look/landmarks.ts';
 import { ATTIC_HEIGHT, NODE_TYPE_IDS, nodeGeometry } from '../../src/look/nodes.ts';
 import { floraFor } from '../../src/look/presets.ts';
@@ -25,7 +26,8 @@ import { buildIslandTerrain, islandWatcher } from '../../src/look/terrain.ts';
 import { CLOSE_DRESSING, FINE_GROUND, FINE_LANDMARKS, FINE_TREES, clearDistance, noteEye } from '../../src/look/world/distance.ts';
 import { dressIsland, fogNormal } from '../../src/look/world/dressing.ts';
 import { DAY, NIGHT } from '../../src/look/daylight.ts';
-import { LANDMARK_SUNK, siteOf } from '../../src/look/world/kit.ts';
+import { LANDMARK_SUNK, TONE, siteOf } from '../../src/look/world/kit.ts';
+import { CAR } from '../../src/look/world/reach.ts';
 import { COTTAGE_RIDGE } from '../../src/look/world/shallows.ts';
 import { nodeMaterial, withSpentSwitch } from '../../src/look/world/spent.ts';
 
@@ -94,6 +96,35 @@ describe('the cottages', () => {
       expect(seenFrom(0, 1, pitch, 0.65), `the lid from the south, ${pitch} up`).toBe(true);
     }
     for (const [x, z] of [[1, 0], [-1, 0], [0, 1]]) expect(seenFrom(x, z, 0.42, 0.25), `the body from ${x}, ${z}`).toBe(true);
+  });
+});
+
+describe('the scrap stack', () => {
+  /** How many vertices of a drawing wear a colour (a piece keeps its wash on every vertex). */
+  const wearing = (geometry: THREE.BufferGeometry, tone: string): number => {
+    const colours = geometry.getAttribute('aColor');
+    const wanted = new THREE.Color(tone);
+    let count = 0;
+    for (let index = 0; index < colours.count; index += 1) {
+      if (Math.abs(colours.getX(index) - wanted.r) < 0.004 && Math.abs(colours.getY(index) - wanted.g) < 0.004 && Math.abs(colours.getZ(index) - wanted.b) < 0.004) count += 1;
+    }
+    return count;
+  };
+
+  it('is cars, not slabs: glass under a roof, wheels with hubs, lamps at both ends, on each of the five and the pickup', () => {
+    const stack = landmarkGeometry('scrap_stack');
+    // A box is 36 vertices, a hub 96. Glass: one band a car, two on the pickup's cab.
+    expect(wearing(stack, TONE.glassDark)).toBeGreaterThanOrEqual(7 * 36);
+    // Head lamps: two a car and two on the pickup. Tail lamps: two a car.
+    expect(wearing(stack, PAL.cream)).toBeGreaterThanOrEqual(12 * 36);
+    expect(wearing(stack, TONE.towerRed)).toBeGreaterThanOrEqual(10 * 36);
+    // A hub in every wheel: two a car, two on the pickup.
+    expect(wearing(stack, PAL.tin)).toBeGreaterThanOrEqual(12 * 96);
+    // From far off the glass is still there on every car.
+    expect(wearing(landmarkFarGeometry('scrap_stack'), TONE.glassDark)).toBeGreaterThanOrEqual(5 * 36);
+    // And a car is a car's shape: twice as long as it is tall would be a slab.
+    expect(CAR.length / CAR.height).toBeLessThan(5);
+    expect(CAR.height).toBeGreaterThan(0.85);
   });
 });
 
