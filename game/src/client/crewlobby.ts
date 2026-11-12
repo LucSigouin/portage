@@ -137,7 +137,7 @@ export class CrewLobby {
   setField(field: 'name' | 'code', value: string): void {
     if (field === 'name') {
       // As typed, so a space can be typed. Cut to length; cleaned when it is used.
-      this.name = Array.from(value.replace(/[\u0000-\u001f\u007f]/g, '')).slice(0, MAXIMUM_NAME_LENGTH).join('');
+      this.name = Array.from(value.replace(/[\u0000-\u001f\u007f]/g, '').replace(/^\s+/, '')).slice(0, MAXIMUM_NAME_LENGTH).join('');
       this.write(NAME_SLOT, this.name);
     } else {
       this.code = value.toUpperCase().replace(/[^A-Z0-9 -]/g, '').slice(0, 9);
