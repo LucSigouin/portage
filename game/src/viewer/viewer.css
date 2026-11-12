@@ -1,0 +1,414 @@
+/* The workshop page. It wears the game's theme (theme.css: paper, pen, tape, the two fonts) and adds only the
+   layout of a page. Nothing here moves: no transition, no animation, no hover growth. */
+*,
+*::before,
+*::after {
+  transition: none !important;
+  animation: none !important;
+  scroll-behavior: auto !important;
+}
+html {
+  font-size: clamp(13px, calc(0.4vw + 0.7vh + 5px), 19px);
+  background: #e6dcc4;
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+#app.vw.iw {
+  --iw-tex: none;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+  pointer-events: auto;
+  user-select: text;
+  -webkit-user-select: text;
+  background: #e6dcc4 var(--iw-tex);
+  background-size: 256px 256px;
+}
+.vw a {
+  color: inherit;
+}
+
+/* ---------- the bar ---------- */
+.vw-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.6rem;
+  flex: none;
+  padding: 0.7rem 1.4rem 0;
+  border-bottom: 0.115rem solid var(--iw-ink);
+  background: var(--iw-paper-deep);
+}
+.vw-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding-bottom: 0.45rem;
+}
+.vw-logo {
+  font-style: italic;
+  font-size: 1.9rem;
+  line-height: 1;
+}
+.vw-sub {
+  font-family: var(--iw-hand);
+  font-size: 0.95rem;
+  color: var(--iw-ink-soft);
+}
+.vw-rooms {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: -0.115rem;
+}
+.vw .iw-tab {
+  text-decoration: none;
+  cursor: pointer;
+}
+.vw-tools {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  margin: 0 0 0.5rem auto;
+  font-family: var(--iw-hand);
+  font-size: 1.02rem;
+}
+.vw-link {
+  color: var(--iw-ink-soft);
+  text-decoration: underline wavy var(--iw-ink-faint);
+  text-underline-offset: 0.25rem;
+  cursor: pointer;
+}
+.vw-link:hover {
+  color: var(--iw-ink);
+}
+.vw-screens {
+  position: relative;
+}
+.vw-screens summary {
+  list-style: none;
+}
+.vw-screens summary::-webkit-details-marker {
+  display: none;
+}
+.vw-screens ul {
+  position: absolute;
+  right: 0;
+  top: 1.9rem;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.1rem 1.4rem;
+  min-width: 14rem;
+  margin: 0;
+  padding: 0.7rem 1rem;
+  list-style: none;
+  background: var(--iw-paper-bright);
+  border: 0.115rem solid var(--iw-ink);
+  border-radius: 0.5rem 0.3rem 0.6rem 0.3rem;
+  box-shadow: 0.1rem 0.2rem 0 rgba(42, 43, 51, 0.2);
+}
+.vw-screens a {
+  text-decoration: none;
+  text-transform: capitalize;
+}
+.vw-screens a:hover {
+  text-decoration: underline wavy var(--iw-rust);
+}
+
+/* ---------- the three columns ---------- */
+.vw-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr) minmax(16rem, 21rem);
+  gap: 1.5rem;
+  padding: 1.3rem 1.5rem 1.2rem;
+  height: calc(100vh - 3.6rem);
+}
+.vw-main > * {
+  min-width: 0;
+  min-height: 0;
+}
+.vw-things,
+.vw-facts-card,
+.vw-choices-card {
+  --tilt: -0.2deg;
+  display: flex;
+  flex-direction: column;
+  padding: 1.1rem 1.2rem 1rem;
+}
+.vw-facts-card {
+  --tilt: 0.25deg;
+  flex: 1 1 auto;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+.vw-choices-card {
+  --tilt: -0.3deg;
+  flex: none;
+}
+.vw-things > h2,
+.vw-choices-card > h2 {
+  font-style: italic;
+  font-size: 1.6rem;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+.vw-find {
+  display: grid;
+  gap: 0.15rem;
+  font-family: var(--iw-hand);
+  font-size: 0.9rem;
+  color: var(--iw-ink-soft);
+}
+.vw-search,
+.vw-choice select {
+  font: inherit;
+  font-family: var(--iw-serif);
+  font-size: 1.05rem;
+  color: var(--iw-ink);
+  background: var(--iw-paper-bright);
+  border: 0.1rem solid var(--iw-ink);
+  border-radius: 0.5rem 0.3rem 0.55rem 0.3rem;
+  padding: 0.28rem 0.55rem 0.22rem;
+  min-width: 0;
+  width: 100%;
+}
+.vw-count {
+  margin: 0.5rem 0 0.2rem;
+  font-family: var(--iw-hand);
+  font-size: 0.88rem;
+  color: var(--iw-ink-soft);
+}
+.vw-items {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--iw-ink-soft) transparent;
+  padding-right: 0.3rem;
+}
+.vw-group h3 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0.9rem 0 0.2rem;
+  padding-bottom: 0.15rem;
+  font-size: 0.76rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--iw-ink-soft);
+  border-bottom: 0.09rem solid var(--iw-ink-faint);
+}
+.vw-group:first-child h3 {
+  margin-top: 0.2rem;
+}
+.vw-n {
+  font-family: var(--iw-hand);
+  letter-spacing: 0;
+}
+.vw .vw-item {
+  display: block;
+  width: 100%;
+  padding: 0.2rem 0.5rem 0.14rem 0.7rem;
+  text-align: left;
+  font-size: 1.04rem;
+  line-height: 1.25;
+  border-radius: 0.3rem;
+  position: relative;
+}
+.vw .vw-item[hidden] {
+  display: none;
+}
+.vw .vw-item:hover {
+  background: var(--iw-paper-bright);
+}
+.vw .vw-item[aria-current='true'] {
+  background: var(--iw-paper-bright);
+  box-shadow: inset 0.22rem 0 0 var(--iw-rust);
+  font-style: italic;
+}
+
+/* ---------- the stage ---------- */
+.vw-centre {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.vw-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.1rem;
+  flex: none;
+}
+.vw-segment {
+  display: flex;
+  gap: 0.3rem;
+}
+.vw .vw-btn[aria-pressed='true'] {
+  background: var(--iw-ochre);
+  box-shadow: inset 0 -0.2rem 0 var(--iw-rust);
+}
+.vw .vw-btn.iw-go {
+  background: var(--iw-rust-fill);
+}
+.vw .vw-btn:disabled {
+  opacity: 0.55;
+}
+.vw-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  border: 0.14rem solid var(--iw-ink);
+  border-radius: 0.5rem 0.3rem 0.6rem 0.3rem;
+  box-shadow: 0.1rem 0.2rem 0 rgba(42, 43, 51, 0.2);
+  background: var(--iw-paper);
+  cursor: grab;
+  touch-action: none;
+}
+.vw-stage:active {
+  cursor: grabbing;
+}
+.vw-stage[data-flat='true'] {
+  cursor: default;
+}
+.vw-stage canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.vw-stage canvas[hidden] {
+  display: none;
+}
+.vw-stage[data-background='dark'] {
+  background: #1c1e26;
+}
+.vw-stage[data-background='checker'] {
+  background-color: #f4f0e4;
+  background-image: conic-gradient(#d5cfbd 25%, transparent 0 50%, #d5cfbd 0 75%, transparent 0);
+  background-size: 28px 28px;
+}
+.vw-flat {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.vw-flat[hidden] {
+  display: none;
+}
+.vw-flat .iw-ico {
+  --vw-zoom: 1;
+  width: calc(var(--vw-zoom, 1) * min(24rem, 60vh));
+  height: calc(var(--vw-zoom, 1) * min(24rem, 60vh));
+}
+.vw-stage[data-background='dark'] .vw-flat {
+  --iw-ink: #f3ebd9;
+}
+.vw-caption {
+  flex: none;
+  margin: 0;
+  min-height: 1.3rem;
+  font-family: var(--iw-hand);
+  font-size: 0.95rem;
+  color: var(--iw-ink-soft);
+}
+
+/* ---------- the facts and the choices ---------- */
+.vw-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+.vw-facts h2 {
+  font-style: italic;
+  font-size: 1.9rem;
+  line-height: 1.05;
+}
+.vw-kind {
+  display: inline;
+  font-family: var(--iw-hand);
+  color: var(--iw-ink-soft);
+  font-size: 0.95rem;
+}
+.vw-id,
+.vw-source code {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.8rem;
+  color: var(--iw-ink-soft);
+  overflow-wrap: anywhere;
+}
+.vw-about {
+  margin: 0.5rem 0 0 !important;
+  font-size: 1.02rem;
+}
+.vw-rows {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.9rem 0 0 !important;
+  padding-top: 0.6rem;
+  border-top: 0.09rem solid var(--iw-ink-faint);
+}
+.vw-rows div {
+  display: grid;
+  grid-template-columns: 6.2rem 1fr;
+  gap: 0.6rem;
+  align-items: baseline;
+}
+.vw-rows dt {
+  font-family: var(--iw-hand);
+  font-size: 0.95rem;
+  color: var(--iw-ink-soft);
+}
+.vw-rows dd {
+  margin: 0 !important;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+.vw-source {
+  display: grid;
+  gap: 0.15rem;
+  margin-top: 0.8rem;
+}
+.vw-source h3 {
+  margin: 0 0 0.1rem;
+  font-size: 0.76rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--iw-ink-soft);
+}
+.vw-note,
+.vw-failure {
+  margin: 0.7rem 0 0 !important;
+  font-family: var(--iw-hand);
+  font-size: 0.95rem;
+  color: var(--iw-ink-soft);
+}
+.vw-failure {
+  color: var(--iw-rust-deep);
+}
+.vw-choice {
+  display: grid;
+  gap: 0.15rem;
+  margin-top: 0.55rem;
+  font-family: var(--iw-hand);
+  font-size: 0.95rem;
+  color: var(--iw-ink-soft);
+}
+
+@media (max-width: 1000px) {
+  .vw-main {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .vw-stage {
+    min-height: 60vh;
+  }
+  .vw-items {
+    max-height: 22rem;
+  }
+}
