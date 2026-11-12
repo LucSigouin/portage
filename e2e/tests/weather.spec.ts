@@ -11,7 +11,9 @@
  *   the sky shows the next weather standing upwind as its time nears;
  * - it holds 55 frames a second in a storm, at night, and in a storm at night, at 1920×1080 on rung 0;
  * - the heroes are drawn at the window's size with the full pen in a storm at night on the ladder's last rung;
- * - the ladder's first rung sheds the weather's fine work and nothing else.
+ * - the ladder's first rung sheds the weather's fine work and nothing else;
+ * - a rain stroke stops at what stands in front of it: none shows through the canoe and its crew, none through the ground;
+ * - the lantern's pool on the water is drawn in strokes of lamp light, and a whitecap near the eye is a pen stroke, not a band.
  *
  * Needs the dev server (PORTAGE_URL, default http://localhost:5221).
  *
@@ -386,6 +388,163 @@ test('the heroes are drawn at the window\'s size with the full pen in a storm at
   expect(look.hero.pixelsPerCanvasPixel).toBe(1);
   expect(look.hero.inkScale).toBe(2);
   expect(look.hero.fine).toBe(1);
+  expect(problems).toEqual([]);
+});
+
+/**
+ * Of three captures of one held view (with the rain's strokes, without them, and without the heroes either): the share of
+ * pixels a stroke plainly marks (more than `step` of 255 on some channel), on the heroes and off them.
+ */
+async function strokesOn(page: Page, withStrokes: Buffer, without: Buffer, bare: Buffer, step: number): Promise<{ hero: number; heroPixels: number; elsewhere: number }> {
+  return page.evaluate(async ([strokesPng, plainPng, barePng, limit]) => {
+    const pixelsOf = async (base64: string): Promise<Uint8ClampedArray> => {
+      const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+      const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const context = canvas.getContext('2d')!;
+      context.drawImage(bitmap, 0, 0);
+      return context.getImageData(0, 0, bitmap.width, bitmap.height).data;
+    };
+    const [strokes, plain, empty] = [await pixelsOf(strokesPng as string), await pixelsOf(plainPng as string), await pixelsOf(barePng as string)];
+    const counts = { hero: 0, heroMarked: 0, elsewhere: 0, elsewhereMarked: 0 };
+    for (let offset = 0; offset < plain.length; offset += 4) {
+      const differs = (first: Uint8ClampedArray, second: Uint8ClampedArray, by: number): boolean =>
+        Math.abs(first[offset] - second[offset]) > by || Math.abs(first[offset + 1] - second[offset + 1]) > by || Math.abs(first[offset + 2] - second[offset + 2]) > by;
+      const hero = differs(plain, empty, 0);
+      const marked = differs(strokes, plain, limit as number);
+      if (hero) { counts.hero += 1; if (marked) counts.heroMarked += 1; } else { counts.elsewhere += 1; if (marked) counts.elsewhereMarked += 1; }
+    }
+    return { hero: counts.heroMarked / Math.max(1, counts.hero), heroPixels: counts.hero, elsewhere: counts.elsewhereMarked / Math.max(1, counts.elsewhere) };
+  }, [withStrokes.toString('base64'), without.toString('base64'), bare.toString('base64'), step] as const);
+}
+
+test('a rain stroke stops at what stands in front of it: the canoe and its crew, and the ground', async ({ page }) => {
+  const problems = watchConsole(page);
+  await open(page, 'shot=play&hold=1');
+  await stage(page, "W('storm'); H(12);");
+  expect((await probe(page)).weather.strokes).toBe(STORM_STROKES);
+  // The test's own eye. `strokes`, `heroes`: what is drawn. The game is held still throughout, so the three captures differ in that alone.
+  const look = (eye: [number, number, number], target: [number, number, number], strokes: boolean, heroes: boolean): Promise<void> =>
+    page.evaluate(async ([from, to, rain, crew]) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const view = (window as any).portage.worldView;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const hold = ((window as any).__look ??= { drawn: view.render.bind(view), pose: null });
+      hold.pose = { position: { x: from[0], y: from[1], z: from[2] }, target: { x: to[0], y: to[1], z: to[2] }, fieldOfView: 60 };
+      view.render = () => hold.drawn(hold.pose);
+      view.marks.scene.visible = false;
+      view.rainStrokes = rain;
+      view.canoe.group.visible = crew;
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }, [eye, target, strokes, heroes] as const);
+
+  // 1. Side on to the canoe from 2.6 m, from low down, so the sky is behind the paddler. A stroke nearer the eye than
+  //    2.2 m is not drawn at all (rain.ts), so the strokes that could mark the canoe are nearly all behind it: they must not show.
+  const canoe = await page.evaluate(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { position, heading } = (window as any).portage.session.game.canoe;
+    return { x: position.x as number, z: position.z as number, heading: heading as number };
+  });
+  const eye: [number, number, number] = [canoe.x + Math.cos(canoe.heading) * 2.6, 0.6, canoe.z + Math.sin(canoe.heading) * 2.6];
+  const frame = { x: 100, y: 100, width: 1720, height: 880 };
+  await look(eye, [canoe.x, 1, canoe.z], true, true);
+  const withStrokes = await page.screenshot({ clip: frame });
+  await look(eye, [canoe.x, 1, canoe.z], false, true);
+  const without = await page.screenshot({ clip: frame });
+  await look(eye, [canoe.x, 1, canoe.z], false, false);
+  const bare = await page.screenshot({ clip: frame });
+  const marked = await strokesOn(page, withStrokes, without, bare, 10);
+  console.log(`storm, side on to the canoe from 2.6 m: strokes mark ${(marked.elsewhere * 100).toFixed(2)}% of the view round it, ${(marked.hero * 100).toFixed(3)}% of the canoe and crew (${marked.heroPixels} pixels)`);
+  expect(marked.heroPixels, 'the canoe fills a good part of the view').toBeGreaterThan(60_000);
+  expect(marked.elsewhere, 'it is raining round the canoe').toBeGreaterThan(0.004);
+  expect(marked.hero, 'no rain shows through the canoe').toBeLessThan(marked.elsewhere * 0.2);
+
+  // 2. Looking down at open ground from 1.5 m: everything in the lower half is nearer than 2.2 m, so every stroke
+  //    that could show there is under the ground.
+  const ground = await page.evaluate(async () => {
+    const sim = await import(/* @vite-ignore */ `${'/src/sim/index.ts'}`);
+    return [sim.terrainHeight(14, 1163) as number, sim.terrainHeight(14.9, 1163) as number];
+  });
+  const lower = { x: 300, y: 560, width: 1320, height: 420 };
+  await look([14, ground[0] + 1.5, 1163], [14.9, ground[1], 1163], true, true);
+  const wet = await page.screenshot({ clip: lower });
+  await look([14, ground[0] + 1.5, 1163], [14.9, ground[1], 1163], false, true);
+  const dry = await page.screenshot({ clip: lower });
+  const through = await strokesOn(page, wet, dry, dry, 10);
+  console.log(`storm, looking down at the ground from 1.5 m: strokes mark ${(through.elsewhere * 100).toFixed(3)}% of it`);
+  expect(through.elsewhere, 'no rain shows through the ground').toBe(0);
+  expect(problems).toEqual([]);
+});
+
+/**
+ * Marks in a capture. `warm`: the share of its pixels that are lamp light (lighter than night water, and redder than blue: night water is bluer than red).
+ * `heaviest`: how thick the heaviest white marks are, in pixels: for every white pixel the shorter of the white runs
+ * through it, across and down (a line's own width, whichever way it lies), and of those the one 98 in 100 are under.
+ */
+async function marksIn(page: Page, clip: { x: number; y: number; width: number; height: number }): Promise<{ warm: number; white: number; heaviest: number }> {
+  const png = await page.screenshot({ clip });
+  return page.evaluate(async (base64) => {
+    const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = canvas.getContext('2d')!;
+    context.drawImage(bitmap, 0, 0);
+    const { data, width, height } = context.getImageData(0, 0, bitmap.width, bitmap.height);
+    const white = new Uint8Array(width * height);
+    let warm = 0;
+    for (let index = 0; index < width * height; index += 1) {
+      const [red, green, blue] = [data[index * 4], data[index * 4 + 1], data[index * 4 + 2]];
+      if (red > 110 && red - blue > 25) warm += 1;
+      if (red > 185 && green > 185 && blue > 185) white[index] = 1;
+    }
+    // The white run through each pixel, across and down.
+    const across = new Uint16Array(width * height);
+    const down = new Uint16Array(width * height);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if (!white[y * width + x] || (x > 0 && white[y * width + x - 1])) continue;
+        let end = x;
+        while (end < width && white[y * width + end]) end += 1;
+        for (let fill = x; fill < end; fill += 1) across[y * width + fill] = end - x;
+      }
+    }
+    for (let x = 0; x < width; x += 1) {
+      for (let y = 0; y < height; y += 1) {
+        if (!white[y * width + x] || (y > 0 && white[(y - 1) * width + x])) continue;
+        let end = y;
+        while (end < height && white[end * width + x]) end += 1;
+        for (let fill = y; fill < end; fill += 1) down[fill * width + x] = end - y;
+      }
+    }
+    const widths: number[] = [];
+    for (let index = 0; index < width * height; index += 1) if (white[index]) widths.push(Math.min(across[index], down[index]));
+    widths.sort((first, second) => first - second);
+    return { warm: warm / (width * height), white: widths.length / (width * height), heaviest: widths.length ? widths[Math.floor(widths.length * 0.98)] : 0 };
+  }, png.toString('base64'));
+}
+
+test('the lantern\'s pool is strokes of lamp light, and a whitecap near the eye is a pen stroke', async ({ page }) => {
+  const problems = watchConsole(page);
+  // 1. Night, the lantern lit: the water beside the canoe carries marks in the lamp's colour. One flat wash had none.
+  await open(page, 'shot=night&hold=1');
+  await stage(page, "W('clear'); H(23.5); game.canoe.lanternLit = true;");
+  const lit = await probe(page);
+  const hero = lit.hero.windows[0];
+  const beside = { x: Math.max(0, hero.x - 320), y: lit.canvasHeight - hero.y - hero.h + Math.round(hero.h * 0.4), width: 300, height: Math.round(hero.h * 0.5) };
+  const pool = await marksIn(page, beside);
+  await stage(page, 'game.canoe.lanternLit = false;');
+  const dark = await marksIn(page, beside);
+  console.log(`night, the water beside the canoe: ${(pool.warm * 100).toFixed(2)}% of it is marks of lamp light with the lantern lit, ${(dark.warm * 100).toFixed(2)}% with it out`);
+  expect(pool.warm).toBeGreaterThan(0.02);
+  expect(dark.warm).toBeLessThan(0.005);
+
+  // 2. A storm by day, the strokes of rain left out: the white marks on the water nearest the eye (the foot of the
+  //    picture, clear of the canoe and its wake) are no heavier than a pen line. They were bands 10 pixels and more thick.
+  await open(page, 'shot=storm&hold=1&rain=0');
+  const near = await marksIn(page, { x: 60, y: 780, width: 620, height: 260 });
+  console.log(`storm, the water nearest the eye: white marks cover ${(near.white * 100).toFixed(2)}% of it, the heaviest ${near.heaviest} pixels thick`);
+  expect(near.white, 'there are whitecaps near the eye').toBeGreaterThan(0.005);
+  expect(near.heaviest).toBeLessThanOrEqual(7);
   expect(problems).toEqual([]);
 });
 

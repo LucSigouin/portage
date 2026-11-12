@@ -116,6 +116,11 @@ function boot(): void {
   new ResizeObserver(resize).observe(worldElement);
   resize();
 
+  // --- Sound -------------------------------------------------------------------
+  // Starting the sound engine costs one long frame. It starts on the first click or key anywhere, which
+  // is in the lobby (a button there is not part of the world), so the long frame never lands in play.
+  window.addEventListener('pointerdown', () => void audio.unlock(), { capture: true });
+
   // --- Keys -------------------------------------------------------------------
   const typingInControl = (event: KeyboardEvent): boolean =>
     event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement;
@@ -174,7 +179,6 @@ function boot(): void {
 
   // --- Mouse: drag on the world to orbit, wheel to zoom ---------------------------
   worldElement.addEventListener('pointerdown', (event) => {
-    void audio.unlock();
     worldElement.setPointerCapture(event.pointerId);
     session.input.pointerDown();
   });
@@ -195,7 +199,7 @@ function boot(): void {
       cancelFrame: (handle) => window.cancelAnimationFrame(handle),
       now: () => performance.now(),
     },
-    frame: (frameSeconds) => app.frame(frameSeconds),
+    frame: (frameSeconds, dueSeconds) => app.frame(frameSeconds, dueSeconds),
     frameRateCap: () => session.settings.graphics.fpsCap,
   });
 

@@ -9,9 +9,10 @@
  */
 import * as THREE from 'three';
 import { TUNING, VALLEY_NORTH_SHORE_Z, VALLEY_SOUTH_SHORE_Z, spotPosition } from '../data/index.ts';
-import type { IslandDefinition } from '../data/index.ts';
+import type { IslandDefinition, LandmarkKind } from '../data/index.ts';
 import { terrainHeight, valleyHalfWidth } from '../sim/index.ts';
 import { terrainMaterialFor } from './b2/palette.js';
+import { FITTED_KINDS, landmarkGeometryAt } from './landmarks.ts';
 import { PRESETS, presetIdFor } from './presets.ts';
 import type { PresetId } from './presets.ts';
 import { CLOSE_DRESSING, FINE_GROUND, FINE_LANDMARKS, clearDistance, eyeHook, watchDistance, within } from './world/distance.ts';
@@ -53,7 +54,21 @@ export function islandWatcher(island: IslandDefinition, ground: THREE.Object3D, 
   const reach = Math.max(island.radiusX, island.radiusZ);
   let fine = true;
   let fineGround = true;
+  let fitted = false;
   return (eye) => {
+    // Once: a landmark of a kind drawn to fit its own ground gets its own drawing, by the spot it stands on.
+    if (!fitted) {
+      fitted = true;
+      for (const sibling of ground.parent?.children ?? []) {
+        const kind = sibling instanceof THREE.Mesh ? (sibling.geometry.userData.landmark as LandmarkKind | undefined) : undefined;
+        if (!(sibling instanceof THREE.Mesh) || !kind || !FITTED_KINDS.has(kind)) continue;
+        const own = island.landmarks.find((landmark) => {
+          const spot = spotPosition(island, landmark.spot);
+          return landmark.kind === kind && Math.hypot(spot.x - sibling.position.x, spot.z - sibling.position.z) < 0.5;
+        });
+        if (own) sibling.geometry = landmarkGeometryAt(island, own);
+      }
+    }
     const distance = Math.max(0, Math.hypot(island.center.x - eye.x, island.center.z - eye.z) - reach);
     close.visible = within(close.visible, distance, CLOSE_DRESSING);
     fineGround = within(fineGround, distance, FINE_GROUND);

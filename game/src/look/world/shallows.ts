@@ -3,9 +3,10 @@
  * bench), the cabin roofs, the birch grove, the orchard and its farmhouse,
  * the boathouse and its dock, and the bedroll every survivor's camp has.
  */
+import * as THREE from 'three';
 import type { LandmarkKind } from '../../data/index.ts';
 import { KIND } from '../b2/detail.js';
-import { birch, cabinRoof } from '../b2/flora.js';
+import { birch } from '../b2/flora.js';
 import type { Builder, Triple } from '../b2/geo.js';
 import { PAL } from '../b2/palette.js';
 import { seededRandom } from '../scatter.ts';
@@ -23,6 +24,18 @@ export function fireRing(builder: Builder): void {
   }
   builder.cone(0.14, 0.32, '#f0a04a', { pos: [0, 0.22, 0], ...EMBER }, 6);
 }
+
+/** How far the cottage's eaves stand above the ground, metres, and how much bigger than B2's the roof is drawn. */
+const COTTAGE_EAVES = 1;
+const COTTAGE_SCALE = 1.2;
+/** B2's cabin roof space (eaves at y = -0.1) set on the cottage's walls. It has settled a little to one side: half of B2's sag, which was a roof lying on the ground. */
+const COTTAGE = new THREE.Matrix4().compose(
+  new THREE.Vector3(0, COTTAGE_EAVES + 0.1 * COTTAGE_SCALE, 0),
+  new THREE.Quaternion().setFromEuler(new THREE.Euler(0.03, 0, 0.05, 'YXZ')),
+  new THREE.Vector3(COTTAGE_SCALE, COTTAGE_SCALE, COTTAGE_SCALE),
+);
+/** How high the cottage's ridge stands over its ground as drawn (the world view sinks a landmark 0.1 m). */
+export const COTTAGE_RIDGE = COTTAGE_EAVES + (2.305 + 0.1) * COTTAGE_SCALE - 0.1;
 
 /** One orchard tree: a short limed trunk, a low round crown, apples in it. */
 function orchardTree(builder: Builder, x: number, y: number, z: number, size: number, random: () => number, detail: boolean): void {
@@ -128,18 +141,98 @@ export const SHALLOWS: Partial<Record<LandmarkKind, LandmarkBuilder>> = {
     for (const [x, z] of [[0.3, 0.6], [-0.2, 0.75], [0.6, 0.85]]) builder.box(0.16, 0.012, 0.05, PAL.woodLight, { pos: [x, 0.01, z], rot: [0, x * 4, 0], flat: true, kind: KIND.PLAIN });
   },
 
-  /** A cottage roof left by the water: B2's own, grounded in silt, with a stone chimney and what the flood left against it. */
+  /**
+   * A cottage silted up to its window heads: what shows of its plank walls, and B2's cabin roof on them (the same
+   * shakes, boards and numbers as `cabinRoof` in b2/flora.js, a fifth bigger, and sagging as B2's does). So the roof
+   * stands as high as a young spruce and carries the island's outline from the water. The eave has gone over the
+   * middle of each slope (its two lowest rows of shakes, the rafter tails left bare) and the south end is stove in,
+   * wall and gable: whatever the rules put under the roof shows from both sides and from the south, at the height
+   * the eye follows a walker from.
+   */
   cabin_roof: (builder, detail) => {
-    cabinRoof(builder, !detail);
-    builder.box(0.7, 3, 0.6, '#a59f9b', { pos: [-1.2, 0.9, -2.3], rot: [0.03, 0, -0.05], kind: KIND.STONE });
-    builder.box(0.84, 0.12, 0.74, '#8d8886', { pos: [-1.27, 2.45, -2.34], rot: [0.03, 0, -0.05], kind: KIND.STONE });
+    const pitch = Math.atan2(2.3, 2.5);
+    const slope = Math.hypot(2.5, 2.3);
+    const shakes = ['#8f7d6b', '#9c8974', '#7f6f62', '#94806c', '#857362'];
+    const boards = [TONE.board, TONE.boardDark, '#927659'];
+    // Along the ridge, the roof is cut at these places (B2's). The hole is the middle two bays of the two rows at the eave.
+    const cuts = [-2.75, -1.3, -0.2, 1.1, 2.75];
+    const holed = (row: number): boolean => row < 2;
+    const holeTop = 2 / 6 + 0.035;
+    moved(builder, COTTAGE, () => {
+      for (const side of [-1, 1]) {
+        // Up the slope from the eave (0) to the ridge (1): where a strip of roof lies.
+        const strip = (from: number, to: number, lift: number): { x: number; y: number; width: number } =>
+          ({ x: side * 2.5 * (1 - (from + to) / 2), y: -0.1 + 2.3 * ((from + to) / 2) + lift, width: (to - from) * slope });
+        // The dark underlay, so a missing shake reads as a hole: left out where the roof is really gone.
+        for (const [from, to, z0, z1] of [[0, 1, -2.65, cuts[1]], [0, 1, cuts[3], 2.65], [holeTop, 1, cuts[1], cuts[3]]]) {
+          const under = strip(from, to, -0.07);
+          builder.box(under.width, 0.05, z1 - z0, '#4a413a', { pos: [under.x + side * 0.05, under.y, (z0 + z1) / 2], rot: [0, 0, -side * pitch], flat: true });
+        }
+        for (let row = 0; row < 6; row += 1) {
+          const shake = strip(row / 6, (row + 1) / 6 + 0.035, 0.03 + (row % 2) * 0.012);
+          const split = holed(row) || (detail && (row + (side > 0 ? 1 : 0)) % 3 === 1);
+          if (!split) {
+            builder.box(shake.width, 0.06, 5.5 + (row % 2) * 0.12, shakes[(row + (side > 0 ? 2 : 0)) % 5], { pos: [shake.x, shake.y, 0], rot: [0, 0, -side * pitch], kind: KIND.SHINGLE });
+            continue;
+          }
+          for (let bay = 0; bay < 4; bay += 1) {
+            if (holed(row) ? bay === 1 || bay === 2 : bay === (side > 0 ? 1 : 2) && row > 1) continue;
+            const [z0, z1] = [cuts[bay] + 0.02, cuts[bay + 1] - 0.02];
+            builder.box(shake.width, 0.06, z1 - z0, shakes[(row + bay) % 5], { pos: [shake.x, shake.y, (z0 + z1) / 2], rot: [0, bay % 2 ? 0.02 : -0.015, -side * pitch], kind: KIND.SHINGLE, axis: 2 });
+          }
+        }
+        // What shows of the walls, let into the ground far enough for any slope.
+        builder.box(0.16, 2.8, 5.1, boards[side > 0 ? 0 : 1], { pos: [side * 2.28, -1.52, 0], kind: KIND.SIDING, seed: 0.35 + side * 0.1, axis: 2 });
+        builder.box(1.45, 2.8, 0.16, boards[2], { pos: [side * 1.5, -1.52, 2.52], kind: KIND.SIDING, seed: 0.5 });
+        if (!detail) continue;
+        // Rafters left bare across the hole, moss creeping over the shakes, a window drowned to its head.
+        for (const z of [-0.95, -0.1, 0.75]) {
+          const [low, high] = [strip(-0.02, -0.02, -0.04), strip(holeTop, holeTop, -0.04)];
+          builder.beam([low.x, low.y, z], [high.x, high.y, z], 0.045, '#6f5a47', PEN, 4);
+        }
+        builder.box(0.7, 0.05, 1.1, PAL.moss, { pos: [side * 0.75, 1.62, side * 1.9], rot: [0, 0.2, -side * pitch] });
+        builder.box(0.5, 0.05, 0.7, PAL.mossDeep, { pos: [side * 1.5, 0.95, -side * 1.9], rot: [0, -0.3, -side * pitch] });
+        pane(builder, [side * 2.37, -0.72, -side * 1.1], 0.95, 0.75, side * Math.PI / 2, { glass: TONE.glassDark });
+      }
+      builder.box(0.34, 0.09, 5.7, PAL.rustDark, { pos: [0, 2.26, 0] });
+      builder.box(4.5, 2.8, 0.16, boards[1], { pos: [0, -1.52, -2.52], kind: KIND.SIDING, seed: 0.6 });
+      // Gable ends: stacked boards with a small attic window. The south gable is stove in up past its window.
+      for (const end of [-2.62, 2.62]) {
+        const out = Math.sign(end);
+        let board = 0;
+        for (let y = -0.35; y < 2.0; y += detail ? 0.27 : 0.81) {
+          const half = 2.3 * (1 - (y + 0.22) / 2.3);
+          if (half < 0.12) break;
+          if (end > 0 && y < 1.2) {
+            if (detail) for (const side of [-1, 1]) builder.box(half - 0.75, 0.25, 0.14, boards[board++ % 3], { pos: [side * (half + 0.75) / 2, y + 0.125, end] });
+            continue;
+          }
+          builder.box(half * 2, detail ? 0.25 : 0.79, 0.14, boards[board++ % 3], { pos: [0, y + (detail ? 0.125 : 0.395), end] });
+        }
+        if (!detail) continue;
+        for (const side of [-1, 1]) builder.plank([side * 2.42, -0.2, end + out * 0.1], [side * 0.05, 2.2, end + out * 0.1], 0.16, 0.05, '#6f5a47', {});
+        if (end > 0) continue;
+        builder.box(0.62, 0.62, 0.06, PAL.cream, { pos: [0, 0.95, end + out * 0.08], kind: KIND.PAINT });
+        builder.box(0.46, 0.46, 0.08, TONE.glassDark, { pos: [0, 0.95, end + out * 0.1], flat: true, kind: KIND.PLAIN });
+        builder.box(0.05, 0.46, 0.1, PAL.cream, { pos: [0, 0.95, end + out * 0.11], kind: KIND.PAINT });
+        builder.box(0.46, 0.05, 0.1, PAL.cream, { pos: [0, 0.95, end + out * 0.11], kind: KIND.PAINT });
+      }
+      if (!detail) return;
+      // The stovepipe.
+      builder.cyl(0.1, 0.1, 1.1, PAL.rust, { pos: [1.05, 1.85, 0.9] }, 8);
+      builder.cone(0.2, 0.16, PAL.rustDark, { pos: [1.05, 2.5, 0.9] }, 8);
+    });
+    // The stone chimney up the north gable, clear of the ridge.
+    builder.box(0.8, 6.2, 0.7, '#a59f9b', { pos: [-1.45, 1.6, -3.05], rot: [0.03, 0, -0.05], kind: KIND.STONE });
+    builder.box(0.96, 0.14, 0.86, '#8d8886', { pos: [-1.6, 4.74, -3.14], rot: [0.03, 0, -0.05], kind: KIND.STONE });
     if (!detail) return;
-    // Silt banked against the eaves, a drift log, an aerial gone crooked.
-    builder.sphere(1, '#b9ad94', { pos: [2.5, -0.12, -0.6], scale: [1.1, 0.36, 2.6], kind: KIND.SOIL }, 8);
-    builder.sphere(1, '#b0a48c', { pos: [-2.6, -0.1, 1.1], scale: [0.9, 0.3, 1.9], kind: KIND.SOIL }, 8);
-    builder.beam([2.3, 0.22, -2.6], [3.3, 0.14, 1.6], 0.14, PAL.driftwood, { r2: 0.09, kind: KIND.DRIFT }, 7);
-    builder.beam([0.2, 1.7, -1.9], [0.32, 3.5, -1.95], 0.025, PAL.iron, PEN, 4);
-    for (const [y, half] of [[3.4, 0.5], [3.15, 0.38], [2.9, 0.26]]) builder.beam([0.31 - half, y, -1.95], [0.31 + half, y + 0.04, -1.95], 0.014, PAL.iron, PEN, 4);
+    // Silt banked against the walls, a drift log, the fallen planks, an aerial gone crooked.
+    builder.sphere(1, '#b9ad94', { pos: [3.25, -0.12, -0.7], scale: [1.1, 0.36, 2.9], kind: KIND.SOIL }, 8);
+    builder.sphere(1, '#b0a48c', { pos: [-3.3, -0.1, 1.3], scale: [0.9, 0.3, 2.1], kind: KIND.SOIL }, 8);
+    builder.beam([3.1, 0.22, -3], [4.1, 0.14, 1.8], 0.14, PAL.driftwood, { r2: 0.09, kind: KIND.DRIFT }, 7);
+    for (const [x, z, turn] of [[-0.5, 4.3, 0.5], [0.6, 4.8, -0.3]]) builder.box(0.3, 0.05, 1.7, boards[x > 0 ? 0 : 2], { pos: [x, 0.12, z], rot: [0.04, turn, 0], kind: KIND.WOOD, axis: 2 });
+    builder.beam([0.25, 3.7, -2.4], [0.4, 5.6, -2.46], 0.025, PAL.iron, PEN, 4);
+    for (const [y, half] of [[5.5, 0.5], [5.25, 0.38], [5, 0.26]]) builder.beam([0.39 - half, y, -2.46], [0.39 + half, y + 0.04, -2.46], 0.014, PAL.iron, PEN, 4);
   },
 
   /** A stand of white birch on the crown of the islet, each on the rules' own ground, with one long down. */

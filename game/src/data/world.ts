@@ -168,6 +168,19 @@ export const ISLANDS_BY_ID: Record<IslandId, IslandDefinition> = Object.fromEntr
   ISLANDS.map((definition) => [definition.id, definition]),
 ) as Record<IslandId, IslandDefinition>;
 
+/**
+ * The quarry's cut benches, in the numbers the look draws them with (`look/world/narrows.ts`,
+ * `quarry_cut`): rows of flat-topped blocks stepped up the slope, in the landmark's own frame
+ * (x along the face, -z out toward the water). Row r runs from `front + r * depth` back by `depth`;
+ * column c is `columnWidth` wide, centred on `firstColumnX + c * columnWidth`. A block's top is the
+ * hill's height at the middle of its back edge, plus `lip`. The rules stand feet on these tops
+ * (`groundHeight` in `sim/world.ts`). A test holds the two sets of numbers together.
+ */
+export const QUARRY_BENCHES = {
+  landmark: 'quarry_cut' as LandmarkKind,
+  rows: 3, columns: 6, front: -13, depth: 6.5, firstColumnX: -20, columnWidth: 8, lip: 0.25,
+} as const;
+
 /** World position of an island-local spot. */
 export function spotPosition(definition: IslandDefinition, islandSpot: IslandSpot): { x: number; z: number } {
   const localX = islandSpot.along * definition.radiusX;

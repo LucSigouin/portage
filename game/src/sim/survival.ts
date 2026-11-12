@@ -8,7 +8,7 @@ import {
 } from './inventory.ts';
 import { notifySlept, updateQuests } from './quests.ts';
 import type { FailCause, GameState, ItemStack, PlayerState } from './types.ts';
-import { islandAt, islandLanding, landingBerth, regionAt, terrainHeight } from './world.ts';
+import { groundHeight, islandAt, islandLanding, landingBerth, regionAt, terrainHeight } from './world.ts';
 import { updateWeather } from './weather.ts';
 
 const { daySeconds, hourSeconds } = TUNING.time;
@@ -237,7 +237,7 @@ function standAt(player: PlayerState, spot: { x: number; z: number }): void {
   player.seat = null;
   player.position.x = spot.x;
   player.position.z = spot.z;
-  player.position.y = terrainHeight(spot.x, spot.z);
+  player.position.y = groundHeight(spot.x, spot.z);
   player.islandId = islandAt(spot.x, spot.z);
 }
 

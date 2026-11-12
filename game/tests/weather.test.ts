@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TUNING, WEATHER, WEATHER_KINDS } from '../src/data/index.ts';
-import { selectCanoeStats, selectWeather } from '../src/sim/index.ts';
+import { bearingDifference, selectCanoeStats, selectWeather } from '../src/sim/index.ts';
 import type { GameEvent, GameState } from '../src/sim/index.ts';
 import { updateWeather } from '../src/sim/weather.ts';
 import { build, countIn, newGame, run, standOn } from './support.ts';
@@ -90,6 +90,78 @@ describe('weather', () => {
     state.weather.secondsRemaining = 9999;
     forecast(state, 10);
     expect(state.weather.windSpeed).toBeCloseTo(1 + TUNING.weather.windEasePerSecond * 10, 6);
+  });
+
+  it('swings the wind round to a new bearing at a steady rate, the short way', () => {
+    const rate = TUNING.weather.windTurnPerSecond;
+    const state = newGame(5);
+    state.weather.secondsRemaining = 9999;
+    state.weather.windDirection = 3;
+    state.weather.windTurn = 1.2; // clockwise, across the seam at PI
+    forecast(state, 1);
+    expect(state.weather.windDirection).toBeCloseTo(3 + rate - 2 * Math.PI, 9);
+    expect(state.weather.windTurn).toBeCloseTo(1.2 - rate, 9);
+    forecast(state, 2);
+    expect(state.weather.windTurn).toBe(0);
+    expect(state.weather.windDirection).toBeCloseTo(4.2 - 2 * Math.PI, 9);
+    forecast(state, 30);
+    expect(state.weather.windDirection).toBeCloseTo(4.2 - 2 * Math.PI, 9); // steady once it is there
+    state.weather.windTurn = -0.4;
+    forecast(state, 1);
+    expect(state.weather.windDirection).toBeCloseTo(4.2 - 2 * Math.PI - 0.4, 9);
+    expect(state.weather.windTurn).toBe(0);
+  });
+
+  it('never jumps the wind at a weather change: it arrives within about six seconds', () => {
+    const rate = TUNING.weather.windTurnPerSecond;
+    const step = TUNING.fixedStep;
+    let changes = 0;
+    let widest = 0;
+    let fastest = 0;
+    for (let seed = 1; seed <= 6; seed += 1) {
+      const state = newGame(seed);
+      let aim: number | null = null;
+      let secondsTurning = 0;
+      for (let tick = 0; tick < 2 * TUNING.time.daySeconds / step; tick += 1) {
+        const before = state.weather.windDirection;
+        const kind = state.weather.kind;
+        const until = state.weather.secondsRemaining;
+        updateWeather(state, step);
+        const swung = Math.abs(bearingDifference(state.weather.windDirection, before));
+        fastest = Math.max(fastest, swung);
+        if (until - step <= 0) {
+          // The weather changed on this step: a new bearing was rolled, and the wind has only begun to turn.
+          expect(state.weather.kind).not.toBe(kind);
+          changes += 1;
+          aim = bearingDifference(state.weather.windDirection + state.weather.windTurn!, 0);
+          widest = Math.max(widest, Math.abs(state.weather.windTurn!) + swung);
+          secondsTurning = 0;
+        }
+        if (aim !== null) {
+          secondsTurning += step;
+          if (state.weather.windTurn === 0) {
+            expect(Math.abs(bearingDifference(state.weather.windDirection, aim))).toBeLessThan(1e-9);
+            expect(secondsTurning).toBeLessThanOrEqual(Math.PI / rate + 2 * step);
+            aim = null;
+          }
+        }
+      }
+    }
+    expect(changes).toBeGreaterThan(30);
+    expect(fastest).toBeLessThanOrEqual(rate * step + 1e-9); // no step ever swung it faster than the rate
+    expect(fastest).toBeGreaterThan(rate * step * 0.99);
+    expect(widest).toBeGreaterThan(2.5); // some of those were near reversals, the case that used to snap hardest
+    expect(Math.PI / rate).toBeGreaterThanOrEqual(3); // "a few seconds", not a blink...
+    expect(Math.PI / rate).toBeLessThanOrEqual(10); // ...and not a slow drift a sailor has to wait out
+  });
+
+  it('keeps turning the wind through a night asleep', () => {
+    const state = newGame(5);
+    state.weather.secondsRemaining = 9999;
+    state.weather.windDirection = 0;
+    state.weather.windTurn = 2;
+    forecast(state, 3); // the sleep skip advances the weather a second at a time, as this does
+    expect(state.weather.windDirection).toBeCloseTo(3 * TUNING.weather.windTurnPerSecond, 9);
   });
 });
 

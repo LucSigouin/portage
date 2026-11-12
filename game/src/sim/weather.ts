@@ -4,6 +4,7 @@ import { WEATHER, WEATHER_KINDS } from '../data/weather.ts';
 import { emit } from './inventory.ts';
 import { nextRandom, randomBetween } from './random.ts';
 import type { GameState, WeatherState } from './types.ts';
+import { bearingDifference } from './world.ts';
 
 /** Storms are never rolled before the first outrigger is built. */
 function stormsAllowed(state: GameState): boolean {
@@ -30,6 +31,7 @@ export function createWeather(): WeatherState {
     nextSeconds: 0,
     stormLevel: 0,
     windDirection: Math.PI * 0.75,
+    windTurn: 0,
     windSpeed: 3,
     windTarget: 3,
     stormWarned: false,
@@ -61,7 +63,8 @@ export function updateWeather(state: GameState, deltaSeconds: number): void {
     weather.secondsRemaining += weather.nextSeconds;
     const definition = WEATHER[weather.kind];
     weather.windTarget = randomBetween(state, definition.minimumWind, definition.maximumWind);
-    weather.windDirection = randomBetween(state, -Math.PI, Math.PI);
+    // The new bearing is rolled as before. The wind swings round to it instead of jumping.
+    weather.windTurn = bearingDifference(randomBetween(state, -Math.PI, Math.PI), weather.windDirection);
     emit(state, { type: 'weather_changed', kind: weather.kind });
     rollNextWeather(state);
   }
@@ -72,4 +75,10 @@ export function updateWeather(state: GameState, deltaSeconds: number): void {
   const windStep = TUNING.weather.windEasePerSecond * deltaSeconds;
   if (weather.windSpeed < weather.windTarget) weather.windSpeed = Math.min(weather.windTarget, weather.windSpeed + windStep);
   else if (weather.windSpeed > weather.windTarget) weather.windSpeed = Math.max(weather.windTarget, weather.windSpeed - windStep);
+  const turnLeft = weather.windTurn ?? 0;
+  if (turnLeft !== 0) {
+    const turn = Math.sign(turnLeft) * Math.min(Math.abs(turnLeft), TUNING.weather.windTurnPerSecond * deltaSeconds);
+    weather.windDirection = bearingDifference(weather.windDirection + turn, 0);
+    weather.windTurn = turnLeft - turn;
+  }
 }

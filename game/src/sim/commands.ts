@@ -15,7 +15,7 @@ import {
 import { acceptQuest, notifyTalked, turnInQuest, updateQuests } from './quests.ts';
 import { sleep, sleepBlocked } from './survival.ts';
 import type { Command, CommandResult, Container, GameState, PlayerId, PlayerState } from './types.ts';
-import { islandAt, regionAt, terrainHeight } from './world.ts';
+import { groundHeight, islandAt, regionAt, terrainHeight } from './world.ts';
 
 const otherContainer = (container: Container): Container => (container === 'backpack' ? 'cargo' : 'backpack');
 
@@ -239,7 +239,7 @@ export function dispatch(state: GameState, command: Command, playerId: PlayerId 
       const spot = clearSpot(state, player, landing);
       player.position.x = spot.x;
       player.position.z = spot.z;
-      player.position.y = terrainHeight(spot.x, spot.z);
+      player.position.y = groundHeight(spot.x, spot.z);
       player.islandId = islandAt(spot.x, spot.z);
       player.regionId = regionAt(spot.x, spot.z).id;
       emit(state, { type: 'landed', islandId: player.islandId }, player);

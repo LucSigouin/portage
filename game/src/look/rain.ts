@@ -5,8 +5,11 @@
  * in on the far side, faded out at the moment it does. Nothing is tied to the
  * screen, and nothing moves while the look's paint time stands still.
  *
- * The strokes are drawn last, at the window's own size, over the world and the
- * heroes alike: rain falls in front of the crew too.
+ * The strokes are drawn last, at the window's own size. A stroke stops where
+ * something stands in front of it: each pixel of a stroke is held against the
+ * world's depth and the heroes' (`behind`), so rain falls in front of a tree,
+ * the canopy or the crew, and never shows through them. Nothing is drawn twice
+ * for that: the frame's own depth is read, and each hero window's is copied.
  */
 import * as THREE from 'three';
 import { GU } from './b2/palette.js';
@@ -20,6 +23,12 @@ const RAIN_LIFT = 3;
 export const RAIN_STROKES = 2400;
 /** With the weather's fine work shed (the ladder's first rung), this share of them is drawn. */
 export const RAIN_SHED_SHARE = 0.5;
+
+/** The heroes' depth is kept for the rain in at most this many pixels: one a canvas pixel up to 1920 x 1080. */
+const HERO_DEPTH_PIXELS = 1920 * 1080;
+
+/** A rectangle of the canvas in pixels, from the bottom left (a hero window). */
+interface CanvasWindow { x: number; y: number; w: number; h: number }
 
 /** A stroke's length in metres: a pen flick, longer in a storm. It moves a ninth of that in a frame, so it slides and never jumps. */
 export function strokeLength(storm: number): number {
@@ -47,12 +56,29 @@ export class Rain {
     uStrength: { value: 1 },
     uPixel: { value: new THREE.Vector2(1, 1) },
     uSheet: { value: 1 },
+    tWorldDepth: { value: null as THREE.Texture | null },
+    tHeroDepth: { value: null as THREE.Texture | null },
+    uBehind: { value: 0 },
     uFogDensity: GU.uFogDensity,
     uLamp: GU.uLamp,
     uLampTint: GU.uLampTint,
     uDark: GU.uDark,
   };
   private readonly shift: [number, number, number] = [0, 0, 0];
+  /**
+   * The crew and the canoe are drawn apart from the world, in their own windows, so the world's depth does not hold
+   * them. The depth of each hero window (the heroes, and the world under them) is copied here as the frame draws it.
+   */
+  private readonly heroDepth = new THREE.WebGLRenderTarget(4, 4, {
+    format: THREE.RedFormat, depthBuffer: true, generateMipmaps: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
+  });
+  private readonly copyUniforms = { tDepth: { value: null as THREE.Texture | null }, uFill: { value: new THREE.Vector2(1, 1) } };
+  private readonly copyScene = new THREE.Scene();
+  private readonly copyCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  private canvasWidth = 1;
+  private canvasHeight = 1;
+  /** True while the heroes' depth holds a hero window of this frame (or the last, until it is cleared). */
+  private heroesKept = false;
 
   constructor() {
     // Four corners a stroke. aSeed: its home in the box (0 to 1 each way) and its own number. aCorner: tail to head, left to right.
@@ -137,13 +163,25 @@ export class Rain {
         in float vAlpha;
         in float vHeight;
         layout(location = 0) out vec4 oColor;
-        uniform float uStrength;
+        uniform float uStrength, uBehind;
+        uniform vec2 uPixel;
+        uniform sampler2D tWorldDepth, tHeroDepth;
         void main(){
           // the pen lands light, presses, and lifts: thin at the tail, full near the head
           float press = smoothstep(0., .55, vAt.y) * (1. - smoothstep(.9, 1., vAt.y));
           float line = 1. - smoothstep(vAt.z * press - .5, vAt.z * press + .5, abs(vAt.x));
           // it ends where it meets the water
-          oColor = vec4(vInk, line * press * vAlpha * uStrength * smoothstep(0., .12, vHeight));
+          float mark = line * press * vAlpha * uStrength * smoothstep(0., .12, vHeight);
+          // (most of a stroke's quad is clear paper round the line: nothing more to work out there)
+          if (mark < .004) discard;
+          // behind a tree, a roof, the ground, the canopy or the crew: not drawn. The depths are read only where the
+          // stroke marks the pixel, the world's first, and the heroes' only if the world did not hide it.
+          if (uBehind > .5) {
+            vec2 uv = gl_FragCoord.xy * uPixel * .5;
+            if (gl_FragCoord.z > textureLod(tWorldDepth, uv, 0.).x) discard;
+            if (uBehind > 1.5 && gl_FragCoord.z > textureLod(tHeroDepth, uv, 0.).x) discard;
+          }
+          oColor = vec4(vInk, mark);
         }`,
       transparent: true,
       side: THREE.DoubleSide,
@@ -153,7 +191,58 @@ export class Rain {
     this.mesh = new THREE.Mesh(geometry, material);
     this.mesh.frustumCulled = false;
     this.scene.add(this.mesh);
+    this.heroDepth.depthTexture = new THREE.DepthTexture(4, 4);
+    this.uniforms.tHeroDepth.value = this.heroDepth.depthTexture;
+    // One triangle over a hero window, writing that window's depth and no colour.
+    const copyGeometry = new THREE.BufferGeometry();
+    copyGeometry.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
+    const copy = new THREE.Mesh(copyGeometry, new THREE.ShaderMaterial({
+      uniforms: this.copyUniforms,
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = position.xy * .5 + .5; gl_Position = vec4(position.xy, 0., 1.); }',
+      fragmentShader: 'uniform sampler2D tDepth; uniform vec2 uFill; varying vec2 vUv; void main(){ gl_FragDepth = texture2D(tDepth, vUv * uFill).x; gl_FragColor = vec4(0.); }',
+      depthTest: true,
+      depthFunc: THREE.AlwaysDepth,
+      depthWrite: true,
+      colorWrite: false,
+    }));
+    copy.frustumCulled = false;
+    this.copyScene.add(copy);
+    // b2/post.js looks for this on a layer it draws over the sheet.
+    this.scene.userData.behind = this.behind;
   }
+
+  /**
+   * What the strokes fall behind. b2/post.js calls it once the world is drawn, with the world's depth and no
+   * window, then once for each hero window it draws, with that window's depth (the heroes over the world) and
+   * the share of that buffer the window fills. So the strokes stop at the heroes too, and nothing is drawn again.
+   */
+  private readonly behind = (renderer: THREE.WebGLRenderer, depth: THREE.Texture, window: CanvasWindow | null, fill: THREE.Vector2 | null): void => {
+    const target = this.heroDepth;
+    if (!window || !fill) {
+      this.uniforms.tWorldDepth.value = depth;
+      // Last frame's heroes are forgotten: all of it as far as can be. With no hero on screen last frame there is
+      // nothing to forget, and the strokes read the world's depth alone.
+      if (this.heroesKept) {
+        target.scissorTest = false;
+        target.viewport.set(0, 0, target.width, target.height);
+        renderer.setRenderTarget(target);
+        renderer.clear(false, true, false);
+      }
+      this.heroesKept = false;
+      this.uniforms.uBehind.value = 1;
+      return;
+    }
+    this.heroesKept = true;
+    this.uniforms.uBehind.value = 2;
+    const [scaleX, scaleY] = [target.width / this.canvasWidth, target.height / this.canvasHeight];
+    target.viewport.set(window.x * scaleX, window.y * scaleY, window.w * scaleX, window.h * scaleY);
+    target.scissor.copy(target.viewport);
+    target.scissorTest = true;
+    this.copyUniforms.tDepth.value = depth;
+    this.copyUniforms.uFill.value.copy(fill);
+    renderer.setRenderTarget(target);
+    renderer.render(this.copyScene, this.copyCamera);
+  };
 
   /** How many strokes are drawn now. */
   get drawn(): number {
@@ -190,10 +279,21 @@ export class Rain {
   resize(canvasWidth: number, canvasHeight: number): void {
     this.uniforms.uPixel.value.set(2 / canvasWidth, 2 / canvasHeight);
     this.uniforms.uSheet.value = canvasHeight / 1080;
+    this.canvasWidth = canvasWidth;
+    this.canvasHeight = canvasHeight;
+    const share = Math.min(1, Math.sqrt(HERO_DEPTH_PIXELS / (canvasWidth * canvasHeight)));
+    this.heroDepth.setSize(Math.max(1, Math.round(canvasWidth * share)), Math.max(1, Math.round(canvasHeight * share)));
+    // (a buffer made anew holds nothing yet: clear it before it is first read)
+    this.heroesKept = true;
   }
 
   dispose(): void {
     this.mesh.geometry.dispose();
     (this.mesh.material as THREE.Material).dispose();
+    this.heroDepth.dispose();
+    for (const child of this.copyScene.children as THREE.Mesh[]) {
+      child.geometry.dispose();
+      (child.material as THREE.Material).dispose();
+    }
   }
 }

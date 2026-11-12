@@ -8,7 +8,7 @@
  */
 import * as THREE from 'three';
 import { ISLANDS, spotPosition } from '../../data/index.ts';
-import type { IslandDefinition, LandmarkKind } from '../../data/index.ts';
+import type { IslandDefinition, LandmarkDefinition, LandmarkKind } from '../../data/index.ts';
 import { terrainHeight } from '../../sim/index.ts';
 import { KIND } from '../b2/detail.js';
 import { THIN } from '../b2/geo.js';
@@ -160,26 +160,44 @@ export interface Site {
   water: number;
 }
 
+/** The ground under one landmark of the island table. The numbers are the world view's own: sunk 0.1 m, turned by the bearing and the island's turn. */
+export function siteAt(island: IslandDefinition, landmark: LandmarkDefinition): Site {
+  const spot = spotPosition(island, landmark.spot);
+  const origin = Math.max(0, terrainHeight(spot.x, spot.z)) - LANDMARK_SUNK;
+  const turn = -(landmark.bearing + island.rotation);
+  const cosine = Math.cos(turn);
+  const sine = Math.sin(turn);
+  return {
+    island,
+    water: -origin,
+    ground: (x, z) => terrainHeight(spot.x + x * cosine + z * sine, spot.z - x * sine + z * cosine) - origin,
+  };
+}
+
+/** The one landmark being drawn on its own site now, if any (`onSite`). */
+let drawing: { kind: LandmarkKind; site: Site } | null = null;
+
+/** Run `draw` with `siteOf(kind)` answering for this site: how a kind the table has several times is fitted to each one's ground. */
+export function onSite<Drawn>(kind: LandmarkKind, site: Site, draw: () => Drawn): Drawn {
+  const before = drawing;
+  drawing = { kind, site };
+  try {
+    return draw();
+  } finally {
+    drawing = before;
+  }
+}
+
 /**
- * Where the first landmark of a kind stands. For a kind the island table has
- * once (the dock, the dam, the quarry cut, the orchard, the grove) this is the
- * very ground it will be drawn on, so it can be fitted to it. The numbers are
- * the world view's own: sunk 0.1 m, turned by the bearing and the island's turn.
+ * Where a landmark of a kind stands: the one being drawn on its own site (`onSite`), else the first the island
+ * table has. For a kind the table has once (the dock, the dam, the quarry cut, the orchard, the grove) that is
+ * the very ground it will be drawn on, so it can be fitted to it.
  */
 export function siteOf(kind: LandmarkKind): Site {
+  if (drawing?.kind === kind) return drawing.site;
   for (const island of ISLANDS) {
     for (const landmark of island.landmarks) {
-      if (landmark.kind !== kind) continue;
-      const spot = spotPosition(island, landmark.spot);
-      const origin = Math.max(0, terrainHeight(spot.x, spot.z)) - LANDMARK_SUNK;
-      const turn = -(landmark.bearing + island.rotation);
-      const cosine = Math.cos(turn);
-      const sine = Math.sin(turn);
-      return {
-        island,
-        water: -origin,
-        ground: (x, z) => terrainHeight(spot.x + x * cosine + z * sine, spot.z - x * sine + z * cosine) - origin,
-      };
+      if (landmark.kind === kind) return siteAt(island, landmark);
     }
   }
   return { island: null, water: -3, ground: () => LANDMARK_SUNK };
