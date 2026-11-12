@@ -57,13 +57,32 @@ npm --prefix relay run check
   One of them waits 12 s for the room to be put to sleep and checks that it wakes whole.
 - The game's side: `game/tests/net/relay.test.ts` and `game/tests/client/crewlobby.test.ts` (both ends against `src/room.ts`, in memory), and `e2e/tests/relay.spec.ts` (two browser profiles through this Worker).
 
+### The browser spec
+
+Needs the game's dev server (port 5222 here) and this relay (8791). Seven tests. Two of them each need a built game
+served by `vite preview`, and are skipped (not passed) without it:
+
+```
+game/node_modules/.bin/vite build game --outDir <folder>/dist-norelay --emptyOutDir
+PORTAGE_RELAY=/relay game/node_modules/.bin/vite build game --outDir <folder>/dist-relay --emptyOutDir
+game/node_modules/.bin/vite preview game --outDir <folder>/dist-norelay --port 5226 --strictPort
+game/node_modules/.bin/vite preview game --outDir <folder>/dist-relay --port 5227 --strictPort
+PORTAGE_URL=http://localhost:5222 PORTAGE_BARE_URL=http://localhost:5226 PORTAGE_BUILT_URL=http://localhost:5227 \
+  PORTAGE_HEADERS=<sigouin-net>/site/_headers RELAY_SHOTS=<folder>/shots \
+  npm --prefix e2e test -- relay.spec.ts --global-timeout=540000
+```
+
+- `PORTAGE_BARE_URL`: the build with no relay. No crew entries, no socket, an invite link ignored.
+- `PORTAGE_BUILT_URL` and `PORTAGE_HEADERS`: the build with the relay, under the live site's security policy.
+- `RELAY_SHOTS`: eleven pictures at 1920x1080.
+
 ## The one setting in the game
 
 `PORTAGE_RELAY`, read when the game is built.
 
 | Value | Result |
 |---|---|
-| not set | No relay. No crew entries in the lobby, no relay code in the bundle, no socket ever opened. This is what `deploy/deploy.sh` builds today. |
+| not set | No relay. No crew entries in the lobby and no socket ever opened. The bundle has no socket code and no crew lobby in it (the words of the two cards stay, out of reach). This is what `deploy/deploy.sh` builds today. |
 | `/portage/relay` | The relay on the site's own host. The site's security policy needs no change. |
 | `wss://relay.example` | The relay somewhere else. The site's `connect-src` must name it. |
 
@@ -88,11 +107,13 @@ To undo: `wrangler delete --cwd relay`, and build the game without the setting. 
 
 ## Cost
 
-Figures read from Cloudflare's own pages on 2026-11-11 (Durable Objects pricing, last updated Oct 18, 2026; Workers limits, last updated Oct 29, 2026).
+Figures read from Cloudflare's own pages on 2026-11-11 and read again on 2026-11-12 (Durable Objects pricing, last updated Oct 18, 2026; Workers limits, last updated Oct 29, 2026).
 
 - Workers Free: 100,000 requests a day for the account. Durable Objects on Free: 100,000 requests and 13,000 GB-s of running time a day. Resets at 00:00 UTC.
-- A WebSocket frame coming in counts as 1/20 of a request. Frames going out are free. Running time is charged at 128 MB while a room is awake.
-- Measured through this Worker with four players paddling (`e2e/tests/relay.spec.ts` prints it): host 18 frames a second, each guest 16 to 19. All four: 67 to 73 a second over two runs.
-- One hour, four players, at 73: 263,500 frames, 13,200 requests (13% of the day), 461 GB-s (3.5% of the day).
+- A WebSocket frame coming in counts as 1/20 of a request. Frames going out are free. Opening a socket is one request. Running time is charged at 128 MB while a room is awake, and not while it sleeps.
+- Measured through this Worker with four players paddling (`e2e/tests/relay.spec.ts` prints it): host 18 frames a second, each guest 15 to 19. All four: 64 to 73 a second over four runs.
+- One hour, four players, at 73: 262,800 frames, 13,140 requests (13% of the day), 461 GB-s (3.5% of the day).
 - So the free plan carries about 7.5 hours of four-player play a day, or about 16 hours with two players.
-- Past the limit the relay stops until midnight UTC. The limit is the account's: Luc's other Workers stop with it.
+- The idle alarm is one row written every ten minutes a room is open. The free plan allows 100,000 rows a day: nothing.
+- Past the limit, Cloudflare's words: "further operations of that type will fail with an error". The relay stops until midnight UTC.
+- Not said on either page: whether the rooms' 100,000 requests are the same 100,000 as the account's Workers. Count on the worst: an hour of four players takes 13% of what Luc's other Workers have that day.
