@@ -9,7 +9,8 @@
  * - far islands are cheap: trees, landmarks and ground each drop to a coarser drawing with distance, and come back;
  * - a cottage's roof stands on its walls, high enough to carry the outline, the attic's cupola clears its ridge,
  *   and what the rules put under it can be seen from outside;
- * - the scrap stack is cars: each has glass under a roof, wheels with hubs, lamps at both ends.
+ * - the scrap stack is cars: each has glass under a roof, wheels with hubs, lamps at both ends;
+ * - each truss span follows its own ground, and the island's watcher gives each its own drawing.
  */
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
@@ -17,7 +18,7 @@ import { ISLANDS, ISLANDS_BY_ID, NODES_BY_ISLAND, NODE_TYPES, REGIONS_BY_ID, spo
 import type { IslandDefinition, LandmarkDefinition, LandmarkKind, NodeTypeId } from '../../src/data/index.ts';
 import { terrainHeight } from '../../src/sim/index.ts';
 import { PAL, inkMaterial } from '../../src/look/b2/palette.js';
-import { LANDMARK_HEIGHT, LANDMARK_KINDS, landmarkFarGeometry, landmarkGeometry } from '../../src/look/landmarks.ts';
+import { FITTED_KINDS, LANDMARK_HEIGHT, LANDMARK_KINDS, landmarkFarGeometry, landmarkGeometry, landmarkGeometryAt } from '../../src/look/landmarks.ts';
 import { ATTIC_HEIGHT, NODE_TYPE_IDS, nodeGeometry } from '../../src/look/nodes.ts';
 import { floraFor } from '../../src/look/presets.ts';
 import { buildIslandProps, instancedMesh, treeWatcher } from '../../src/look/props.ts';
@@ -322,6 +323,59 @@ function skyline(island: IslandDefinition): number[] {
   });
   return bins;
 }
+
+describe('the truss spans', () => {
+  const bridge = ISLANDS_BY_ID.truss_bridge;
+  const spans = bridge.landmarks.filter((landmark) => landmark.kind === 'truss_span');
+  const placing = (landmark: LandmarkDefinition): THREE.Matrix4 => {
+    const spot = spotPosition(bridge, landmark.spot);
+    return new THREE.Matrix4().makeRotationY(-(landmark.bearing + bridge.rotation)).setPosition(spot.x, Math.max(0, terrainHeight(spot.x, spot.z)) - LANDMARK_SUNK, spot.z);
+  };
+
+  it('each follow their own ground: the bottom chord is as high over the deck at every joint, on all three', () => {
+    expect(spans.length).toBe(3);
+    expect(FITTED_KINDS.has('truss_span')).toBe(true);
+    const heights: number[] = [];
+    for (const span of spans) {
+      const matrix = placing(span);
+      const positions = landmarkGeometryAt(bridge, span).getAttribute('position');
+      const points = Array.from({ length: positions.count }, (_, index) => new THREE.Vector3().fromBufferAttribute(positions, index));
+      // The steel along one side, at each joint between the piers (every 8 m): its underside over the rules' ground there.
+      for (let joint = -32; joint <= 32; joint += 8) {
+        const here = points.filter((point) => Math.abs(point.x) > 3 && Math.abs(point.x) < 3.528 && Math.abs(point.z - joint) < 0.3);
+        expect(here.length, `steel at ${joint}`).toBeGreaterThan(0);
+        // (over the deck's middle line, where the track runs: the ground also falls away to each side)
+        const lowest = here.reduce((low, point) => (point.y < low.y ? point : low)).clone().setX(0).applyMatrix4(matrix);
+        heights.push(lowest.y - terrainHeight(lowest.x, lowest.z));
+      }
+    }
+    // A level span stood 2 m over the deck at one end of an outer span and sat on it at the other.
+    console.log(`truss spans: the bottom chord's underside is ${Math.min(...heights).toFixed(2)} to ${Math.max(...heights).toFixed(2)} m over the deck`);
+    expect(Math.min(...heights)).toBeGreaterThan(0.75);
+    expect(Math.max(...heights)).toBeLessThan(0.9);
+  });
+
+  it('get a drawing each from the island\'s watcher, with every stroke near by and as an outline far off', () => {
+    const group = new THREE.Group();
+    const ground = new THREE.Object3D();
+    const close = new THREE.Object3D();
+    const meshes = spans.map((span) => {
+      // As the world view makes them: every span the kind's shared drawing, at its own spot.
+      const mesh = new THREE.Mesh(landmarkGeometry('truss_span'), inkMaterial);
+      mesh.position.setFromMatrixPosition(placing(span));
+      return mesh;
+    });
+    group.add(ground, ...meshes);
+    const watch = islandWatcher(bridge, ground, close);
+    watch(new THREE.Vector3(bridge.center.x + 60, 3, bridge.center.z));
+    meshes.forEach((mesh, index) => expect(mesh.geometry, `span ${index}`).toBe(landmarkGeometryAt(bridge, spans[index])));
+    expect(new Set(meshes.map((mesh) => mesh.geometry)).size).toBe(3);
+    watch(new THREE.Vector3(bridge.center.x + 900, 3, bridge.center.z));
+    meshes.forEach((mesh, index) => expect(mesh.geometry, `span ${index} far`).toBe(landmarkGeometryAt(bridge, spans[index]).userData.far));
+    watch(new THREE.Vector3(bridge.center.x + 60, 3, bridge.center.z));
+    meshes.forEach((mesh, index) => expect(mesh.geometry, `span ${index} back`).toBe(landmarkGeometryAt(bridge, spans[index])));
+  });
+});
 
 describe('the fog wall', () => {
   const beacon = ISLANDS_BY_ID.the_beacon;

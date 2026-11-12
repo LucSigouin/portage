@@ -19,10 +19,11 @@ How the islands, landmarks and scavenge nodes are drawn. Read `LOOK.md` first: t
 
 - The world view places one mesh per landmark at its spot, sunk 0.1 m, turned by its bearing. That code is not touched.
 - A kind the island table has once (dock, dam, quarry cut, orchard, grove) asks `siteOf(kind)` for the rules' ground under it. So the dock runs down the real bank to the water, the dam follows its crest, the orchard trees stand on the slope.
-- A kind the table has more than once (cabin roof, silo, pylon, truss span) is one shared mesh. It must look right on any ground: give it a footing that goes below its origin.
+- A kind the table has more than once (cabin roof, silo, pylon) is one shared mesh. It must look right on any ground: give it a footing that goes below its origin.
+- A kind the table has more than once that cannot look right on any ground is a **fitted kind** (`FITTED_KINDS` in `landmarks.ts`: the truss span, whose deck is the rules' ground and falls 2.2 m under the outer spans). Each landmark of it gets its own drawing and far outline, built on its own site: inside its builder `siteOf(kind)` answers for the span being drawn. The world view still hands every span the shared drawing. The island's watcher (`terrain.ts`) swaps each one's own in, by the spot it stands on, the first time it runs.
 - Some nodes sit on a landmark's own spot: an attic in each cabin roof and in the nave, a cache in the boathouse and under the fire tower, a machine under the gatehouse, the lamp at the tower's foot. The landmark leaves room: a gable stove in, a door stood open, a cabin up on legs, an open foot. The attic node is a cupola tall enough to stand through a roof ridge (`ATTIC_HEIGHT` in `nodes.ts`, held over `COTTAGE_RIDGE` by a test).
 - What stands under a roof must show from outside. The cottage (`cabin_roof`) is B2's cabin roof set on what shows of its walls, a fifth bigger, so it carries the outline from the water. Its eave is gone over the middle of each slope and its south end is stove in, wall and gable. A test casts the walking eye's sight lines to the chest from the east, the west and the south: change the roof and run it.
-- The truss spans have no floor. The rules' ground is the deck, and the dressing lays the track on it.
+- The truss spans have no floor. The rules' ground is the deck, and the dressing lays the track on it. Every joint of a span stands as high over the deck as on a level one.
 
 ## Adding a landmark
 
@@ -112,6 +113,8 @@ Each view's budget is in `TRIANGLES` in the spec. Redraw something and it grows:
 | `treeWatcher` always fine; `islandWatcher` never far | detail by distance |
 | `FINE_GROUND` of 42 km | the 15 views (budget) |
 | `world/spent.ts`: `HIDE` empty, or `aGone != 0.` | a used-up node |
+| `narrows.ts`: `rise` always 0; `landmarkGeometryAt` always the shared drawing | the truss spans follow their own ground |
+| `terrain.ts`: the watcher never fits a landmark | the truss spans get a drawing each |
 | `FOG_HEAPS`: the old heap (`at: [0, 0.2, 0], reach: [1.7, 0.85, 1.1]`) | the tower's head over the fog |
 | `fogBanks`: rows of size 4 and 5 | the fog is still a wall |
 | `staging.ts`: the beacon view back at `floatAt(state, 0, -1085, 0)` | e2e: the staged view of the Beacon has the lit tower in it |
