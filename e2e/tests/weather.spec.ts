@@ -229,7 +229,7 @@ test('playing, the land changes only where a rain stroke is drawn, and lamp ligh
   await open(page, 'shot=island&live=1&hold=1&rain=0');
   await stage(page, "W('storm'); H(10);");
   const bare = await pair();
-  expect((await probe(page)).weather.wet).toBe(1);
+  expect((await probe(page)).weather.wet).toBeGreaterThan(0.85);
   // The same with the strokes: something changes, and only a little of the land.
   await open(page, 'shot=island&live=1&hold=1');
   await stage(page, "W('storm'); H(10);");

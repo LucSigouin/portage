@@ -123,8 +123,8 @@ describe('the weather the look draws', () => {
   });
 
   it('measures crests against the rules\' own wave table: its chop, every wave but the longest', () => {
-    const longest = Math.max(...WAVE_TABLE.map((wave) => wave.wavelength));
-    expect(WAVE_TABLE[0].wavelength).toBe(longest);
+    // The longest wave has the smallest wavenumber, and it is the table's first.
+    expect(WAVE_TABLE[0].wavenumber).toBe(Math.min(...WAVE_TABLE.map((wave) => wave.wavenumber)));
     expect(WAVE_CHOP).toBeCloseTo(WAVE_TABLE.slice(1).reduce((sum, wave) => sum + wave.amplitude, 0), 6);
   });
 });
