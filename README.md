@@ -24,8 +24,9 @@ Done:
 - Each crew member sits in their own seat, wears their own colours, and paddles, bails, sleeps and walks for themselves.
 - The canoe: four hull tiers you can tell apart, all 19 attachments, the three survivors.
 - The valley: every landmark and scavenge node drawn, all 15 islands told apart by their outline.
+- A crew list in the HUD, crewmates on the compass and the map, and notes for the whole crew.
 
-Next: a crew list in the HUD, weather and night, a speed pass, then co-op you join by a link.
+Next: weather and night, a speed pass, then co-op you join by a link.
 
 ## Run it
 
