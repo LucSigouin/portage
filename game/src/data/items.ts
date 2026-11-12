@@ -56,7 +56,7 @@ const ITEM_LIST: ItemDefinition[] = [
   item('clean_water', 'Clean water', 'refined', 'Boiled or fallen from the sky. Safe to drink.', food(0, 40), true),
   item('cooked_fish', 'Cooked fish', 'refined', 'Crisp skin, white flakes. A proper meal.', food(28, 2)),
   item('roast_roots', 'Roast roots', 'refined', 'Cattail roots baked soft in the coals.', food(20)),
-  item('stew', 'Stew', 'refined', 'Fish, roots and mushroom in one pot. Fills you twice.', food(45, 15, 5)),
+  item('stew', 'Stew', 'refined', 'Fish, roots and mushroom in one pot. Fills you twice.', food(45, 40, 5)),
   // stock food
   item('smoked_fish', 'Smoked fish', 'stock', 'Keeps for the long crossing. Tastes of the smoker.', food(40, 0)),
   item('jam', 'Jam', 'stock', 'Berries boiled down and sealed in a jar.', food(35, 5)),

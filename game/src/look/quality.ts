@@ -154,6 +154,11 @@ export class FrameLadder {
     return this.best;
   }
 
+  /** Seconds of frames the ladder has seen: the clock its changes are stamped with. */
+  get seconds(): number {
+    return this.clock;
+  }
+
   /** Start over from rung 0 with every rung allowed again. A pinned ladder (`&hold=1`) stays where it is. */
   reset(): void {
     if (this.hold) return;

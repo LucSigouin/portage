@@ -8,6 +8,10 @@ import { subjectFromState } from '../camera.ts';
 import type { DebugParameters } from './parameters.ts';
 import { addIdleCrew, gameAtQuest, stageShot } from './staging.ts';
 
+// `?perf=1`: the performance readout rides in this chunk. A second on-demand chunk would make the bundler
+// split the game's data out of the first download, and every normal game would then fetch one file more.
+export { runPerfReadout } from '../perf/readout.ts';
+
 export function applyDebugParameters(app: App, parameters: DebugParameters): void {
   const session = app.session;
   const seed = parameters.seed ?? BOT_SEED;

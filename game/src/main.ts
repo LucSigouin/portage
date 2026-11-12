@@ -82,6 +82,8 @@ function boot(): void {
   if (!worldElement || !interfaceElement) throw new Error('index.html is missing #world or #interface');
 
   const parameters = parseDebugParameters(window.location.search);
+  // `?perf=1`: the performance readout. It plays in a storage that forgets, so saves and settings are never touched.
+  const perf = new URLSearchParams(window.location.search).get('perf') === '1';
   const worldView = createWorldView();
   const gameInterface = createGameInterface();
   const audio = createAudio();
@@ -91,7 +93,7 @@ function boot(): void {
     worldView,
     gameInterface,
     audio,
-    storage: parameters.sandbox ? createMemoryStorage() : browserStorage(),
+    storage: parameters.sandbox || perf ? createMemoryStorage() : browserStorage(),
     stats: () => loop?.stats ?? { framesPerSecond: 0, frameMilliseconds: 0, workMilliseconds: 0 },
     forceFrameRate: parameters.showFrameRate,
   });
@@ -131,6 +133,11 @@ function boot(): void {
   const resize = (): void => worldView.resize(worldElement.clientWidth, worldElement.clientHeight, window.devicePixelRatio || 1);
   new ResizeObserver(resize).observe(worldElement);
   resize();
+
+  // --- Sound -------------------------------------------------------------------
+  // Starting the sound engine costs one long frame. It starts on the first click or key anywhere, which
+  // is in the lobby (a button there is not part of the world), so the long frame never lands in play.
+  window.addEventListener('pointerdown', () => void audio.unlock(), { capture: true });
 
   // --- Keys -------------------------------------------------------------------
   const typingInControl = (event: KeyboardEvent): boolean =>
@@ -190,7 +197,6 @@ function boot(): void {
 
   // --- Mouse: drag on the world to orbit, wheel to zoom ---------------------------
   worldElement.addEventListener('pointerdown', (event) => {
-    void audio.unlock();
     worldElement.setPointerCapture(event.pointerId);
     session.input.pointerDown();
   });
@@ -211,7 +217,7 @@ function boot(): void {
       cancelFrame: (handle) => window.cancelAnimationFrame(handle),
       now: () => performance.now(),
     },
-    frame: (frameSeconds) => app.frame(frameSeconds),
+    frame: (frameSeconds, dueSeconds) => app.frame(frameSeconds, dueSeconds),
     frameRateCap: () => session.settings.graphics.fpsCap,
   });
 
@@ -219,6 +225,7 @@ function boot(): void {
     // A handle for the console and for browser tests.
     (window as unknown as { portage: unknown }).portage = { app, session, worldView, loop, followVisibility };
     loop?.start();
+    if (perf) void import('./client/debug/index.ts').then((debug) => debug.runPerfReadout(app, worldView, loop));
     // `?join=ROOM&name=...`: ask the host tab for a seat. The lobby shows until it answers.
     if (parameters.join !== null) {
       session.joinGame(joinTabRoom(parameters.join, randomHex(8)), { name: parameters.name, key: crewKey(parameters.join, parameters.name) });

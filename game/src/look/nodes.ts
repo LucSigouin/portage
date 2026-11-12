@@ -228,14 +228,16 @@ const BUILDERS: Record<NodeTypeId, NodeBuilder> = {
 
   /**
    * The way into an attic: a little cupola with a window on each face, tall enough to stand through the
-   * ridge of the roof the rules put it on. A lamp left burning in it. Used up: dark, a shutter hanging.
+   * ridge of the roof the rules put it on (`ATTIC_HEIGHT`: its windows clear a cottage's ridge). A lamp left
+   * burning in it. Used up: dark, a shutter hanging.
    */
   attic: (builder, stage) => {
-    builder.box(1.2, 2.9, 1.2, TONE.board, { pos: [0, 1.45, 0], kind: KIND.SIDING, seed: 0.4 });
-    builder.cone(1.1, 0.75, TONE.shingleDark, { pos: [0, 3.27, 0], rot: [0, Math.PI / 4, 0], kind: KIND.SHINGLE }, 4);
-    builder.box(1.5, 0.08, 1.5, TONE.shingle, { pos: [0, 2.9, 0], kind: KIND.SHINGLE });
+    const top = ATTIC_HEIGHT;
+    builder.box(1.2, top, 1.2, TONE.board, { pos: [0, top / 2, 0], kind: KIND.SIDING, seed: 0.4 });
+    builder.cone(1.1, 0.75, TONE.shingleDark, { pos: [0, top + 0.37, 0], rot: [0, Math.PI / 4, 0], kind: KIND.SHINGLE }, 4);
+    builder.box(1.5, 0.08, 1.5, TONE.shingle, { pos: [0, top, 0], kind: KIND.SHINGLE });
     for (const [x, z, turn] of [[0, 0.61, 0], [0, -0.61, Math.PI], [0.61, 0, Math.PI / 2], [-0.61, 0, -Math.PI / 2]] as const) {
-      moved(builder, new THREE.Matrix4().makeRotationY(turn).setPosition(x, 2.3, z), () => {
+      moved(builder, new THREE.Matrix4().makeRotationY(turn).setPosition(x, top - 0.6, z), () => {
         builder.box(0.72, 0.08, 0.1, PAL.cream, { pos: [0, -0.36, 0.02], kind: KIND.PAINT });
         builder.box(0.72, 0.06, 0.1, PAL.cream, { pos: [0, 0.36, 0.02], kind: KIND.PAINT });
         stage.fresh(() => {
@@ -461,10 +463,13 @@ const BUILDERS: Record<NodeTypeId, NodeBuilder> = {
   },
 };
 
+/** How tall the attic's cupola stands, to its eaves, metres: its windows (0.93 m down from there) clear the ridge of the roof it stands in. */
+export const ATTIC_HEIGHT = 4.9;
+
 /** How far above its foot each node's loot mark floats, metres. */
 export const NODE_MARK_HEIGHT: Record<NodeTypeId, number> = {
   driftwood_pile: 1.7, cattail_stand: 2.3, berry_bush: 1.2, apple_tree: 4.6, mushroom_log: 1, birch: 3.2, spruce: 3.6, stone_outcrop: 1.5,
-  clay_bank: 1.2, crate: 1.2, attic: 3.9, shed: 2.9, junk_heap: 1.9, boat_wreck: 1.6, machinery: 2.4, rain_barrel: 2.1, garden_bed: 1.4,
+  clay_bank: 1.2, crate: 1.2, attic: 5.9, shed: 2.9, junk_heap: 1.9, boat_wreck: 1.6, machinery: 2.4, rain_barrel: 2.1, garden_bed: 1.4,
   fishing_spot: 2.1, wreck_buoy: 2.2, message_bottle: 0.8, cache: 1.2, beacon_lamp: 1.9,
 };
 

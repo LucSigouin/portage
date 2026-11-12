@@ -19,7 +19,8 @@ export const HULL_TIERS: HullTierDefinition[] = [
     tier: 0, id: 'leaky_canoe', name: 'Leaky canoe',
     description: 'Cedar strip, split along two seams. It floats. Mostly.',
     iconId: 'hull_leaky_canoe', cost: [], tools: [],
-    cargoSlots: 8, leakPerSecond: 0.4, speedMultiplier: 1,
+    // From the starting 60, a new player who touches nothing has 160 seconds before the first capsize.
+    cargoSlots: 8, leakPerSecond: 0.25, speedMultiplier: 1,
     dimensions: { length: 4.9, beam: 0.9, depth: 0.38, draft: 0.15 },
     mountIds: BASE_MOUNTS,
   },

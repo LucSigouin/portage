@@ -3,7 +3,8 @@ import {
   SAVE_KEY_PREFIX, SAVE_SLOT_COUNT, SAVE_VERSION, createAutosaver, createSaveStore, deserialize, serialize,
 } from '../src/save/index.ts';
 import type { SaveMigration } from '../src/save/index.ts';
-import { FIXED_STEP, NEUTRAL_INPUT, dispatch, hashState, step } from '../src/sim/index.ts';
+import { FIXED_STEP, NEUTRAL_INPUT, bearingDifference, dispatch, hashState, step } from '../src/sim/index.ts';
+import { TUNING } from '../src/data/index.ts';
 import { FakeStorage, give, newGame, run, standOn, teleportToCamp } from './support.ts';
 
 /** A game with some history in it. */
@@ -160,6 +161,57 @@ describe('old saves', () => {
     const loaded = store.load(0);
     expect(loaded.ok && loaded.state.tools).toEqual(['bailing_can', 'stone_knife', 'hatchet']);
     expect(store.list()[0]).toMatchObject({ empty: false, corrupt: false, mainQuestId: 'ribs_and_rails' });
+  });
+});
+
+describe('saves from before the wind swung', () => {
+  // A real version 3 save written by commit 8db9b32, before the wind's bearing eased: twelve minutes
+  // in, ashore on Home Knoll, in rain, 102 seconds before the next weather. Its weather has no `windTurn`.
+  const fixtures = import.meta.glob<string>('./fixtures/save-v3-*.json', { eager: true, query: '?raw', import: 'default' });
+  const text = fixtures['./fixtures/save-v3-ashore.json'];
+
+  it('has the real save to test with, and it has no wind turn in it', () => {
+    expect(Object.keys(fixtures)).toEqual(['./fixtures/save-v3-ashore.json']);
+    const old = JSON.parse(text);
+    expect(old.version).toBe(3);
+    expect(old.state.weather.windDirection).toBeCloseTo(-2.4535, 4);
+    expect('windTurn' in old.state.weather).toBe(false);
+  });
+
+  it('loads it exactly as it was saved, with no migration to run', () => {
+    const loaded = deserialize(text);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(loaded.migratedFrom).toBeNull();
+    expect(loaded.state).toEqual({ ...JSON.parse(text).state, version: SAVE_VERSION });
+    expect(serialize(loaded.state, 1762819200000) + '\n').toBe(text);
+  });
+
+  it('plays on: the wind holds its bearing, then swings at the next weather instead of jumping', () => {
+    const loaded = deserialize(text);
+    if (!loaded.ok) throw new Error('the version 3 save did not load');
+    const state = loaded.state;
+    const bearing = state.weather.windDirection;
+    run(state, {}, 100);
+    expect(state.weather.windDirection).toBe(bearing);
+    expect(state.weather.windTurn ?? 0).toBe(0);
+    let widest = 0;
+    let changed = false;
+    for (let index = 0; index < 20 / FIXED_STEP; index += 1) {
+      const before = state.weather.windDirection;
+      step(state, NEUTRAL_INPUT, FIXED_STEP);
+      changed ||= state.events.some((event) => event.type === 'weather_changed');
+      state.events = [];
+      expect(Number.isFinite(state.weather.windDirection)).toBe(true);
+      widest = Math.max(widest, Math.abs(bearingDifference(state.weather.windDirection, before)));
+    }
+    expect(changed).toBe(true);
+    expect(state.weather.windDirection).not.toBe(bearing);
+    expect(widest).toBeLessThanOrEqual(TUNING.weather.windTurnPerSecond * FIXED_STEP + 1e-9);
+    expect(state.weather.windTurn).toBe(0);
+    // Saved now, it carries the new number and loads again the same.
+    const again = deserialize(serialize(state, 9));
+    expect(again.ok && again.state).toEqual(state);
   });
 });
 

@@ -128,12 +128,44 @@ function flatten(geometry: THREE.BufferGeometry, normal: THREE.Vector3): THREE.B
   return geometry;
 }
 
+/**
+ * The three soft heaps of one bank of fog, before the instance's scale: where each one's middle is, and how far it
+ * reaches each way. Fog lies low on the water: a bank is four times as broad as it is tall.
+ */
+export const FOG_HEAPS: readonly { at: Triple; reach: Triple }[] = [
+  { at: [0, 0.1, 0], reach: [1.7, 0.38, 1.1] },
+  { at: [1.35, 0.05, 0.25], reach: [1.05, 0.27, 0.75] },
+  { at: [-1.3, 0.06, -0.2], reach: [1.2, 0.27, 0.8] },
+];
+
 /** A bank of fog: three soft heaps, one wash, no pen line. One unit is a metre before the instance's scale. */
 function fogHeap(builder: Builder): void {
   const wash = { id: PEN.id, flat: true, kind: KIND.PLAIN } as const;
-  builder.sphere(1, TONE.fog, { pos: [0, 0.2, 0], scale: [1.7, 0.85, 1.1], ...wash }, 8);
-  builder.sphere(0.75, TONE.fog, { pos: [1.35, 0.1, 0.25], scale: [1.4, 0.8, 1], ...wash }, 8);
-  builder.sphere(0.8, TONE.fog, { pos: [-1.3, 0.12, -0.2], scale: [1.5, 0.75, 1], ...wash }, 8);
+  for (const heap of FOG_HEAPS) builder.sphere(1, TONE.fog, { pos: heap.at, scale: heap.reach, ...wash }, 8);
+}
+
+/**
+ * Where the banks of a fogged region lie, and how big each is. The wall: two rows along the region's edge, from
+ * valley wall to valley wall, low enough that from the dam's crest the head of the Beacon's tower stands over
+ * them, and high enough to hide the island's shore. Then it closes in behind: bigger banks far off, along both
+ * valley walls and the far shore. Never turned: a turned heap would turn its normal out of the plain tone.
+ */
+export function fogBanks(southEdgeZ: number, random: () => number): InstanceTransform[] {
+  const front = southEdgeZ - 32;
+  const transforms: InstanceTransform[] = [];
+  const heap = (x: number, z: number, size: number, lift: number): void => {
+    transforms.push({ x, y: lift, z, yaw: 0, scale: size * (0.85 + random() * 0.3) });
+  };
+  for (const [row, size, spacing] of [[0, 30, 62], [1, 40, 96]] as const) {
+    const z = front - row * 62;
+    const half = valleyHalfWidth(z) + 30;
+    for (let x = -half; x <= half; x += spacing) heap(x + (random() - 0.5) * spacing * 0.4, z + (random() - 0.5) * 14, size, -2 + row);
+  }
+  for (let z = front - 190; z > VALLEY_NORTH_SHORE_Z + 60; z -= 120) {
+    for (const side of [-1, 1]) heap(side * (valleyHalfWidth(z) - 70 + random() * 30), z + (random() - 0.5) * 30, 60, -1);
+  }
+  for (let x = -valleyHalfWidth(VALLEY_NORTH_SHORE_Z) + 90; x < valleyHalfWidth(VALLEY_NORTH_SHORE_Z) - 60; x += 130) heap(x + (random() - 0.5) * 30, VALLEY_NORTH_SHORE_Z + 55 + random() * 20, 60, -1);
+  return transforms;
 }
 
 const worldPoint = (island: IslandDefinition, landmark: LandmarkDefinition, x: number, y: number, z: number): Triple => {
@@ -295,25 +327,9 @@ export function dressIsland(island: IslandDefinition): Dressing {
     add(always, 'wreck', shape(`wreck.${kind}`, 2460 + kind, (builder) => wreck(builder, kind)),
       [{ x: buoy.position.x + Math.cos(away) * 6.5, y: -0.25, z: buoy.position.z + Math.sin(away) * 6.5, yaw: (hashText(buoy.id) % 628) / 100, scale: 1 }], 61 + index);
   });
-  // The fog wall: a bank along the edge of a fogged region, from valley wall to valley wall.
+  // The fog wall along the edge of a fogged region, and the banks that close in behind it.
   if (region.fogWall) {
-    const front = region.southEdgeZ - 32;
-    const transforms: InstanceTransform[] = [];
-    const heap = (x: number, z: number, size: number, lift: number): void => {
-      transforms.push({ x, y: lift, z, yaw: 0, scale: size * (0.85 + random() * 0.3) });
-    };
-    for (const [row, size, spacing] of [[0, 30, 62], [1, 44, 105]] as const) {
-      const z = front - row * 62;
-      const half = valleyHalfWidth(z) + 30;
-      for (let x = -half; x <= half; x += spacing) heap(x + (random() - 0.5) * spacing * 0.4, z + (random() - 0.5) * 14, size, -2 + row * 3);
-    }
-    // And it closes in behind: banks lying along both valley walls and the far shore.
-    for (let z = front - 190; z > VALLEY_NORTH_SHORE_Z + 60; z -= 120) {
-      for (const side of [-1, 1]) heap(side * (valleyHalfWidth(z) - 70 + random() * 30), z + (random() - 0.5) * 30, 38, -1);
-    }
-    for (let x = -valleyHalfWidth(VALLEY_NORTH_SHORE_Z) + 90; x < valleyHalfWidth(VALLEY_NORTH_SHORE_Z) - 60; x += 130) heap(x + (random() - 0.5) * 30, VALLEY_NORTH_SHORE_Z + 55 + random() * 20, 38, -1);
-    // Never turned: a turned heap would turn its normal out of the plain tone.
-    add(always, 'fog_heap', shape('fog_heap', 2470, fogHeap, (geometry) => flatten(geometry, fogNormal())), transforms, 71);
+    add(always, 'fog_heap', shape('fog_heap', 2470, fogHeap, (geometry) => flatten(geometry, fogNormal())), fogBanks(region.southEdgeZ, random), 71);
   }
   return { always, close, counts };
 }
