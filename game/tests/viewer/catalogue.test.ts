@@ -6,7 +6,10 @@
 import type * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { ATTACHMENTS, ATTACHMENT_IDS, CREW_MARKS, HULL_TIERS, ISLANDS, ITEMS, ITEM_IDS, NODE_TYPES, NPC_IDS } from '../../src/data/index.ts';
-import { LANDMARK_KINDS } from '../../src/look/landmarks.ts';
+import { LANDMARK_KINDS, landmarkGeometry } from '../../src/look/landmarks.ts';
+import { nodeGeometry } from '../../src/look/nodes.ts';
+import { finePropLibrary } from '../../src/look/props.ts';
+import { canonicalBuild } from '../../src/viewer/canonical.ts';
 import { NODE_TYPE_IDS } from '../../src/look/nodes.ts';
 import { VARIANTS } from '../../src/look/scatter.ts';
 import { GROUPS, catalogue, cleanOptions, defaultsOf, entryById, resetCatalogue } from '../../src/viewer/catalogue.ts';
@@ -208,5 +211,29 @@ describe('the same picture whatever was opened before', () => {
       expect(drawingOf(again.object as THREE.Object3D), id).toBe(before);
       again.dispose();
     }
+  });
+});
+
+describe('a clean start', () => {
+  it('forgets the game\'s shared drawings and rebuilds them the same', () => {
+    const geometryHash = (geometry: THREE.BufferGeometry): string => {
+      let hash = 2166136261;
+      for (const name of Object.keys(geometry.attributes).sort()) {
+        const array = geometry.getAttribute(name).array as ArrayLike<number>;
+        for (let at = 0; at < array.length; at += 1) hash = Math.imul(hash ^ Math.round(array[at] * 1e5), 16777619) >>> 0;
+      }
+      return String(hash);
+    };
+    const take = (): { drawings: THREE.BufferGeometry[]; hashes: string[] } => {
+      canonicalBuild();
+      const drawings = [landmarkGeometry('steeple'), nodeGeometry('crate'), finePropLibrary().spruce[0]];
+      return { drawings, hashes: drawings.map(geometryHash) };
+    };
+    const first = take();
+    // other things get built in between, and the game's shared drawings with them
+    for (const other of catalogue().filter((candidate) => !candidate.flat).slice(5, 30)) other.build(defaultsOf(other)).dispose();
+    const second = take();
+    first.drawings.forEach((drawing, at) => expect(second.drawings[at]).not.toBe(drawing));
+    expect(second.hashes).toEqual(first.hashes);
   });
 });
