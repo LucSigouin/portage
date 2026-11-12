@@ -92,7 +92,7 @@ Figures read from Cloudflare's own pages on 2026-11-11 (Durable Objects pricing,
 
 - Workers Free: 100,000 requests a day for the account. Durable Objects on Free: 100,000 requests and 13,000 GB-s of running time a day. Resets at 00:00 UTC.
 - A WebSocket frame coming in counts as 1/20 of a request. Frames going out are free. Running time is charged at 128 MB while a room is awake.
-- Measured through this Worker with four players paddling: host 18 frames a second, each guest 16. All four: 66.5 frames a second.
-- One hour, four players: 239,400 frames, 11,970 requests (12% of the day), 461 GB-s (3.5% of the day).
-- So the free plan carries about 8 hours of four-player play a day, or about 16 hours with two players.
+- Measured through this Worker with four players paddling (`e2e/tests/relay.spec.ts` prints it): host 18 frames a second, each guest 16 to 19. All four: 67 to 73 a second over two runs.
+- One hour, four players, at 73: 263,500 frames, 13,200 requests (13% of the day), 461 GB-s (3.5% of the day).
+- So the free plan carries about 7.5 hours of four-player play a day, or about 16 hours with two players.
 - Past the limit the relay stops until midnight UTC. The limit is the account's: Luc's other Workers stop with it.

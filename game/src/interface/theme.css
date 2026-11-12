@@ -1483,10 +1483,11 @@ html.iw-document {
   width: 15rem;
   max-width: 100%;
   margin: 0;
-  padding: 0.34rem 0.7rem 0.26rem;
+  /* The hand's letters stand taller than a line of 1.3: the line is given the room, so nothing typed is shaved. */
+  padding: 0.18rem 0.7rem 0.1rem;
   font-family: var(--iw-hand);
   font-size: 1.12rem;
-  line-height: 1.3;
+  line-height: 1.6;
   color: var(--iw-ink);
   background: var(--iw-paper-deep);
   border: 0.1rem solid var(--iw-ink);
