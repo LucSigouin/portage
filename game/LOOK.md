@@ -49,6 +49,9 @@ Every player is drawn from their own state by `CanoeView` (`canoe.ts`), the loca
 - **The starter kit makes room**: on the two bare hulls, with someone kneeling amidships, the pack, the tin and the small things are drawn shoved up to the thwart (`buildStarterKit(shape, true)`).
 - **What each one does is their own flag**: `paddling` (a stroke), `bailing` (a tin, bilge to gunwale, the paddle laid down), `asleep` (slumped aboard, laid on their back ashore), else at rest. Each eases in and out. Never the canoe's speed: a drifting canoe shows nobody paddling.
 - **One stroke clock** for the crew, so paddlers are in time. Counted along the hull from the stern, every second one works and rests their paddle on the other side.
+- **A paddle changes sides early in the recovery** (stroke clock 0.46 to 0.6), when the hands are drawn back over the paddler's own lap. Never across the catch: there the leading hand is furthest forward, over whatever stands ahead.
+- **Kneelers beside an outrigger deck paddle in the well.** The deck's inner edge is never nearer the centreline than `DECK.inner` (`canoe/deck-parts.ts`). A kneeler's recovery runs the pull backwards with the blade turned edge on, and `clearOfDecks` draws a paddle in along its own shaft wherever its tip would pass the planks' ends. Past the deck's ends there is open water and nothing is changed.
+- **The patched hull wears its bark where the paddling camera sees it** (`canoe/mends.ts`, hung by `CanoeView` on tier 1 only): laps folded over the rails and a sheet on the bow deck, edged in pitch. No lap lies where the lone paddler's blade crosses the rail.
 - **Walking is each player's own change in position.** Stepping out of the canoe, or a new state, is not a stride.
 - New pose: add it to `createCrew` in `b2/canoe.js` (`paddle(..., more)` for seated ones, `stand(..., lying)` ashore), drive it from a player flag in `CanoeView.sync`, and report it in `figures()`.
 
