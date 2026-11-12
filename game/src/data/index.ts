@@ -7,8 +7,9 @@ export { HULL_TIERS, ATTACHMENTS, ATTACHMENT_IDS, REFERENCE_HULL_TIER, attachmen
 export {
   REGIONS, REGION_IDS, REGIONS_BY_ID, ISLANDS, ISLAND_IDS, ISLANDS_BY_ID, START, WAVE_TABLE,
   VALLEY_HALF_WIDTH, VALLEY_SOUTH_SHORE_Z, VALLEY_NORTH_SHORE_Z, QUARRY_BENCHES, spotPosition,
+  CAMP_LANDMARK_KINDS, BED_LANDMARK_KINDS, CAMP_LAYOUTS,
 } from './world.ts';
-export type { WaveComponent } from './world.ts';
+export type { CampLayout, WaveComponent } from './world.ts';
 export { NODES, NODES_BY_ID, NODES_BY_ISLAND, NODE_TYPES, NODE_IDS, LOOT_TABLES } from './nodes.ts';
 export { QUESTS, QUEST_IDS, QUEST_LIST, MAIN_QUESTS, SIDE_QUESTS } from './quests.ts';
 export { NPCS, NPC_IDS } from './dialogue.ts';

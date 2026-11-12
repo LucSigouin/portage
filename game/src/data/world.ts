@@ -193,6 +193,39 @@ export function spotPosition(definition: IslandDefinition, islandSpot: IslandSpo
   };
 }
 
+/**
+ * What a camp is made of: its fire or hearth, its bench, its bed. A camp reaches a few steps past each one
+ * (`TUNING.foot.campLandmarkRange`), so nobody stands at the bench and reads that the bench is out of reach.
+ * A test walks every camp and holds this list to the layout: whatever stands by a camp's fire must be on it.
+ */
+export const CAMP_LANDMARK_KINDS: readonly LandmarkKind[] = ['campfire', 'forge_hearth', 'stump_bench', 'lean_to', 'bedroll', 'keeper_hut'];
+
+/** The camp landmarks a crew lies down at. */
+export const BED_LANDMARK_KINDS: readonly LandmarkKind[] = ['lean_to', 'bedroll', 'keeper_hut'];
+
+export interface CampLayout {
+  /** The camp's own spot: its fire. */
+  fire: { x: number; z: number };
+  /** Everything that stands in the camp, the fire among it. */
+  landmarks: { kind: LandmarkKind; x: number; z: number }[];
+  /** The ones to lie down at. */
+  beds: { kind: LandmarkKind; x: number; z: number }[];
+}
+
+/** Where each camp's fire and furniture stand, in world metres. Worked out once: the layout is fixed. */
+export const CAMP_LAYOUTS: Partial<Record<IslandId, CampLayout>> = Object.fromEntries(
+  ISLANDS.filter((definition) => definition.camp).map((definition): [IslandId, CampLayout] => {
+    const landmarks = definition.landmarks
+      .filter((entry) => CAMP_LANDMARK_KINDS.includes(entry.kind))
+      .map((entry) => ({ kind: entry.kind, ...spotPosition(definition, entry.spot) }));
+    return [definition.id, {
+      fire: spotPosition(definition, definition.camp!.spot),
+      landmarks,
+      beds: landmarks.filter((entry) => BED_LANDMARK_KINDS.includes(entry.kind)),
+    }];
+  }),
+);
+
 /** Where a new game starts: afloat, north of Home Knoll, bow toward it. */
 export const START = {
   islandId: 'home_knoll' as IslandId,
