@@ -6,7 +6,9 @@
  * - one-of-a-kind landmarks are fitted to the rules' own ground (the dam along its crest, the dock down to the water);
  * - the dressing follows the island table: wires where pylons stand, a wreck by every wreck buoy, fog round the Fog;
  * - all 15 islands have their own outline from the water;
- * - far islands are cheap: trees, landmarks and ground each drop to a coarser drawing with distance, and come back.
+ * - far islands are cheap: trees, landmarks and ground each drop to a coarser drawing with distance, and come back;
+ * - a cottage's roof stands on its walls, high enough to carry the outline, the attic's cupola clears its ridge,
+ *   and what the rules put under it can be seen from outside.
  */
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
@@ -15,7 +17,7 @@ import type { IslandDefinition, LandmarkDefinition, LandmarkKind, NodeTypeId } f
 import { terrainHeight } from '../../src/sim/index.ts';
 import { inkMaterial } from '../../src/look/b2/palette.js';
 import { LANDMARK_KINDS, landmarkFarGeometry, landmarkGeometry } from '../../src/look/landmarks.ts';
-import { NODE_TYPE_IDS, nodeGeometry } from '../../src/look/nodes.ts';
+import { ATTIC_HEIGHT, NODE_TYPE_IDS, nodeGeometry } from '../../src/look/nodes.ts';
 import { floraFor } from '../../src/look/presets.ts';
 import { buildIslandProps, instancedMesh, treeWatcher } from '../../src/look/props.ts';
 import { scatterIsland } from '../../src/look/scatter.ts';
@@ -24,6 +26,7 @@ import { CLOSE_DRESSING, FINE_GROUND, FINE_LANDMARKS, FINE_TREES, clearDistance,
 import { dressIsland, fogNormal } from '../../src/look/world/dressing.ts';
 import { DAY, NIGHT } from '../../src/look/daylight.ts';
 import { LANDMARK_SUNK, siteOf } from '../../src/look/world/kit.ts';
+import { COTTAGE_RIDGE } from '../../src/look/world/shallows.ts';
 import { nodeMaterial, withSpentSwitch } from '../../src/look/world/spent.ts';
 
 const triangles = (geometry: THREE.BufferGeometry): number => (geometry.index ? geometry.index.count : geometry.getAttribute('position').count) / 3;
@@ -38,6 +41,61 @@ function placed(island: IslandDefinition, landmark: LandmarkDefinition): { local
     return { local, world: local.clone().applyMatrix4(matrix) };
   });
 }
+
+describe('the cottages', () => {
+  const cottages = ISLANDS.flatMap((island) => island.landmarks.filter((landmark) => landmark.kind === 'cabin_roof').map((landmark) => ({ island, landmark })));
+  /** The node the rules put on a cottage's own spot, if any. */
+  const under = (island: IslandDefinition, landmark: LandmarkDefinition): NodeTypeId | null => {
+    const spot = spotPosition(island, landmark.spot);
+    return (NODES_BY_ISLAND[island.id] ?? []).find((node) => Math.hypot(node.position.x - spot.x, node.position.z - spot.z) < 0.5)?.typeId ?? null;
+  };
+
+  it('stand on what shows of their walls, the ridge twice as high as a roof lying on the ground', () => {
+    // A roof on the ground (as it was) had its ridge 1.7 m up: lost against 7 m spruce from the water.
+    expect(COTTAGE_RIDGE).toBeGreaterThan(3.5);
+    const positions = landmarkGeometry('cabin_roof').getAttribute('position');
+    const ridge = Array.from({ length: positions.count }, (_, index) => new THREE.Vector3().fromBufferAttribute(positions, index))
+      .filter((point) => Math.abs(point.x) < 0.6 && Math.abs(point.z) < 2.5 && Math.abs(point.y - LANDMARK_SUNK - COTTAGE_RIDGE) < 0.25);
+    expect(ridge.length, 'the drawing has its ridge there').toBeGreaterThan(3);
+    // Walls: something drawn under the eaves all the way into the ground, on both long sides.
+    for (const side of [-1, 1]) {
+      const wall = Array.from({ length: positions.count }, (_, index) => new THREE.Vector3().fromBufferAttribute(positions, index))
+        .filter((point) => point.x * side > 2.2 && point.x * side < 3.2 && point.y < -1);
+      expect(wall.length, `wall ${side}`).toBeGreaterThan(3);
+    }
+  });
+
+  it('let the attic\'s cupola stand through the ridge, windows and all', () => {
+    expect(cottages.filter(({ island, landmark }) => under(island, landmark) === 'attic').length).toBeGreaterThan(0);
+    // The cupola's windows: their sills are 0.96 m under its eaves (nodes.ts).
+    expect(ATTIC_HEIGHT - 0.96).toBeGreaterThan(COTTAGE_RIDGE);
+    nodeGeometry('attic').computeBoundingBox();
+    expect(nodeGeometry('attic').boundingBox!.max.y).toBeGreaterThan(COTTAGE_RIDGE + 1.5);
+  });
+
+  it('show the cache the rules put under a roof: from both sides and the south, where the eye follows a walker from', () => {
+    const withCache = cottages.filter(({ island, landmark }) => under(island, landmark) === 'cache');
+    expect(withCache.length).toBeGreaterThan(0);
+    const cottage = new THREE.Mesh(landmarkGeometry('cabin_roof'), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+    cottage.updateMatrixWorld();
+    // The chest stands on the ground at the landmark's own spot: 0.1 m above its origin. Its lid is 0.7 m up.
+    const reach = 8.5;
+    const seenFrom = (x: number, z: number, pitch: number, height: number): boolean => {
+      const chest = new THREE.Vector3(0, LANDMARK_SUNK + height, 0);
+      const eye = chest.clone().add(new THREE.Vector3(x * Math.cos(pitch), Math.sin(pitch), z * Math.cos(pitch)).multiplyScalar(reach));
+      const ray = new THREE.Raycaster(eye, chest.clone().sub(eye).normalize(), 0, reach - 0.05);
+      return ray.intersectObject(cottage).length === 0;
+    };
+    // The eye follows a walker from 0.34 radians up by default (client/camera.ts) and 0.42 in the staged island view:
+    // the lid shows from a little under the one to a little over the other, the body from 0.42.
+    for (const pitch of [0.26, 0.34, 0.42, 0.46]) {
+      expect(seenFrom(1, 0, pitch, 0.65), `the lid from the east, ${pitch} up`).toBe(true);
+      expect(seenFrom(-1, 0, pitch, 0.65), `the lid from the west, ${pitch} up`).toBe(true);
+      expect(seenFrom(0, 1, pitch, 0.65), `the lid from the south, ${pitch} up`).toBe(true);
+    }
+    for (const [x, z] of [[1, 0], [-1, 0], [0, 1]]) expect(seenFrom(x, z, 0.42, 0.25), `the body from ${x}, ${z}`).toBe(true);
+  });
+});
 
 describe('landmarks', () => {
   /** Triangles of the simplest real drawing (the bedroll). The old stand-ins for the big kinds had 60 to 300. */

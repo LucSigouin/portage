@@ -20,7 +20,8 @@ How the islands, landmarks and scavenge nodes are drawn. Read `LOOK.md` first: t
 - The world view places one mesh per landmark at its spot, sunk 0.1 m, turned by its bearing. That code is not touched.
 - A kind the island table has once (dock, dam, quarry cut, orchard, grove) asks `siteOf(kind)` for the rules' ground under it. So the dock runs down the real bank to the water, the dam follows its crest, the orchard trees stand on the slope.
 - A kind the table has more than once (cabin roof, silo, pylon, truss span) is one shared mesh. It must look right on any ground: give it a footing that goes below its origin.
-- Some nodes sit on a landmark's own spot: an attic in each cabin roof and in the nave, a cache in the boathouse and under the fire tower, a machine under the gatehouse, the lamp at the tower's foot. The landmark leaves room: a gable stove in, a door stood open, a cabin up on legs, an open foot. The attic node is a cupola tall enough to stand through a roof ridge.
+- Some nodes sit on a landmark's own spot: an attic in each cabin roof and in the nave, a cache in the boathouse and under the fire tower, a machine under the gatehouse, the lamp at the tower's foot. The landmark leaves room: a gable stove in, a door stood open, a cabin up on legs, an open foot. The attic node is a cupola tall enough to stand through a roof ridge (`ATTIC_HEIGHT` in `nodes.ts`, held over `COTTAGE_RIDGE` by a test).
+- What stands under a roof must show from outside. The cottage (`cabin_roof`) is B2's cabin roof set on what shows of its walls, a fifth bigger, so it carries the outline from the water. Its eave is gone over the middle of each slope and its south end is stove in, wall and gable. A test casts the walking eye's sight lines to the chest from the east, the west and the south: change the roof and run it.
 - The truss spans have no floor. The rules' ground is the deck, and the dressing lays the track on it.
 
 ## Adding a landmark
@@ -87,7 +88,7 @@ npm --prefix game run check                                        # tests/look/
 PORTAGE_URL=http://localhost:5222 npm --prefix e2e test -- world.spec.ts look.spec.ts
 ```
 
-`tests/look/world.test.ts`, no graphics card: every landmark kind and node type is a real drawing, the dam and dock fit the rules' ground, the dressing follows the island table, the 15 skylines differ, detail drops with distance and comes back.
+`tests/look/world.test.ts`, no graphics card: every landmark kind and node type is a real drawing, the dam and dock fit the rules' ground, the dressing follows the island table, the 15 skylines differ, detail drops with distance and comes back, the cottages stand on their walls and show what is under them.
 
 `e2e/tests/world.spec.ts`, real graphics card: 15 island views with a clean console, every landmark and node at the rules' place, each view inside its triangle budget, 0 changed land pixels at three islands paused and playing, a used-up node drawn used up.
 
@@ -109,3 +110,6 @@ Each view's budget is in `TRIANGLES` in the spec. Redraw something and it grows:
 | `treeWatcher` always fine; `islandWatcher` never far | detail by distance |
 | `FINE_GROUND` of 42 km | the 15 views (budget) |
 | `world/spent.ts`: `HIDE` empty, or `aGone != 0.` | a used-up node |
+| `shallows.ts`: `holed` never true, or the south gable stove in only to `y < 0.2` | the cottages show the cache |
+| `COTTAGE_EAVES = -0.6` (the roof back on the ground) | the cottages stand on their walls |
+| `ATTIC_HEIGHT = 2.9` | the attic's cupola stands through the ridge |
