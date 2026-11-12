@@ -20,6 +20,7 @@
 //   shots/         thumbnails, downscaled to JPEG with sips
 //   docs/          every hub.json link that has "from": that markdown file rendered to HTML
 //   index.html     the hub page: hub.json poured into src/hub.html with src/style.css inlined
+//   workbench.html the debrief page for a phone: workbench.json poured into src/workbench.html (see workbench.mjs)
 //
 // No dependencies of its own. It borrows vite from each project's node_modules.
 import { execFileSync } from 'node:child_process';
@@ -27,6 +28,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync,
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { escapeHtml, firstHeading, renderMarkdown } from './src/markdown.mjs';
+import { buildWorkbench } from './workbench.mjs';
 
 const HUB = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HUB, '..');
@@ -435,4 +437,5 @@ const css = read(join(HUB, 'src/style.css')).trim();
 buildCompare(css);
 buildDocs(css);
 buildHubPage(css);
+buildWorkbench(SITE, { say });
 say(`done in ${((Date.now() - startedAt) / 1000).toFixed(1)} s: ${SITE}`);

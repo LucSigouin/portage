@@ -1,0 +1,486 @@
+/* Portage workbench: every rule for the debrief page. Inlined into workbench.html by hub/workbench.mjs,
+   under a block that holds the drawn pieces (--pen-a to --pen-next, --tooth).
+
+   The game's own look (game/src/interface/theme.css): paper, ink, tape, one rust accent, and its two faces.
+   IM Fell English says what a thing is. Kalam, the hand, says what happened.
+
+   Written for a phone first: one column at 390 px. Wider rules are at the foot.
+   Nothing here moves by itself: no animation, no transition. Text always sits level.
+   The words wait for their faces, as the game's lobby does, so they are written once and do not jump. */
+@font-face { font-family: 'IM Fell English'; font-style: normal; font-weight: 400; font-display: block; src: url('workbench/fonts/im-fell-english-latin-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'IM Fell English'; font-style: italic; font-weight: 400; font-display: block; src: url('workbench/fonts/im-fell-english-latin-400-italic.woff2') format('woff2'); }
+@font-face { font-family: 'Kalam'; font-style: normal; font-weight: 400; font-display: block; src: url('workbench/fonts/kalam-latin-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Kalam'; font-style: normal; font-weight: 700; font-display: block; src: url('workbench/fonts/kalam-latin-700-normal.woff2') format('woff2'); }
+
+:root {
+  color-scheme: light;
+  --paper: #f3ebd9;
+  --paper-deep: #e8dec8;
+  --paper-bright: #fbf5e6;
+  --ink: #2a2b33;
+  --ink-soft: #5b5f6b;
+  --ink-faint: rgba(42, 43, 51, 0.26);
+  --rust: #b5553a;
+  /* Rust dark enough to carry paper-coloured words. */
+  --rust-fill: #a4492f;
+  --rust-deep: #8b3f2e;
+  --ochre: #d5a542;
+  --ochre-deep: #7d5a10;
+  --sage: #93a88a;
+  --sage-deep: #3f6b46;
+  --water: #7f9eab;
+  --serif: 'IM Fell English', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --hand: 'Kalam', 'Bradley Hand', 'Segoe Print', cursive;
+
+  --s1: 0.25rem;
+  --s2: 0.5rem;
+  --s3: 0.75rem;
+  --s4: 1rem;
+  --s5: 1.5rem;
+  --s6: 2.5rem;
+  --s7: 4rem;
+  /* Never smaller than a thumb. */
+  --tap: 2.75rem;
+  --pen: 0.1rem;
+  --blot: 50% 45% 55% 48%;
+  --slip: 0.5rem 0.28rem 0.6rem 0.24rem;
+  --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4.5 12.8c2 1.5 3.6 3.3 4.9 5.4C12 12 15.5 7.5 20.5 3.8' fill='none' stroke='%23b5553a' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highlight-color: rgba(181, 85, 58, 0.18); }
+body {
+  margin: 0;
+  padding-bottom: calc(var(--s7) + env(safe-area-inset-bottom, 0px));
+  background-color: var(--paper);
+  background-image: var(--tooth);
+  background-size: 256px 256px;
+  color: var(--ink);
+  font: 1.0625rem / 1.4 var(--serif);
+  overflow-wrap: break-word;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+h1, h2, h3, h4, p, ul, ol, dl, dd, dt, figure, blockquote { margin: 0; padding: 0; font-weight: 400; }
+ul, ol { list-style: none; }
+a { color: inherit; }
+:focus-visible { outline: 0.15rem solid var(--rust-deep); outline-offset: 0.14rem; border-radius: 0.3rem; }
+
+.wrap {
+  max-width: 46rem;
+  margin-inline: auto;
+  padding-inline: max(var(--s4), env(safe-area-inset-left, 0px)) max(var(--s4), env(safe-area-inset-right, 0px));
+}
+
+/* Small capitals, spaced: the label over a thing. */
+.over {
+  font: 0.8125rem / 1.3 var(--serif);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* ---------- drawn pieces ---------- */
+
+/* A sheet of paper inside a pen line that wavers. The line is a picture, so the words on it stay level. */
+.paper {
+  position: relative;
+  padding: var(--s2) var(--s2) var(--s3);
+  border: 0.625rem solid transparent;
+  border-image: var(--pen-a) 30 fill / 30px / 0 round;
+  background: var(--paper-bright) padding-box;
+}
+/* A strip of tape over the top edge. */
+.paper::before {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  top: -0.85rem;
+  left: 1.2rem;
+  width: 3.6rem;
+  height: 1.05rem;
+  background: rgba(213, 165, 66, 0.5);
+  border-left: 1px dashed rgba(42, 43, 51, 0.25);
+  border-right: 1px dashed rgba(42, 43, 51, 0.25);
+  box-shadow: 0 0.05rem 0.1rem rgba(42, 43, 51, 0.12);
+  transform: rotate(-4deg);
+}
+
+/* A number in a pen ring. */
+.pip {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.8rem;
+  height: 1.8rem;
+  padding-top: 0.16rem;
+  font: 700 1rem / 1 var(--hand);
+  background: var(--paper);
+  border: var(--pen) solid var(--ink);
+  border-radius: var(--blot);
+}
+.is-running .pip { border-style: dashed; }
+.is-next .pip { border-style: dashed; border-color: var(--ink-soft); color: var(--ink-soft); }
+
+/* Where a step stands: a rust tick for done, an ochre dab for running, an empty ring for next. */
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font: 1rem / 1 var(--hand);
+  white-space: nowrap;
+}
+.state > span { padding-top: 0.2rem; }
+.state.is-done, .is-done > .state { color: var(--rust-deep); }
+.state.is-running, .is-running > .state { color: var(--ochre-deep); }
+.state.is-next, .is-next > .state { color: var(--ink-soft); }
+.tick {
+  display: block;
+  flex: none;
+  width: 1.2rem;
+  height: 1.2rem;
+  fill: none;
+  stroke: var(--rust);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dab {
+  flex: none;
+  width: 0.72rem;
+  height: 0.72rem;
+  background: var(--ochre);
+  border: var(--pen) solid var(--ink);
+  border-radius: var(--blot);
+}
+.is-next .dab { background: none; border-style: dashed; border-color: var(--ink-soft); }
+
+/* A hanging quotation mark, in rust. */
+blockquote {
+  position: relative;
+  padding-left: 1.75rem;
+  font-style: italic;
+  text-wrap: pretty;
+}
+blockquote::before {
+  content: '\201C';
+  position: absolute;
+  left: -0.05rem;
+  top: -0.14em;
+  font-size: 2.4em;
+  line-height: 1;
+  color: var(--rust);
+}
+
+/* ---------- masthead ---------- */
+.mast { padding-top: calc(var(--s4) + env(safe-area-inset-top, 0px)); }
+.logo-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s4); }
+.logo { display: inline-block; }
+.logo h1 {
+  font: italic 4rem / 1 var(--serif);
+  letter-spacing: -0.02em;
+}
+.paddle { display: block; width: 112%; height: auto; margin-top: -0.5rem; overflow: visible; }
+.paddle .blade { fill: var(--rust); }
+.paddle .ripple { fill: none; stroke: var(--water); stroke-width: 3; stroke-linecap: round; }
+.seal { flex: none; width: 2.6rem; height: 2.6rem; margin-top: var(--s2); transform: rotate(4deg); }
+.seal-block { fill: var(--rust); }
+.seal-mark { fill: none; stroke: var(--paper); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tagline {
+  margin-top: var(--s3);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.updated { margin-top: var(--s1); font: 1rem / 1.3 var(--hand); color: var(--ink-soft); }
+.ask { margin-top: var(--s3); }
+.ask blockquote { margin-top: var(--s1); font-size: 1.25rem; line-height: 1.3; }
+
+/* ---------- now ---------- */
+.now { margin-top: var(--s5); }
+/* The card's name sits in its top corner, so the five lines start at once. */
+.now > .over { position: absolute; top: var(--s2); right: var(--s2); color: var(--rust-deep); }
+.now dl > div { padding: 0.4rem 0 0.35rem; border-top: var(--pen) dashed var(--ink-faint); }
+.now dl > div:first-child { border-top: 0; padding-top: var(--s1); }
+.now dt { font: 0.8125rem / 1.3 var(--serif); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-soft); }
+.now dd { font-size: 1.25rem; line-height: 1.25; }
+.go {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  margin: 0.2rem 0 0.25rem;
+  padding: 0.1rem 1.2rem 0;
+  font-size: 1.2rem;
+  color: var(--paper-bright);
+  text-decoration: none;
+  background: var(--rust-fill);
+  border: var(--pen) solid var(--ink);
+  border-radius: 0.6rem 0.4rem 0.7rem 0.36rem;
+  box-shadow: 0.1rem 0.16rem 0 var(--ink);
+}
+.go:hover { background: var(--rust-deep); }
+
+/* ---------- the run: every step on one screen ---------- */
+.trail { margin-top: var(--s5); }
+.run { scroll-margin-top: var(--s5); }
+.run::before { left: auto; right: 1.4rem; transform: rotate(5deg); }
+.run-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s1) var(--s4); padding-top: var(--s1); }
+.run h2 { font: italic 1.7rem / 1.1 var(--serif); }
+.tally { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4); }
+.run .day {
+  margin-top: var(--s2);
+  padding-top: var(--s2);
+  font: 1rem / 1.2 var(--hand);
+  color: var(--ink-soft);
+  border-top: var(--pen) dashed var(--ink-faint);
+}
+.run a {
+  display: grid;
+  grid-template-columns: 1.8rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--tap);
+  padding: 0.15rem 0;
+  text-decoration: none;
+}
+.run .name { line-height: 1.2; }
+.run a:hover .name, .run a[aria-current] .name { text-decoration: underline; text-decoration-color: var(--rust); text-decoration-thickness: 0.12rem; text-underline-offset: 0.2rem; }
+.run a[aria-current] .pip { background: var(--ochre); }
+/* A finished step shows its tick alone. The word is still there for a screen reader. */
+.run a.is-done .state > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- the steps ---------- */
+.page-heading { font: italic 1.9rem / 1.1 var(--serif); text-wrap: balance; }
+/* A stroke of rust under a heading, as under the chosen tool in the game. */
+.page-heading::after {
+  content: '';
+  display: block;
+  width: 4.5rem;
+  height: 0.3rem;
+  margin-top: 0.35rem;
+  background: var(--rust);
+  border-radius: 60% 40% 70% 30% / 100% 60% 80% 50%;
+}
+.timeline { margin-top: var(--s6); }
+.step { margin-top: var(--s6); scroll-margin-top: var(--s5); }
+.step:first-child { margin-top: var(--s5); }
+.step:nth-child(3n + 2) { border-image-source: var(--pen-b); }
+.step:nth-child(3n) { border-image-source: var(--pen-c); }
+.step.is-running { border-image-source: var(--pen-running); }
+.step.is-next { border-image-source: var(--pen-next); background-color: var(--paper-deep); }
+.step::before { left: 42%; }
+.step:nth-child(even)::before { left: 54%; transform: rotate(4deg); }
+/* The trail from one step to the next. */
+.step + .step::after {
+  content: '';
+  position: absolute;
+  left: 0.8rem;
+  top: calc(-1 * var(--s6) - 0.3rem);
+  height: calc(var(--s6) - 0.45rem);
+  border-left: 0.12rem dashed var(--ink-soft);
+}
+.step .top { display: flex; align-items: center; gap: var(--s2); }
+.step .when { padding-top: 0.2rem; font: 1rem / 1 var(--hand); color: var(--ink-soft); }
+.step .top .state { margin-left: auto; }
+.step h3 { margin-top: var(--s2); font: italic 1.6rem / 1.15 var(--serif); text-wrap: balance; }
+/* Padding, not margin, between the parts: a part that starts a second column then sits level with the first. */
+.parts { margin-top: var(--s3); }
+.part { padding: var(--s3) 0; border-top: var(--pen) dashed var(--ink-faint); }
+.part .over { margin-bottom: var(--s1); }
+.part blockquote { font-size: 1.1875rem; line-height: 1.3; }
+
+/* Point form, in the hand. The dab says which kind of line it is: water for built, sage for proof, rust for a snag. */
+.dabs li, .ticks li, .boxes li {
+  position: relative;
+  padding: 0.2rem 0 0 1.45rem;
+  font: 1.0625rem / 1.35 var(--hand);
+  text-wrap: pretty;
+}
+.dabs li::before {
+  content: '';
+  position: absolute;
+  left: 0.1rem;
+  top: 0.56rem;
+  width: 0.66rem;
+  height: 0.66rem;
+  background: var(--water);
+  border: var(--pen) solid var(--ink);
+  border-radius: var(--blot);
+}
+.dabs.good li::before { background: var(--sage); }
+.dabs.bad li::before { background: var(--rust); }
+
+.pics { display: grid; gap: var(--s3); margin-top: var(--s1); }
+.frame {
+  display: block;
+  overflow: hidden;
+  line-height: 0;
+  background: var(--paper-deep);
+  border: var(--pen) solid var(--ink);
+  border-radius: var(--slip);
+  box-shadow: 0.08rem 0.14rem 0 rgba(42, 43, 51, 0.2);
+}
+.frame img { display: block; width: 100%; height: auto; }
+.pic figcaption { margin-top: 0.3rem; font: 1rem / 1.3 var(--hand); color: var(--ink-soft); }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  margin-top: var(--s3);
+  padding: 0.1rem 1.3rem 0;
+  font-size: 1.125rem;
+  text-decoration: none;
+  background: var(--paper);
+  border: var(--pen) solid var(--ink);
+  border-radius: 0.6rem 0.4rem 0.7rem 0.36rem;
+  box-shadow: 0.08rem 0.14rem 0 rgba(42, 43, 51, 0.35);
+}
+.btn:hover { background: var(--paper-deep); }
+
+/* ---------- the notebook pages after the steps ---------- */
+.notes { display: grid; gap: var(--s6); margin-top: var(--s7); }
+.notes > * { min-width: 0; }
+.notes .page-heading { margin-bottom: var(--s3); }
+/* A call made: a ticked box. A thing still to judge: an empty one. */
+.ticks li, .boxes li { padding-left: 1.9rem; padding-top: 0.3rem; }
+.ticks li::before, .boxes li::before {
+  content: '';
+  position: absolute;
+  left: 0.05rem;
+  top: 0.42rem;
+  width: 1.15rem;
+  height: 1.15rem;
+  background: var(--paper-bright);
+  border: var(--pen) solid var(--ink);
+  border-radius: 0.3rem 0.2rem 0.34rem 0.18rem;
+}
+/* Dashed, as an empty slot is in the game: still open, and not a box to tap. */
+.boxes li::before { background: none; border-style: dashed; border-color: var(--ink-soft); }
+.ticks li::after {
+  content: '';
+  position: absolute;
+  left: 0.05rem;
+  top: 0;
+  width: 1.7rem;
+  height: 1.7rem;
+  background: var(--tick) center / contain no-repeat;
+}
+.ledger > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: 0.45rem 0 0.25rem;
+  font: 1.0625rem / 1.35 var(--hand);
+  border-bottom: var(--pen) dashed var(--ink-faint);
+}
+.ledger dd { flex: none; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.ledger-unit { text-align: right; }
+/* The links are written as the game's own menu: a paddle blade before each. */
+.menu a {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 3rem;
+  padding: 0.2rem 0.3rem 0.2rem 2rem;
+  font-size: 1.5rem;
+  line-height: 1.15;
+  text-decoration: none;
+}
+.menu a::before {
+  content: '';
+  position: absolute;
+  left: 0.2rem;
+  top: 50%;
+  width: 1.25rem;
+  height: 0.5rem;
+  background: var(--rust);
+  border-radius: 60% 90% 90% 60% / 80% 100% 100% 80%;
+  transform: translateY(-40%);
+}
+.menu a:hover, .menu a:focus-visible { text-decoration: underline; text-decoration-color: var(--ink); text-decoration-thickness: 0.12rem; text-underline-offset: 0.25rem; }
+
+/* Back to the run from anywhere down the page. */
+.to-run {
+  position: fixed;
+  z-index: 5;
+  right: max(var(--s3), env(safe-area-inset-right, 0px));
+  bottom: calc(var(--s3) + env(safe-area-inset-bottom, 0px));
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: var(--tap);
+  padding: 0.2rem 1rem 0 0.95rem;
+  font: 700 1rem / 1 var(--hand);
+  text-decoration: none;
+  background: var(--paper-bright);
+  border: var(--pen) solid var(--ink);
+  border-radius: 0.6rem 0.4rem 0.7rem 0.36rem;
+  box-shadow: 0.1rem 0.16rem 0 rgba(42, 43, 51, 0.35);
+}
+.to-run::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-top: 0.1rem;
+  border-left: 0.14rem solid var(--rust-deep);
+  border-top: 0.14rem solid var(--rust-deep);
+  transform: rotate(45deg);
+}
+
+/* ---------- a tablet ---------- */
+@media (min-width: 720px) {
+  .wrap { padding-inline: var(--s5); }
+  .logo h1 { font-size: 5.5rem; }
+  .seal { width: 3.2rem; height: 3.2rem; }
+  .ask blockquote { font-size: 1.4rem; }
+  .paper { padding: var(--s3) var(--s4) var(--s4); }
+  .now dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--s5); }
+  .now dl > div:nth-child(2) { border-top: 0; padding-top: var(--s1); }
+  .now > .over { right: var(--s4); }
+  .run ol { columns: 2; column-gap: var(--s5); }
+  .run li { break-inside: avoid; }
+  .pics { grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); }
+  /* With no picture beside them, the words run in two columns. */
+  .step:not(.has-pics) .parts { columns: 2; column-gap: var(--s5); }
+  .step:not(.has-pics) .part { break-inside: avoid; }
+  .notes { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s6) var(--s6); }
+}
+
+/* ---------- a desk ---------- */
+@media (min-width: 1100px) {
+  .wrap { max-width: 78rem; padding-inline: var(--s6); }
+  .mast { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--s7); align-items: end; }
+  .mast .logo-row { grid-column: 1; gap: var(--s5); }
+  .mast .tagline, .mast .updated { grid-column: 1; }
+  .mast .ask { grid-column: 2; grid-row: 1 / span 3; max-width: 36rem; margin: 0 0 var(--s1); }
+  .ask blockquote { font-size: 1.6rem; }
+  .now > .over { position: static; }
+  .now dl { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .now dl > div { border-top: 0; padding: var(--s1) 0 var(--s1) var(--s4); border-left: var(--pen) dashed var(--ink-faint); }
+  .now dl > div:first-child { border-left: 0; padding-left: 0; }
+  .trail { display: grid; grid-template-columns: 19.5rem minmax(0, 1fr); gap: var(--s6); align-items: start; margin-top: var(--s6); }
+  .run ol { columns: auto; }
+  .run a { min-height: 2.3rem; }
+  .timeline { margin-top: 0; }
+  .step.has-pics .body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: var(--s5); align-items: start; }
+  .step.has-pics .pics { grid-template-columns: minmax(0, 1fr); margin-top: calc(var(--s3) * 2); }
+  /* Three pictures or more sit in a row under the words. */
+  .step.has-pics .body:has(.pic:nth-child(3)) { grid-template-columns: minmax(0, 1fr); }
+  .step.has-pics .body:has(.pic:nth-child(3)) .pics { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: var(--s1); }
+  .notes { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s7) var(--s7); }
+}
+
+/* The run stays beside the steps, on a window tall enough to hold all of it. */
+@media (min-width: 1100px) and (min-height: 820px) {
+  .run { position: sticky; top: var(--s5); }
+  /* The run is always in sight here, so the jump back to it is not needed. */
+  .to-run { display: none; }
+}
+
+@media print {
+  .to-run { display: none; }
+}
