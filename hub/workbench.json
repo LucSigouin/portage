@@ -135,7 +135,7 @@
     {
       "when": "Nov 11", "title": "Live on sigouin.net", "state": "done",
       "asked": "I want to host it on my website.",
-      "built": ["sigouin.net/portage, four deploys", "Private GitHub repo with 11 issues", "One command builds, tests, uploads and checks"],
+      "built": ["sigouin.net/portage, five deploys", "This page: sigouin.net/portage/workbench", "Private GitHub repo with 11 issues", "One command builds, tests, uploads and checks"],
       "proof": ["Every live file hashes the same as the build", "The live game takes a click and a key press", "Two tabs played one game on the live site"],
       "snags": ["Cloudflare login had expired", "I misread the sign-in: one failed run, nothing published"],
       "pictures": [],
@@ -193,13 +193,13 @@
     "The bot test failed once on a busy Mac. Same code passed when quiet"
   ],
   "numbers": [
-    {"label": "Commits", "value": "77"},
+    {"label": "Commits", "value": "80"},
     {"label": "Worker runs", "value": "22"},
     {"label": "Unit tests", "value": "815"},
     {"label": "Browser tests", "value": "86"},
     {"label": "Lines of game code", "value": "36,000"},
     {"label": "Issues", "value": "12, 4 closed"},
-    {"label": "Deploys", "value": "3"}
+    {"label": "Deploys", "value": "5"}
   ],
   "left": [
     {"what": "Friends join by a link: relay, Host and Join buttons", "hours": "4"},
@@ -224,9 +224,8 @@
     {"title": "Play the game", "href": "https://sigouin.net/portage/"},
     {"title": "A crew of four", "href": "https://sigouin.net/portage/?crew=4"},
     {"title": "The fully fitted canoe", "href": "https://sigouin.net/portage/?shot=upgraded&live=1"},
-    {"title": "Newest build, with weather", "href": "game/"},
-    {"title": "Co-op, tab one: host", "href": "game/?host=lake&name=Luc"},
-    {"title": "Co-op, tab two: join", "href": "game/?join=lake&name=Sam"},
+    {"title": "Co-op, tab one: host", "href": "https://sigouin.net/portage/?host=lake&name=Luc"},
+    {"title": "Co-op, tab two: join", "href": "https://sigouin.net/portage/?join=lake&name=Sam"},
     {"title": "The hub: everything else", "href": "index.html"},
     {"title": "GitHub repo", "href": "https://github.com/LucSigouin/portage"},
     {"title": "Issues", "href": "https://github.com/LucSigouin/portage/issues"}

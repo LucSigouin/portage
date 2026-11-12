@@ -3,6 +3,9 @@
 // HOW TO
 //   Build:   node hub/workbench.mjs --out <folder>     writes <folder>/workbench.html and <folder>/workbench/
 //   The hub build (hub/build.mjs) calls buildWorkbench(hub/site), so the page ships with the hub as workbench.html.
+//   Public:  node hub/workbench.mjs --out <folder> --public
+//            The copy for sigouin.net/portage/workbench (deploy/deploy.sh builds it into the game's folder).
+//            It keeps only links that leave the folder: the reports and the hub stay on the home network.
 //
 // KEEPING IT CURRENT
 //   Edit hub/workbench.json only: the words and the numbers. Its "_how" lines explain the shape. Then rebuild.
@@ -13,9 +16,11 @@
 //   workbench.html          the page: static HTML and CSS, reads with scripts off, asks nothing of another site
 //   workbench/fonts/        the game's two faces, copied from game/src/interface/fonts/
 //   workbench/pics/         each picture as JPEG, about 800 px wide for a phone and about 1600 px, made with sips
+//   workbench/workbench.js  the page's one small script (src/workbench.js), as a file so a strict security policy runs it
 //
 // PICTURES
-//   A "src" that starts with shots/ is already in the site and is used as it is.
+//   A "src" that starts with shots/ is already in the site and is used as it is. In any other folder it is
+//   copied in from the hub's last build (hub/site/shots/).
 //   Any other "src" is a path from the portage folder. In a git worktree the main checkout is tried as well.
 //   A picture that is missing is left off the page with a warning. It never stops the build.
 //
@@ -183,9 +188,14 @@ function pictureRoots() {
 function preparePicture(picture, out, warn) {
   try {
     if (picture.src.startsWith('shots/')) {
-      const file = join(out, picture.src);
-      if (!existsSync(file)) { warn(`picture left off: ${picture.src} is not in ${out}`); return null; }
-      return { alt: picture.alt, phone: picture.src, full: picture.src, phoneWidth: 0, ...pixelSize(file) };
+      let path = picture.src;
+      if (!existsSync(join(out, path))) {
+        const built = join(HUB, 'site', picture.src);
+        if (!existsSync(built)) { warn(`picture left off: ${picture.src} is not in ${out} or in ${join(HUB, 'site')}`); return null; }
+        path = `workbench/pics/${picture.src.slice('shots/'.length)}`;
+        copyFileSync(built, join(out, path));
+      }
+      return { alt: picture.alt, phone: path, full: path, phoneWidth: 0, ...pixelSize(join(out, path)) };
     }
     const source = pictureRoots().map((root) => resolve(root, picture.src)).find((file) => existsSync(file));
     if (!source) { warn(`picture left off: ${picture.src} was not found from ${pictureRoots().join(' or ')}`); return null; }
@@ -272,17 +282,27 @@ const ledgerHtml = (rows, name, value) => rows.map((row) => `<div><dt>${escapeHt
 /**
  * Build the page into `out`. Returns what it did, warnings included.
  * `words` is for the tests: the page is made from that instead of hub/workbench.json.
+ * `publicCopy` leaves off every report and link that does not leave the folder (see "Public" at the top).
  */
-export function buildWorkbench(out, { words = JSON.parse(read(join(HUB, 'workbench.json'))), say = (text) => console.log(`[workbench] ${text}`) } = {}) {
+export function buildWorkbench(out, { words = JSON.parse(read(join(HUB, 'workbench.json'))), say = (text) => console.log(`[workbench] ${text}`), publicCopy = false } = {}) {
   const folder = resolve(out);
   const warnings = [];
   const warn = (text) => { warnings.push(text); say(`WARNING: ${text}`); };
   checkWords(words);
 
+  if (publicCopy) {
+    const leaves = (href) => /^[a-z]+:/i.test(href);
+    const links = words.links.filter((link) => leaves(link.href));
+    const reports = words.steps.filter((step) => step.report && !leaves(step.report)).length;
+    say(`public copy: ${reports} reports and ${words.links.length - links.length} links stay on the home network`);
+    words = { ...words, links, steps: words.steps.map((step) => ({ ...step, report: leaves(step.report) ? step.report : '' })) };
+  }
+
   mkdirSync(join(folder, 'workbench/fonts'), { recursive: true });
   mkdirSync(join(folder, 'workbench/pics'), { recursive: true });
   const fonts = readdirSync(FONTS).filter((name) => name.endsWith('.woff2'));
   for (const name of fonts) copyFileSync(join(FONTS, name), join(folder, 'workbench/fonts', name));
+  copyFileSync(join(HUB, 'src/workbench.js'), join(folder, 'workbench/workbench.js'));
 
   let shown = 0;
   let asked = 0;
@@ -326,8 +346,8 @@ export function buildWorkbench(out, { words = JSON.parse(read(join(HUB, 'workben
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const flag = process.argv.indexOf('--out');
   if (flag < 0 || !process.argv[flag + 1]) {
-    console.error('Say where to build: node hub/workbench.mjs --out <folder>');
+    console.error('Say where to build: node hub/workbench.mjs --out <folder> [--public]');
     process.exit(1);
   }
-  buildWorkbench(process.argv[flag + 1]);
+  buildWorkbench(process.argv[flag + 1], { publicCopy: process.argv.includes('--public') });
 }

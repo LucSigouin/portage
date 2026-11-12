@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Publishes the game at https://sigouin.net/portage/.
+# Publishes the game at https://sigouin.net/portage/, and the workbench page at https://sigouin.net/portage/workbench.
 # It builds main, tests the build under sigouin.net's security policy, copies it into the sigouin.net site
 # folder, runs that site's own deploy script, then checks that the live files are the built files.
 #
@@ -29,15 +29,19 @@ fail() { printf 'STOPPED: %s\nLast lines of %s:\n' "$1" "$LOG" >&2; tail -n 15 "
 [ -z "$(git -C "$ROOT" status --porcelain)" ] || fail 'Portage has uncommitted changes.'
 [ -z "$(git -C "$SITE" status --porcelain -- site ':!site/portage' ':!site/_headers')" ] || fail 'sigouin-net/site has other uncommitted changes.'
 grep -q '^/portage/$' "$SITE/site/_headers" || fail 'sigouin-net/site/_headers has no /portage/ block.'
+grep -q '^/portage/workbench$' "$SITE/site/_headers" || fail 'sigouin-net/site/_headers has no /portage/workbench block.'
 
 npm --prefix "$ROOT/game" run check --cache "$WORK/npmcache" >> "$LOG" 2>&1 || fail 'The tests failed.'
 printf '1/6 tests pass (%s)\n' "$(grep -E '^ +Tests ' "$LOG" | tail -n 1 | sed 's/^ *//')"
 
 DIST="$WORK/dist"
 "$ROOT/game/node_modules/.bin/vite" build "$ROOT/game" --base=/portage/ --outDir "$DIST" --emptyOutDir >> "$LOG" 2>&1 || fail 'The build failed.'
-printf '2/6 built commit %s\n' "$(git -C "$ROOT" rev-parse --short HEAD)"
+# The public copy of the workbench page goes into the same folder, so it is tested, uploaded and hash-checked with the game.
+node "$ROOT/hub/workbench.mjs" --out "$DIST" --public >> "$LOG" 2>&1 || fail 'The workbench page did not build.'
+printf '2/6 built commit %s, and the workbench page (%s)\n' "$(git -C "$ROOT" rev-parse --short HEAD)" "$(grep -E 'workbench\.html [0-9]+ steps' "$LOG" | tail -n 1 | sed -E 's/^.*workbench\.html (.*): .*$/\1/')"
 
 node "$ROOT/deploy/smoke.mjs" local "$DIST" "$SITE/site/_headers" >> "$LOG" 2>&1 || fail "The build does not run under sigouin.net's security policy."
+node "$ROOT/deploy/smoke-workbench.mjs" local "$DIST" "$SITE/site/_headers" >> "$LOG" 2>&1 || fail "The workbench page fails under sigouin.net's security policy."
 printf "3/6 the build runs under sigouin.net's security policy\n"
 
 rsync -a --delete "$DIST/" "$SITE/site/portage/"
@@ -58,11 +62,14 @@ while IFS= read -r file; do
   relative="${file#"$DIST"/}"
   [ "$relative" = index.html ] && continue
   local_hash="$(shasum -a 256 < "$file" | cut -d' ' -f1)"
-  live_hash="$(curl -s "${LIVE}${relative}" | shasum -a 256 | cut -d' ' -f1)"
+  # -L: Cloudflare Pages answers workbench.html with a redirect to /portage/workbench.
+  live_hash="$(curl -sL "${LIVE}${relative}" | shasum -a 256 | cut -d' ' -f1)"
   [ "$local_hash" = "$live_hash" ] || fail "Live file differs from the build: $relative"
 done < <(find "$DIST" -type f)
 printf '5/6 live files match the build: page %s, %s files\n' "${want:0:16}" "$(find "$DIST" -type f | wc -l | tr -d ' ')"
 
 node "$ROOT/deploy/smoke.mjs" live "$LIVE" >> "$LOG" 2>&1 || fail 'The live game failed its smoke test.'
 printf '6/6 the live game starts, takes a click and a key press (%s)\n' "$(grep -E '^live:' "$LOG" | tail -n 1)"
-printf 'LIVE: %s\n' "$LIVE"
+node "$ROOT/deploy/smoke-workbench.mjs" live "$LIVE" >> "$LOG" 2>&1 || fail 'The live workbench page failed its smoke test.'
+printf '     and the live workbench page reads on a phone-sized screen (%s)\n' "$(grep -E '^live workbench:' "$LOG" | tail -n 1)"
+printf 'LIVE: %s and %sworkbench\n' "$LIVE" "$LIVE"

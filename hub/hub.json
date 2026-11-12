@@ -30,7 +30,8 @@
       "The HUD has a crew: a crew list with each player's colour, place and meters, crewmates on the compass and the map, notes for the whole crew, reward icons in the quest log.",
       "Weather and night: rain, storm, fog, stars, light from the lantern, the campfire and the Beacon, and the sky showing what is coming. Nothing flashes.",
       "Co-op groundwork: players who drop and come back, a host and guests kept in step, two tabs on one computer playing one game. 815 tests pass, plus 86 browser tests.",
-      "Weather, night and the co-op groundwork are live on sigouin.net/portage (fourth deploy, commit 0d3a8fd). Two tabs played one game on the live site."
+      "Weather, night and the co-op groundwork are live on sigouin.net/portage (fourth deploy, commit 0d3a8fd). Two tabs played one game on the live site.",
+      "The workbench is public at sigouin.net/portage/workbench, for a phone anywhere. The reports and the hub stay on the home network."
     ],
     "running": [],
     "waiting": [

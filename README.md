@@ -6,6 +6,8 @@ Working name. Everything on screen is drawn in code: no asset packs, no download
 
 **Play it: https://sigouin.net/portage/** (keyboard and mouse; press F to act, Esc for the menu).
 
+Every step so far, in point form: https://sigouin.net/portage/workbench
+
 ![The lobby](docs/shots/lobby.jpg)
 ![Paddling to Home Knoll](docs/shots/play.jpg)
 ![On foot on an island](docs/shots/island.jpg)
