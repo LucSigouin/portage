@@ -241,7 +241,9 @@ async function medianFrameRate(page: Page, seconds: number): Promise<number> {
 for (const [width, height] of [[1920, 1080], [2560, 1440], [3840, 2160]]) {
   test(`draws the screen's full size at ${width}×${height}`, async ({ page }) => {
     await page.setViewportSize({ width, height });
-    await open(page, 'shot=play');
+    // Pinned on rung 0: this is the drawing's size at render scale 1, not the ladder. Unpinned, the chip test at load
+    // would start a 3840×2160 window some rungs down whenever another page is using the chip.
+    await open(page, 'shot=play&hold=1');
     const canvas = await page.evaluate(() => {
       const element = document.querySelector<HTMLCanvasElement>('#world canvas')!;
       return { width: element.width, height: element.height, window: [window.innerWidth, window.innerHeight], ratio: window.devicePixelRatio };

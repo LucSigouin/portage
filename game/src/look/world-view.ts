@@ -46,7 +46,7 @@ import type { IslandProps } from './props.ts';
 import { RAIN_SHED_SHARE, Rain } from './rain.ts';
 import {
   CHIP_TEST_MILLISECONDS, FrameLadder, HATCH_BY_SHADOWS, WATER_CELL_BY_DETAIL, climbTo, drawingPixelRatio, fitMilliseconds, fittingRung, qualityAt,
-  qualityCeiling, shedNote, windowPixelRatio,
+  qualityCeiling, shedNote, topFitMilliseconds, windowPixelRatio,
 } from './quality.ts';
 import type { LadderChange, Quality } from './quality.ts';
 import { hashText, scatterIsland } from './scatter.ts';
@@ -760,27 +760,29 @@ export class InkWashWorldView implements WorldView {
   private startOnFittingRung(draw: () => void): void {
     this.chipTestDue = false;
     const fits = fitMilliseconds(this.dueSeconds);
+    // Rung 0 fits when the ladder itself would hold it: the test's margin never takes a pixel from a machine at the line.
+    const topFits = topFitMilliseconds(this.dueSeconds);
     const timed: [number, number][] = [];
     let from = 0;
     const measure = (candidate: number): number => {
       // Top quality gets a second look when it is close: a busy moment must not cost a good chip its pixels.
-      const cost = this.frameCost(candidate, draw, (first) => candidate === 0 && first > fits && first <= fits * 2, () => {
+      const cost = this.frameCost(candidate, draw, (first) => candidate === 0 && first > topFits && first <= topFits * 2, () => {
         if (from === 0) from = performance.now();
       });
       timed.push([candidate, cost]);
       return cost;
     };
     const outOfTime = (): boolean => performance.now() - from > CHIP_TEST_MILLISECONDS;
-    let rung = fittingRung(measure, fits, outOfTime);
+    let rung = fittingRung(measure, fits, outOfTime, undefined, 0, topFits);
     // And a last look at the top if there is time: the chip may only have been busy when the test began.
-    if (rung > 0 && !outOfTime() && measure(0) <= fits) rung = 0;
+    if (rung > 0 && !outOfTime() && measure(0) <= topFits) rung = 0;
     // A clock too coarse to time a frame (some private modes) proves nothing: start at the top and let the ladder judge.
     const blind = timed.some(([, cost]) => cost <= 0);
     this.clockIsCoarse = blind;
     this.ladder.startOn(blind ? 0 : rung);
     this.applyQuality();
     this.chipTest = { rung: this.ladder.rung, took: performance.now() - from, timed };
-    console.info(`Portage look: chip test, top quality takes ${timed[0][1].toFixed(1)} ms a frame (${fits.toFixed(1)} fits), starting on rung ${this.ladder.rung}, ${shedNote(this.ceiling, this.quality)}`);
+    console.info(`Portage look: chip test, top quality takes ${timed[0][1].toFixed(1)} ms a frame (${topFits.toFixed(1)} fits), starting on rung ${this.ladder.rung}, ${shedNote(this.ceiling, this.quality)}`);
   }
 
   /** The ladder wants the rung above: time it first, so it only climbs to a rung the chip has room for. */
@@ -793,7 +795,8 @@ export class InkWashWorldView implements WorldView {
       timed.push(`rung ${rung} ${cost.toFixed(1)} ms`);
       return cost;
     };
-    const climbed = this.ladder.answer(this.clockIsCoarse ? asked : climbTo(asked, this.ladder.bestAllowed, measure, fits, () => performance.now() - from > CHIP_TEST_MILLISECONDS));
+    const climbed = this.ladder.answer(this.clockIsCoarse ? asked
+      : climbTo(asked, this.ladder.bestAllowed, measure, fits, () => performance.now() - from > CHIP_TEST_MILLISECONDS, topFitMilliseconds(this.dueSeconds)));
     this.applyQuality();
     console.info(`Portage look: ${climbed ? 'frames are quick again' : 'no room to climb yet'} (${timed.join(', ')}; ${fits.toFixed(1)} fits), rung ${this.ladder.rung}, ${shedNote(this.ceiling, this.quality)}`);
   }

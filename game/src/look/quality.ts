@@ -153,14 +153,26 @@ export function fitMilliseconds(dueSeconds: number | undefined): number {
 }
 
 /**
+ * The same for rung 0, where nothing is shed: the longest frame the ladder itself still calls on time
+ * (17.5 ms on a 60 Hz screen). A machine at the line keeps every pixel, and play decides. The margin in
+ * `fitMilliseconds` is for the rungs under it, where a wrong guess costs a visible change later.
+ */
+export function topFitMilliseconds(dueSeconds: number | undefined): number {
+  return judgedGap(dueSeconds) * 1000 * LONG_SHARE;
+}
+
+/**
  * The rung to start on: the best one whose frame fits, found by timing as few rungs as it can.
  * `measure(rung)` gives that rung's frame in milliseconds. A rung further down is taken to cost no more.
  * It looks from `top` down to just above `floor`, and answers `floor` when nothing above it fits: the last rung
  * is where a chip ends up whether it fits or not, so it is never timed.
  * When time runs out (`giveUp`) it keeps the best rung seen to fit, or `floor` if none was.
+ * `topFits`: what fits on rung 0 (`topFitMilliseconds`), when that is more than `fits`.
  */
-export function fittingRung(measure: (rung: number) => number, fits: number, giveUp: () => boolean = () => false, floor = LADDER.length - 1, top = 0): number {
-  if (top >= floor || measure(top) <= fits) return Math.min(top, floor);
+export function fittingRung(
+  measure: (rung: number) => number, fits: number, giveUp: () => boolean = () => false, floor = LADDER.length - 1, top = 0, topFits = fits,
+): number {
+  if (top >= floor || measure(top) <= (top === 0 ? topFits : fits)) return Math.min(top, floor);
   let found = floor;
   let [from, to] = [top + 1, floor - 1];
   while (from <= to && !giveUp()) {
@@ -181,11 +193,13 @@ export function fittingRung(measure: (rung: number) => number, fits: number, giv
  * time it was timed: then the best rung that fits now (no higher than `top`) is found, and the ladder goes there
  * in one change instead of one rung every ten seconds.
  */
-export function climbTo(asked: number, top: number, measure: (rung: number) => number, fits: number, giveUp: () => boolean = () => false): number | null {
+export function climbTo(
+  asked: number, top: number, measure: (rung: number) => number, fits: number, giveUp: () => boolean = () => false, topFits = fits,
+): number | null {
   const cost = measure(asked);
-  if (cost > fits) return null;
+  if (cost > (asked === 0 ? topFits : fits)) return null;
   if (cost > fits * ROOM_SHARE || asked <= top) return asked;
-  return fittingRung(measure, fits, giveUp, asked, top);
+  return fittingRung(measure, fits, giveUp, asked, top, topFits);
 }
 
 export interface LadderChange {

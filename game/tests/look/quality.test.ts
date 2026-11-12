@@ -10,7 +10,8 @@ import { createDefaultSettings } from '../../src/settings/index.ts';
 import { createFrameLoop } from '../../src/client/loop.ts';
 import {
   ASK_AGAIN_SECONDS, CLIMB_AFTER_SECONDS, DOWN_AGAIN_SECONDS, FAILS_ALLOWED, FINDING_SECONDS, FrameLadder, LADDER, LADDER_REST_SECONDS, PIXEL_BUDGET, WARM_UP_SECONDS,
-  WINDOW_PIXEL_LIMIT, WORLD_FLOOR, climbTo, drawingPixelRatio, fitMilliseconds, fittingRung, qualityAt, qualityCeiling, shedNote, windowPixelRatio,
+  WINDOW_PIXEL_LIMIT, WORLD_FLOOR, climbTo, drawingPixelRatio, fitMilliseconds, fittingRung, qualityAt, qualityCeiling, shedNote, topFitMilliseconds,
+  windowPixelRatio,
 } from '../../src/look/quality.ts';
 
 const graphics = createDefaultSettings().graphics;
@@ -435,6 +436,28 @@ describe('the chip test: start on the rung that fits', () => {
   it('puts this Mac on rung 0, a 4 times slower chip on rung 8, and an 8 times slower one on the last', () => {
     expect(fits).toBeCloseTo(15, 5);
     expect([1, 2, 4, 8, 16].map((factor) => fittingRung(chip(factor).cost, fits))).toEqual([0, 0, 8, LAST, LAST]);
+  });
+
+  it('a machine at the line keeps every pixel: rung 0 fits when the ladder itself would hold it', () => {
+    // This Mac on a 5120×2160 window: a top-quality frame takes about 17 ms. On time is up to 17.5.
+    const topFits = topFitMilliseconds(1 / 60);
+    expect(topFits).toBeCloseTo(17.5, 5);
+    const costs = (top: number) => (rung: number): number => top * (AFLOAT[rung] / AFLOAT[0]);
+    expect(fittingRung(costs(17.2), fits, undefined, undefined, 0, topFits)).toBe(0);
+    // The test's margin would have started it five rungs down, with the fine strokes gone.
+    expect(fittingRung(costs(17.2), fits)).toBe(5);
+    // Past the line the margin is back: the best rung under 15 ms, not the first under 17.5.
+    expect(fittingRung(costs(18), fits, undefined, undefined, 0, topFits)).toBe(6);
+    // And the ladder holds rung 0 there: 17.2 ms is 58 a second, which is on time.
+    const ladder = new FrameLadder({ ask: true });
+    run(ladder, 300, () => 0.0172, 0, { due: 1 / 60 });
+    expect(ladder.changes).toEqual([]);
+    // Climbing back to the top after a slow spell is judged the same way; any other rung keeps the margin.
+    expect(climbTo(0, 0, () => 17.2, fits, undefined, topFits)).toBe(0);
+    expect(climbTo(0, 0, () => 17.2, fits)).toBeNull();
+    expect(climbTo(3, 0, () => 17.2, fits, undefined, topFits)).toBeNull();
+    // A 30 Hz screen: on time is up to 35 ms.
+    expect(topFitMilliseconds(1 / 30)).toBeCloseTo(35, 5);
   });
 
   it('when time runs out keeps the best rung it saw fit, or the last rung', () => {
