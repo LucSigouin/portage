@@ -44,7 +44,10 @@ import { floraFor } from './presets.ts';
 import { buildIslandProps, buildValleyForest, disposePropLibrary, instancedMesh } from './props.ts';
 import type { IslandProps } from './props.ts';
 import { RAIN_SHED_SHARE, Rain } from './rain.ts';
-import { FrameLadder, HATCH_BY_SHADOWS, WATER_CELL_BY_DETAIL, drawingPixelRatio, qualityAt, qualityCeiling, shedNote, windowPixelRatio } from './quality.ts';
+import {
+  CHIP_TEST_MILLISECONDS, FrameLadder, HATCH_BY_SHADOWS, WATER_CELL_BY_DETAIL, climbTo, drawingPixelRatio, fitMilliseconds, fittingRung, qualityAt,
+  qualityCeiling, shedNote, windowPixelRatio,
+} from './quality.ts';
 import type { LadderChange, Quality } from './quality.ts';
 import { hashText, scatterIsland } from './scatter.ts';
 import { GROUND_UNIFORM, regionUniforms, shoreUniforms, waveUniforms } from './surface.ts';
@@ -133,8 +136,12 @@ export interface LookProbe {
     pools: number;
     glows: number;
   };
-  /** The frame-rate ladder: every change this session, the best rung it may still climb to, and the seconds of frames it has seen (the clock of `changes[].at`). */
-  ladder: { changes: LadderChange[]; bestAllowed: number; seconds: number };
+  /**
+   * The frame-rate ladder: every change this session, the best rung it may still climb to, and the seconds of frames it has seen (the clock of `changes[].at`).
+   * `chipTest`: what the test at load found, or null if it did not run (`&chiptest=0`, `&rung=`, `&hold=1`): the rung it started on, how long it took,
+   * and each rung it timed with that rung's frame, all in milliseconds.
+   */
+  ladder: { changes: LadderChange[]; bestAllowed: number; seconds: number; chipTest: ChipTest | null };
   /** Rungs shed by the frame-rate ladder, and what the look draws now. */
   rung: number;
   quality: Quality;
@@ -149,6 +156,16 @@ export interface LookProbe {
   waterDrawnAtCanoe: number;
   waterSimAtCanoe: number;
   islandsDrawn: number;
+}
+
+/** What the chip test at load found. */
+export interface ChipTest {
+  /** The rung the game started on. */
+  rung: number;
+  /** How long the test took, milliseconds, the first frame's shader compiling left out. */
+  took: number;
+  /** Each rung it timed, and that rung's frame in milliseconds, drawn back to back. */
+  timed: [rung: number, milliseconds: number][];
 }
 
 const setColour = (target: THREE.Color, value: Rgb): void => void target.setRGB(value[0], value[1], value[2]);
@@ -198,6 +215,17 @@ export class InkWashWorldView implements WorldView {
   private ceiling: Quality = { weather: 1, reflection: 0.75, fine: 1, ink: 2, resolution: 1 };
   private quality: Quality = { ...this.ceiling };
   private ladder = new FrameLadder();
+  /**
+   * The chip test: before the first frame is shown, time the chip and start on the rung that fits.
+   * `&chiptest=0` leaves it out, and so does a start rung or a pinned ladder (`&rung=`, `&hold=1`).
+   */
+  private chipTestDue = false;
+  private chipTest: ChipTest | null = null;
+  /** The gap the last frame was meant to have, seconds. */
+  private dueSeconds: number | undefined;
+  private readonly testPixel = new Uint8Array(4);
+  /** The page's clock cannot time a frame: the ladder then climbs without asking, as it always did. */
+  private clockIsCoarse = false;
   private boil = false;
   /** ?bench=N draws every frame N times: the graphics card's true cost, and a way to make the frame-rate test fail. */
   private benchDraws = 1;
@@ -233,7 +261,8 @@ export class InkWashWorldView implements WorldView {
 
     // Look-only switches, for checking the look in a browser nobody can type into.
     const switches = new URLSearchParams(window.location.search);
-    this.ladder = new FrameLadder({ hold: switches.has('hold'), startRung: Number(switches.get('rung')) || 0 });
+    this.ladder = new FrameLadder({ hold: switches.has('hold'), startRung: Number(switches.get('rung')) || 0, ask: true });
+    this.chipTestDue = switches.get('chiptest') !== '0' && !switches.has('hold') && !switches.has('rung');
     this.boil = switches.has('boil');
     this.benchDraws = Math.max(1, Math.min(64, Number(switches.get('bench')) || 1));
     this.heroPass = switches.get('hero') !== '0';
@@ -391,10 +420,11 @@ export class InkWashWorldView implements WorldView {
     this.applyQuality();
   }
 
-  private applyQuality(): void {
+  /** Size everything for a rung: the ladder's own, or one the chip test is timing. */
+  private applyQuality(rung = this.ladder.rung): void {
     const { renderer, post, water } = this;
     if (!renderer || !post || !water) return;
-    this.quality = qualityAt(this.ceiling, this.ladder.rung);
+    this.quality = qualityAt(this.ceiling, rung);
     // The canvas is the window's own pixels, always: the heroes are drawn at that size. The world is drawn at
     // whatever the pixel budget, the render scale and the ladder leave it, and stretched to the canvas.
     const windowRatio = windowPixelRatio(this.width, this.height, this.pixelRatio);
@@ -415,6 +445,8 @@ export class InkWashWorldView implements WorldView {
 
   /** The lobby and the credits get B2's wider margin of bare paper round the painting. */
   showStage(stage: StageName): void {
+    // A game begins: the work is not the lobby's, so the ladder finds its level again.
+    if (stage === 'game' && this.stage !== 'game') this.ladder.find();
     this.stage = stage;
     if (!this.post) return;
     this.post.uniforms.uFrame.value = stage === 'game' ? 0.013 : 0.03;
@@ -436,10 +468,10 @@ export class InkWashWorldView implements WorldView {
     this.frameCount += 1;
     GU.uTime.value = this.paintTime;
     if (this.post && this.boil) this.post.pen.uBoilTime.value = frame.elapsedSeconds;
-    const rungBefore = this.ladder.rung;
-    if (this.ladder.note(frame.frameSeconds)) {
+    this.dueSeconds = frame.dueSeconds;
+    if (this.ladder.note(frame.frameSeconds, frame.dueSeconds)) {
       this.applyQuality();
-      console.info(`Portage look: ${this.ladder.rung > rungBefore ? 'frames ran long' : 'frames are quick again'}, rung ${this.ladder.rung}, ${shedNote(this.ceiling, this.quality)}`);
+      console.info(`Portage look: frames ran long, rung ${this.ladder.rung}, ${shedNote(this.ceiling, this.quality)}`);
     }
 
     this.syncLight(state, jumped || this.frameCount <= 1 || this.settleDue);
@@ -684,7 +716,81 @@ export class InkWashWorldView implements WorldView {
     // Where the heroes are on the window: each gets a rectangle of the canvas, drawn at the canvas's own size.
     this.heroes.updateMatrixWorld();
     const windows = this.heroPass ? heroWindows(this.canoe.heroes(), camera, this.canvasWidth, this.canvasHeight, heroMargin(this.canvasHeight)) : [];
-    post.render(this.scene, camera, water.mesh, this.rainStrokes && this.rain.falling ? [this.rain.scene, marks.scene] : marks.scene, this.quality.reflection > 0, (pass) => this.beforePass(pass), this.heroPass ? this.heroes : null, windows);
+    const draw = (): void => post.render(this.scene, camera, water.mesh, this.rainStrokes && this.rain.falling ? [this.rain.scene, marks.scene] : marks.scene, this.quality.reflection > 0, (pass) => this.beforePass(pass), this.heroPass ? this.heroes : null, windows);
+    if (this.chipTestDue) this.startOnFittingRung(draw);
+    else if (this.ladder.asking !== null) this.answerLadder(this.ladder.asking, draw);
+    draw();
+  }
+
+  /**
+   * The honest cost of a frame on a rung, in milliseconds: the frame drawn twice back to back, then the chip is
+   * waited for. Leaves the world sized for that rung. It all happens inside one frame, so none of it is shown:
+   * the caller draws the real frame last. `again`: time it a second time and keep the quicker.
+   */
+  private frameCost(rung: number, draw: () => void, again: (milliseconds: number) => boolean = () => false, warmed: () => void = () => {}): number {
+    const renderer = this.renderer;
+    if (!renderer) return 0;
+    const gl = renderer.getContext();
+    const finish = (): void => {
+      renderer.setRenderTarget(null);
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, this.testPixel);
+    };
+    const timed = (): number => {
+      const from = performance.now();
+      draw();
+      draw();
+      finish();
+      return (performance.now() - from) / 2;
+    };
+    this.applyQuality(rung);
+    // The first frame on new buffers pays for making them (and the very first compiles every shader).
+    draw();
+    finish();
+    warmed();
+    const first = timed();
+    return again(first) ? Math.min(first, timed()) : first;
+  }
+
+  /** The chip test (S1): time the chip on the first frame, before anything is shown, and start on the best rung that fits. */
+  private startOnFittingRung(draw: () => void): void {
+    this.chipTestDue = false;
+    const fits = fitMilliseconds(this.dueSeconds);
+    const timed: [number, number][] = [];
+    let from = 0;
+    const measure = (candidate: number): number => {
+      // Top quality gets a second look when it is close: a busy moment must not cost a good chip its pixels.
+      const cost = this.frameCost(candidate, draw, (first) => candidate === 0 && first > fits && first <= fits * 2, () => {
+        if (from === 0) from = performance.now();
+      });
+      timed.push([candidate, cost]);
+      return cost;
+    };
+    const outOfTime = (): boolean => performance.now() - from > CHIP_TEST_MILLISECONDS;
+    let rung = fittingRung(measure, fits, outOfTime);
+    // And a last look at the top if there is time: the chip may only have been busy when the test began.
+    if (rung > 0 && !outOfTime() && measure(0) <= fits) rung = 0;
+    // A clock too coarse to time a frame (some private modes) proves nothing: start at the top and let the ladder judge.
+    const blind = timed.some(([, cost]) => cost <= 0);
+    this.clockIsCoarse = blind;
+    this.ladder.startOn(blind ? 0 : rung);
+    this.applyQuality();
+    this.chipTest = { rung: this.ladder.rung, took: performance.now() - from, timed };
+    console.info(`Portage look: chip test, top quality takes ${timed[0][1].toFixed(1)} ms a frame (${fits.toFixed(1)} fits), starting on rung ${this.ladder.rung}, ${shedNote(this.ceiling, this.quality)}`);
+  }
+
+  /** The ladder wants the rung above: time it first, so it only climbs to a rung the chip has room for. */
+  private answerLadder(asked: number, draw: () => void): void {
+    const from = performance.now();
+    const fits = fitMilliseconds(this.dueSeconds);
+    const timed: string[] = [];
+    const measure = (rung: number): number => {
+      const cost = this.frameCost(rung, draw);
+      timed.push(`rung ${rung} ${cost.toFixed(1)} ms`);
+      return cost;
+    };
+    const climbed = this.ladder.answer(this.clockIsCoarse ? asked : climbTo(asked, this.ladder.bestAllowed, measure, fits, () => performance.now() - from > CHIP_TEST_MILLISECONDS));
+    this.applyQuality();
+    console.info(`Portage look: ${climbed ? 'frames are quick again' : 'no room to climb yet'} (${timed.join(', ')}; ${fits.toFixed(1)} fits), rung ${this.ladder.rung}, ${shedNote(this.ceiling, this.quality)}`);
   }
 
   /** Before each pass of the world (2 mirrored, 0 colour, 1 ink): the mirror sees less, and the ink buffer no washes of light. */
@@ -812,7 +918,10 @@ export class InkWashWorldView implements WorldView {
         pools: GU.uLamp.value.filter((lamp) => lamp.w > 0).length,
         glows: this.glows.mesh.count,
       },
-      ladder: { changes: this.ladder.changes.map((change) => ({ ...change })), bestAllowed: this.ladder.bestAllowed, seconds: this.ladder.seconds },
+      ladder: {
+        changes: this.ladder.changes.map((change) => ({ ...change })), bestAllowed: this.ladder.bestAllowed, seconds: this.ladder.seconds,
+        chipTest: this.chipTest && { ...this.chipTest, timed: this.chipTest.timed.map(([rung, milliseconds]) => [rung, milliseconds]) },
+      },
       rung: this.ladder.rung,
       quality: { ...this.quality },
       shed: shedNote(this.ceiling, this.quality),

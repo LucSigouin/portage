@@ -2,7 +2,8 @@
  * How much the look draws: the graphics settings set a ceiling, and B2's
  * frame-rate ladder sheds cost below it when frames run long. Cost goes in
  * this order: the weather's fine work, reflection size, fine strokes and
- * hatching, the pen's anti-aliasing, and only last the resolution.
+ * hatching, the pen's anti-aliasing, and only last the resolution, down to
+ * half size and no further.
  *
  * All of that is the world's. The heroes (the crew and the canoe) are drawn
  * apart, at the window's full size with every stroke, on every rung.
@@ -28,6 +29,12 @@ export const PIXEL_BUDGET = 8.3e6;
 /** The canvas, and so the heroes, never exceed this many pixels: 7680×4320. Below it they are the window's full size. */
 export const WINDOW_PIXEL_LIMIT = 3.4e7;
 
+/**
+ * The ladder never draws the world under this share of its full size, each way: at 40% the land's pen lines break
+ * into dots. Only the player's own render scale can go lower.
+ */
+export const WORLD_FLOOR = 0.5;
+
 /** Each rung lowers one thing. Rung 0 sheds nothing. */
 export const LADDER: readonly Partial<Quality>[] = [
   {},
@@ -40,6 +47,8 @@ export const LADDER: readonly Partial<Quality>[] = [
   { resolution: 0.9 },
   { resolution: 0.8 },
   { resolution: 0.72 },
+  { resolution: 0.6 },
+  { resolution: WORLD_FLOOR },
 ];
 
 const REFLECTION_BY_WATER_DETAIL = { low: 0, medium: 0.5, high: 0.75 } as const;
@@ -73,13 +82,14 @@ export function qualityAt(ceiling: Quality, rung: number): Quality {
 /**
  * Renderer pixel ratio. At render scale 1 the drawing is the screen's full
  * size: 1:1 on a 1x screen up to 3840×2160, and above 1x on a dense screen
- * while it stays inside the pixel budget.
+ * while it stays inside the pixel budget. `resolution` is the ladder's share:
+ * with the render scale it never takes the world under `WORLD_FLOOR`.
  */
 export function drawingPixelRatio(width: number, height: number, devicePixelRatio: number, renderScale: number, resolution: number): number {
   const area = Math.max(1, width * height);
   const full = Math.min(devicePixelRatio, 2, Math.sqrt(PIXEL_BUDGET / area));
   const hardCap = Math.sqrt((2 * PIXEL_BUDGET) / area);
-  return Math.max(0.25, Math.min(hardCap, full * renderScale * resolution));
+  return Math.max(0.25, Math.min(hardCap, Math.max(full * renderScale * resolution, full * Math.min(renderScale, WORLD_FLOOR))));
 }
 
 /**
@@ -101,14 +111,80 @@ export function shedNote(ceiling: Quality, quality: Quality): string {
   return shed.length > 0 ? `shed: ${shed.join(', ')}` : 'nothing shed';
 }
 
-/** The ladder changes at most once in this many seconds, up or down. */
+
+/** The first seconds compile shaders and fill buffers: they prove nothing. Seconds, not frames, so a slow chip waits no longer than a quick one. */
+export const WARM_UP_SECONDS = 3;
+/** While the ladder is still finding its level, a step down may follow a step down after this many seconds. */
+export const DOWN_AGAIN_SECONDS = 2;
+/** Every other pair of changes is at least this many seconds apart. */
 export const LADDER_REST_SECONDS = 10;
 /** Seconds of good frames before it tries the rung above. */
 export const CLIMB_AFTER_SECONDS = 10;
-/** A rung that ran long this many times is out for the session. */
+/** A rung that ran long this many times is out for the session. One that ran long straight after a climb is out at once. */
 export const FAILS_ALLOWED = 2;
-/** A frame is long past this many milliseconds (under 49 a second). */
-const LONG_FRAME = 20.5;
+/** A rung the chip test turned down is asked about again after a minute of good frames, then after five. Then it is out for the session. */
+export const ASK_AGAIN_SECONDS: readonly number[] = [60, 300];
+/** When the rung above takes under this share of what fits, there is more than one rung of room: the chip is timed from the top. */
+export const ROOM_SHARE = 0.6;
+/**
+ * Half a second of frames is long when they come this much further apart than they were meant to: one frame in
+ * twenty shown twice. On a 60 Hz screen that is 17.5 ms, under 57 a second.
+ */
+export const LONG_SHARE = 1.05;
+/** The ladder sheds nothing to draw more than 60 a second: on a faster screen a frame is still on time at 16.7 ms. */
+export const QUICKEST_DUE_SECONDS = 1 / 60;
+/** A rung fits when its frame, drawn back to back, takes no more than this share of the gap: the rest is the browser's. */
+export const FIT_SHARE = 0.9;
+/** The chip test at load may take this long, milliseconds. A chip too slow to finish it starts on the last rung. */
+export const CHIP_TEST_MILLISECONDS = 500;
+/** A clamped frame (the loop hands on 0.25 s at most) is a stall: a hidden tab, a compile. It says nothing about the frame rate. */
+const STALL_SECONDS = 0.25;
+
+/** The gap a frame is judged against, seconds: what the screen and the cap allow, but never under a 60th. */
+export function judgedGap(dueSeconds: number | undefined): number {
+  return Math.max(dueSeconds ?? QUICKEST_DUE_SECONDS, QUICKEST_DUE_SECONDS);
+}
+
+/** The longest a frame may take, drawn back to back, for its rung to fit: milliseconds. */
+export function fitMilliseconds(dueSeconds: number | undefined): number {
+  return judgedGap(dueSeconds) * 1000 * FIT_SHARE;
+}
+
+/**
+ * The rung to start on: the best one whose frame fits, found by timing as few rungs as it can.
+ * `measure(rung)` gives that rung's frame in milliseconds. A rung further down is taken to cost no more.
+ * It looks from `top` down to just above `floor`, and answers `floor` when nothing above it fits: the last rung
+ * is where a chip ends up whether it fits or not, so it is never timed.
+ * When time runs out (`giveUp`) it keeps the best rung seen to fit, or `floor` if none was.
+ */
+export function fittingRung(measure: (rung: number) => number, fits: number, giveUp: () => boolean = () => false, floor = LADDER.length - 1, top = 0): number {
+  if (top >= floor || measure(top) <= fits) return Math.min(top, floor);
+  let found = floor;
+  let [from, to] = [top + 1, floor - 1];
+  while (from <= to && !giveUp()) {
+    const middle = Math.floor((from + to) / 2);
+    if (measure(middle) <= fits) {
+      found = middle;
+      to = middle - 1;
+    } else {
+      from = middle + 1;
+    }
+  }
+  return found;
+}
+
+/**
+ * The answer to a ladder that asks about the rung above (`asked`): the rung to climb to, or null when `asked`
+ * does not fit. Mostly that is `asked` itself. When `asked` fits with room to spare, the chip was busy the last
+ * time it was timed: then the best rung that fits now (no higher than `top`) is found, and the ladder goes there
+ * in one change instead of one rung every ten seconds.
+ */
+export function climbTo(asked: number, top: number, measure: (rung: number) => number, fits: number, giveUp: () => boolean = () => false): number | null {
+  const cost = measure(asked);
+  if (cost > fits) return null;
+  if (cost > fits * ROOM_SHARE || asked <= top) return asked;
+  return fittingRung(measure, fits, giveUp, asked, top);
+}
 
 export interface LadderChange {
   /** Seconds of frames the ladder had seen when it changed. */
@@ -120,10 +196,16 @@ export interface LadderChange {
 /**
  * Watches frame times and moves the world's quality one change at a time.
  *
- * - Down: two seconds of long frames step one rung down (two rungs under 29 frames a second, three under 20).
- * - Up: ten seconds of good frames step one rung back up.
- * - Never pumping: at most one change every ten seconds, and a rung that ran long twice is left alone for
- *   the session. So a rung that cannot hold is tried twice at most, ten seconds apart, and then never again.
+ * - A frame is judged against the gap it was meant to have (`dueSeconds`), so a 30 Hz screen is not a slow chip.
+ * - Down: two seconds of long frames step one rung down (two rungs under 29 a second on a 60 Hz screen, three under 20).
+ * - Finding its level: at the start, after a settings change and when a game begins, steps down may follow each
+ *   other two seconds apart. That ends at the first ten seconds of good frames. From then on every change is ten
+ *   seconds from the last.
+ * - Up: ten seconds of good frames step one rung back up. With `ask` set it asks first (`asking`, `answer`): the
+ *   world view times the rung above and the ladder only climbs to a rung that fits. A rung turned down is asked
+ *   about twice more (after one minute, then five), then left alone.
+ * - Never pumping: a rung that runs long straight after a climb is out for the session, and so is one that ran
+ *   long twice. So a player sees a rung tried and dropped once at most.
  *
  * A settings change resets it.
  */
@@ -132,20 +214,30 @@ export class FrameLadder {
   /** Every change this session, oldest first. */
   readonly changes: LadderChange[] = [];
   private readonly hold: boolean;
-  /** The best rung still allowed: every rung above it ran long twice. */
+  private readonly ask: boolean;
+  /** The best rung still allowed: every rung above it is out for the session. */
   private best = 0;
   private fails: number[] = LADDER.map(() => 0);
+  private refusals: number[] = LADDER.map(() => 0);
   private clock = 0;
+  private warmUntil = WARM_UP_SECONDS;
   private lastChange = Number.NEGATIVE_INFINITY;
+  private lastWentUp = false;
+  /** The rung the last climb left: it held for ten seconds, so a climb that fails falls no further than this. */
+  private cameFrom = 0;
+  /** Still finding its level: no rung has held for ten seconds since the start, the last reset or the last `find()`. */
+  private finding = true;
+  private wanted: number | null = null;
+  private skipFrame = false;
   private slowWindows = 0;
   private slowest = 0;
   private goodSeconds = 0;
-  private frames = 0;
   private windowSeconds = 0;
-  private windowFrames = 0;
+  private windowDue = 0;
 
-  constructor(options: { hold?: boolean; startRung?: number } = {}) {
+  constructor(options: { hold?: boolean; startRung?: number; ask?: boolean } = {}) {
     this.hold = options.hold ?? false;
+    this.ask = options.ask ?? false;
     this.rung = Math.max(0, Math.min(LADDER.length - 1, options.startRung ?? 0));
   }
 
@@ -159,61 +251,119 @@ export class FrameLadder {
     return this.clock;
   }
 
+  /** The rung the ladder would climb to if the chip has room for it, or null. Time that rung, then `answer`. */
+  get asking(): number | null {
+    return this.wanted;
+  }
+
   /** Start over from rung 0 with every rung allowed again. A pinned ladder (`&hold=1`) stays where it is. */
   reset(): void {
     if (this.hold) return;
     this.rung = 0;
     this.best = 0;
     this.fails = LADDER.map(() => 0);
+    this.refusals = LADDER.map(() => 0);
     this.lastChange = Number.NEGATIVE_INFINITY;
+    this.lastWentUp = false;
+    this.warmUntil = this.clock + WARM_UP_SECONDS;
+    this.find();
+  }
+
+  /** The chip test's verdict: start on this rung. Not a change: nothing has been shown yet. */
+  startOn(rung: number): void {
+    if (!this.hold) this.rung = Math.max(0, Math.min(LADDER.length - 1, rung));
+  }
+
+  /** The work has changed (a game begins): find the level again, with quick steps down allowed. */
+  find(): void {
+    this.finding = true;
+    this.wanted = null;
     this.slowWindows = 0;
     this.slowest = 0;
     this.goodSeconds = 0;
-    this.frames = 0;
   }
 
   private move(rung: number): boolean {
     this.changes.push({ at: this.clock, from: this.rung, to: rung });
+    this.lastWentUp = rung < this.rung;
+    this.cameFrom = this.rung;
     this.rung = rung;
     this.lastChange = this.clock;
+    this.wanted = null;
     this.slowWindows = 0;
     this.slowest = 0;
     this.goodSeconds = 0;
     return true;
   }
 
-  /** Call once a frame with the real frame time. Returns true when the rung changed. */
-  note(frameSeconds: number): boolean {
-    // A stall (the tab was hidden, a shader compiled) says nothing about the frame rate.
-    if (frameSeconds > 0.25) return false;
-    this.frames += 1;
-    this.clock += frameSeconds;
+  /**
+   * The answer to `asking`: the rung to climb to (the one asked about, or a better one that fits: see `climbTo`),
+   * or null when the one asked about does not fit. Turned down, the ladder asks again after a minute of good
+   * frames, then after five, then leaves that rung alone for the session. Returns true when the rung changed.
+   */
+  answer(rung: number | null): boolean {
+    const asked = this.wanted;
+    if (asked === null) return false;
+    this.wanted = null;
+    // The frame that held the timing was long for that reason alone.
+    this.skipFrame = true;
+    this.windowSeconds = 0;
+    this.windowDue = 0;
+    if (rung !== null) return this.move(Math.max(this.best, Math.min(asked, rung)));
+    this.refusals[asked] += 1;
+    if (this.refusals[asked] > ASK_AGAIN_SECONDS.length) this.best = Math.max(this.best, asked + 1);
+    this.goodSeconds = 0;
+    return false;
+  }
+
+  /**
+   * Call once a frame with the real frame time and the gap the frame was meant to have (a 60th when not told).
+   * Returns true when the rung changed.
+   */
+  note(frameSeconds: number, dueSeconds?: number): boolean {
+    this.clock += Math.min(frameSeconds, STALL_SECONDS);
+    if (frameSeconds >= STALL_SECONDS) return false;
+    if (this.skipFrame) {
+      this.skipFrame = false;
+      return false;
+    }
     this.windowSeconds += frameSeconds;
-    this.windowFrames += 1;
+    this.windowDue += judgedGap(dueSeconds);
     if (this.windowSeconds <= 0.5) return false;
     const span = this.windowSeconds;
-    const milliseconds = (span / this.windowFrames) * 1000;
+    // How far apart the frames came, against how far apart they were meant to: 1 is on time.
+    const lateness = span / this.windowDue;
     this.windowSeconds = 0;
-    this.windowFrames = 0;
-    // The first three seconds compile shaders and fill buffers: they prove nothing.
-    if (this.frames <= 180 || this.hold) return false;
-    if (milliseconds > LONG_FRAME) {
-      this.slowWindows += milliseconds > 30 ? 2 : 1;
-      this.slowest = Math.max(this.slowest, milliseconds);
+    this.windowDue = 0;
+    if (this.clock <= this.warmUntil || this.hold) return false;
+    if (lateness > LONG_SHARE) {
+      this.slowWindows += lateness > 1.8 ? 2 : 1;
+      this.slowest = Math.max(this.slowest, lateness);
       this.goodSeconds = 0;
+      this.wanted = null;
     } else {
       this.slowWindows = 0;
       this.slowest = 0;
       this.goodSeconds += span;
+      if (this.goodSeconds >= CLIMB_AFTER_SECONDS) this.finding = false;
     }
-    if (this.clock - this.lastChange < LADDER_REST_SECONDS) return false;
+    const rested = this.clock - this.lastChange;
     const last = LADDER.length - 1;
     if (this.slowWindows >= 4 && this.rung < last) {
+      if (rested < (this.finding && !this.lastWentUp ? DOWN_AGAIN_SECONDS : LADDER_REST_SECONDS)) return false;
+      // A rung that runs long straight after the climb to it has had its one try.
+      const climbFailed = this.lastWentUp;
       this.fails[this.rung] += 1;
-      if (this.fails[this.rung] >= FAILS_ALLOWED) this.best = Math.max(this.best, this.rung + 1);
-      return this.move(Math.min(last, this.rung + (this.slowest > 50 ? 3 : this.slowest > 34 ? 2 : 1)));
+      if (climbFailed || this.fails[this.rung] >= FAILS_ALLOWED) this.best = Math.max(this.best, this.rung + 1);
+      // Further in one change when badly behind, but after a climb no further than the rung that held.
+      const drop = this.slowest > 3 ? 3 : this.slowest > 2.04 ? 2 : 1;
+      return this.move(Math.min(climbFailed ? this.cameFrom : last, this.rung + drop));
     }
-    if (this.goodSeconds >= CLIMB_AFTER_SECONDS && this.rung > this.best) return this.move(this.rung - 1);
+    if (this.rung > this.best && rested >= LADDER_REST_SECONDS
+      && this.goodSeconds >= (ASK_AGAIN_SECONDS[this.refusals[this.rung - 1] - 1] ?? CLIMB_AFTER_SECONDS)) {
+      if (!this.ask) return this.move(this.rung - 1);
+      this.wanted = this.rung - 1;
+    }
     return false;
   }
 }
