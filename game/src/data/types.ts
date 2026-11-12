@@ -340,10 +340,23 @@ export type QuestId =
 
 export type QuestStatus = 'locked' | 'available' | 'active' | 'ready' | 'completed';
 
+/**
+ * What an ingredient gets made into. A `have_item` step that names one is also
+ * done once that exists: making it uses the ingredient up (some ingredients,
+ * like the hatchet head, are found once and never again), so "hold the
+ * ingredient" can stop being true for good.
+ */
+export type MadeInto = { toolId: ToolId } | { attachmentId: AttachmentId };
+
+/**
+ * One step of a quest. A step counts as done once what it asks for has been
+ * achieved, whenever that happened, even before the quest was given. The
+ * exceptions are `deliver` and nothing else: a hand-over is checked live.
+ */
 export type ObjectiveDefinition = { text: string } & (
   | { type: 'bail'; waterAtMost: number }
   | { type: 'land'; islandId: IslandId }
-  | { type: 'have_item'; itemId: ItemId; count: number }
+  | { type: 'have_item'; itemId: ItemId; count: number; madeInto?: MadeInto }
   | { type: 'have_tool'; toolId: ToolId }
   /** Craft `count` of any of these items while the quest is active. */
   | { type: 'craft'; itemIds: ItemId[]; count: number }
