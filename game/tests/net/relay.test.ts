@@ -113,8 +113,10 @@ describe('a game through the relay', () => {
     }
     expect(rig.relay.frames.lost).toBeGreaterThan(300);
     expect(seats.map((seat) => seat.link.mismatches)).toEqual([0, 0, 0]);
-    // Every command got its answer, once.
-    for (const seat of seats) expect(seat.results.map((outcome) => outcome.id)).toEqual(seat.results.map((_, index) => index + 1));
+    // Every command got its answer, once. (An answer lost on the line comes again, and may then come after the next one's.)
+    for (const seat of seats) {
+      expect(seat.results.map((outcome) => outcome.id).sort((first, second) => first - second)).toEqual(seat.results.map((_, index) => index + 1));
+    }
     expect(await rig.settle(20)).toBe(true);
     for (const seat of seats) expect(hashState(seat.link.truth!)).toBe(rig.hostHash());
     // And what the guests ate, the host's game ate.

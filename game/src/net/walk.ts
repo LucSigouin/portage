@@ -43,7 +43,7 @@ export type WireRun = [start: number, moveX: number, moveY: number, run: number,
 export const WALK_RUNS_SENT = 6;
 /** A guest walks at most this many steps ahead of what the host has confirmed (1.5 s). Past that it stands and waits. */
 export const WALK_AHEAD_STEPS = 90;
-/** The host keeps at most this many unwalked steps of a guest's walk (2 s). More is a backlog nobody should watch play out. */
+/** The host keeps at most this many unwalked moving steps of a guest's walk (2 s). More is a backlog nobody should watch play out. */
 export const WALK_BACKLOG_STEPS = 120;
 /** A difference between guess and truth is eased out over about this long. */
 export const WALK_EASE_SECONDS = 0.1;
@@ -113,6 +113,17 @@ export class WalkStream {
     return false;
   }
 
+  /** How many steps from `from` up to but not `to` move the player. */
+  movingSteps(from: number, to: number): number {
+    let count = 0;
+    for (let step = from; step < to;) {
+      const next = this.nextChange(step, to);
+      if (!isStill(this.at(step))) count += next - step;
+      step = next;
+    }
+    return count;
+  }
+
   /** Keep a stretch. One that begins where a stretch already begins is not taken: what was said first stands. */
   add(run: WalkRun): void {
     let index = this.runs.length;
@@ -170,6 +181,10 @@ export class WalkTimeline {
     return this.walked >= at || (this.known >= at && !this.stream.movesBetween(this.walked, at));
   }
 
+  private passStill(): void {
+    while (this.walked < this.known && isStill(this.stream.at(this.walked))) this.walked = this.stream.nextChange(this.walked, this.known);
+  }
+
   /**
    * What the guest's player is handed for the host's next step. On foot: the
    * next step of its walk, or undefined (standing) while that has not arrived.
@@ -183,10 +198,14 @@ export class WalkTimeline {
       return null;
     }
     // Steps the guest stood still on move nobody: pass them over, and the walk is that much less behind.
-    while (this.walked < this.known && isStill(this.stream.at(this.walked))) this.walked = this.stream.nextChange(this.walked, this.known);
-    if (this.known - this.walked > WALK_BACKLOG_STEPS) {
-      this.dropped += this.known - this.walked - WALK_BACKLOG_STEPS;
-      this.walked = this.known - WALK_BACKLOG_STEPS;
+    this.passStill();
+    // More walking owed than anyone should watch play out: the oldest of it is let go. The guest's screen is put right by the next state.
+    for (let owed = this.stream.movingSteps(this.walked, this.known) - WALK_BACKLOG_STEPS; owed > 0;) {
+      const cut = Math.min(owed, this.stream.nextChange(this.walked, this.known) - this.walked);
+      this.walked += cut;
+      this.dropped += cut;
+      owed -= cut;
+      this.passStill();
     }
     this.stream.dropBefore(this.walked);
     this.following = this.walked < this.known;
