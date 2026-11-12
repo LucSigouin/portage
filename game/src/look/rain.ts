@@ -77,6 +77,8 @@ export class Rain {
   private readonly copyCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private canvasWidth = 1;
   private canvasHeight = 1;
+  /** True while the heroes' depth holds a hero window of this frame (or the last, until it is cleared). */
+  private heroesKept = false;
 
   constructor() {
     // Four corners a stroke. aSeed: its home in the box (0 to 1 each way) and its own number. aCorner: tail to head, left to right.
@@ -165,15 +167,21 @@ export class Rain {
         uniform vec2 uPixel;
         uniform sampler2D tWorldDepth, tHeroDepth;
         void main(){
-          // behind a tree, a roof, the ground, the canopy or the crew: not drawn
-          vec2 uv = gl_FragCoord.xy * uPixel * .5;
-          float front = min(texture(tWorldDepth, uv).x, texture(tHeroDepth, uv).x);
-          if (uBehind > .5 && gl_FragCoord.z > front) discard;
           // the pen lands light, presses, and lifts: thin at the tail, full near the head
           float press = smoothstep(0., .55, vAt.y) * (1. - smoothstep(.9, 1., vAt.y));
           float line = 1. - smoothstep(vAt.z * press - .5, vAt.z * press + .5, abs(vAt.x));
           // it ends where it meets the water
-          oColor = vec4(vInk, line * press * vAlpha * uStrength * smoothstep(0., .12, vHeight));
+          float mark = line * press * vAlpha * uStrength * smoothstep(0., .12, vHeight);
+          // (most of a stroke's quad is clear paper round the line: nothing more to work out there)
+          if (mark < .004) discard;
+          // behind a tree, a roof, the ground, the canopy or the crew: not drawn. The depths are read only where the
+          // stroke marks the pixel, the world's first, and the heroes' only if the world did not hide it.
+          if (uBehind > .5) {
+            vec2 uv = gl_FragCoord.xy * uPixel * .5;
+            if (gl_FragCoord.z > textureLod(tWorldDepth, uv, 0.).x) discard;
+            if (uBehind > 1.5 && gl_FragCoord.z > textureLod(tHeroDepth, uv, 0.).x) discard;
+          }
+          oColor = vec4(vInk, mark);
         }`,
       transparent: true,
       side: THREE.DoubleSide,
@@ -212,14 +220,20 @@ export class Rain {
     const target = this.heroDepth;
     if (!window || !fill) {
       this.uniforms.tWorldDepth.value = depth;
+      // Last frame's heroes are forgotten: all of it as far as can be. With no hero on screen last frame there is
+      // nothing to forget, and the strokes read the world's depth alone.
+      if (this.heroesKept) {
+        target.scissorTest = false;
+        target.viewport.set(0, 0, target.width, target.height);
+        renderer.setRenderTarget(target);
+        renderer.clear(false, true, false);
+      }
+      this.heroesKept = false;
       this.uniforms.uBehind.value = 1;
-      // Last frame's heroes are forgotten: all of it as far as can be.
-      target.scissorTest = false;
-      target.viewport.set(0, 0, target.width, target.height);
-      renderer.setRenderTarget(target);
-      renderer.clear(false, true, false);
       return;
     }
+    this.heroesKept = true;
+    this.uniforms.uBehind.value = 2;
     const [scaleX, scaleY] = [target.width / this.canvasWidth, target.height / this.canvasHeight];
     target.viewport.set(window.x * scaleX, window.y * scaleY, window.w * scaleX, window.h * scaleY);
     target.scissor.copy(target.viewport);
@@ -269,6 +283,8 @@ export class Rain {
     this.canvasHeight = canvasHeight;
     const share = Math.min(1, Math.sqrt(HERO_DEPTH_PIXELS / (canvasWidth * canvasHeight)));
     this.heroDepth.setSize(Math.max(1, Math.round(canvasWidth * share)), Math.max(1, Math.round(canvasHeight * share)));
+    // (a buffer made anew holds nothing yet: clear it before it is first read)
+    this.heroesKept = true;
   }
 
   dispose(): void {
