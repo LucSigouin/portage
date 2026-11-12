@@ -201,6 +201,16 @@ export interface BindingRowModel {
   unbound: boolean;
 }
 
+/** A line of text the player types: a name, a room code. */
+export interface TextFieldModel {
+  field: 'name' | 'code';
+  label: string;
+  value: string;
+  maxLength: number;
+  placeholder: string;
+  enabled: boolean;
+}
+
 export interface ControlLineModel {
   label: string;
   keys: string;
@@ -341,6 +351,30 @@ export type PanelModel = { title: string; close: ButtonModel } & (
     markers: MapMarkerModel[];
   }
   | { id: 'dialogue'; speaker: string; text: string; options: ButtonModel[] }
+  | {
+    id: 'crew_host';
+    phase: 'idle' | 'connecting' | 'open' | 'reconnecting' | 'failed';
+    name: TextFieldModel;
+    /** How the line to the relay is doing, in one sentence. Empty when there is nothing to say. */
+    status: string;
+    statusTone: Tone;
+    /** The room, once there is one: its code as read aloud ("FHJ-K3M"), the link to send, and the button that copies it. */
+    room: { code: string; link: string; copy: ButtonModel } | null;
+    lines: string[];
+    /** What to do next: open the room, try again, start a game. The first is the one Enter presses. */
+    actions: ButtonModel[];
+    stop: ButtonModel | null;
+  }
+  | {
+    id: 'crew_join';
+    code: TextFieldModel;
+    name: TextFieldModel;
+    status: string;
+    statusTone: Tone;
+    lines: string[];
+    join: ButtonModel;
+    cancel: ButtonModel | null;
+  }
 );
 
 export interface ConfirmModel {

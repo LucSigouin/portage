@@ -1,0 +1,148 @@
+/**
+ * The Portage relay on Cloudflare: a Worker in front, one Durable Object per
+ * room behind it. All it does is pass frames between the sockets of a room
+ * (`room.ts`). It reads no game message, keeps nothing on disk and logs nothing.
+ *
+ * Address: `<anything>/room/<CODE>?role=host|guest`, as a WebSocket. The part
+ * before `/room/` is free, so the same Worker answers on its own address and
+ * on a route such as `sigouin.net/portage/relay/*`.
+ *
+ * Sockets are taken with the hibernation API: a room nobody is talking in
+ * costs no running time, and comes back from its sockets' attachments.
+ */
+import { DurableObject } from 'cloudflare:workers';
+import { CLOSE, RELAY_PROTOCOL, ROOM_CODE_PATTERN, RoomLogic, originAllowed } from './room.ts';
+import type { SeatRecord, Wire } from './room.ts';
+
+export interface Env {
+  ROOMS: DurableObjectNamespace<Room>;
+  /** Comma-separated origins a connection may come from. `:*` at the end of one allows any port. */
+  ALLOWED_ORIGINS: string;
+  /** Seconds between looks at a room for the idle cap. */
+  IDLE_SWEEP_SECONDS: string;
+}
+
+const text = (body: string, status: number): Response =>
+  new Response(`${body}\n`, { status, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+    if (request.method === 'GET' && /(^|\/)health$/.test(url.pathname)) return text('portage relay: ok', 200);
+    const match = /(?:^|\/)room\/([^/]+)$/.exec(url.pathname);
+    if (!match) return text('not found', 404);
+    if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') return text('this address takes WebSockets only', 426);
+    if (!originAllowed(request.headers.get('Origin'), env.ALLOWED_ORIGINS)) return text('this page may not use the relay', 403);
+    const code = match[1]!;
+    if (!ROOM_CODE_PATTERN.test(code)) return text('not a room code', 400);
+    const offered = (request.headers.get('Sec-WebSocket-Protocol') ?? '').split(',').map((entry) => entry.trim());
+    if (!offered.includes(RELAY_PROTOCOL)) return text('this relay speaks another protocol', 400);
+    // One object per code: everyone who dials the same code meets in the same room.
+    return env.ROOMS.get(env.ROOMS.idFromName(code)).fetch(request);
+  },
+} satisfies ExportedHandler<Env>;
+
+export class Room extends DurableObject<Env> {
+  private readonly logic = new RoomLogic();
+  private readonly wires = new Map<WebSocket, Wire>();
+
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    // Waking from sleep: the sockets are still open. Each carries what the room knew about it.
+    const now = Date.now();
+    for (const socket of ctx.getWebSockets()) {
+      const record = socket.deserializeAttachment() as SeatRecord | null;
+      if (record) this.logic.restore(this.wire(socket), record, now);
+    }
+  }
+
+  private wire(socket: WebSocket): Wire {
+    let wire = this.wires.get(socket);
+    if (!wire) {
+      wire = {
+        send: (frame) => {
+          try {
+            socket.send(frame);
+          } catch {
+            // The socket went between two frames. Its close is on its way.
+          }
+        },
+        close: (code, reason) => {
+          this.wires.delete(socket);
+          try {
+            socket.close(code, reason);
+          } catch {
+            // Already closed.
+          }
+        },
+      };
+      this.wires.set(socket, wire);
+    }
+    return wire;
+  }
+
+  private get sweepMilliseconds(): number {
+    const seconds = Number(this.env.IDLE_SWEEP_SECONDS);
+    return (Number.isFinite(seconds) && seconds > 0 ? seconds : 600) * 1000;
+  }
+
+  override async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const offered = (request.headers.get('Sec-WebSocket-Protocol') ?? '').split(',').map((entry) => entry.trim());
+    const key = offered.find((entry) => entry.startsWith('k.'))?.slice(2) ?? null;
+    const pair = new WebSocketPair();
+    const client = pair[0];
+    const server = pair[1];
+    this.ctx.acceptWebSocket(server);
+    const wasEmpty = this.logic.empty;
+    // A socket that is turned away is still opened first: a browser can only read the reason from a close.
+    const record = this.logic.connect(this.wire(server), url.searchParams.get('role'), key, Date.now());
+    if (record) {
+      server.serializeAttachment(record);
+      if (wasEmpty) await this.ctx.storage.setAlarm(Date.now() + this.sweepMilliseconds);
+    }
+    return new Response(null, { status: 101, webSocket: client, headers: { 'Sec-WebSocket-Protocol': RELAY_PROTOCOL } });
+  }
+
+  override webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): void {
+    if (typeof message !== 'string') {
+      this.gone(socket);
+      socket.close(CLOSE.badRequest, 'text-only');
+      return;
+    }
+    this.logic.message(this.wire(socket), message, Date.now());
+  }
+
+  override async webSocketClose(socket: WebSocket, code: number, reason: string): Promise<void> {
+    this.gone(socket);
+    try {
+      socket.close(code === 1005 || code === 1006 ? 1000 : code, reason);
+    } catch {
+      // The runtime had already answered the close.
+    }
+    await this.rest();
+  }
+
+  override async webSocketError(socket: WebSocket): Promise<void> {
+    this.gone(socket);
+    await this.rest();
+  }
+
+  private gone(socket: WebSocket): void {
+    const wire = this.wires.get(socket);
+    if (wire) this.logic.disconnect(wire);
+    this.wires.delete(socket);
+  }
+
+  /** The last socket left: leave nothing behind, not even the alarm. */
+  private async rest(): Promise<void> {
+    if (!this.logic.empty) return;
+    await this.ctx.storage.deleteAlarm();
+    await this.ctx.storage.deleteAll();
+  }
+
+  override async alarm(): Promise<void> {
+    if (this.logic.sweep()) await this.ctx.storage.setAlarm(Date.now() + this.sweepMilliseconds);
+    else await this.rest();
+  }
+}

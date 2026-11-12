@@ -1478,6 +1478,96 @@ html.iw-document {
   gap: 0.9rem;
 }
 
+/* the crew lobby: hosting a room, joining one. Lines to type on, a code to read aloud, a link to send. */
+.iw .iw-text {
+  width: 15rem;
+  max-width: 100%;
+  margin: 0;
+  /* The hand's letters stand taller than a line of 1.3: the line is given the room, so nothing typed is shaved. */
+  padding: 0.18rem 0.7rem 0.1rem;
+  font-family: var(--iw-hand);
+  font-size: 1.12rem;
+  line-height: 1.6;
+  color: var(--iw-ink);
+  background: var(--iw-paper-deep);
+  border: 0.1rem solid var(--iw-ink);
+  border-radius: 0.4rem 0.3rem 0.45rem 0.26rem;
+  pointer-events: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.iw .iw-text::placeholder {
+  color: var(--iw-ink-soft);
+  opacity: 1;
+}
+.iw .iw-text:disabled {
+  color: var(--iw-ink-soft);
+  background: none;
+  border-style: dashed;
+  border-color: var(--iw-ink-soft);
+}
+.iw .iw-text-code {
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.iw .iw-text-code::placeholder {
+  font-weight: 400;
+}
+.iw .iw-text-link {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  font-size: 0.95rem;
+}
+.iw-room {
+  margin-top: 0.9rem;
+  padding: 0.9rem 0 1rem;
+  border-bottom: 0.09rem dashed var(--iw-ink-faint);
+}
+.iw-room-code {
+  display: flex;
+  align-items: baseline;
+  gap: 1.2rem;
+}
+.iw-room-label {
+  flex: none;
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--iw-ink-soft);
+}
+.iw-code {
+  font-family: var(--iw-hand);
+  font-weight: 700;
+  font-size: 3rem;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  pointer-events: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.iw-room-link {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 0.8rem;
+}
+.iw-crew-status {
+  min-height: 1.5rem;
+  margin: 0.9rem 0 0.1rem;
+  font-family: var(--iw-hand);
+  font-size: 1.08rem;
+  line-height: 1.35;
+}
+.iw-crew-line {
+  margin-top: 0.4rem;
+  font-family: var(--iw-hand);
+  font-size: 0.98rem;
+  line-height: 1.4;
+  color: var(--iw-ink-soft);
+}
+
 /* save slots */
 .iw-save {
   display: grid;

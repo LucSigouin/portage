@@ -5,12 +5,14 @@
 import type { SlotSummary } from '../../save/index.ts';
 import type { InputAction, Settings } from '../../settings/index.ts';
 import type { GameState, PlayerId } from '../../sim/index.ts';
+import type { CrewView } from '../crewlobby.ts';
 import { topPanel } from '../panels.ts';
 import type { PanelId, PanelState } from '../panels.ts';
 import {
   buildCanoeBuilderPanel, buildCraftingPanel, buildDialoguePanel, buildInventoryPanel, buildMapPanel,
   buildQuestLogPanel,
 } from './gamepanels.ts';
+import { buildCrewHostPanel, buildCrewJoinPanel } from './crew.ts';
 import { buildHudModel } from './hud.ts';
 import {
   buildConfirmModel, buildCreditsPanel, buildHowToPlayPanel, buildLobbyModel, buildPausePanel, buildSaveSlotsPanel,
@@ -24,6 +26,7 @@ export * from './hud.ts';
 export * from './toasts.ts';
 export * from './gamepanels.ts';
 export * from './menus.ts';
+export * from './crew.ts';
 export * from './settings.ts';
 
 export interface InterfaceModelInput {
@@ -49,13 +52,15 @@ export interface InterfaceModelInput {
   bindingNotice: string;
   /** "Quest 5 of 12: A proper edge". */
   progressText: string;
+  /** The crew lobby's state. Null or absent in a game built without a relay: no crew entries, no crew panels. */
+  crew?: CrewView | null;
   debug: DebugModel | null;
 }
 
 const PANEL_TITLES: Readonly<Record<PanelId, string>> = {
   settings: 'Settings', how_to_play: 'How to Play', credits: 'Credits', pause: 'Paused', save_slots: 'Save slots',
   inventory: 'Inventory', crafting: 'Crafting', canoe_builder: 'Canoe builder', quest_log: 'Quest log', map: 'Map',
-  dialogue: 'Conversation', confirm: 'Confirm',
+  dialogue: 'Conversation', confirm: 'Confirm', crew_host: 'Host a crew', crew_join: 'Join a crew',
 };
 
 /** The model of one open panel, or null when it has nothing to show. */
@@ -77,7 +82,7 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
     case 'credits':
       return { ...frame, ...buildCreditsPanel(game?.flags.beacon_lit === true) };
     case 'pause':
-      return { ...frame, ...buildPausePanel(input.progressText) };
+      return { ...frame, ...buildPausePanel(input.progressText, input.crew ?? null) };
     case 'save_slots':
       return { ...frame, ...buildSaveSlotsPanel(input.slots, input.now, input.currentSlot) };
     case 'inventory':
@@ -94,6 +99,10 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
       const body = game ? buildDialoguePanel(game, playerId) : null;
       return body ? { ...frame, ...body } : null;
     }
+    case 'crew_host':
+      return input.crew ? { ...frame, ...buildCrewHostPanel(input.crew, input.slots, input.latestSlot) } : null;
+    case 'crew_join':
+      return input.crew ? { ...frame, ...buildCrewJoinPanel(input.crew) } : null;
     case 'confirm':
       return null;
   }
@@ -109,7 +118,7 @@ export function buildInterfaceModel(input: InterfaceModelInput): InterfaceModel 
     uiScale: settings.accessibility.uiScale,
     patternedMeters: settings.accessibility.patternedMeters,
     paused: input.paused,
-    lobby: panels.screen === 'lobby' ? buildLobbyModel(input.slots, input.latestSlot) : null,
+    lobby: panels.screen === 'lobby' ? buildLobbyModel(input.slots, input.latestSlot, input.crew ?? null) : null,
     hud: game ? buildHudModel(game, settings, input.cameraYaw, input.playerId ?? 0, input.hostId ?? null) : null,
     toasts: input.toasts,
     panel: beneath ? buildPanelModel(beneath, input) : null,

@@ -203,6 +203,7 @@ export class App {
       capture: session.input.capture,
       bindingNotice: session.bindingNotice,
       progressText: session.progressText(),
+      crew: session.crew?.view() ?? null,
       debug: showFrameRate || debugLines.length > 0 ? {
         showFrameRate,
         framesPerSecond: Math.round(stats?.framesPerSecond ?? 0),

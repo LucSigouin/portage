@@ -10,6 +10,9 @@
  * - `?host=ROOM`: start a game that other tabs of this site can join. `&name=...` names the host.
  * - `?join=ROOM&name=...`: join it, from another tab or window on the same computer.
  *   A tester's door (a channel between tabs, no server), not the lobby's.
+ *
+ * And one that is not for testing: `?invite=CODE` is the link a host sends. It opens the lobby's
+ * join panel with the code filled in. It touches nothing else: the player's own saves stay as they are.
  */
 export const SHOT_NAMES = [
   'lobby', 'settings', 'play', 'island', 'inventory', 'crafting', 'builder', 'quests', 'map', 'dialogue', 'pause',
@@ -37,6 +40,8 @@ export interface DebugParameters {
   join: string | null;
   /** The name to play under in a shared game. Cut to 12 letters by the rules. */
   name: string;
+  /** The room code of an invite link, or null. Checked for shape only: the relay says whether there is such a room. */
+  invite: string | null;
   /** True when a switch replaces the normal game: saves stay untouched. */
   sandbox: boolean;
 }
@@ -73,6 +78,7 @@ export function parseDebugParameters(query: string): DebugParameters {
     host,
     join,
     name: (values.get('name') ?? '').slice(0, 40),
+    invite: /^[A-Za-z0-9-]{6,9}$/.test(values.get('invite') ?? '') ? values.get('invite') : null,
     sandbox: bot || atQuest !== null || shot !== null || crew > 1 || host !== null || join !== null,
   };
 }

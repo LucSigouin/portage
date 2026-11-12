@@ -9,7 +9,9 @@ export type ScreenId = 'lobby' | 'game';
 
 export type PanelId =
   | 'settings' | 'how_to_play' | 'credits' | 'pause' | 'inventory' | 'crafting' | 'canoe_builder'
-  | 'quest_log' | 'map' | 'dialogue' | 'save_slots' | 'confirm';
+  | 'quest_log' | 'map' | 'dialogue' | 'save_slots' | 'confirm'
+  /** Hosting a room on the relay, and joining one. Only reachable in a game built with a relay address. */
+  | 'crew_host' | 'crew_join';
 
 export type SettingsTabId = 'audio' | 'graphics' | 'controls' | 'gameplay' | 'accessibility';
 
@@ -61,7 +63,11 @@ export const PANEL_RULES: Readonly<Record<PanelId, PanelRule>> = {
   settings: { group: 'menu', parents: { lobby: ['root'], game: ['pause'] }, pausesSimulation: true, needsBeachedCanoe: false },
   how_to_play: { group: 'menu', parents: { lobby: ['root'], game: ['pause'] }, pausesSimulation: true, needsBeachedCanoe: false },
   credits: { group: 'menu', parents: { lobby: ['root'], game: ['root'] }, pausesSimulation: true, needsBeachedCanoe: false },
-  save_slots: { group: 'menu', parents: { lobby: ['root'] }, pausesSimulation: true, needsBeachedCanoe: false },
+  // A host picks the game to share from the room's own panel.
+  save_slots: { group: 'menu', parents: { lobby: ['root', 'crew_host'] }, pausesSimulation: true, needsBeachedCanoe: false },
+  // The host's room card is also on the pause menu: the place to copy the link again mid-game.
+  crew_host: { group: 'menu', parents: { lobby: ['root'], game: ['pause'] }, pausesSimulation: true, needsBeachedCanoe: false },
+  crew_join: { group: 'menu', parents: { lobby: ['root'] }, pausesSimulation: true, needsBeachedCanoe: false },
   pause: { group: 'menu', parents: GAME_ROOT, pausesSimulation: true, needsBeachedCanoe: false },
   inventory: { group: 'gameplay', parents: GAME_ROOT, pausesSimulation: true, needsBeachedCanoe: false },
   crafting: { group: 'gameplay', parents: GAME_ROOT, pausesSimulation: true, needsBeachedCanoe: false },
