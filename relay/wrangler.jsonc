@@ -1,0 +1,27 @@
+// The Portage relay: one Worker, one Durable Object per room.
+// Pinned to wrangler 4.133.0 (package.json). Local: `npm run dev` (port 8791). Deploy steps: README.md.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "portage-relay",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-09-01",
+  // No address of its own: it answers only on the route below, once Luc turns it on.
+  "workers_dev": false,
+  "preview_urls": false,
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "Room" }]
+  },
+  // The Free plan only runs SQLite-backed Durable Objects. The relay never writes to that storage.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+  "vars": {
+    // Where a connection may come from. `*` stands for any port.
+    "ALLOWED_ORIGINS": "https://sigouin.net,http://localhost:*,http://127.0.0.1:*",
+    // A room is looked at this often. Three looks in a row with no message through it and it is closed (about half an hour).
+    "IDLE_SWEEP_SECONDS": "600"
+  },
+  // Nothing is logged, and nothing is kept by Cloudflare's log store either.
+  "observability": { "enabled": false }
+
+  // The deploy step (README.md, "What a deploy needs") adds this, on Luc's go:
+  // "routes": [{ "pattern": "sigouin.net/portage/relay/*", "zone_name": "sigouin.net" }]
+}
