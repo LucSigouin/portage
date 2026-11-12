@@ -69,6 +69,8 @@ export class Builder {
   mesh(material?: Material): Mesh;
 }
 
+/** Start the pen seeds of `piece` again from the first. Only the viewer calls it, so every build starts alike. */
+export function resetPieceCount(): void;
 /** One animated piece (a limb, a puff) as its own mesh. */
 export function piece(geometry: BufferGeometry, color: string, glow?: number, id?: number, kind?: MaterialKind): Mesh;
 export function cloth(
