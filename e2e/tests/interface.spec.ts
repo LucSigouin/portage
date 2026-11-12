@@ -78,6 +78,18 @@ const MENUS: View[] = [
   { name: 'pause over the settings', query: '?shot=pause', steps: settingsTab('controls'), shows: '.iw-bindings' },
   { name: 'settings: waiting for a key', query: '', steps: [...settingsTab('controls'), { intent: { type: 'begin_rebind', action: 'paddle', slot: 0 } }], shows: '.iw-listen' },
   { name: 'credits at the Beacon', query: '?shot=beacon', steps: [open('credits')], shows: '.iw-panel-credits' },
+  // The crew lobby's two cards, with the longest name there is. Neither needs the relay: nothing is dialled.
+  { name: 'host a crew', query: '', steps: [open('crew_host'), { intent: { type: 'crew_field', field: 'name', value: 'Bartholomew W' } }], shows: '.iw-panel-crew_host' },
+  {
+    name: 'join a crew, with a complaint', query: '', shows: '.iw-crew-status.iw-tone-warning',
+    steps: [open('crew_join'), { intent: { type: 'crew_field', field: 'code', value: 'HELLO' } },
+      { intent: { type: 'crew_field', field: 'name', value: 'Bartholomew W' } }, { intent: { type: 'crew_join' } }],
+  },
+  // The room card with its code and its link. This one dials the relay: set PORTAGE_RELAY_UP=1 when it is running (relay/, npm run dev).
+  ...(process.env.PORTAGE_RELAY_UP ? [{
+    name: 'host a crew, the room open', query: '', shows: '.iw-code',
+    steps: [open('crew_host'), { intent: { type: 'crew_field', field: 'name', value: 'Bartholomew W' } }, { intent: { type: 'crew_open_room' } }],
+  }] : []),
 ];
 
 /** Put one player ashore on an island, a few metres east of its middle. Used by the staging scripts below. */

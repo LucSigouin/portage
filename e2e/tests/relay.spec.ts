@@ -92,13 +92,23 @@ interface Seat {
   page: Page;
   /** Every WebSocket address the page dialled. */
   sockets: string[];
+  /** Frames the page has sent to the relay, and their characters. */
+  sent: { frames: number; characters: number };
 }
 
 /** A page in a profile of its own, at the lobby. */
 async function arrive(context: BrowserContext, address: string, problems: string[], who: string): Promise<Seat> {
   const page = await context.newPage();
   const sockets: string[] = [];
-  page.on('websocket', (socket) => void sockets.push(socket.url()));
+  const sent = { frames: 0, characters: 0 };
+  page.on('websocket', (socket) => {
+    sockets.push(socket.url());
+    if (!socket.url().includes('/room/')) return;
+    socket.on('framesent', (frame) => {
+      sent.frames += 1;
+      sent.characters += String(frame.payload).length;
+    });
+  });
   page.on('console', (message) => {
     if (message.type() === 'error') problems.push(`${who} console error: ${message.text()}`);
   });
@@ -106,7 +116,7 @@ async function arrive(context: BrowserContext, address: string, problems: string
   await page.goto(address);
   await page.waitForFunction(() => (window as unknown as { portage?: unknown }).portage !== undefined);
   await page.evaluate(() => document.fonts.ready);
-  return { page, sockets };
+  return { page, sockets, sent };
 }
 
 const inGame = (page: Page): Promise<unknown> =>
@@ -269,6 +279,29 @@ test('friends join by a link: host, copy, open, name, in the canoe; they move, d
   await host.page.keyboard.press('Escape');
   await host.page.keyboard.press('Escape');
 
+  // --- What four players send through the relay, counted on the real sockets --------------------------
+  // Everyone paddles for six seconds. The relay is billed by the frame it receives, so this is the number that matters.
+  const seats = [host, sam, ann, bo];
+  for (const seat of seats) await seat.page.keyboard.down('w');
+  await host.page.waitForTimeout(500);
+  const counted = seats.map((seat) => ({ ...seat.sent }));
+  await host.page.waitForTimeout(6000);
+  const rates = seats.map((seat, index) => ({
+    frames: (seat.sent.frames - counted[index]!.frames) / 6,
+    characters: (seat.sent.characters - counted[index]!.characters) / 6,
+  }));
+  for (const seat of seats) await seat.page.keyboard.up('w');
+  console.log(`relay frames a second with four paddling: host ${rates[0]!.frames.toFixed(1)} (${(rates[0]!.characters / 1024).toFixed(1)} KB/s), `
+    + `guests ${rates.slice(1).map((rate) => rate.frames.toFixed(1)).join(', ')} (${(rates[1]!.characters / 1024).toFixed(2)} KB/s each); `
+    + `all four ${rates.reduce((sum, rate) => sum + rate.frames, 0).toFixed(1)}`);
+  // The host's fifteen states a second for three guests leave as about fifteen frames, not forty-five.
+  expect(rates[0]!.frames, 'host frames a second').toBeGreaterThan(10);
+  expect(rates[0]!.frames, 'host frames a second').toBeLessThan(30);
+  for (const rate of rates.slice(1)) {
+    expect(rate.frames, 'guest frames a second').toBeGreaterThan(5);
+    expect(rate.frames, 'guest frames a second').toBeLessThanOrEqual(42);
+  }
+
   // --- A fifth is refused, in words ------------------------------------------------------------------
   const dee = await arrive(await open(SMALL), `${BASE}/`, problems, 'dee');
   await joinByClicks(dee.page, code, 'Dee');
@@ -297,6 +330,48 @@ test('friends join by a link: host, copy, open, name, in the canoe; they move, d
     expect((await read(guest.page)).screen).toBe('lobby');
   }
   for (const context of contexts) await context.close();
+});
+
+test('by keyboard alone: host a crew, open the room, and reach every control on its card', async ({ browser }) => {
+  const context = await profile(browser, SMALL);
+  const player = await arrive(context, `${BASE}/`, [], 'player');
+  const page = player.page;
+  // Down the lobby menu to "Host a crew" (past New Game: with no save yet, Continue is not a stop), and in.
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Host a crew' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  const card = page.locator('.iw-panel-crew_host');
+  await expect(card).toBeVisible();
+  // The caret is on the name line. Typing goes there and nowhere else; Enter opens the room.
+  await expect(card.getByLabel('Your name')).toBeFocused();
+  await page.keyboard.type('Luc wasd');
+  await expect(card.getByLabel('Your name')).toHaveValue('Luc wasd');
+  await page.keyboard.press('Enter');
+  await expect(card.locator('.iw-code')).toBeVisible({ timeout: 15_000 });
+  expect(await read(page)).toMatchObject({ screen: 'lobby', hosting: 'open' });
+  // The name line is switched off now. The keyboard is not stuck on it: it is on the first control that works.
+  const focusedOn = (): Promise<string> => page.evaluate(() => new Promise<string>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const focused = document.activeElement as HTMLElement;
+      resolve(focused === document.body ? 'nothing' : focused.id || (focused.querySelector('.iw-label')?.textContent ?? focused.textContent ?? '').trim());
+    }));
+  }));
+  // It is on the way out of the card, where a stray Enter undoes nothing.
+  expect(await focusedOn()).toBe('Close');
+  // Tab walks the card: the link, Copy, Stop hosting, New Game, and round to Close again. (The settled name and the empty Continue are passed over.)
+  const stops: string[] = [];
+  for (let press = 0; press < 5; press += 1) {
+    await page.keyboard.press('Tab');
+    stops.push(await focusedOn());
+  }
+  expect(stops).toEqual(['iw-invite-link', 'Copy link', 'Stop hosting', 'New Game', 'Close']);
+  expect(await page.evaluate(() => document.querySelector('.iw')!.classList.contains('iw-by-keys')), 'the focus mark is shown').toBe(true);
+  // Esc backs out, and the room stays open behind the lobby.
+  await page.keyboard.press('Escape');
+  await expect(card).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Host a crew' }).locator('.iw-n')).toHaveText(/^Room .{3}-.{3} is open$/);
+  await context.close();
 });
 
 test('a code nobody opened, a code that is not one, and no name each get their sentence', async ({ browser }) => {

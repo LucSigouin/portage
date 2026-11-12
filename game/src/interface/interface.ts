@@ -401,6 +401,7 @@ export class InkInterface implements GameInterface {
         if (event.code !== 'Space' && target instanceof HTMLInputElement && target.dataset.field) {
           event.preventDefault();
           event.stopImmediatePropagation();
+          this.setKeyboardNavigation(true);
           surface.querySelector<HTMLButtonElement>('button[data-primary]:not([disabled])')?.click();
           return;
         }
@@ -473,6 +474,18 @@ export class InkInterface implements GameInterface {
     if (this.draw('confirm', confirm ? JSON.stringify(confirm) : '', () => confirmView(confirm!))) part('confirm').hidden = !confirm;
     if (this.draw('debug', debug ? JSON.stringify(debug) : '', () => debugView(debug!))) {
       part('debug').hidden = this.parts.get('debug')!.nodes.length === 0;
+    }
+
+    // A control that was switched off while it held the keyboard (a name line once the room is open, a
+    // button whose turn is over) would swallow every key after it. Let go of it, and hand a player who
+    // steers by key the card's main button, or failing that its last control: the way out, never a
+    // button that undoes something.
+    const held = document.activeElement;
+    if (held instanceof HTMLElement && root.contains(held) && (held as HTMLButtonElement | HTMLInputElement).disabled === true) {
+      held.blur();
+      if (this.keyboardNavigation) {
+        (this.topSurface()?.querySelector<HTMLElement>('button[data-primary]:not([disabled])') ?? this.focusableControls().at(-1))?.focus();
+      }
     }
 
     // What lies under a panel or a dialog can be seen but not used.
