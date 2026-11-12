@@ -6,7 +6,7 @@
 import type { IslandId } from '../data/types.ts';
 import { TUNING } from '../data/tuning.ts';
 import { ISLANDS, ISLANDS_BY_ID, REGIONS, START } from '../data/world.ts';
-import { islandLanding, regionAt, terrainHeight } from '../sim/index.ts';
+import { groundHeight, islandLanding, regionAt, terrainHeight } from '../sim/index.ts';
 
 export interface Point {
   x: number;
@@ -334,10 +334,10 @@ const slopeLimit = TUNING.foot.slopeLimit * 0.92;
 export function clearGround(from: Point, to: Point): boolean {
   const distance = Math.hypot(to.x - from.x, to.z - from.z);
   const steps = Math.max(1, Math.ceil(distance / 0.5));
-  let previousHeight = terrainHeight(from.x, from.z);
+  let previousHeight = groundHeight(from.x, from.z);
   const stepLength = distance / steps;
   for (let step = 1; step <= steps; step += 1) {
-    const height = terrainHeight(from.x + ((to.x - from.x) * step) / steps, from.z + ((to.z - from.z) * step) / steps);
+    const height = groundHeight(from.x + ((to.x - from.x) * step) / steps, from.z + ((to.z - from.z) * step) / steps);
     if (height < LAND_STANDING_DEPTH) return false;
     if (stepLength > 1e-6 && (height - previousHeight) / stepLength > slopeLimit) return false;
     previousHeight = height;
@@ -363,7 +363,7 @@ export function findFootPath(islandId: IslandId, from: Point, to: Point): Point[
   const heights = new Float64Array(size * size);
   for (let index = 0; index < size * size; index += 1) {
     const point = centre(index);
-    heights[index] = terrainHeight(point.x, point.z);
+    heights[index] = groundHeight(point.x, point.z);
   }
   const cellAt = (point: Point): number => {
     const column = Math.max(0, Math.min(size - 1, Math.floor((point.x - originX) / LAND_CELL)));

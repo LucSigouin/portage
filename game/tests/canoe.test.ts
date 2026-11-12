@@ -154,9 +154,12 @@ describe('water in the hull', () => {
     const state = newGame();
     expect(state.canoe.waterLevel).toBe(60);
     expect(state.canoe.hullTier).toBe(0);
-    const events = run(state, {}, 30);
+    // The warning comes inside the first minute, with two more minutes to act on it.
+    const events = run(state, {}, 45);
     expect(state.canoe.waterLevel).toBeGreaterThan(70);
     expect(events.some((event) => event.type === 'swamping_warning')).toBe(true);
+    run(state, {}, 110);
+    expect(state.statistics.fails).toBe(0);
   });
 });
 

@@ -6,24 +6,30 @@
  * - one-of-a-kind landmarks are fitted to the rules' own ground (the dam along its crest, the dock down to the water);
  * - the dressing follows the island table: wires where pylons stand, a wreck by every wreck buoy, fog round the Fog;
  * - all 15 islands have their own outline from the water;
- * - far islands are cheap: trees, landmarks and ground each drop to a coarser drawing with distance, and come back.
+ * - far islands are cheap: trees, landmarks and ground each drop to a coarser drawing with distance, and come back;
+ * - a cottage's roof stands on its walls, high enough to carry the outline, the attic's cupola clears its ridge,
+ *   and what the rules put under it can be seen from outside;
+ * - the scrap stack is cars: each has glass under a roof, wheels with hubs, lamps at both ends;
+ * - each truss span follows its own ground, and the island's watcher gives each its own drawing.
  */
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ISLANDS, ISLANDS_BY_ID, NODES_BY_ISLAND, NODE_TYPES, spotPosition } from '../../src/data/index.ts';
+import { ISLANDS, ISLANDS_BY_ID, NODES_BY_ISLAND, NODE_TYPES, REGIONS_BY_ID, spotPosition } from '../../src/data/index.ts';
 import type { IslandDefinition, LandmarkDefinition, LandmarkKind, NodeTypeId } from '../../src/data/index.ts';
 import { terrainHeight } from '../../src/sim/index.ts';
-import { inkMaterial } from '../../src/look/b2/palette.js';
-import { LANDMARK_KINDS, landmarkFarGeometry, landmarkGeometry } from '../../src/look/landmarks.ts';
-import { NODE_TYPE_IDS, nodeGeometry } from '../../src/look/nodes.ts';
+import { PAL, inkMaterial } from '../../src/look/b2/palette.js';
+import { FITTED_KINDS, LANDMARK_HEIGHT, LANDMARK_KINDS, landmarkFarGeometry, landmarkGeometry, landmarkGeometryAt } from '../../src/look/landmarks.ts';
+import { ATTIC_HEIGHT, NODE_TYPE_IDS, nodeGeometry } from '../../src/look/nodes.ts';
 import { floraFor } from '../../src/look/presets.ts';
 import { buildIslandProps, instancedMesh, treeWatcher } from '../../src/look/props.ts';
-import { scatterIsland } from '../../src/look/scatter.ts';
+import { hashText, scatterIsland, seededRandom } from '../../src/look/scatter.ts';
 import { buildIslandTerrain, islandWatcher } from '../../src/look/terrain.ts';
 import { CLOSE_DRESSING, FINE_GROUND, FINE_LANDMARKS, FINE_TREES, clearDistance, noteEye } from '../../src/look/world/distance.ts';
-import { dressIsland, fogNormal } from '../../src/look/world/dressing.ts';
+import { FOG_HEAPS, dressIsland, fogBanks, fogNormal } from '../../src/look/world/dressing.ts';
 import { DAY, NIGHT } from '../../src/look/daylight.ts';
-import { LANDMARK_SUNK, siteOf } from '../../src/look/world/kit.ts';
+import { LANDMARK_SUNK, TONE, siteOf } from '../../src/look/world/kit.ts';
+import { CAR } from '../../src/look/world/reach.ts';
+import { COTTAGE_RIDGE } from '../../src/look/world/shallows.ts';
 import { nodeMaterial, withSpentSwitch } from '../../src/look/world/spent.ts';
 
 const triangles = (geometry: THREE.BufferGeometry): number => (geometry.index ? geometry.index.count : geometry.getAttribute('position').count) / 3;
@@ -38,6 +44,90 @@ function placed(island: IslandDefinition, landmark: LandmarkDefinition): { local
     return { local, world: local.clone().applyMatrix4(matrix) };
   });
 }
+
+describe('the cottages', () => {
+  const cottages = ISLANDS.flatMap((island) => island.landmarks.filter((landmark) => landmark.kind === 'cabin_roof').map((landmark) => ({ island, landmark })));
+  /** The node the rules put on a cottage's own spot, if any. */
+  const under = (island: IslandDefinition, landmark: LandmarkDefinition): NodeTypeId | null => {
+    const spot = spotPosition(island, landmark.spot);
+    return (NODES_BY_ISLAND[island.id] ?? []).find((node) => Math.hypot(node.position.x - spot.x, node.position.z - spot.z) < 0.5)?.typeId ?? null;
+  };
+
+  it('stand on what shows of their walls, the ridge twice as high as a roof lying on the ground', () => {
+    // A roof on the ground (as it was) had its ridge 1.7 m up: lost against 7 m spruce from the water.
+    expect(COTTAGE_RIDGE).toBeGreaterThan(3.5);
+    const positions = landmarkGeometry('cabin_roof').getAttribute('position');
+    const ridge = Array.from({ length: positions.count }, (_, index) => new THREE.Vector3().fromBufferAttribute(positions, index))
+      .filter((point) => Math.abs(point.x) < 0.6 && Math.abs(point.z) < 2.5 && Math.abs(point.y - LANDMARK_SUNK - COTTAGE_RIDGE) < 0.25);
+    expect(ridge.length, 'the drawing has its ridge there').toBeGreaterThan(3);
+    // Walls: something drawn under the eaves all the way into the ground, on both long sides.
+    for (const side of [-1, 1]) {
+      const wall = Array.from({ length: positions.count }, (_, index) => new THREE.Vector3().fromBufferAttribute(positions, index))
+        .filter((point) => point.x * side > 2.2 && point.x * side < 3.2 && point.y < -1);
+      expect(wall.length, `wall ${side}`).toBeGreaterThan(3);
+    }
+  });
+
+  it('let the attic\'s cupola stand through the ridge, windows and all', () => {
+    expect(cottages.filter(({ island, landmark }) => under(island, landmark) === 'attic').length).toBeGreaterThan(0);
+    // The cupola's windows: their sills are 0.96 m under its eaves (nodes.ts).
+    expect(ATTIC_HEIGHT - 0.96).toBeGreaterThan(COTTAGE_RIDGE);
+    nodeGeometry('attic').computeBoundingBox();
+    expect(nodeGeometry('attic').boundingBox!.max.y).toBeGreaterThan(COTTAGE_RIDGE + 1.5);
+  });
+
+  it('show the cache the rules put under a roof: from both sides and the south, where the eye follows a walker from', () => {
+    const withCache = cottages.filter(({ island, landmark }) => under(island, landmark) === 'cache');
+    expect(withCache.length).toBeGreaterThan(0);
+    const cottage = new THREE.Mesh(landmarkGeometry('cabin_roof'), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+    cottage.updateMatrixWorld();
+    // The chest stands on the ground at the landmark's own spot: 0.1 m above its origin. Its lid is 0.7 m up.
+    const reach = 8.5;
+    const seenFrom = (x: number, z: number, pitch: number, height: number): boolean => {
+      const chest = new THREE.Vector3(0, LANDMARK_SUNK + height, 0);
+      const eye = chest.clone().add(new THREE.Vector3(x * Math.cos(pitch), Math.sin(pitch), z * Math.cos(pitch)).multiplyScalar(reach));
+      const ray = new THREE.Raycaster(eye, chest.clone().sub(eye).normalize(), 0, reach - 0.05);
+      return ray.intersectObject(cottage).length === 0;
+    };
+    // The eye follows a walker from 0.34 radians up by default (client/camera.ts) and 0.42 in the staged island view:
+    // the lid shows from a little under the one to a little over the other, the body from 0.42.
+    for (const pitch of [0.26, 0.34, 0.42, 0.46]) {
+      expect(seenFrom(1, 0, pitch, 0.65), `the lid from the east, ${pitch} up`).toBe(true);
+      expect(seenFrom(-1, 0, pitch, 0.65), `the lid from the west, ${pitch} up`).toBe(true);
+      expect(seenFrom(0, 1, pitch, 0.65), `the lid from the south, ${pitch} up`).toBe(true);
+    }
+    for (const [x, z] of [[1, 0], [-1, 0], [0, 1]]) expect(seenFrom(x, z, 0.42, 0.25), `the body from ${x}, ${z}`).toBe(true);
+  });
+});
+
+describe('the scrap stack', () => {
+  /** How many vertices of a drawing wear a colour (a piece keeps its wash on every vertex). */
+  const wearing = (geometry: THREE.BufferGeometry, tone: string): number => {
+    const colours = geometry.getAttribute('aColor');
+    const wanted = new THREE.Color(tone);
+    let count = 0;
+    for (let index = 0; index < colours.count; index += 1) {
+      if (Math.abs(colours.getX(index) - wanted.r) < 0.004 && Math.abs(colours.getY(index) - wanted.g) < 0.004 && Math.abs(colours.getZ(index) - wanted.b) < 0.004) count += 1;
+    }
+    return count;
+  };
+
+  it('is cars, not slabs: glass under a roof, wheels with hubs, lamps at both ends, on each of the five and the pickup', () => {
+    const stack = landmarkGeometry('scrap_stack');
+    // A box is 36 vertices, a hub 96. Glass: one band a car, two on the pickup's cab.
+    expect(wearing(stack, TONE.glassDark)).toBeGreaterThanOrEqual(7 * 36);
+    // Head lamps: two a car and two on the pickup. Tail lamps: two a car.
+    expect(wearing(stack, PAL.cream)).toBeGreaterThanOrEqual(12 * 36);
+    expect(wearing(stack, TONE.towerRed)).toBeGreaterThanOrEqual(10 * 36);
+    // A hub in every wheel: two a car, two on the pickup.
+    expect(wearing(stack, PAL.tin)).toBeGreaterThanOrEqual(12 * 96);
+    // From far off the glass is still there on every car.
+    expect(wearing(landmarkFarGeometry('scrap_stack'), TONE.glassDark)).toBeGreaterThanOrEqual(5 * 36);
+    // And a car is a car's shape: twice as long as it is tall would be a slab.
+    expect(CAR.length / CAR.height).toBeLessThan(5);
+    expect(CAR.height).toBeGreaterThan(0.85);
+  });
+});
 
 describe('landmarks', () => {
   /** Triangles of the simplest real drawing (the bedroll). The old stand-ins for the big kinds had 60 to 300. */
@@ -233,6 +323,123 @@ function skyline(island: IslandDefinition): number[] {
   });
   return bins;
 }
+
+describe('the truss spans', () => {
+  const bridge = ISLANDS_BY_ID.truss_bridge;
+  const spans = bridge.landmarks.filter((landmark) => landmark.kind === 'truss_span');
+  const placing = (landmark: LandmarkDefinition): THREE.Matrix4 => {
+    const spot = spotPosition(bridge, landmark.spot);
+    return new THREE.Matrix4().makeRotationY(-(landmark.bearing + bridge.rotation)).setPosition(spot.x, Math.max(0, terrainHeight(spot.x, spot.z)) - LANDMARK_SUNK, spot.z);
+  };
+
+  it('each follow their own ground: the bottom chord is as high over the deck at every joint, on all three', () => {
+    expect(spans.length).toBe(3);
+    expect(FITTED_KINDS.has('truss_span')).toBe(true);
+    const heights: number[] = [];
+    for (const span of spans) {
+      const matrix = placing(span);
+      const positions = landmarkGeometryAt(bridge, span).getAttribute('position');
+      const points = Array.from({ length: positions.count }, (_, index) => new THREE.Vector3().fromBufferAttribute(positions, index));
+      // The steel along one side, at each joint between the piers (every 8 m): its underside over the rules' ground there.
+      for (let joint = -32; joint <= 32; joint += 8) {
+        const here = points.filter((point) => Math.abs(point.x) > 3 && Math.abs(point.x) < 3.528 && Math.abs(point.z - joint) < 0.3);
+        expect(here.length, `steel at ${joint}`).toBeGreaterThan(0);
+        // (over the deck's middle line, where the track runs: the ground also falls away to each side)
+        const lowest = here.reduce((low, point) => (point.y < low.y ? point : low)).clone().setX(0).applyMatrix4(matrix);
+        heights.push(lowest.y - terrainHeight(lowest.x, lowest.z));
+      }
+    }
+    // A level span stood 2 m over the deck at one end of an outer span and sat on it at the other.
+    console.log(`truss spans: the bottom chord's underside is ${Math.min(...heights).toFixed(2)} to ${Math.max(...heights).toFixed(2)} m over the deck`);
+    expect(Math.min(...heights)).toBeGreaterThan(0.75);
+    expect(Math.max(...heights)).toBeLessThan(0.9);
+  });
+
+  it('get a drawing each from the island\'s watcher, with every stroke near by and as an outline far off', () => {
+    const group = new THREE.Group();
+    const ground = new THREE.Object3D();
+    const close = new THREE.Object3D();
+    const meshes = spans.map((span) => {
+      // As the world view makes them: every span the kind's shared drawing, at its own spot.
+      const mesh = new THREE.Mesh(landmarkGeometry('truss_span'), inkMaterial);
+      mesh.position.setFromMatrixPosition(placing(span));
+      return mesh;
+    });
+    group.add(ground, ...meshes);
+    const watch = islandWatcher(bridge, ground, close);
+    watch(new THREE.Vector3(bridge.center.x + 60, 3, bridge.center.z));
+    meshes.forEach((mesh, index) => expect(mesh.geometry, `span ${index}`).toBe(landmarkGeometryAt(bridge, spans[index])));
+    expect(new Set(meshes.map((mesh) => mesh.geometry)).size).toBe(3);
+    watch(new THREE.Vector3(bridge.center.x + 900, 3, bridge.center.z));
+    meshes.forEach((mesh, index) => expect(mesh.geometry, `span ${index} far`).toBe(landmarkGeometryAt(bridge, spans[index]).userData.far));
+    watch(new THREE.Vector3(bridge.center.x + 60, 3, bridge.center.z));
+    meshes.forEach((mesh, index) => expect(mesh.geometry, `span ${index} back`).toBe(landmarkGeometryAt(bridge, spans[index])));
+  });
+});
+
+describe('the fog wall', () => {
+  const beacon = ISLANDS_BY_ID.the_beacon;
+  const dam = ISLANDS_BY_ID.dam_crest;
+  const tower = spotPosition(beacon, beacon.landmarks.find((landmark) => landmark.kind === 'radio_tower')!.spot);
+  const foot = terrainHeight(tower.x, tower.z);
+  const head = foot + LANDMARK_HEIGHT.radio_tower!;
+  // The banks as the Beacon's dressing really lays them: read back from the instances it made. Each heap is an ellipsoid.
+  const dressing = dressIsland(beacon);
+  const drawn = dressing.always.children.find((child) => (child as THREE.InstancedMesh).isInstancedMesh && (child as THREE.InstancedMesh).count === dressing.counts.fog_heap) as THREE.InstancedMesh;
+  const banks = Array.from({ length: drawn.count }, (_, index) => {
+    const matrix = new THREE.Matrix4();
+    drawn.getMatrixAt(index, matrix);
+    const [place, turn, size] = [new THREE.Vector3(), new THREE.Quaternion(), new THREE.Vector3()];
+    matrix.decompose(place, turn, size);
+    return { x: place.x, y: place.y, z: place.z, scale: size.x };
+  });
+  /** True when nothing of the fog lies on the line from `eye` to `mark`. */
+  const clear = (eye: THREE.Vector3, mark: THREE.Vector3): boolean => {
+    for (const bank of banks) {
+      for (const heap of FOG_HEAPS) {
+        // In the heap's own space it is the unit sphere: does the line from the eye to the mark cross it?
+        const into = (point: THREE.Vector3): THREE.Vector3 => new THREE.Vector3(
+          (point.x - bank.x - heap.at[0] * bank.scale) / (heap.reach[0] * bank.scale),
+          (point.y - bank.y - heap.at[1] * bank.scale) / (heap.reach[1] * bank.scale),
+          (point.z - bank.z - heap.at[2] * bank.scale) / (heap.reach[2] * bank.scale),
+        );
+        const [from, to] = [into(eye), into(mark)];
+        const along = to.clone().sub(from);
+        const nearest = Math.max(0, Math.min(1, -from.dot(along) / along.lengthSq()));
+        if (from.clone().addScaledVector(along, nearest).lengthSq() < 1) return false;
+      }
+    }
+    return true;
+  };
+  // Where a walker's eye is on the dam: along its crest, 2.5 m over the ground.
+  const eyes = [-0.6, -0.2, 0.3, 0.6].map((along) => {
+    const spot = spotPosition(dam, { along, across: 0 });
+    return new THREE.Vector3(spot.x, terrainHeight(spot.x, spot.z) + 2.5, spot.z);
+  });
+
+  it('is laid by one rule, two rows along the region\'s edge and bigger banks behind', () => {
+    const ruled = fogBanks(REGIONS_BY_ID.fog.southEdgeZ, seededRandom(hashText('fog')));
+    expect(banks.length).toBe(ruled.length);
+    expect(banks.length).toBeGreaterThan(40);
+    const edge = REGIONS_BY_ID.fog.southEdgeZ;
+    expect(banks.filter((bank) => bank.z > edge - 60).length).toBeGreaterThan(15);
+  });
+
+  it('leaves the head of the Beacon\'s tower standing over it from the dam, lamp and top third', () => {
+    for (const eye of eyes) {
+      expect(clear(eye, new THREE.Vector3(tower.x, head + 1.2, tower.z)), `the lamp from ${eye.x.toFixed(0)}`).toBe(true);
+      expect(clear(eye, new THREE.Vector3(tower.x, head - LANDMARK_HEIGHT.radio_tower! / 3, tower.z)), `a third down the tower from ${eye.x.toFixed(0)}`).toBe(true);
+    }
+  });
+
+  it('is still a wall: from the dam it hides the Beacon\'s shore and the foot of its hill', () => {
+    const shore = spotPosition(beacon, beacon.landing);
+    for (const eye of eyes) {
+      expect(clear(eye, new THREE.Vector3(shore.x, 1, shore.z)), `the landing from ${eye.x.toFixed(0)}`).toBe(false);
+      expect(clear(eye, new THREE.Vector3(tower.x, foot * 0.4, tower.z + beacon.radiusZ * 0.6)), `the hill's foot from ${eye.x.toFixed(0)}`).toBe(false);
+    }
+  });
+});
 
 describe('the 15 islands', () => {
   it('each has its own outline from the water', () => {

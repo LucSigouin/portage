@@ -555,7 +555,7 @@ export function createPost(renderer, camera) {
   }
 
   // One hero window: the heroes at the window's size, the world's ink and depth under them, then the pen.
-  function drawHeroWindow(heroes, cam, win) {
+  function drawHeroWindow(heroes, cam, win, behind) {
     const { x, y, w, h } = win;
     const { sheetW, sheetH } = state;
     const s = state.heroInkScale;
@@ -593,6 +593,7 @@ export function createPost(renderer, camera) {
     renderer.setRenderTarget(heroAux);
     renderer.clear();
     renderer.render(heroes, cam);
+    if (behind) behind(renderer, heroAux.depthTexture, win, u.uFill.value);
     GU.uPass.value = 0;
     GU.uHero.value = 0;
 
@@ -718,6 +719,10 @@ export function createPost(renderer, camera) {
         renderer.render(blitScene, postCam);
       }
 
+      // a layer drawn over the sheet may ask what it falls behind (rain.ts): the world's depth now, then each hero window's as it is drawn
+      const behind = (overlay ? [overlay].flat() : []).find((layer) => layer.userData.behind)?.userData.behind ?? null;
+      if (behind) behind(renderer, aux.depthTexture, null, null);
+
       // the heroes, at the window's size, with every stroke
       state.heroWindows = heroes ? heroWindows : [];
       state.heroFine = heroes ? 1 : 0;
@@ -732,7 +737,7 @@ export function createPost(renderer, camera) {
         const clearAlpha = renderer.getClearAlpha();
         renderer.setClearColor(0x000000, 0);
         fitHeroBuffers(heroWindows);
-        for (let draw = times('hero'); draw > 0; draw -= 1) for (const win of heroWindows) drawHeroWindow(heroes, cam, win);
+        for (let draw = times('hero'); draw > 0; draw -= 1) for (const win of heroWindows) drawHeroWindow(heroes, cam, win, behind);
         renderer.setClearColor(clearColour, clearAlpha);
         GU.uSc.value = state.h / 1080;
         GU.uPxK.value = tangent / state.h;

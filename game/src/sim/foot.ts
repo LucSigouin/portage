@@ -1,17 +1,17 @@
 import { TUNING } from '../data/tuning.ts';
 import type { GameState, PlayerState, StepInput } from './types.ts';
-import { terrainHeight } from './world.ts';
+import { groundHeight } from './world.ts';
 
 /**
  * True when a step from one ground point to another is allowed: not deeper
  * than the wading limit, and not a climb steeper than the slope limit.
  */
 export function canWalk(fromX: number, fromZ: number, toX: number, toZ: number): boolean {
-  const toHeight = terrainHeight(toX, toZ);
+  const toHeight = groundHeight(toX, toZ);
   if (toHeight < -TUNING.foot.wadeDepth) return false;
   const distance = Math.hypot(toX - fromX, toZ - fromZ);
   if (distance < 1e-9) return true;
-  const rise = toHeight - terrainHeight(fromX, fromZ);
+  const rise = toHeight - groundHeight(fromX, fromZ);
   return rise / distance <= TUNING.foot.slopeLimit;
 }
 
@@ -53,6 +53,6 @@ export function stepOnFoot(state: GameState, player: PlayerState, input: StepInp
   state.statistics.distanceWalked += Math.hypot(nextX - x, nextZ - z);
   player.position.x = nextX;
   player.position.z = nextZ;
-  player.position.y = terrainHeight(nextX, nextZ);
+  player.position.y = groundHeight(nextX, nextZ);
   player.heading = Math.atan2(worldX, -worldZ);
 }

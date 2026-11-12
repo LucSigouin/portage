@@ -2,7 +2,6 @@
  * The performance readout's arithmetic. No DOM, no graphics and no clock of
  * its own: every time comes in as a number, so the tests run it with fakes.
  */
-import { FRAME_DUE_TOLERANCE_MILLISECONDS } from '../loop.ts';
 
 /** The value below which `share` (0 to 1) of an ascending list falls. Nearest rank. 0 for an empty list. */
 export function percentile(ascending: readonly number[], share: number): number {
@@ -56,19 +55,17 @@ export function framesPerSecondBySpan(frameMoments: readonly number[], startAt: 
 }
 
 /**
- * The time between two frames the game's own loop lets through on a screen
- * that refreshes every `refreshMilliseconds`, with the frame-rate cap at
- * `cap` a second (0 = none). The loop's rule, from `client/loop.ts`: a screen
- * refresh is skipped while less than a cap's worth of time has passed, give
- * or take the tolerance. So a 60 cap on a 144 Hz screen runs every third
- * refresh: 48 frames a second, not 60.
+ * The average time between two frames the game's own loop lets through on a
+ * screen that refreshes every `refreshMilliseconds`, with the frame-rate cap
+ * at `cap` a second (0 = none). Since the loop keeps a beat of whole rules
+ * steps (`client/loop.ts`), a 60 cap draws 60 frames a second on any screen
+ * at 60 Hz or faster, skipping refreshes unevenly to stay on the beat; a
+ * slower screen draws every refresh.
  */
 export function cappedFrameMilliseconds(refreshMilliseconds: number, cap: number): number {
   if (!(refreshMilliseconds > 0)) return 0;
   if (cap <= 0) return refreshMilliseconds;
-  let refreshes = 1;
-  while (refreshes * refreshMilliseconds < 1000 / cap - FRAME_DUE_TOLERANCE_MILLISECONDS) refreshes += 1;
-  return refreshes * refreshMilliseconds;
+  return Math.max(refreshMilliseconds, 1000 / cap);
 }
 
 export interface TimedFrames {
