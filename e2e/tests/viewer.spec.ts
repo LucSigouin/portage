@@ -61,6 +61,18 @@ const probe = (page: Page): Promise<Probe> => page.evaluate(() => (window as unk
 async function openViewer(page: Page, search = ''): Promise<void> {
   await page.goto(`${BASE}/viewer.html${search}`, { waitUntil: 'load' });
   await page.waitForFunction(() => (window as unknown as Hooks).viewer?.probe().frames > 0, null, { timeout: 60_000 });
+  await settled(page);
+}
+
+/** The page draws a few frames while it loads (its first size, then its real one). Wait until the count has held for a moment. */
+async function settled(page: Page): Promise<void> {
+  let last = -1;
+  for (let tries = 0; tries < 40; tries += 1) {
+    const frames = (await probe(page)).frames;
+    if (frames === last) return;
+    last = frames;
+    await page.waitForTimeout(350);
+  }
 }
 
 /** Run something that should redraw, and wait for the next frame. */
@@ -318,7 +330,7 @@ test('a pasted link reopens the same thing and view, pixel for pixel', async ({ 
   const otherProblems = watchConsole(other);
   await other.goto(address, { waitUntil: 'load' });
   await other.waitForFunction(() => (window as unknown as Hooks).viewer?.probe().frames > 0, null, { timeout: 60_000 });
-  await other.waitForTimeout(300);
+  await settled(other);
   const there = await probe(other);
   expect({ ...there, frames: 0 }).toEqual({ ...here, frames: 0 });
   await takePicture(other, 'there');
