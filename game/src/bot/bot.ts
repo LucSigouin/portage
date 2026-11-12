@@ -867,6 +867,8 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
     for (let guard = 0; guard < 80; guard += 1) {
       if (held(itemId) >= target) return;
       yield* maintain();
+      // A trip for food or water sweeps the island on its way out, and may have picked this up already.
+      if (held(itemId) >= target) return;
       const sources = (NODE_SOURCES.get(itemId) ?? []).filter(usable);
       if (sources.length === 0) {
         const all = NODE_SOURCES.get(itemId) ?? [];
