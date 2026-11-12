@@ -1,5 +1,5 @@
 /** Wording shared by every view model: names, key labels, "needs 3 more plank". */
-import { ATTACHMENTS, HULL_TIERS, ITEMS, STATIONS } from '../../data/index.ts';
+import { ATTACHMENTS, HULL_TIERS, ITEMS, STATIONS, TUNING } from '../../data/index.ts';
 import type { FlagId, ItemId } from '../../data/index.ts';
 import type { KeyBindings, InputAction } from '../../settings/index.ts';
 import type { FailureReason, Missing } from '../../sim/index.ts';
@@ -37,6 +37,15 @@ export function needsText(missing: Missing | null): string {
   return parts.length > 0 ? `Needs ${parts.join(', ')}` : '';
 }
 
+/** An hour of the day as the clock shows it: 7 is "07:00", 6.5 is "06:30". */
+export function hourText(hour: number): string {
+  const minutes = Math.round(hour * 60);
+  return `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+/** The hour a bed takes anyone from, as the clock shows it. Read from the rules' own table, never typed in. */
+export const SLEEP_FROM_TEXT = hourText(TUNING.time.sleepFromHour);
+
 const FAILURE_TEXT: Record<FailureReason, string> = {
   unknown_id: 'That is not a thing.',
   recipe_locked: 'You have not learned that yet.',
@@ -54,7 +63,7 @@ const FAILURE_TEXT: Record<FailureReason, string> = {
   not_drinkable: 'You cannot drink that.',
   no_water_in_reach: 'No water in reach.',
   no_bed_in_reach: 'Nowhere to sleep here.',
-  not_tired: 'Not tired yet. Sleep after 19:00, or when worn out.',
+  not_tired: `Not tired yet. Sleep after ${SLEEP_FROM_TEXT}, or when worn out.`,
   npc_out_of_reach: 'Nobody close enough to talk to.',
   no_dialogue_open: 'Nobody is talking.',
   invalid_option: 'That is not an option.',

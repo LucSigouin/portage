@@ -228,6 +228,18 @@ describe('the Ink & Wash views', () => {
     expect(collectText([button])).toContain(disabled.note!);
   });
 
+  it('draws a prompt with its key cap, and a prompt that names no key with none', () => {
+    const find = (nodes: ViewNode[], className: string): ViewNode[] =>
+      nodes.flatMap((node) => [...(node.classes.split(' ').includes(className) ? [node] : []), ...find(node.children, className)]);
+    const pressed = promptView({ text: 'Sleep until morning', keyLabel: 'F', mode: 'press' });
+    expect(find(pressed, 'iw-key').map((node) => collectText([node]))).toEqual(['F']);
+    expect(pressed[0]!.classes).not.toContain('iw-prompt-keyless');
+    const told = promptView({ text: 'Sleep (after 19:00)', keyLabel: '', mode: 'blocked' });
+    expect(find(told, 'iw-key')).toEqual([]);
+    expect(told[0]!.classes).toContain('iw-prompt-keyless');
+    expect(collectText(told)).toBe('Sleep (after 19:00)');
+  });
+
   it('draws the same model the same way: no clock, no randomness', () => {
     for (const { model } of models) {
       expect(JSON.stringify(viewsOf(model))).toBe(JSON.stringify(viewsOf(structuredClone(model))));

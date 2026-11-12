@@ -6,8 +6,8 @@ import {
   bearingBetween, bearingDifference, playerOf, selectActiveQuests, selectCanoeStats, selectInteractable, selectMap,
   selectMeters, selectTimeOfDay, selectWeather,
 } from '../../sim/index.ts';
-import type { GameState, PlayerId, PlayerState, QuestView } from '../../sim/index.ts';
-import { bearingDegrees, cardinalName, distanceText, durationText, primaryKey } from './format.ts';
+import type { GameState, PlayerId, PlayerState, QuestView, TimeOfDay } from '../../sim/index.ts';
+import { SLEEP_FROM_TEXT, bearingDegrees, cardinalName, distanceText, durationText, primaryKey } from './format.ts';
 import type {
   CompassMarkModel, CompassModel, CrewRowModel, HotbarSlotModel, HudModel, MeterModel, ObjectiveRowModel, PromptModel,
   QuestTrackerModel, Tone, WaterGaugeModel,
@@ -185,9 +185,14 @@ function buildCompass(state: GameState, cameraYaw: number, trackedQuestId: strin
   return { headingDegrees: heading < 0 ? heading + 360 : heading, cardinal: cardinalName(cameraYaw, 8), marks };
 }
 
-function buildPrompt(state: GameState, settings: Settings, playerId: PlayerId): PromptModel | null {
+function buildPrompt(state: GameState, settings: Settings, playerId: PlayerId, time: TimeOfDay): PromptModel | null {
   const interactable = selectInteractable(state, playerId);
   if (!interactable) return null;
+  // A bed by day, to someone who is not worn out: it says when it will have them, and names no key.
+  // The key would only be refused.
+  if (interactable.kind === 'bed' && interactable.command.type === 'sleep' && time.sleepBlocked === 'not_tired') {
+    return { text: `Sleep (after ${SLEEP_FROM_TEXT})`, keyLabel: '', mode: 'blocked' };
+  }
   const keyLabel = primaryKey(settings.controls.keyBindings, 'interact');
   const blocked = interactable.kind === 'node' && !interactable.available;
   return { text: interactable.prompt, keyLabel, mode: blocked ? 'blocked' : 'press' };
@@ -253,7 +258,7 @@ export function buildHudModel(
     hotbar: buildHotbar(state, settings, playerId),
     tracker,
     compass: buildCompass(state, cameraYaw, tracker?.questId ?? null, playerId),
-    prompt: buildPrompt(state, settings, playerId),
+    prompt: buildPrompt(state, settings, playerId, time),
     clockText: `Day ${time.day}, ${time.clock}`,
     night: time.isNight,
     weatherText: weather.nextKind === weather.kind

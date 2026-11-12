@@ -59,7 +59,7 @@ function hudHtml(hud: HudModel, patterned: boolean): string {
   const offscreen = hud.compass.marks.filter((mark) => mark.kind !== 'cardinal' && Math.abs(mark.relativeDegrees) > 90).map((mark) =>
     `${escapeHtml(mark.label)} ${mark.relativeDegrees < 0 ? 'behind left' : 'behind right'}, ${escapeHtml(mark.distanceText)}`).join(' | ');
   const prompt = hud.prompt
-    ? `<div class="gb-prompt gb-prompt-${hud.prompt.mode}"><kbd>${escapeHtml(hud.prompt.keyLabel)}</kbd> `
+    ? `<div class="gb-prompt gb-prompt-${hud.prompt.mode}">${hud.prompt.keyLabel ? `<kbd>${escapeHtml(hud.prompt.keyLabel)}</kbd> ` : ''}`
       + `${escapeHtml(hud.prompt.text)}</div>`
     : '';
   const hotbar = hud.hotbar.map((slot) => (slot.intent

@@ -6,7 +6,7 @@ import type { InterfaceIntent } from '../intents.ts';
 import type { CrewView } from '../crewlobby.ts';
 import type { ConfirmAction } from '../panels.ts';
 import { buildCrewLobbyButtons, buildCrewPauseButton } from './crew.ts';
-import { actionKeys, capitalise, durationText } from './format.ts';
+import { SLEEP_FROM_TEXT, actionKeys, capitalise, durationText } from './format.ts';
 import type { ButtonModel, ConfirmModel, ControlLineModel, LobbyModel, PanelModel, SaveSlotModel } from './types.ts';
 
 type PanelBody<Id extends PanelModel['id']> = Omit<Extract<PanelModel, { id: Id }>, 'title' | 'close'>;
@@ -149,7 +149,7 @@ export function buildHowToPlayPanel(settings: Settings): PanelBody<'how_to_play'
         heading: 'Staying alive',
         lines: [
           'Hunger and thirst fall slowly; hard paddling and running speed them up. Eat and drink from the inventory. Boil water at a fire first.',
-          'Energy comes back when you rest. Sleep at a camp after 19:00 to refill it and skip the night.',
+          `Energy comes back when you rest. Sleep at a camp after ${SLEEP_FROM_TEXT} to refill it and skip the night.`,
           'Each region is rougher than the last. Stability is 1, plus 1 for each outrigger. Roughness above stability floods the canoe.',
           'Run out of energy or swamp the canoe and you wake at your last camp, six hours later, with half of every cargo stack gone. Tools and the canoe are never lost.',
         ],

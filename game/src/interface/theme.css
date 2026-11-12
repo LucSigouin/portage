@@ -664,6 +664,10 @@ html.iw-document {
 .iw-prompt-blocked {
   color: var(--iw-rust-deep);
 }
+/* No key cap to make room for: the words sit in the middle of the slip. */
+.iw-prompt-keyless {
+  padding-left: 1.1rem;
+}
 .iw .iw-prompt-blocked .iw-key {
   background: var(--iw-paper);
   border-style: dashed;

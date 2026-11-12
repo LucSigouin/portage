@@ -152,8 +152,8 @@ export function hintView(hint: string): ViewNode[] {
 }
 
 export function promptView(prompt: PromptModel): ViewNode[] {
-  return [h('div.iw-prompt.iw-paper', { key: 'prompt', class: `iw-prompt-${prompt.mode}` },
-    h('span.iw-key', null, prompt.keyLabel),
+  return [h('div.iw-prompt.iw-paper', { key: 'prompt', class: classes(`iw-prompt-${prompt.mode}`, prompt.keyLabel === '' && 'iw-prompt-keyless') },
+    prompt.keyLabel === '' ? null : h('span.iw-key', null, prompt.keyLabel),
     h('span.iw-prompt-text', null, prompt.text))];
 }
 

@@ -98,6 +98,7 @@ export interface CompassModel {
 
 export interface PromptModel {
   text: string;
+  /** The key that does it. Empty when no key would: the prompt then only tells (a bed by day). */
   keyLabel: string;
   /** `press`: one tap does it. `blocked`: something is missing. */
   mode: 'press' | 'blocked';

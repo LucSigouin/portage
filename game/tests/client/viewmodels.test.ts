@@ -8,7 +8,7 @@ import {
   savedAgoText, settingsRows, toastForEvent, toastsFromEvents,
 } from '../../src/client/viewmodels/index.ts';
 import type { InterfaceModelInput } from '../../src/client/viewmodels/index.ts';
-import { ISLANDS, NODES_BY_ISLAND } from '../../src/data/index.ts';
+import { ISLANDS, NODES_BY_ISLAND, TUNING } from '../../src/data/index.ts';
 import type { SlotSummary } from '../../src/save/index.ts';
 import { INPUT_ACTIONS, createDefaultSettings } from '../../src/settings/index.ts';
 import { dispatch, selectInteractable } from '../../src/sim/index.ts';
@@ -17,6 +17,8 @@ import { SETTINGS_TABS } from '../../src/client/panels.ts';
 import { floatCanoeAt, give, newGame, run, standOn, teleport, teleportToCamp, teleportToNode } from '../support.ts';
 
 const settings = createDefaultSettings();
+/** Every source file of the game, as text. */
+const sources = import.meta.glob('../../src/**/*.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 const missing = (overrides: Partial<Missing>): Missing => ({
   items: [], tools: [], station: null, hullTier: null, attachments: [], flag: null, ...overrides,
 });
@@ -144,6 +146,42 @@ describe('the HUD', () => {
     const blocked = buildHudModel(state, settings, 0).prompt!;
     expect(blocked.mode).toBe('blocked');
     expect(blocked.text).toContain('needs stone knife');
+  });
+
+  it('offers a bed no key before the sleep hour, says the hour from the rules\' table, and offers the key from then on', () => {
+    const state = newGame();
+    standOn(state, 'home_knoll');
+    teleportToCamp(state, 'home_knoll');
+    const hour = TUNING.time.hourSeconds;
+    const from = TUNING.time.sleepFromHour;
+    const clock = `${String(from).padStart(2, '0')}:00`;
+
+    // Midday, rested: the bed tells when, and promises nothing.
+    state.time = 12 * hour;
+    expect(selectInteractable(state)).toMatchObject({ kind: 'bed', command: { type: 'sleep' } });
+    expect(dispatch(state, { type: 'sleep' })).toMatchObject({ ok: false, reason: 'not_tired' });
+    expect(buildHudModel(state, settings, 0).prompt).toEqual({ text: `Sleep (after ${clock})`, keyLabel: '', mode: 'blocked' });
+    // The refusal names the same hour, and so does How to Play.
+    expect(failureText('not_tired', null)).toBe(`Not tired yet. Sleep after ${clock}, or when worn out.`);
+    expect(JSON.stringify(buildHowToPlayPanel(settings))).toContain(`Sleep at a camp after ${clock} to refill it`);
+
+    // A minute before the hour it still does; on the hour the key is back and the key works.
+    state.time = from * hour - 60;
+    expect(buildHudModel(state, settings, 0).prompt!.keyLabel).toBe('');
+    state.time = from * hour;
+    expect(buildHudModel(state, settings, 0).prompt).toEqual({ text: 'Sleep until morning', keyLabel: 'F', mode: 'press' });
+
+    // Worn out by day, the bed takes you: so the key is offered.
+    state.time = 12 * hour;
+    state.players[0].energy = TUNING.time.sleepWhenEnergyAtMost;
+    expect(buildHudModel(state, settings, 0).prompt).toEqual({ text: 'Sleep until morning', keyLabel: 'F', mode: 'press' });
+    expect(dispatch(state, { type: 'sleep' }).ok).toBe(true);
+  });
+
+  it('types the sleep hour in nowhere: no file of the game spells it out', () => {
+    const clock = `${String(TUNING.time.sleepFromHour).padStart(2, '0')}:00`;
+    expect(Object.keys(sources).length).toBeGreaterThan(100);
+    expect(Object.entries(sources).filter(([, text]) => text.includes(clock)).map(([path]) => path)).toEqual([]);
   });
 
   it('gives a hint only when the setting is on and one applies', () => {
