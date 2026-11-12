@@ -14,6 +14,7 @@
  * | host | `[[to, [body, ...]], ...]` | Messages for guests. `to` is a guest's number, or `"*"` for all of them. |
  * | relay to guest | `[body, ...]` | The host's messages for this guest. |
  * | host | `{"relay":"bye"}` | The host is closing the room: every guest is let go. |
+ * | host | `{"relay":"drop","peer":n}` | The host has let that guest go: its socket is closed. |
  * | relay | `{"relay":"hello", ...}` | To a new socket: its role, its number, who else is here. |
  * | relay to host | `{"relay":"joined","peer":n}`, `{"relay":"left","peer":n}` | A guest's socket came or went. |
  * | relay to guest | `{"relay":"host","here":bool}` | The host's socket came or went. |
@@ -53,6 +54,8 @@ export const LIMITS = {
 /** Why the relay closes a socket. The game turns each into words. */
 export const CLOSE = {
   badRequest: 4400,
+  /** The host let this guest go. */
+  dropped: 4401,
   /** Three guests already. */
   full: 4403,
   /** Nobody has opened a room with that code. */
@@ -224,7 +227,10 @@ export class RoomLogic {
 
   private fromHost(frame: unknown): void {
     if (typeof frame === 'object' && frame !== null && !Array.isArray(frame)) {
-      if ((frame as { relay?: unknown }).relay === 'bye') this.closeAll(CLOSE.hostLeft, 'host-left');
+      const order = frame as { relay?: unknown; peer?: unknown };
+      const guest = order.relay === 'drop' ? this.guests.find((seat) => seat.peer === order.peer) : undefined;
+      if (order.relay === 'bye') this.closeAll(CLOSE.hostLeft, 'host-left');
+      else if (guest) this.drop(guest, CLOSE.dropped, 'dropped');
       else this.stats.dropped += 1;
       return;
     }

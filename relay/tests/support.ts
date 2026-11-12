@@ -1,10 +1,9 @@
 /** Runs the real Worker locally (wrangler's local mode, workerd) and dials it with real WebSockets. */
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { RELAY_PROTOCOL } from '../src/room.ts';
 
-const RELAY_FOLDER = fileURLToPath(new URL('..', import.meta.url));
+const RELAY_FOLDER = `${import.meta.dirname}/../`;
 
 export interface LocalRelay {
   port: number;

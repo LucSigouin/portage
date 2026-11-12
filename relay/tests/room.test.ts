@@ -208,6 +208,20 @@ describe('coming and going', () => {
     assert.deepEqual(next.frames, [{ relay: 'hello', role: 'guest', peer: 3, host: true }]);
   });
 
+  it('closes the socket of a guest the host lets go, and no other', () => {
+    const { room, host, guests } = openRoom(2);
+    host.frames.length = 0;
+    room.message(host, JSON.stringify({ relay: 'drop', peer: 1 }), 1);
+    assert.deepEqual(guests[0]!.closed, { code: CLOSE.dropped, reason: 'dropped' });
+    assert.deepEqual(guests[0]!.frames.at(-1), { relay: 'bye', code: CLOSE.dropped, reason: 'dropped' });
+    assert.equal(guests[1]!.closed, null);
+    assert.deepEqual(host.frames, [{ relay: 'left', peer: 1 }]);
+    // A guest cannot drop anyone: from a guest the same words are thrown away.
+    room.message(guests[1]!, JSON.stringify({ relay: 'drop', peer: 0 }), 2);
+    assert.equal(host.closed, null);
+    assert.equal(room.size, 2);
+  });
+
   it('lets every guest go when the host says bye, and keeps nothing', () => {
     const { room, host, guests } = openRoom(2);
     room.message(host, JSON.stringify({ relay: 'bye' }), 1);
