@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MAIN_QUESTS, NODE_IDS } from '../src/data/index.ts';
 import {
-  dispatch, selectActiveQuests, selectCurrentMainQuest, selectInteractable, selectQuestLog,
+  dispatch, drainEvents, selectActiveQuests, selectCurrentMainQuest, selectInteractable, selectQuestLog,
 } from '../src/sim/index.ts';
 import type { GameState } from '../src/sim/index.ts';
 import {
@@ -52,21 +52,23 @@ describe('the main line', () => {
     expect(selectCurrentMainQuest(state)).toBe('stop_the_leak');
   });
 
-  it('counts crafting only while the quest that asks for it is active', () => {
+  it('counts crafting from the start: pitch cooked before the quest is given is already counted when it arrives', () => {
     const state = newGame();
     standOn(state, 'home_knoll');
     teleportToCamp(state, 'home_knoll');
     give(state, 'spruce_gum', 8);
     give(state, 'driftwood', 6);
-    expect(dispatch(state, { type: 'craft', recipeId: 'pitch', count: 2 }).ok).toBe(true); // too early to count
+    expect(dispatch(state, { type: 'craft', recipeId: 'pitch', count: 2 }).ok).toBe(true); // before "Stop the leak" is given
+    expect(state.quests.stop_the_leak.status).toBe('locked');
+    expect(state.quests.stop_the_leak.progress[2]).toBe(2); // remembered in silence
+    expect(drainEvents(state).filter((event) => event.type === 'quest_advanced' && event.questId === 'stop_the_leak')).toEqual([]);
     state.quests.bail_out.status = 'completed';
     state.quests.first_haul.status = 'completed';
     state.quests.stop_the_leak.status = 'active';
-    expect(state.quests.stop_the_leak.progress[2]).toBe(0);
-    expect(dispatch(state, { type: 'craft', recipeId: 'pitch' }).ok).toBe(true);
-    expect(state.quests.stop_the_leak.progress[2]).toBe(1);
-    expect(dispatch(state, { type: 'craft', recipeId: 'pitch' }).ok).toBe(true);
+    run(state, {}, 0.5);
     expect(state.quests.stop_the_leak.progress[2]).toBe(2);
+    expect(dispatch(state, { type: 'craft', recipeId: 'pitch' }).ok).toBe(true);
+    expect(state.quests.stop_the_leak.progress[2]).toBe(2); // capped at what the step asks for
   });
 
   it('gates the Beacon lamp on the rest of its quest, and ends the main line when it is lit', () => {
