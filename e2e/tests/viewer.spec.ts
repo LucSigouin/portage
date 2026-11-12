@@ -71,25 +71,60 @@ async function andDrawn(page: Page, action: () => Promise<void>): Promise<void> 
   await page.waitForTimeout(120);
 }
 
-/** The stage's pixels as they are on the card (the pipeline's canvas, or the see-through one). */
-function stagePixels(page: Page): Promise<{ data: number[]; width: number; height: number }> {
-  return page.evaluate(() => {
-    const canvases = [...document.querySelectorAll<HTMLCanvasElement>('.vw-stage canvas')].filter((canvas) => !canvas.hidden);
-    const canvas = canvases[0];
+interface Picture {
+  width: number;
+  height: number;
+  corner: number[];
+  /** Pixels that differ from the corner's colour by a clear margin. */
+  inked: number;
+  /** Pixels with alpha 255. */
+  solid: number;
+}
+
+/** Keep the stage's pixels in the page under `name` (the pipeline's canvas, or the see-through one) and say what is in them. */
+function takePicture(page: Page, name: string): Promise<Picture> {
+  return page.evaluate((key) => {
+    const store = ((window as unknown as { shots?: Record<string, Uint8ClampedArray> }).shots ??= {});
+    const canvas = [...document.querySelectorAll<HTMLCanvasElement>('.vw-stage canvas')].filter((candidate) => !candidate.hidden)[0];
     const copy = document.createElement('canvas');
     copy.width = canvas.width;
     copy.height = canvas.height;
     const context = copy.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D;
     context.drawImage(canvas, 0, 0);
-    return { data: Array.from(context.getImageData(0, 0, copy.width, copy.height).data), width: copy.width, height: copy.height };
-  });
+    const { data } = context.getImageData(0, 0, copy.width, copy.height);
+    store[key] = data;
+    const corner = [data[0], data[1], data[2], data[3]];
+    let inked = 0;
+    let solid = 0;
+    for (let at = 0; at < data.length; at += 4) {
+      if (Math.abs(data[at] - corner[0]) + Math.abs(data[at + 1] - corner[1]) + Math.abs(data[at + 2] - corner[2]) > 40) inked += 1;
+      if (data[at + 3] === 255) solid += 1;
+    }
+    return { width: copy.width, height: copy.height, corner, inked, solid };
+  }, name);
 }
 
-const differing = (first: number[], second: number[]): number => {
-  let count = 0;
-  for (let at = 0; at < first.length; at += 4) if (first[at] !== second[at] || first[at + 1] !== second[at + 1] || first[at + 2] !== second[at + 2] || first[at + 3] !== second[at + 3]) count += 1;
-  return count;
-};
+/** How many pixels differ between two pictures kept in a page. */
+function differing(page: Page, first: string, second: string): Promise<number> {
+  return page.evaluate(([one, two]) => {
+    const store = (window as unknown as { shots: Record<string, Uint8ClampedArray> }).shots;
+    const a = store[one];
+    const b = store[two];
+    if (a.length !== b.length) return a.length;
+    let count = 0;
+    for (let at = 0; at < a.length; at += 4) if (a[at] !== b[at] || a[at + 1] !== b[at + 1] || a[at + 2] !== b[at + 2] || a[at + 3] !== b[at + 3]) count += 1;
+    return count;
+  }, [first, second]);
+}
+
+/** A page's picture as a string, to carry to another page. */
+const digest = (page: Page, name: string): Promise<string> =>
+  page.evaluate((key) => {
+    const data = (window as unknown as { shots: Record<string, Uint8ClampedArray> }).shots[key];
+    let hash = 2166136261;
+    for (let at = 0; at < data.length; at += 1) hash = Math.imul(hash ^ data[at], 16777619) >>> 0;
+    return `${data.length}:${hash}`;
+  }, name);
 
 test('every entry opens with a clean console and draws something', async ({ page }) => {
   const problems = watchConsole(page);
@@ -107,13 +142,8 @@ test('every entry opens with a clean console and draws something', async ({ page
       continue;
     }
     // something is drawn: well over a few hundred pixels differ from the corner's colour
-    const picture = await stagePixels(page);
-    const corner = picture.data.slice(0, 4);
-    let inked = 0;
-    for (let at = 0; at < picture.data.length; at += 4) {
-      if (Math.abs(picture.data[at] - corner[0]) + Math.abs(picture.data[at + 1] - corner[1]) + Math.abs(picture.data[at + 2] - corner[2]) > 40) inked += 1;
-    }
-    if (inked < 300) bare.push(`${id}: ${inked}`);
+    const picture = await takePicture(page, 'entry');
+    if (picture.inked < 300) bare.push(`${id}: ${picture.inked}`);
   }
   console.log(`opened ${ids.length} entries`);
   expect(bare).toEqual([]);
@@ -128,13 +158,14 @@ test('a still view changes 0 pixels over a second', async ({ page }) => {
     await page.addScriptTag({ content: `window.setInterval(() => document.querySelector('.vw-stage').dispatchEvent(new WheelEvent('wheel', { deltaY: (Math.random() - 0.5) * 6, cancelable: true })), 100);` });
   }
   await page.waitForTimeout(300);
-  const first = await stagePixels(page);
+  const first = await takePicture(page, 'first');
   const shotA = await page.locator('.vw-stage').screenshot();
   await page.waitForTimeout(1000);
-  const second = await stagePixels(page);
+  const second = await takePicture(page, 'second');
   const shotB = await page.locator('.vw-stage').screenshot();
-  console.log(`still view: ${first.width}x${first.height}, differing canvas pixels ${differing(first.data, second.data)}, screenshot bytes equal ${shotA.equals(shotB)}`);
-  expect(differing(first.data, second.data)).toBe(0);
+  const moved = await differing(page, 'first', 'second');
+  console.log(`still view: ${first.width}x${first.height}, differing canvas pixels ${moved}, screenshot bytes equal ${shotA.equals(shotB)}`);
+  expect(moved).toBe(0);
   expect(shotA.equals(shotB)).toBe(true);
   // and not a single frame was drawn while it stood still
   const frames = (await probe(page)).frames;
@@ -146,35 +177,35 @@ test('a still view changes 0 pixels over a second', async ({ page }) => {
 test('the grid and the three backgrounds switch', async ({ page }) => {
   const problems = watchConsole(page);
   await openViewer(page, '?thing=attachment%2Fcargo_rack&mount=hull&tier=2');
-  const withGrid = await stagePixels(page);
+  await takePicture(page, 'withGrid');
   await andDrawn(page, () => page.getByRole('button', { name: 'Grid', exact: true }).click());
   expect((await probe(page)).grid).toBe(false);
-  const withoutGrid = await stagePixels(page);
-  const gridPixels = differing(withGrid.data, withoutGrid.data);
+  await takePicture(page, 'withoutGrid');
+  const gridPixels = await differing(page, 'withGrid', 'withoutGrid');
   console.log(`grid on/off: ${gridPixels} pixels differ`);
   expect(gridPixels).toBeGreaterThan(2000);
   await andDrawn(page, () => page.getByRole('button', { name: 'Grid', exact: true }).click());
-  expect(differing((await stagePixels(page)).data, withGrid.data)).toBe(0);
+  await takePicture(page, 'again');
+  expect(await differing(page, 'again', 'withGrid')).toBe(0);
 
   // paper, dark, see-through
-  const paper = await stagePixels(page);
+  const paper = await takePicture(page, 'paper');
   await andDrawn(page, () => page.getByRole('button', { name: 'Dark', exact: true }).click());
-  const dark = await stagePixels(page);
+  const dark = await takePicture(page, 'dark');
   await andDrawn(page, () => page.getByRole('button', { name: 'See-through', exact: true }).click());
-  const clear = await stagePixels(page);
-  const lightness = (picture: { data: number[] }): number => picture.data[0] + picture.data[1] + picture.data[2];
-  console.log(`corner: paper ${lightness(paper)}, dark ${lightness(dark)}, see-through alpha ${clear.data[3]}`);
+  const clear = await takePicture(page, 'clear');
+  const lightness = (picture: Picture): number => picture.corner[0] + picture.corner[1] + picture.corner[2];
+  console.log(`corner: paper ${lightness(paper)}, dark ${lightness(dark)}, see-through alpha ${clear.corner[3]}`);
   expect(lightness(paper)).toBeGreaterThan(600);
   expect(lightness(dark)).toBeLessThan(150);
-  expect(clear.data[3]).toBe(0);
-  let solid = 0;
-  for (let at = 3; at < clear.data.length; at += 4) if (clear.data[at] === 255) solid += 1;
-  expect(solid).toBeGreaterThan(500);
+  expect(clear.corner[3]).toBe(0);
+  expect(clear.solid).toBeGreaterThan(500);
   await expect(page.locator('.vw-stage')).toHaveAttribute('data-background', 'checker');
   // night changes the light, and the picture
   await andDrawn(page, () => page.getByRole('button', { name: 'Paper', exact: true }).click());
   await andDrawn(page, () => page.getByRole('button', { name: 'Night', exact: true }).click());
-  expect(differing((await stagePixels(page)).data, paper.data)).toBeGreaterThan(5000);
+  await takePicture(page, 'night');
+  expect(await differing(page, 'night', 'paper')).toBeGreaterThan(5000);
   expect(problems).toEqual([]);
 });
 
@@ -274,7 +305,8 @@ test('a pasted link reopens the same thing and view, pixel for pixel', async ({ 
   expect(address).toContain('crew=3');
   expect(address).toContain('view=free');
   expect(address).toContain('bg=dark');
-  const pictureHere = await stagePixels(page);
+  await takePicture(page, 'here');
+  const pictureHere = await digest(page, 'here');
 
   const other = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
   const otherProblems = watchConsole(other);
@@ -283,9 +315,10 @@ test('a pasted link reopens the same thing and view, pixel for pixel', async ({ 
   await other.waitForTimeout(300);
   const there = await probe(other);
   expect({ ...there, frames: 0 }).toEqual({ ...here, frames: 0 });
-  const pictureThere = await stagePixels(other);
-  console.log(`pasted link: ${differing(pictureHere.data, pictureThere.data)} of ${pictureHere.data.length / 4} pixels differ`);
-  expect(differing(pictureHere.data, pictureThere.data)).toBe(0);
+  await takePicture(other, 'there');
+  const pictureThere = await digest(other, 'there');
+  console.log(`pasted link: picture ${pictureHere} against ${pictureThere}`);
+  expect(pictureThere).toBe(pictureHere);
   expect(await other.getByLabel('Crew aboard').inputValue()).toBe('3');
   await other.close();
   expect(otherProblems).toEqual([]);

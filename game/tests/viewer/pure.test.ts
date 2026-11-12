@@ -2,13 +2,21 @@
  * The viewer's pure parts: the address, the see-through maths, the grid's squares, the fixed views, and the rule that
  * the live game carries none of it.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { spacingFor, SPACINGS } from '../../src/viewer/grid.ts';
 import { matte } from '../../src/viewer/matte.ts';
 import { fromQuery, toQuery } from '../../src/viewer/state.ts';
 import type { ViewerState } from '../../src/viewer/state.ts';
+
+const fileSystemModule = 'node:fs';
+const { readdirSync, readFileSync, statSync } = (await import(/* @vite-ignore */ fileSystemModule)) as {
+  readdirSync(path: string): string[];
+  readFileSync(path: string, encoding: 'utf8'): string;
+  statSync(path: string): { isDirectory(): boolean };
+};
+const join = (...parts: string[]): string => parts.join('/').replace(/\/+/g, '/');
+const relative = (from: string, to: string): string => to.slice(from.length + 1);
+const GAME = decodeURIComponent(new URL('../../', import.meta.url).pathname).replace(/\/$/, '');
 
 const base: ViewerState = { thing: 'hull/long_canoe', options: { crew: '2', fitted: 'all' }, view: 'home', free: null, background: 'paper', grid: true, light: 'day' };
 
@@ -62,14 +70,14 @@ describe('the grid', () => {
 
 /** Every file under a folder, as paths from `game/`. */
 function filesUnder(folder: string): string[] {
-  return readdirSync(folder).flatMap((name) => {
+  return readdirSync(folder).flatMap((name: string) => {
     const path = join(folder, name);
     return statSync(path).isDirectory() ? filesUnder(path) : [path];
   });
 }
 
 describe('the live game carries none of it', () => {
-  const root = join(__dirname, '..', '..');
+  const root = GAME;
   it('nothing in the game imports the viewer, and index.html and the config never name it', () => {
     const offenders = filesUnder(join(root, 'src'))
       .filter((path) => !relative(join(root, 'src'), path).startsWith('viewer'))

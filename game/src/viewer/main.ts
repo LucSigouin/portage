@@ -405,6 +405,13 @@ class Viewer {
   }
 
   private afterCamera(settled: boolean): void {
+    // The camera is kept to what the address can hold, so a pasted link reopens exactly this view.
+    const view = this.state.free;
+    if (view) {
+      view.yaw = Number((((view.yaw % 360) + 360) % 360).toFixed(1));
+      view.pitch = Number(view.pitch.toFixed(1));
+      view.distance = Number(view.distance.toFixed(3));
+    }
     this.schedule();
     if (settled) this.touchAddress();
   }
