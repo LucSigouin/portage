@@ -56,18 +56,24 @@ Every player is drawn from their own state by `CanoeView` (`canoe.ts`), the loca
 
 `FrameLadder` in `quality.ts` moves the world's quality one change at a time. The heroes are not on it.
 
-- **Order**: rung 1 sheds the weather's fine work (rain rings, whitecaps, half the rain strokes). Then reflections (2, 3), fine strokes (4), the pen's anti-aliasing (5, 6), and last the resolution (7 to 9). Ten rungs, 0 to 9.
-
-- **Down**: two seconds of long frames (under 49 a second) step one rung down. Under 29 a second it drops two, under 20 three.
-- **Up**: ten seconds of good frames step one rung back up.
-- **Never pumping**: at most one change every ten seconds. A rung that ran long twice is left alone for the session. So a rung that cannot hold is tried twice, then never again.
-- A graphics settings change starts it over.
+- **Order**: rung 1 sheds the weather's fine work (rain rings, whitecaps, half the rain strokes). Then reflections (2, 3), fine strokes (4), the pen's anti-aliasing (5, 6), and last the resolution: 90%, 80%, 72%, 60%, 50% (7 to 11). Twelve rungs, 0 to 11.
+- **The floor is half size** (`WORLD_FLOOR`). At 40% the land's pen lines break into dots. Only the player's own render scale goes lower, and then the ladder takes nothing more.
+- **The chip test** (`startOnFittingRung` in `world-view.ts`): on the first frame, before anything is shown, the frame is drawn back to back on a few rungs and the chip waited for. The game starts on the best rung whose frame fits (`fittingRung`): 90% of the gap, so 15 ms on a 60 Hz screen. Up to five rungs are timed, then the top once more if there is time, inside half a second (`CHIP_TEST_MILLISECONDS`; the rung being timed when it runs out is finished). A chip too slow to finish starts on the last rung. `&chiptest=0`, `&rung=N` and `&hold=1` leave it out.
+- **Long** is judged against the gap the frame was meant to have (`FrameInfo.dueSeconds`, never under a 60th): half a second of frames is long when they come over 5% further apart than meant. On a 60 Hz screen that is 17.5 ms, under 57 a second. A 30 Hz screen or a 30 cap is not a slow chip. A 144 Hz screen sheds nothing to chase 144.
+- **Warm-up**: the first 3 seconds by the clock count for nothing.
+- **Down**: two seconds of long frames step one rung down. Past twice the gap it drops two, past three times three.
+- **Finding its level**: at the start, after a settings change and when a game begins, steps down may follow each other two seconds apart. That ends at the first ten seconds of good frames, or after thirty seconds, whichever comes first. From then on every change is ten seconds from the last.
+- **Up**: after ten seconds of good frames the ladder asks (`asking`). The world view times the rung above inside one frame (`answerLadder`) and the ladder climbs only if it fits. Told no, it asks again after a minute of good frames, then after five, then leaves that rung alone. When the rung above fits with room to spare, the chip was busy at load: it goes to the best rung that fits in one change (`climbTo`).
+- **Never pumping**: a rung that was climbed to and then runs long is out for the session, and the ladder goes back to the rung it left in one change. After a failed climb of several rungs every later climb is one rung. A rung that ran long twice is out too. So a rung is tried and dropped once at most.
+- A graphics settings change starts it over from rung 0, without a new chip test.
 - Do not shorten the ten seconds. A ladder that flips is shimmer.
+- Asking costs one long frame (three draws of the rung above): at most three a rung in a session.
 
 ## What a frame costs
 
 1920×1080, rung 0, this Mac (M5), milliseconds per pass: reflection 0.7, colour 3.5, ink 2.2 to 3.0, pen 3.3 on an island (1.8 on open water), heroes 0.0 to 0.2. The colour pass on open water is 6.8.
 
+- By rung, a whole 1920×1080 frame afloat with the chip to itself, as a share of rung 0 (5.9 ms): rungs 1 to 3 save 5%, rung 6 is 79%, rung 9 is 52%, rung 10 (60%) is 45%, rung 11 (50%) is 38%. About a quarter of a frame is fixed: no rung removes it, and the heroes' full-size pass is part of it.
 - Every surface material has a twin for the mirrored pass (`userData.mirror`). Only the twin can `discard`. A shader that can discard is shaded before the chip knows what hides it. Without it the colour and ink passes shade each pixel once. Keep `discard` out of the plain material.
 - Measure with `&bench=N&benchpass=<pass>` (`overlay` is the rain's strokes and the marks): the slope of frame time against N is that pass's cost. Other pages share the chip, so compare A and B in the same page, in turns.
 - Weather and night, whole frame on open water, measured in one quiet minute by drawing 24 frames back to back and reading a pixel: clear day 9.7, rain 9.8, storm 10.4, night with lamps 10.1, storm at night 11.5, the same with rung 1 shed 10.0. Every weather shader branch is behind a uniform, so a clear day pays nothing.
@@ -152,8 +158,9 @@ PORTAGE_URL=http://localhost:5221 npm --prefix e2e test       # browser: bot, ke
 
 - full-size drawing, 0 changed land pixels, canoe on the drawn water, clean console
 - 55 fps afloat, with the full canoe, mid-game, and zoomed fully out on an island at rung 0
-- the heroes at the window's size on rung 9 and at 5120×2160
-- the player as sharp on rung 9 as on rung 0 (edges measured in a crop of the player)
+- the heroes at the window's size on rung 11 (the world at half size) and at 5120×2160
+- the player as sharp on rung 11 as on rung 0 (edges measured in a crop of the player)
+- the chip test at load: 24 times the work starts on rung 11 with no change, this machine at the top, `&chiptest=0` leaves it out
 - the ladder climbing back after a slow spell, never twice within ten seconds
 - the whole crew drawn (real players, `?crew=N`), each at their own seat on every hull tier
 - one paddling while three rest, nobody paddling on a drifting canoe, bailing and sleeping and walking by the player who does them
@@ -171,7 +178,7 @@ PORTAGE_URL=http://localhost:5221 npm --prefix e2e test       # browser: bot, ke
 - the rain eases in, and neither falls nor builds while paused
 - the next weather standing upwind as its time nears
 - 55 fps in a storm, at night, and in a storm at night, 1920×1080, rung 0
-- the heroes at the window's size with the full pen in a storm at night on rung 9
+- the heroes at the window's size with the full pen in a storm at night on rung 11
 - rung 1 sheds the weather's fine work and nothing else
 - a rain stroke stops at what stands in front of it: side on to the canoe from 2.6 m the strokes mark the view round it and not the canoe; looking down at the ground from 1.5 m they mark nothing
 - the lantern's pool is strokes of lamp light (marks in the lamp's colour on the water beside the canoe, none with the lantern out), and the white marks nearest the eye in a storm are no heavier than a pen line (6 pixels at 1080p, under 8: they were 10)
@@ -180,16 +187,17 @@ PORTAGE_URL=http://localhost:5221 npm --prefix e2e test       # browser: bot, ke
 
 `tests/look/crew.test.ts` checks the same from the figures themselves, with no graphics card: clothes by id, seats against the rules on all four tiers, nobody inside another or the hull, each pose by its flag, and the pen's law.
 
-`PORTAGE_LOOK_BREAK='&hero=0'` (or `&rung=9`, `&boil=1`, `&bench=24`, `&heropen=0`) makes the matching checks fail. Run it when you change them. The crew checks have no switch: break the line in `canoe.ts` they guard (the outfit, the seat, the flag) and watch them fail. The weather checks likewise: feed the rain real time instead of paint time, dip `uDark` every 20th frame, pulse `uWet`, hand `weatherGoals` a clear sky, never light the lantern, snap `easeWeather`, zero `ahead`, swap rung 1, leave the copy of a hero window's depth out of `behind` (or leave `uBehind` at 1 there, or drop the world's depth test from the stroke's shader), drop the line that draws the ripple strokes in lamp light, set `capMid = 1.`.
+`PORTAGE_LOOK_BREAK='&hero=0'` (or `&rung=11`, `&boil=1`, `&bench=24`, `&heropen=0`) makes the matching checks fail. Run it when you change them. The crew checks have no switch: break the line in `canoe.ts` they guard (the outfit, the seat, the flag) and watch them fail. The weather checks likewise: feed the rain real time instead of paint time, dip `uDark` every 20th frame, pulse `uWet`, hand `weatherGoals` a clear sky, never light the lantern, snap `easeWeather`, zero `ahead`, swap rung 1, leave the copy of a hero window's depth out of `behind` (or leave `uBehind` at 1 there, or drop the world's depth test from the stroke's shader), drop the line that draws the ripple strokes in lamp light, set `capMid = 1.`.
 
 ## Debug switches
 
 | Switch | Does |
 |---|---|
 | `?look=greybox` | The old placeholder, to compare |
-| `&rung=N` | Start N rungs down the quality ladder (0 to 9) |
+| `&rung=N` | Start N rungs down the quality ladder (0 to 11). No chip test |
+| `&chiptest=0` | Leave out the chip test at load: start on rung 0 and let the ladder find its level |
 | `&rain=0` | Leave the rain's strokes out (rings, wet and sky stay). Only to prove the land changes nowhere else |
-| `&hold=1` | Pin the ladder |
+| `&hold=1` | Pin the ladder. No chip test |
 | `&bench=N` | Draw each frame N times: true cost, and a way to fail the fps test |
 | `&benchpass=<pass>` | With `bench`: only that pass (`reflection`, `colour`, `ink`, `composite`, `hero`) |
 | `&hero=0` | Leave the heroes in the world, as it was. Only to prove the sharpness tests can fail |
@@ -197,7 +205,7 @@ PORTAGE_URL=http://localhost:5221 npm --prefix e2e test       # browser: bot, ke
 | `?crew=N` | The client's switch, not the look's: a real crew of N (2 to 4), the extra players idle |
 | `&stall=N` | Hold every frame N milliseconds: a slow spell, to watch the ladder |
 | `&boil=1` | Line boil on. Only to prove the steadiness test can fail |
-| `window.portage.worldView.probe()` | World and canvas size, ladder rung and history, hero windows, canoe and water heights. `hero.figures`: each crew figure's seat, place, pose and clothes as drawn. `hero.pen`: the pen's share on the local figure |
+| `window.portage.worldView.probe()` | World and canvas size, ladder rung and history (`ladder.chipTest`: what the test at load timed and chose), hero windows, canoe and water heights. `hero.figures`: each crew figure's seat, place, pose and clothes as drawn. `hero.pen`: the pen's share on the local figure |
 | `window.portage.worldView.bench(n, pass)`, `.stall(ms)` | The same switches, while it runs |
 | `window.portage.worldView.settle()` | Land on the rules' weather at the next frame, without easing: for a staged view that is held still |
 | `probe().weather` | Rain, storm, fog, wind, what is ahead, stars, lamp share, strokes drawn, how far the rain has fallen, pools and glows |
