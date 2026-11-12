@@ -104,10 +104,11 @@ const CREW_IN_TROUBLE = `${PUT_ASHORE}
     Object.assign(player, { hunger: 5, thirst: 5, energy: 5 });
   }
 `;
-/** Player 3 makes the crew's first knife. */
+/** Player 3 comes back (a `?crew=N` stand-in is away, and nobody acts for an away player) and makes the crew's first knife. */
 const CREWMATE_MAKES_A_KNIFE = `
   const sim = await import('/src/sim/index.ts');
   const game = portage.session.game;
+  sim.setConnected(game, 2, true, true);
   game.players[2].backpack.push({ itemId: 'stone', count: 2 }, { itemId: 'driftwood', count: 1 }, { itemId: 'fiber', count: 2 });
   if (!sim.dispatch(game, { type: 'craft', recipeId: 'stone_knife' }, 2).ok) throw new Error('the knife was not made');
 `;

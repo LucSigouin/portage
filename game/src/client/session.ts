@@ -15,7 +15,7 @@ import {
 import type { InputAction, Settings, SettingsStorage } from '../settings/index.ts';
 import {
   FIXED_STEP, NEUTRAL_INPUT, connectedPlayers, createGame, dispatch, drainEvents, playerOf, selectInteractable,
-  setConnected, step,
+  setConnected, setPlayerName, step,
 } from '../sim/index.ts';
 import type { Command, CommandResult, GameEvent, GameState, PlayerId, StepInput } from '../sim/index.ts';
 import { InputController } from './input.ts';
@@ -26,6 +26,8 @@ import {
 } from './panels.ts';
 import type { ConfirmAction, PanelAction, PanelEffect, PanelId, PanelState, ScreenId } from './panels.ts';
 import { failureText, keyLabel, refusalText } from './viewmodels/format.ts';
+import { GuestLink, HostLink } from '../net/index.ts';
+import type { LeaveReason, Transport } from '../net/index.ts';
 import { applySettingChange } from './viewmodels/settings.ts';
 import type { Tone } from './viewmodels/types.ts';
 
@@ -81,6 +83,14 @@ export const MAXIMUM_STEPS_PER_FRAME = 2400;
 
 const defaultRandomSeed = (): number => Math.floor(Math.random() * 0x7fffffff);
 
+/** Why a guest is back in the lobby, in words. */
+const LEAVE_TEXT: Readonly<Record<LeaveReason, string>> = {
+  full: 'That crew is full.',
+  version: 'The host runs another version of the game. Reload the page.',
+  replaced: 'You joined this game from another window.',
+  closed: 'The host closed the game.',
+};
+
 export class Session {
   settings: Settings;
   panels: PanelState = createPanelState('lobby');
@@ -95,6 +105,18 @@ export class Session {
   crewSize = 1;
   /** The player whose browser runs a shared game. Null while the game is not shared. */
   hostId: PlayerId | null = null;
+  /** The name this screen's player goes by in a shared game. Empty: the crew mark's label. */
+  playerName = '';
+  /**
+   * Set this to share every game this session plays. It is called with a fresh
+   * link each time a game starts: hand the link every wire a guest arrives on
+   * (`link.accept(transport)`).
+   */
+  onShare: ((link: HostLink) => void) | null = null;
+  /** The link to the guests while this session hosts. */
+  host: HostLink | null = null;
+  /** The link to the host while this session is a guest. Then `game` is the host's state, a beat behind, and nothing here changes it. */
+  guest: GuestLink | null = null;
   /** The slot the game autosaves into. Null for a staged game that never saves. */
   slot: number | null = null;
   /** The scene behind the lobby: a game nobody plays. */
@@ -250,6 +272,9 @@ export class Session {
   }
 
   private enterGame(state: GameState, slot: number | null): void {
+    // A game of this session's own: no longer anyone's guest, and the old game's guests are let go.
+    if (this.guest) this.leaveHost();
+    this.stopSharing();
     this.game = state;
     this.slot = slot;
     this.driver = null;
@@ -259,6 +284,12 @@ export class Session {
     // The difficulty setting is global: it follows the player into every save.
     if (state.difficulty !== this.settings.gameplay.difficulty) {
       dispatch(state, { type: 'set_difficulty', difficulty: this.settings.gameplay.difficulty });
+    }
+    if (this.onShare) {
+      if (this.playerName !== '') setPlayerName(state, this.localPlayerId, this.playerName);
+      this.host = new HostLink({ game: state, hostPlayerId: this.localPlayerId });
+      this.hostId = this.localPlayerId;
+      this.onShare(this.host);
     }
     this.input.releaseAll();
     this.applyPanels({ type: 'show_screen', screen: 'game' });
@@ -276,8 +307,46 @@ export class Session {
     return saved;
   }
 
+  /** Stop sharing the game: every guest is told, and their players stay in the game, away. */
+  stopSharing(): void {
+    this.host?.close();
+    this.host = null;
+    this.hostId = null;
+  }
+
+  /**
+   * Join someone else's game over `transport`. This session becomes a guest:
+   * it sends its keys and its commands and shows the host's state. It stays in
+   * the lobby until the host answers.
+   */
+  joinGame(transport: Transport, options: { name: string; key: string }): GuestLink {
+    if (this.game) this.quitToLobby();
+    this.guest?.close();
+    this.guest = new GuestLink(transport, options);
+    return this.guest;
+  }
+
+  /** A guest goes back to the lobby: the wire is closed and nothing of the host's game is kept. */
+  private leaveHost(): void {
+    this.guest?.close();
+    this.guest = null;
+    this.hostId = null;
+    this.localPlayerId = 0;
+    if (!this.game) return;
+    this.game = null;
+    this.input.releaseAll();
+    this.applyPanels({ type: 'show_screen', screen: 'lobby' });
+    this.signal({ type: 'screen_changed', screen: 'lobby' });
+  }
+
   /** Save and go back to the lobby. */
   quitToLobby(): void {
+    if (this.guest) {
+      this.leaveHost();
+      return;
+    }
+    // The guests are away from here on, and saved as away.
+    this.stopSharing();
     this.saveNow();
     this.game = null;
     this.slot = null;
@@ -315,10 +384,9 @@ export class Session {
    */
   advance(frameSeconds: number, cameraYaw: number): GameEvent[] {
     this.simulatedSeconds = 0;
+    if (this.guest) return this.advanceAsGuest(this.guest, frameSeconds, cameraYaw);
     if (!this.game) {
-      if (this.backdrop.playedSeconds >= BACKDROP_RESET_SECONDS) this.backdrop = createBackdrop(this.backdrop.time);
-      if (!this.hidden) step(this.backdrop, NEUTRAL_INPUT, frameSeconds);
-      drainEvents(this.backdrop);
+      this.driftBackdrop(frameSeconds);
       return [];
     }
     const game = this.game;
@@ -328,11 +396,9 @@ export class Session {
       else this.stepWithKeys(game, seconds, cameraYaw);
     }
     const events = drainEvents(game);
-    this.applyPanels({ type: 'sync_dialogue', open: playerOf(game, this.localPlayerId).dialogue !== null }, true);
-    if (events.some((event) => event.type === 'game_completed')) {
-      this.applyPanels({ type: 'close_all' }, true);
-      this.applyPanels({ type: 'open', panel: 'credits' });
-    }
+    // The guests get the frame's events and, about 15 times a second, the state.
+    this.host?.afterFrame(events, frameSeconds);
+    this.followEvents(game, events);
     const reason = this.autosaver?.update(game, events, frameSeconds) ?? null;
     if (reason !== null && this.slot !== null) {
       this.summaries = null;
@@ -341,12 +407,80 @@ export class Session {
     return events;
   }
 
+  /** The lobby's backdrop drifts on; it is staged afresh now and then. */
+  private driftBackdrop(frameSeconds: number): void {
+    if (this.backdrop.playedSeconds >= BACKDROP_RESET_SECONDS) this.backdrop = createBackdrop(this.backdrop.time);
+    if (!this.hidden) step(this.backdrop, NEUTRAL_INPUT, frameSeconds);
+    drainEvents(this.backdrop);
+  }
+
+  /** What the panels do by themselves: the conversation follows the local player's talk, the credits follow the Beacon. */
+  private followEvents(game: GameState, events: readonly GameEvent[]): void {
+    this.applyPanels({ type: 'sync_dialogue', open: playerOf(game, this.localPlayerId).dialogue !== null }, true);
+    if (events.some((event) => event.type === 'game_completed')) {
+      this.applyPanels({ type: 'close_all' }, true);
+      this.applyPanels({ type: 'open', panel: 'credits' });
+    }
+  }
+
+  /**
+   * One frame as a guest. Nothing is stepped here: the keys go to the host,
+   * and the game is whatever the host last said, drawn a beat behind and
+   * smoothed. Hands the look, the HUD and the sound what a solo frame does:
+   * a state, the frame's events, the local player.
+   */
+  private advanceAsGuest(guest: GuestLink, frameSeconds: number, cameraYaw: number): GameEvent[] {
+    guest.update(frameSeconds);
+    if (guest.status === 'refused' || guest.status === 'closed') {
+      const reason = guest.leaveReason ?? 'closed';
+      this.leaveHost();
+      this.notice(LEAVE_TEXT[reason], 'warning');
+    }
+    const view = this.guest?.status === 'playing' ? this.guest.view() : null;
+    if (!view) {
+      this.driftBackdrop(frameSeconds);
+      return [];
+    }
+    const arrived = this.game === null || this.localPlayerId !== guest.playerId;
+    const playedBefore = this.game?.playedSeconds ?? view.playedSeconds;
+    this.game = view;
+    this.localPlayerId = guest.playerId;
+    this.hostId = guest.hostId;
+    if (arrived) {
+      this.slot = null;
+      this.autosaver = null;
+      this.driver = null;
+      this.frozen = false;
+      this.input.releaseAll();
+      this.applyPanels({ type: 'show_screen', screen: 'game' });
+      this.signal({ type: 'screen_changed', screen: 'game' });
+      this.signal({ type: 'game_started', slot: null });
+    }
+    this.simulatedSeconds = Math.max(0, Math.min(0.25, view.playedSeconds - playedBefore));
+
+    const input = this.input.sample(this.inputSnapshot(), cameraYaw);
+    this.lastInput = input;
+    guest.sendInput(input);
+
+    for (const outcome of guest.takeResults()) {
+      const result = outcome.result;
+      const toldByEvent = outcome.command.type === 'scavenge' && !result.ok && result.reason === 'missing_requirements';
+      if (!result.ok && !outcome.quiet && !toldByEvent) {
+        this.notice(failureText(result.reason, result.missing), 'warning');
+        this.sound('error');
+      }
+    }
+    const events = guest.takeEvents();
+    this.followEvents(view, events);
+    return events;
+  }
+
   private stepWithKeys(game: GameState, seconds: number, cameraYaw: number): void {
     const input = this.input.sample(this.inputSnapshot(), cameraYaw);
     this.lastInput = input;
     const before = game.playedSeconds;
     let remaining = seconds;
-    const inputs = this.crewInput(input, this.localPlayerId);
+    const inputs = this.host ? this.host.crewInput(input, this.localPlayerId) : this.crewInput(input, this.localPlayerId);
     while (remaining > 1e-9) {
       const chunk = Math.min(remaining, TUNING.maximumFrameSeconds);
       step(game, inputs, chunk);
@@ -378,7 +512,7 @@ export class Session {
         break;
       }
       this.lastInput = input;
-      step(game, input, FIXED_STEP);
+      step(game, this.host ? this.host.crewInput(input, 0) : input, FIXED_STEP);
       this.driverCarry -= FIXED_STEP;
       steps += 1;
       // A panel that pauses (the credits) stops the replay on the spot.
@@ -397,6 +531,11 @@ export class Session {
    */
   dispatch(command: Command, quiet = false): CommandResult {
     if (!this.game) return { ok: false, reason: 'unknown_id', missing: null };
+    if (this.guest) {
+      // The host runs it. Its answer comes back in a later frame; a refusal is told then.
+      this.guest.sendCommand(command, quiet);
+      return { ok: true, gained: [], spent: [] };
+    }
     const result = dispatch(this.game, command, this.localPlayerId);
     // A node that needs a tool says so itself, with a `harvest_blocked` event: no second notice.
     const toldByEvent = command.type === 'scavenge' && !result.ok && result.reason === 'missing_requirements';
@@ -614,7 +753,8 @@ export class Session {
       invertY: settings.controls.invertY,
     });
     this.autosaver?.setIntervalSeconds(settings.gameplay.autosaveIntervalSeconds);
-    if (this.game && this.game.difficulty !== settings.gameplay.difficulty) {
+    // A guest's difficulty setting is for their own games: the host's game keeps the host's.
+    if (this.game && !this.guest && this.game.difficulty !== settings.gameplay.difficulty) {
       dispatch(this.game, { type: 'set_difficulty', difficulty: settings.gameplay.difficulty });
     }
     this.signal({ type: 'settings_changed', settings });
