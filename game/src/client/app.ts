@@ -3,7 +3,7 @@
  * UI and a sound engine, and runs one frame at a time. No DOM in here, so
  * the whole frame can run in a test with fakes; `main.ts` adds the browser.
  */
-import { eventsFor, selectTrackedQuestTarget } from '../sim/index.ts';
+import { FIXED_STEP, eventsFor, selectTrackedQuestTarget } from '../sim/index.ts';
 import type { GameState } from '../sim/index.ts';
 import { ChaseCamera, lobbyCameraPose, subjectFromState, surfaceFromState } from './camera.ts';
 import type { CameraOptions, CameraPose } from './camera.ts';
@@ -44,6 +44,8 @@ export class App {
   private readonly stats: (() => FrameStats) | null;
   private readonly forceFrameRate: boolean;
   private elapsedSeconds = 0;
+  /** Seconds the lobby's backdrop has stepped: the clock its camera circles on. */
+  private lobbySeconds = 0;
   private audioScene: AudioScene | null = null;
   private stage: StageName | null = null;
   private snapCamera = true;
@@ -95,12 +97,19 @@ export class App {
     };
   }
 
-  private updateCamera(state: GameState, frameSeconds: number): CameraPose {
+  /**
+   * The camera moves with the world. `steppedSeconds` is the time the rules stepped the drawn state
+   * this frame: the camera eases by that much, so a frame with no step moves neither the canoe nor
+   * the camera, and a frame with two steps moves both by two.
+   */
+  private updateCamera(state: GameState, frameSeconds: number, steppedSeconds: number): CameraPose {
     const session = this.session;
     const cameraInput = session.input.takeCameraInput();
     const surface = surfaceFromState(state);
     if (session.screen === 'lobby') {
-      return lobbyCameraPose(state.canoe.position, this.elapsedSeconds, this.cameraOptions(), surface);
+      // The slow circle turns on the backdrop's own steps, not on the frames.
+      this.lobbySeconds += steppedSeconds;
+      return lobbyCameraPose(state.canoe.position, this.lobbySeconds, this.cameraOptions(), surface);
     }
     // A frozen game does not swing the camera round: only the mouse moves it.
     const subject = {
@@ -111,8 +120,11 @@ export class App {
       this.camera.snapBehind(subject);
       this.snapCamera = false;
     }
-    // Follow on simulated time when it runs faster than real time, so a fast replay does not outrun the camera.
-    const followSeconds = Math.max(frameSeconds, session.simulatedSeconds);
+    // While the rules run here, follow on the time they stepped: the camera and the canoe advance together,
+    // and a fast replay does not outrun the camera. A frozen game steps nothing: the camera settles on real
+    // time and the mouse still turns it. A guest's view is placed between the host's states on frame time.
+    const steppedHere = !session.paused && session.guest === null;
+    const followSeconds = steppedHere ? steppedSeconds : Math.max(frameSeconds, session.simulatedSeconds);
     return this.camera.update(subject, cameraInput, this.cameraOptions(), surface, followSeconds);
   }
 
@@ -132,7 +144,7 @@ export class App {
     }
   }
 
-  /** One frame. `frameSeconds` is real time since the last one, already clamped. */
+  /** One frame. `frameSeconds` is the time it stands for, already clamped. */
   frame(frameSeconds: number): void {
     const session = this.session;
     this.elapsedSeconds += frameSeconds;
@@ -140,8 +152,13 @@ export class App {
     // Step, then drain the events once and fan them out. The sound is the local
     // player's; the toasts are theirs plus the crew's news (a new tool is everyone's);
     // the world shows what everyone did.
+    const stateBefore = session.activeState;
+    const tickBefore = stateBefore.tick;
     const events = session.advance(frameSeconds, this.camera.yaw);
     const state = session.activeState;
+    // The time the rules stepped the state that is about to be drawn. A state swapped this frame
+    // (a new game, a guest's view, a fresh backdrop) has no steps to count: it gets the frame's time.
+    const steppedSeconds = state === stateBefore ? Math.max(0, state.tick - tickBefore) * FIXED_STEP : frameSeconds;
     const ownEvents = eventsFor(events, session.localPlayerId);
     this.followScene();
     this.audio.handleEvents(ownEvents);
@@ -157,7 +174,7 @@ export class App {
       panelOpen: coversPlayView(session.panels),
       trackedQuestTarget: session.game ? selectTrackedQuestTarget(session.game)?.position ?? null : null,
     };
-    const pose = this.updateCamera(state, frameSeconds);
+    const pose = this.updateCamera(state, frameSeconds, steppedSeconds);
     this.lastPose = pose;
     this.worldView.sync(state, frame);
     this.worldView.handleEvents(events);

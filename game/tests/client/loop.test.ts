@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from '../../src/client/app.ts';
 import type { App } from '../../src/client/app.ts';
 import type { AudioEngine, CameraPose, FrameInfo, GameInterface, InterfaceModel, WorldView } from '../../src/client/contracts.ts';
-import { createFrameLoop } from '../../src/client/loop.ts';
-import type { LoopClock } from '../../src/client/loop.ts';
+import { SCREEN_WATCH_FRAMES, createFrameLoop } from '../../src/client/loop.ts';
+import type { FrameLoop, LoopClock } from '../../src/client/loop.ts';
 import type { GameEvent } from '../../src/sim/index.ts';
 import { islandLanding } from '../../src/sim/index.ts';
 import { FakeStorage } from '../support.ts';
@@ -46,65 +46,116 @@ class FakeClock implements LoopClock {
 
 function loopWith(cap: () => number, clock = new FakeClock()) {
   const frames: number[] = [];
+  const due: number[] = [];
   const loop = createFrameLoop({
     clock,
-    frame: (frameSeconds) => {
+    frame: (frameSeconds, dueSeconds) => {
       frames.push(frameSeconds);
+      due.push(dueSeconds);
       clock.time += clock.workMilliseconds;
     },
     frameRateCap: cap,
   });
-  return { loop, clock, frames };
+  return { loop, clock, frames, due };
 }
 
 const HZ60 = 1000 / 60;
 
+/**
+ * Start the loop on a screen with `period` milliseconds between display frames, and let it
+ * watch the screen: the first refresh starts the clock, the next few only measure. No frame runs.
+ */
+function startOn(loop: FrameLoop, clock: FakeClock, period = HZ60): void {
+  loop.start();
+  for (let refresh = 0; refresh <= SCREEN_WATCH_FRAMES; refresh += 1) clock.refresh(period);
+}
+
 describe('the frame loop', () => {
-  it('runs a frame per display refresh with the real time between them', () => {
+  it('watches the screen first: no frame runs until its rate is known', () => {
     const { loop, clock, frames } = loopWith(() => 0);
     loop.start();
     expect(loop.running).toBe(true);
-    clock.refresh(HZ60); // the first refresh only starts the clock
+    expect(loop.screenMilliseconds).toBe(0);
+    for (let refresh = 0; refresh <= SCREEN_WATCH_FRAMES; refresh += 1) clock.refresh(HZ60);
     expect(frames).toEqual([]);
+    expect(loop.screenMilliseconds).toBeCloseTo(HZ60, 6);
     clock.refresh(HZ60);
-    clock.refresh(HZ60);
+    // The time spent watching is not a frame.
+    expect(frames).toHaveLength(1);
+    expect(frames[0]).toBeCloseTo(1 / 60, 6);
+  });
+
+  it('with no beat to keep, runs a frame per display refresh with the real time between them', () => {
+    // No cap on a 100 Hz screen: the gap is not whole rules steps.
+    const { loop, clock, frames, due } = loopWith(() => 0);
+    startOn(loop, clock, 10);
+    clock.refresh(10);
+    clock.refresh(10);
     clock.refresh(8);
     expect(frames).toHaveLength(3);
-    expect(frames[0]).toBeCloseTo(1 / 60, 6);
+    expect(frames[0]).toBeCloseTo(0.01, 6);
     expect(frames[2]).toBeCloseTo(0.008, 6);
+    expect(due[0]).toBeCloseTo(0.01, 6);
+  });
+
+  it('on a 60 Hz screen every display refresh is a frame of exactly one sixtieth, cap or no cap, however the timestamps wobble', () => {
+    for (const cap of [60, 0, 144]) {
+      const { loop, clock, frames, due } = loopWith(() => cap);
+      startOn(loop, clock);
+      for (let refresh = 0; refresh < 600; refresh += 1) clock.refresh(HZ60 + (refresh % 3 === 0 ? 0.9 : -0.45));
+      expect(frames).toHaveLength(600);
+      for (const frameSeconds of frames) expect(frameSeconds).toBe(1 / 60);
+      for (const dueSeconds of due) expect(dueSeconds).toBe(1 / 60);
+    }
+  });
+
+  it('a screen a hair off 60 gets one doubled or skipped frame when a whole beat has built up, never a flutter', () => {
+    // 59.94 Hz falls a frame behind every 16.7 s; 60.06 Hz gets a frame ahead as often.
+    for (const [hertz, extra] of [[59.94, 2], [60.06, 0]] as const) {
+      const { loop, clock, frames } = loopWith(() => 60);
+      startOn(loop, clock, 1000 / hertz);
+      const refreshes = Math.round(hertz * 40);
+      for (let refresh = 0; refresh < refreshes; refresh += 1) clock.refresh(1000 / hertz + (refresh % 2 === 0 ? 0.3 : -0.3));
+      const odd = frames.filter((frameSeconds) => frameSeconds !== 1 / 60);
+      // Two beats built up in 40 s, or two display frames were skipped: nothing else is out of step.
+      expect(odd).toEqual(Array.from({ length: extra }, () => 2 / 60));
+      expect(Math.abs(frames.reduce((sum, value) => sum + value, 0) - 40)).toBeLessThan(0.02);
+      if (extra === 0) expect([2, 3]).toContain(refreshes - frames.length);
+    }
   });
 
   it('holds a 30 fps cap on a 60 Hz display by skipping every other refresh', () => {
-    const { loop, clock, frames } = loopWith(() => 30);
-    loop.start();
-    for (let refresh = 0; refresh < 61; refresh += 1) clock.refresh(HZ60);
+    const { loop, clock, frames, due } = loopWith(() => 30);
+    startOn(loop, clock);
+    for (let refresh = 0; refresh < 60; refresh += 1) clock.refresh(HZ60);
     expect(frames).toHaveLength(30);
-    for (const frameSeconds of frames) expect(frameSeconds).toBeCloseTo(1 / 30, 6);
+    for (const frameSeconds of frames) expect(frameSeconds).toBeCloseTo(1 / 30, 9);
+    for (const dueSeconds of due) expect(dueSeconds).toBeCloseTo(1 / 30, 9);
     // No time is lost to the skipped refreshes.
     expect(frames.reduce((sum, value) => sum + value, 0)).toBeCloseTo(1, 6);
   });
 
   it('does not drop a 60 fps cap to 30 when the display runs a hair fast', () => {
     const { loop, clock, frames } = loopWith(() => 60);
-    loop.start();
-    for (let refresh = 0; refresh < 61; refresh += 1) clock.refresh(refresh % 2 === 0 ? 16.2 : 17.1);
+    startOn(loop, clock);
+    for (let refresh = 0; refresh < 60; refresh += 1) clock.refresh(refresh % 2 === 0 ? 16.2 : 17.1);
     expect(frames).toHaveLength(60);
   });
 
-  it('holds a 60 fps cap on a 144 Hz display', () => {
-    const { loop, clock, frames } = loopWith(() => 60);
-    loop.start();
-    for (let refresh = 0; refresh < 145; refresh += 1) clock.refresh(1000 / 144);
-    expect(frames.length).toBeGreaterThanOrEqual(46);
-    expect(frames.length).toBeLessThanOrEqual(62);
-    for (const frameSeconds of frames) expect(frameSeconds).toBeGreaterThan(1 / 75);
+  it('holds a 60 fps cap on a 144 Hz display: 60 frames a second, each exactly one sixtieth', () => {
+    const { loop, clock, frames, due } = loopWith(() => 60);
+    startOn(loop, clock, 1000 / 144);
+    for (let refresh = 0; refresh < 144; refresh += 1) clock.refresh(1000 / 144);
+    expect(frames).toHaveLength(60);
+    for (const frameSeconds of frames) expect(frameSeconds).toBe(1 / 60);
+    for (const dueSeconds of due) expect(dueSeconds).toBeCloseTo(1 / 60, 9);
   });
 
   it('reads the cap every frame, so a settings change takes effect at once', () => {
     let cap = 30;
     const { loop, clock, frames } = loopWith(() => cap);
-    loop.start();
-    for (let refresh = 0; refresh < 21; refresh += 1) clock.refresh(HZ60);
+    startOn(loop, clock);
+    for (let refresh = 0; refresh < 20; refresh += 1) clock.refresh(HZ60);
     expect(frames).toHaveLength(10);
     cap = 0;
     for (let refresh = 0; refresh < 20; refresh += 1) clock.refresh(HZ60);
@@ -112,13 +163,17 @@ describe('the frame loop', () => {
   });
 
   it('clamps a long gap, so a tab coming back does not jump the game', () => {
-    const { loop, clock, frames } = loopWith(() => 60);
-    loop.start();
-    clock.refresh(HZ60);
-    clock.refresh(30_000);
-    expect(frames).toEqual([0.25]);
-    clock.refresh(HZ60);
-    expect(frames[1]).toBeCloseTo(1 / 60, 6);
+    for (const cap of [60, 30, 0]) {
+      const { loop, clock, frames } = loopWith(() => cap);
+      startOn(loop, clock);
+      clock.refresh(30_000);
+      expect(frames).toEqual([0.25]);
+      // Nothing of the long gap is left owed: the next frames are ordinary ones.
+      clock.refresh(HZ60);
+      clock.refresh(HZ60);
+      expect(frames.at(-1)).toBeCloseTo(cap === 30 ? 1 / 30 : 1 / 60, 6);
+      expect(frames.length).toBe(cap === 30 ? 2 : 3);
+    }
   });
 
   it('stops asking for frames when stopped, and starts clean again', () => {
@@ -126,7 +181,7 @@ describe('the frame loop', () => {
     loop.start();
     loop.start(); // a second start does not double the loop
     expect(clock.pending).toBe(1);
-    clock.refresh(HZ60);
+    for (let refresh = 0; refresh <= SCREEN_WATCH_FRAMES; refresh += 1) clock.refresh(HZ60);
     clock.refresh(HZ60);
     loop.stop();
     expect(loop.running).toBe(false);
@@ -135,22 +190,30 @@ describe('the frame loop', () => {
     expect(frames).toHaveLength(1);
     loop.start();
     clock.refresh(5_000); // the time spent stopped is not a frame
-    clock.refresh(HZ60);
+    clock.refresh(HZ60); // the screen is known already: no second watch
     expect(frames).toHaveLength(2);
     expect(frames[1]).toBeCloseTo(1 / 60, 6);
   });
 
   it('measures the frame rate and the work inside a frame', () => {
     const { loop, clock } = loopWith(() => 0);
-    clock.workMilliseconds = 4;
     loop.start();
     expect(loop.stats.framesPerSecond).toBe(0);
+    for (let refresh = 0; refresh <= SCREEN_WATCH_FRAMES; refresh += 1) clock.refresh(16);
+    clock.workMilliseconds = 4;
     // Each refresh comes 20 ms after the last frame started: 50 fps, 4 ms of it spent working.
     // The readout averages 30 frames at a time; the second batch is all steady frames.
     for (let refresh = 0; refresh < 70; refresh += 1) clock.refresh(16);
     expect(loop.stats.framesPerSecond).toBeCloseTo(50, 0);
     expect(loop.stats.frameMilliseconds).toBeCloseTo(20, 1);
     expect(loop.stats.workMilliseconds).toBeCloseTo(4, 3);
+  });
+
+  it('measures the frame rate from the frames that ran, not the display frames skipped', () => {
+    const { loop, clock } = loopWith(() => 60);
+    startOn(loop, clock, 1000 / 144);
+    for (let refresh = 0; refresh < 400; refresh += 1) clock.refresh(1000 / 144);
+    expect(loop.stats.framesPerSecond).toBeCloseTo(60, 0);
   });
 });
 
