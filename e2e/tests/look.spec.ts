@@ -8,6 +8,9 @@
  *   fully out on an island with the ladder still on rung 0;
  * - the heroes (the crew and the canoe) are drawn at the window's size on the ladder's last rung and
  *   on a 5120×2160 window, and the player is as sharp on the last rung as on the first;
+ * - what is aboard below the waterline is drawn, not painted over by the world's water (`&floor=0.05` puts the floor there);
+ * - the chip is timed at load: a chip too slow for any rung starts on the last one with no change shown, this
+ *   machine starts at the top, and `&chiptest=0` leaves the test out;
  * - the ladder climbs back after a slow spell, and never changes twice within ten seconds;
  * - the whole crew is drawn (a real crew: `?crew=N`), each at their own seat on every hull tier;
  * - each player is drawn doing what their own state says: one paddles while three rest, a drifting canoe
@@ -20,8 +23,8 @@
  * Needs the dev server (PORTAGE_URL, default http://localhost:5221).
  *
  * PORTAGE_LOOK_BREAK adds switches to every address, to prove each check can fail:
- * `&rung=9` (size), `&boil=1` (steadiness), `&bench=24` (frame rate), `&hero=0` (hero size and sharpness),
- * `&heropen=0` (the far figure). The crew checks are broken in the source: see game/LOOK.md.
+ * `&rung=11` (size), `&boil=1` (steadiness), `&bench=24` (frame rate), `&hero=0` (hero size and sharpness),
+ * `&heropen=0` (the far figure), `&hullwater=1` (the hull floor). The crew checks are broken in the source: see game/LOOK.md.
  */
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
@@ -84,7 +87,12 @@ interface Probe {
     pen: number;
     subject: { x: number; y: number; width: number; height: number } | null;
   };
-  ladder: { changes: { at: number; from: number; to: number }[]; bestAllowed: number };
+  ladder: {
+    changes: { at: number; from: number; to: number }[];
+    bestAllowed: number;
+    seconds: number;
+    chipTest: { rung: number; took: number; timed: [number, number][] } | null;
+  };
   rung: number;
   quality: { reflection: number; fine: number; ink: number; resolution: number };
   lineBoil: number;
@@ -233,7 +241,9 @@ async function medianFrameRate(page: Page, seconds: number): Promise<number> {
 for (const [width, height] of [[1920, 1080], [2560, 1440], [3840, 2160]]) {
   test(`draws the screen's full size at ${width}×${height}`, async ({ page }) => {
     await page.setViewportSize({ width, height });
-    await open(page, 'shot=play');
+    // Pinned on rung 0: this is the drawing's size at render scale 1, not the ladder. Unpinned, the chip test at load
+    // would start a 3840×2160 window some rungs down whenever another page is using the chip.
+    await open(page, 'shot=play&hold=1');
     const canvas = await page.evaluate(() => {
       const element = document.querySelector<HTMLCanvasElement>('#world canvas')!;
       return { width: element.width, height: element.height, window: [window.innerWidth, window.innerHeight], ratio: window.devicePixelRatio };
@@ -340,12 +350,12 @@ test('zoomed fully out on an island it holds 55 frames a second with the ladder 
 
 // The heroes: the crew and the canoe. Whatever the world is drawn at, they are drawn at the window's own pixels.
 for (const [name, width, height, query, zoomOut] of [
-  ['on the ladder\'s last rung', 1920, 1080, 'shot=island&live=1&rung=9&hold=1', false],
-  ['on the last rung, zoomed fully out', 1920, 1080, 'shot=island&live=1&rung=9&hold=1', true],
-  ['on the last rung, afloat', 1920, 1080, 'shot=play&live=1&rung=9&hold=1', false],
-  ['at 3840×2160 on the last rung', 3840, 2160, 'shot=island&live=1&rung=9&hold=1', true],
+  ['on the ladder\'s last rung', 1920, 1080, 'shot=island&live=1&rung=11&hold=1', false],
+  ['on the last rung, zoomed fully out', 1920, 1080, 'shot=island&live=1&rung=11&hold=1', true],
+  ['on the last rung, afloat', 1920, 1080, 'shot=play&live=1&rung=11&hold=1', false],
+  ['at 3840×2160 on the last rung', 3840, 2160, 'shot=island&live=1&rung=11&hold=1', true],
   ['at 5120×2160, past the pixel budget', 5120, 2160, 'shot=island&live=1&hold=1', false],
-  ['at 5120×2160 on the last rung, zoomed fully out', 5120, 2160, 'shot=island&live=1&rung=9&hold=1', true],
+  ['at 5120×2160 on the last rung, zoomed fully out', 5120, 2160, 'shot=island&live=1&rung=11&hold=1', true],
 ] as const) {
   test(`the heroes are drawn at the window's size ${name}`, async ({ page }) => {
     await page.setViewportSize({ width, height });
@@ -376,6 +386,12 @@ for (const [name, width, height, query, zoomOut] of [
   });
 }
 
+/**
+ * The share of the player's crop that must be pixel for pixel the same on rung 11 as on rung 0.
+ * Measured: 39 to 51% (the rest is the world round the player). With the heroes left in the world (`&hero=0`): 2 to 5%.
+ */
+const SAME_ON_THE_LAST_RUNG = 0.3;
+
 for (const [name, width, height, zoomOut] of [
   ['near', 1920, 1080, false],
   ['zoomed fully out', 1920, 1080, true],
@@ -384,22 +400,88 @@ for (const [name, width, height, zoomOut] of [
   test(`the player is as sharp on the last rung as on the first (${name})`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     const strength: Record<string, number> = {};
-    for (const rung of [0, 9]) {
+    const crops: Record<string, Buffer> = {};
+    for (const rung of [0, 11]) {
       await open(page, `shot=island&rung=${rung}&hold=1`);
       if (zoomOut) await zoomFullyOut(page);
-      strength[rung] = await edgeStrength(page, await playerCrop(page));
+      crops[rung] = await playerCrop(page);
+      strength[rung] = await edgeStrength(page, crops[rung]);
       expect((await probe(page)).rung).toBe(rung);
     }
-    console.log(`player crop, ${name}: edge strength ${strength[0].toFixed(1)} on rung 0, ${strength[9].toFixed(1)} on rung 9 (${Math.round((strength[9] / strength[0]) * 100)}%)`);
+    // The player is drawn at the window's size whatever the world is drawn at. So on the last rung the pixels of
+    // the player are the very same pixels as on the first: only the world round them in the crop is softer.
+    const changed = await differingPixels(page, crops[0], crops[11]);
+    const same = 1 - changed.different / changed.total;
+    console.log(`player crop, ${name}: edge strength ${strength[0].toFixed(1)} on rung 0, ${strength[11].toFixed(1)} on rung 11 (${Math.round((strength[11] / strength[0]) * 100)}%); `
+      + `${(same * 100).toFixed(1)}% of the crop's ${changed.total} pixels are the same on both rungs`);
     expect(strength[0]).toBeGreaterThan(20);
-    expect(strength[9]).toBeGreaterThanOrEqual(strength[0] * 0.93);
+    // The world behind the player is in the crop too, and at half size its lines are softer: that is the few percent.
+    expect(strength[11]).toBeGreaterThanOrEqual(strength[0] * 0.85);
+    expect(same).toBeGreaterThanOrEqual(SAME_ON_THE_LAST_RUNG);
   });
 }
+
+/** A capture of the biggest hero window: the canoe and whoever is aboard. */
+async function canoeCrop(page: Page): Promise<Buffer> {
+  const windows = (await probe(page)).hero.windows;
+  const big = windows.reduce((best, each) => (each.w * each.h > best.w * best.h ? each : best), windows[0]);
+  await page.addStyleTag({ content: '#interface { visibility: hidden !important; }' });
+  return page.screenshot({ clip: { x: big.x, y: page.viewportSize()!.height - big.y - big.h, width: big.w, height: big.h } });
+}
+
+test('what is aboard below the waterline is drawn, not painted over by the water', async ({ page }) => {
+  // The floor you see is 5 cm above the waterline today, so nothing aboard is under the water and the fix changes no pixel.
+  // `&floor=0.05` draws the floor 5 cm above the keel, 10 cm under the water. `&hullwater=1` leaves the world's water in the hull, as it was.
+  const crops: Record<string, Buffer> = {};
+  for (const [name, query] of [['today', ''], ['today, water left in', '&hullwater=1'], ['low floor', '&floor=0.05'], ['low floor, water left in', '&floor=0.05&hullwater=1']]) {
+    await open(page, `shot=play&hold=1${query}`);
+    crops[name] = await canoeCrop(page);
+  }
+  const today = await differingPixels(page, crops.today, crops['today, water left in']);
+  const low = await differingPixels(page, crops['low floor'], crops['low floor, water left in']);
+  const moved = await differingPixels(page, crops.today, crops['low floor']);
+  console.log(`hull floor: today the water left in changes ${today.different} of ${today.total} pixels of the canoe's window; with the floor 5 cm above the keel it paints over ${low.different}; `
+    + `the lower floor itself changes ${moved.different}`);
+  expect(today.different).toBe(0);
+  // 1,456 measured: the water's patch inside the hull.
+  expect(low.different).toBeGreaterThan(500);
+  expect(moved.different).toBeGreaterThan(500);
+});
+
+test('the chip is timed at load: a slow chip starts on its rung with no change shown, a fast one at the top', async ({ page }) => {
+  // A small window, so this machine has room to spare whoever else is using the chip.
+  await page.setViewportSize({ width: 960, height: 540 });
+  await open(page, 'shot=play&live=1', 500);
+  const fast = await probe(page);
+  // 24 times the work: a chip too slow for any rung. It starts on the last one, at half size, and that is not a change.
+  await open(page, 'shot=play&live=1&bench=24', 500);
+  const slow = await probe(page);
+  // The off switch: the ladder starts at the top and is still warming up.
+  await open(page, 'shot=play&live=1&bench=24&chiptest=0', 500);
+  const off = await probe(page);
+  const told = (look: Probe): string => (look.ladder.chipTest
+    ? `rung ${look.ladder.chipTest.rung} in ${look.ladder.chipTest.took.toFixed(0)} ms (${look.ladder.chipTest.timed.map(([rung, cost]) => `rung ${rung} ${cost.toFixed(1)} ms`).join(', ')})`
+    : 'not run');
+  console.log(`chip test: this machine ${told(fast)}; 24 times the work ${told(slow)}, world ${slow.drawingWidth}×${slow.drawingHeight}; switched off ${told(off)}, rung ${off.rung}`);
+  expect(fast.ladder.chipTest?.rung).toBe(0);
+  expect(fast.rung).toBe(0);
+  expect(slow.ladder.chipTest?.rung).toBe(11);
+  expect(slow.rung).toBe(11);
+  expect(slow.ladder.changes).toEqual([]);
+  expect([slow.drawingWidth, slow.drawingHeight]).toEqual([480, 270]);
+  expect([slow.canvasWidth, slow.canvasHeight]).toEqual([960, 540]);
+  // Half a second, and a little over for the rung it was on when time ran out.
+  expect(slow.ladder.chipTest!.took).toBeLessThan(1500);
+  expect(off.ladder.chipTest).toBeNull();
+  expect(off.rung).toBe(0);
+});
 
 test('the ladder climbs back after a slow spell, and never changes twice within ten seconds', async ({ page }) => {
   // A small window, so the graphics chip is never the reason a frame is long: only the stall is.
   await page.setViewportSize({ width: 960, height: 540 });
-  await open(page, 'shot=island&live=1', 4500);
+  // No chip test: the ladder is what is tested. And sixteen seconds of good frames first, so it has found its
+  // level: until then steps down may follow each other two seconds apart.
+  await open(page, 'shot=island&live=1&chiptest=0', 16_000);
   const stall = (milliseconds: number): Promise<void> =>
     page.evaluate((hold) => (window as unknown as { portage: { worldView: { stall: (hold: number) => void } } }).portage.worldView.stall(hold), milliseconds);
   expect((await probe(page)).rung).toBe(0);
@@ -415,7 +497,8 @@ test('the ladder climbs back after a slow spell, and never changes twice within 
   const { changes } = (await probe(page)).ladder;
   console.log(`ladder: ${changes.map((change) => `${change.from}>${change.to} at ${change.at.toFixed(1)} s`).join(', ')}`);
   expect(changes[0].to).toBeGreaterThan(changes[0].from);
-  for (const change of changes.slice(1)) expect(change.from - change.to).toBe(1);
+  // Back up: the world view times the rung above first, and with room to spare goes to the top in one change.
+  for (const change of changes.slice(1)) expect(change.to).toBeLessThan(change.from);
   for (let index = 1; index < changes.length; index += 1) expect(changes[index].at - changes[index - 1].at).toBeGreaterThanOrEqual(10);
   // It stays there.
   await page.waitForTimeout(3000);
@@ -430,7 +513,7 @@ for (const [name, query, crew, stray, windowsAtLeast] of [
 ] as const) {
   test(`the whole crew is drawn (${name})`, async ({ page }) => {
     const problems = watchConsole(page);
-    await open(page, `${query}&rung=9&hold=1`);
+    await open(page, `${query}&rung=11&hold=1`);
     if (stray) {
       await page.evaluate(() => { (window as unknown as Hooks).portage.session.game.players[2].position.x -= 4; });
       await page.waitForTimeout(300);
@@ -570,7 +653,7 @@ for (const [width, height] of [[1920, 1080], [5120, 2160]] as const) {
     const shares: Record<string, { ink: number; coat: number; scarf: number }> = {};
     const pen: Record<string, number> = {};
     for (const [name, query, zoomOut] of [['near', '', false], ['far', '', true], ['far, full pen', '&heropen=0', true]] as const) {
-      await open(page, `shot=island&rung=9&hold=1${query}`);
+      await open(page, `shot=island&rung=11&hold=1${query}`);
       if (zoomOut) await zoomFullyOut(page);
       shares[name] = await paintShares(page, await playerCrop(page));
       pen[name] = (await probe(page)).hero.pen;

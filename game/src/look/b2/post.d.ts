@@ -25,6 +25,8 @@ export interface Post {
    * `discard`: every pass keeps the mirror's materials, as it was before: to measure what shading each pixel once saves.
    */
   bench: { draws: number; pass: string; discard: boolean };
+  /** `?hullwater=1`: `keep` leaves the world's water inside the hull, painted over the floor, as it was. Only to prove the floor check can fail. */
+  hullWater: { keep: boolean };
   /**
    * width, height: the world's drawing size. reflectionScale: reflection size against the drawing.
    * inkMaximum: most ink texels per pixel, each way. sheetWidth, sheetHeight: the canvas. fine: the world's fine strokes.

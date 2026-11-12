@@ -28,7 +28,9 @@ The paddling camera looks down into the boat from astern. So each tier changes w
 | 2 Ribbed | Rebuilt. Fresh cedar with a dark rib every third station. Stout wood rails, rub strakes, mount blocks, a mast step, new decks |
 | 3 Long | 1.5 m longer. Cream rails and a cream band. Tin riveted round the bow. A rib every second station. Floorboards |
 
-**The floor.** The hull's real floor is under the waterline. The game draws the water in the world's pass and the heroes apart, tested against the water's depth. So anything aboard below the waterline is painted over by water. `buildHull` stops the planking you see at `HULL.floor`: 5 cm above the waterline. Put nothing you want seen below it. The proper fix is in the hero pass (`b2/post.js`), not here.
+**The floor.** The hull's real floor is under the waterline. The game draws the water in the world's pass and the heroes apart, tested against the water's depth. The hero pass now takes the world's water out from inside the hull (`PREFILL` in `b2/post.js`, from the shape `buildHull` marks on its mesh), so what is aboard below the waterline is drawn, not painted over.
+
+`buildHull` still stops the planking you see at `HULL.floor`, 5 cm above the waterline: lowering it is the last step of issue 10 and is not done. `&floor=0.05` shows it 5 cm above the keel. Two things to settle first. Everything that stands on the floor moves with it (`kit.ts` reads `floor`). And the flat of the floor narrows: 41 cm each side of the keel today, 24 cm at 5 cm above the keel on the first hull, so wide pieces need re-seating.
 
 ## Drawing a piece
 

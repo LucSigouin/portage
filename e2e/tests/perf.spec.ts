@@ -212,7 +212,8 @@ test('one link: it runs by itself, reports everything, copies, sends nothing and
   expect(data.watched!.frameTimes.count).toBeGreaterThan(800);
   const [top, last, low] = ['Top quality', 'Lowest rung', 'Low preset'].map((name) => costOf(result, name));
   expect([top.rung, top.worldWidth, top.worldHeight]).toEqual([0, 1920, 1080]);
-  expect([last.rung, last.worldWidth, last.worldHeight]).toEqual([9, 1382, 777]);
+  // The ladder's last rung: the world at half size.
+  expect([last.rung, last.worldWidth, last.worldHeight]).toEqual([11, 960, 540]);
   expect([low.rung, low.worldWidth, low.worldHeight]).toEqual([0, 1440, 810]);
   for (const cost of [top, last, low]) {
     expect(cost.milliseconds).toBeGreaterThan(0.5);
@@ -264,9 +265,10 @@ test('the time caps hold on a slow chip: 24 times the work, still inside a minut
   console.log(`bench=24: finished ${seconds.toFixed(1)} s after the address was opened; top quality ${top.milliseconds.toFixed(0)} ms a frame (${top.frames} frames), `
     + `${result.data.watched!.average.toFixed(1)} frames a second by itself`);
   expect(seconds).toBeLessThan(LIMIT_SECONDS);
-  // It really was slow: under 10 frames a second.
+  // It really was slow: a top-quality frame took over a tenth of a second.
   expect(top.milliseconds).toBeGreaterThan(100);
-  expect(result.data.watched!.average).toBeLessThan(10);
+  // By itself the game still fell far short of 60. (Under 10 before the ladder learned to start low on a slow chip; about 16 since.)
+  expect(result.data.watched!.average).toBeLessThan(30);
   expect(result.data.costs).toHaveLength(3);
   expect(result.text).toContain('test switches: bench=24');
   expect(result.text.split('\n').length).toBeLessThan(60);
