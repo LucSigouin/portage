@@ -431,6 +431,21 @@ describe('a quest that arrives already finished', () => {
   });
 });
 
+describe('a hand-over', () => {
+  it('is the one step that is checked live: apples in the bag count only once Odile has asked, and only while they are there', () => {
+    const state = newGame(7);
+    give(state, 'apple', 6);
+    run(state, {}, 0.4);
+    expect(state.quests.odile_windfall).toEqual({ status: 'available', progress: [0] });
+    standBeside(state, 'odile');
+    expect(dispatch(state, { type: 'accept_quest', questId: 'odile_windfall' }).ok).toBe(true);
+    expect(state.quests.odile_windfall).toEqual({ status: 'ready', progress: [6] });
+    expect(dispatch(state, { type: 'eat', itemId: 'apple' }).ok).toBe(true);
+    run(state, {}, 0.4);
+    expect(state.quests.odile_windfall).toEqual({ status: 'active', progress: [5] });
+  });
+});
+
 // --- Saves that are already stuck -------------------------------------------------
 
 describe('a save that is already stuck', () => {
