@@ -269,13 +269,19 @@ describe('pause, and time kept', () => {
     }
   });
 
-  it('no time is lost or made: the rules run 60 steps for every second of the screen, at every rate and cap', () => {
+  it('at every rate and cap: no time is lost or made, and every frame is told the gap the screen and the cap allow', () => {
     for (const hertz of RATES) {
       for (const cap of [60, 0, 30, 90]) {
         const screen = onScreen(hertz, cap);
         screen.run(5);
+        // The rules run 60 steps for every second of the screen.
         const steps = screen.drawn.reduce((sum, frame) => sum + frame.steps, 0);
         expect(Math.abs(steps - 300)).toBeLessThanOrEqual(3);
+        // The due gap is the screen's or the cap's, whichever is longer.
+        const allowed = Math.max(1 / hertz, cap > 0 ? 1 / cap : 0);
+        for (const frame of screen.drawn) expect(Math.abs(frame.due - allowed)).toBeLessThan(allowed * 0.005);
+        // And the frames come at that gap: the cap is held, on average, on every screen.
+        expect(Math.abs(screen.drawn.length / 5 - 1 / allowed)).toBeLessThan(1);
       }
     }
   });
