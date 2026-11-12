@@ -10,20 +10,20 @@ const KEY = 'key-sam-0123456789';
 describe('a guest\'s message', () => {
   it('is read when it is exactly one of the five', () => {
     expect(readClientMessage({ v, type: 'join', name: 'Sam', key: KEY })).toEqual({ v, type: 'join', name: 'Sam', key: KEY });
-    expect(readClientMessage({ v, type: 'input', seq: 3, have: -1, events: 0, input: { ...NEUTRAL_INPUT, paddle: 1 } }))
+    expect(readClientMessage({ v, type: 'input', seq: 3, have: -1, events: 0, input: { ...NEUTRAL_INPUT, paddle: 1 }, step: 0, walk: [] }))
       .toMatchObject({ type: 'input', seq: 3, input: { paddle: 1 } });
-    expect(readClientMessage({ v, type: 'command', id: 1, command: { type: 'board' } })).toEqual({ v, type: 'command', id: 1, command: { type: 'board' } });
+    expect(readClientMessage({ v, type: 'command', id: 1, command: { type: 'board' }, at: 0 })).toEqual({ v, type: 'command', id: 1, command: { type: 'board' }, at: 0 });
     expect(readClientMessage({ v, type: 'ping', time: 1.5, have: 4, events: 2 })).toEqual({ v, type: 'ping', time: 1.5, have: 4, events: 2 });
     expect(readClientMessage({ v, type: 'leave' })).toEqual({ v, type: 'leave' });
   });
 
   it('is refused when it names a player: nothing on the wire says who it is for', () => {
     const input = { ...NEUTRAL_INPUT };
-    expect(readClientMessage({ v, type: 'input', seq: 1, have: 0, events: 0, input, playerId: 0 })).toBeNull();
-    expect(readClientMessage({ v, type: 'input', seq: 1, have: 0, events: 0, input: { ...input, playerId: 0 } })).toBeNull();
-    expect(readClientMessage({ v, type: 'command', id: 1, command: { type: 'board' }, playerId: 0 })).toBeNull();
-    expect(readClientMessage({ v, type: 'command', id: 1, command: { type: 'board', playerId: 0 } })).toBeNull();
-    expect(readClientMessage({ v, type: 'command', id: 1, command: { type: 'eat', itemId: 'berries', as: 2 } })).toBeNull();
+    expect(readClientMessage({ v, type: 'input', seq: 1, have: 0, events: 0, input, step: 0, walk: [], playerId: 0 })).toBeNull();
+    expect(readClientMessage({ v, type: 'input', seq: 1, have: 0, events: 0, input: { ...input, playerId: 0 }, step: 0, walk: [] })).toBeNull();
+    expect(readClientMessage({ v, type: 'command', id: 1, command: { type: 'board' }, at: 0, playerId: 0 })).toBeNull();
+    expect(readClientMessage({ v, type: 'command', id: 1, command: { type: 'board', playerId: 0 }, at: 0 })).toBeNull();
+    expect(readClientMessage({ v, type: 'command', id: 1, command: { type: 'eat', itemId: 'berries', as: 2 }, at: 0 })).toBeNull();
     expect(readClientMessage({ v, type: 'join', name: 'Sam', key: KEY, playerId: 0 })).toBeNull();
     expect(readClientMessage({ v, type: 'leave', playerId: 1 })).toBeNull();
     expect(readClientMessage({ v, type: 'ping', time: 0, have: 0, events: 0, playerId: 1 })).toBeNull();
@@ -44,10 +44,10 @@ describe('a guest\'s message', () => {
   it('is refused when a number is not a number, or a key is not a key', () => {
     const input = { ...NEUTRAL_INPUT };
     for (const seq of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, '3', null]) {
-      expect(readClientMessage({ v, type: 'input', seq, have: 0, events: 0, input })).toBeNull();
+      expect(readClientMessage({ v, type: 'input', seq, have: 0, events: 0, input, step: 0, walk: [] })).toBeNull();
     }
     for (const id of [0, -4, 2.5, '1', null, Number.MAX_SAFE_INTEGER + 2]) {
-      expect(readClientMessage({ v, type: 'command', id, command: { type: 'board' } })).toBeNull();
+      expect(readClientMessage({ v, type: 'command', id, command: { type: 'board' }, at: 0 })).toBeNull();
     }
     for (const key of ['', 'short', 'has spaces in it!!', 'x'.repeat(65), 7, null]) {
       expect(readClientMessage({ v, type: 'join', name: 'Sam', key })).toBeNull();
@@ -115,9 +115,9 @@ describe('a command from the wire', () => {
 describe('a host\'s message, as a guest reads it', () => {
   it('is read when it is one of the host\'s six and of this version', () => {
     const state = { players: [], time: 0 };
-    expect(readHostMessage({ v, type: 'welcome', session: 1, sitting: 1, playerId: 1, hostId: 0, id: 1, step: 5, hash: 'ab', state, events: 0 })).not.toBeNull();
-    expect(readHostMessage({ v, type: 'state', id: 2, step: 9, hash: 'ab', ack: -1, base: null, changed: state })).not.toBeNull();
-    expect(readHostMessage({ v, type: 'state', id: 2, step: 9, hash: 'ab', ack: 4, base: 1, changed: {} })).not.toBeNull();
+    expect(readHostMessage({ v, type: 'welcome', session: 1, sitting: 1, playerId: 1, hostId: 0, id: 1, step: 5, hash: 'ab', state, events: 0, walked: 0 })).not.toBeNull();
+    expect(readHostMessage({ v, type: 'state', id: 2, step: 9, hash: 'ab', ack: -1, walked: 0, base: null, changed: state })).not.toBeNull();
+    expect(readHostMessage({ v, type: 'state', id: 2, step: 9, hash: 'ab', ack: 4, walked: 7, base: 1, changed: {} })).not.toBeNull();
     expect(readHostMessage({ v, type: 'events', first: 0, step: 9, events: [] })).not.toBeNull();
     expect(readHostMessage({ v, type: 'result', id: 1, result: { ok: true, gained: [], spent: [] } })).not.toBeNull();
     expect(readHostMessage({ v, type: 'ping', time: 2 })).not.toBeNull();
@@ -126,7 +126,7 @@ describe('a host\'s message, as a guest reads it', () => {
 
   it('is dropped when it is anything else', () => {
     for (const junk of [null, 5, {}, { v: v + 1, type: 'leave', reason: 'full' }, { v, type: 'leave', reason: 'because' }, { v, type: 'state', id: 'x' },
-      { v, type: 'welcome', session: 1, sitting: 1, playerId: 9, hostId: 0, id: 1, step: 1, hash: 'a', state: { players: [] }, events: 0 }, { v, type: 'join', name: 'x', key: 'y' }]) {
+      { v, type: 'welcome', session: 1, sitting: 1, playerId: 9, hostId: 0, id: 1, step: 1, hash: 'a', state: { players: [] }, events: 0, walked: 0 }, { v, type: 'join', name: 'x', key: 'y' }]) {
       expect(readHostMessage(junk)).toBeNull();
     }
   });

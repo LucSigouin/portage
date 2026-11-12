@@ -1,6 +1,6 @@
 /** A host and its guests on loopback wires, stepped a frame at a time. No network, no clock but the test's. */
 import { GuestLink, HostLink, createLoopbackPair } from '../../src/net/index.ts';
-import type { CommandOutcome, HostOptions, LoopbackConditions, LoopbackPair } from '../../src/net/index.ts';
+import type { CommandOutcome, GuestOptions, HostOptions, LoopbackConditions, LoopbackPair } from '../../src/net/index.ts';
 import { FIXED_STEP, NEUTRAL_INPUT, drainEvents, hashState, step } from '../../src/sim/index.ts';
 import type { GameEvent, GameState, StepInput } from '../../src/sim/index.ts';
 import { floatCanoeAt, newGame } from '../support.ts';
@@ -24,7 +24,7 @@ export interface Rig {
   /** Every event the host drained, in order. */
   hostEvents: GameEvent[];
   /** Seat a guest. Give the same key to get the same player back. */
-  join(name: string, key?: string, conditions?: Partial<LoopbackConditions>): Seat;
+  join(name: string, key?: string, conditions?: Partial<LoopbackConditions>, guest?: Partial<GuestOptions>): Seat;
   /** Run this many seconds of frames: wires, then the host's step, then each guest. */
   run(seconds: number): void;
   /**
@@ -59,10 +59,10 @@ export function createRig(options: { game?: GameState; conditions?: Partial<Loop
     seats: [],
     hostInput: {},
     hostEvents: [],
-    join(name, secret = key(name), conditions = options.conditions ?? {}): Seat {
+    join(name, secret = key(name), conditions = options.conditions ?? {}, guest = {}): Seat {
       const pair = createLoopbackPair(conditions, rig.seats.length + 11);
       host.accept(pair.host);
-      const seat: Seat = { pair, link: new GuestLink(pair.guest, { name, key: secret }), input: {}, events: [], results: [] };
+      const seat: Seat = { pair, link: new GuestLink(pair.guest, { name, key: secret, ...guest }), input: {}, events: [], results: [] };
       rig.seats.push(seat);
       return seat;
     },
