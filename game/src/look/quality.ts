@@ -1,8 +1,8 @@
 /**
  * How much the look draws: the graphics settings set a ceiling, and B2's
  * frame-rate ladder sheds cost below it when frames run long. Cost goes in
- * this order: reflection size, fine strokes and hatching, the pen's
- * anti-aliasing, and only last the resolution.
+ * this order: the weather's fine work, reflection size, fine strokes and
+ * hatching, the pen's anti-aliasing, and only last the resolution.
  *
  * All of that is the world's. The heroes (the crew and the canoe) are drawn
  * apart, at the window's full size with every stroke, on every rung.
@@ -10,6 +10,8 @@
 import type { Settings } from '../settings/index.ts';
 
 export interface Quality {
+  /** The weather's fine work: rain rings on the water, whitecaps, every rain stroke. 1 on, 0 shed (half the strokes stay). */
+  weather: number;
   /** Reflection size against the drawing, each way. 0 skips the mirrored pass. */
   reflection: number;
   /** Fine strokes and hatching: 1 on, 0 off. */
@@ -29,6 +31,7 @@ export const WINDOW_PIXEL_LIMIT = 3.4e7;
 /** Each rung lowers one thing. Rung 0 sheds nothing. */
 export const LADDER: readonly Partial<Quality>[] = [
   {},
+  { weather: 0 },
   { reflection: 0.6 },
   { reflection: 0.5 },
   { fine: 0 },
@@ -49,6 +52,7 @@ export const WATER_CELL_BY_DETAIL = { low: 2, medium: 1.5, high: 1 } as const;
 /** The most the settings allow. */
 export function qualityCeiling(graphics: Settings['graphics']): Quality {
   return {
+    weather: 1,
     reflection: graphics.qualityPreset === 'ultra' && graphics.waterDetail === 'high' ? 1 : REFLECTION_BY_WATER_DETAIL[graphics.waterDetail],
     fine: graphics.qualityPreset === 'low' ? 0 : 1,
     ink: INK_BY_PRESET[graphics.qualityPreset],
@@ -89,6 +93,7 @@ export function windowPixelRatio(width: number, height: number, devicePixelRatio
 /** Words for the `&fps=1` readout: what was shed, if anything. */
 export function shedNote(ceiling: Quality, quality: Quality): string {
   const shed: string[] = [];
+  if (quality.weather < ceiling.weather) shed.push('weather detail off');
   if (quality.reflection < ceiling.reflection) shed.push(`reflections ${Math.round((quality.reflection / ceiling.reflection) * 100)}%`);
   if (quality.fine < ceiling.fine) shed.push('fine strokes off');
   if (quality.ink < ceiling.ink) shed.push(`pen anti-aliasing ${quality.ink}×`);

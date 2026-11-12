@@ -11,7 +11,7 @@
  * own, at the window's full size with every stroke; marks on top. See LOOK.md.
  */
 import * as THREE from 'three';
-import { ISLANDS, ISLANDS_BY_ID, NODES_BY_ID, NODES_BY_ISLAND, NPCS, NPC_IDS, TUNING, WEATHER, spotPosition } from '../data/index.ts';
+import { ISLANDS, ISLANDS_BY_ID, NODES_BY_ID, NODES_BY_ISLAND, NPCS, NPC_IDS, TUNING, spotPosition } from '../data/index.ts';
 import type { IslandDefinition, NodeDefinition, NodeTypeId } from '../data/index.ts';
 import type { Settings } from '../settings/index.ts';
 import { bearingBetween, regionAt, selectTimeOfDay, terrainHeight, waterRoughnessAt, waveHeight } from '../sim/index.ts';
@@ -30,23 +30,27 @@ import { WAVES } from './b2/waves.js';
 import { CanoeView } from './canoe.ts';
 import type { FigureReport } from './canoe.ts';
 import { buildCharacter } from './characters.ts';
-import { mistDensity, overcastFor, paletteAt } from './daylight.ts';
+import { bankColourAt, mistDensity, paletteAt, rainInkAt } from './daylight.ts';
 import type { Rgb } from './daylight.ts';
 import { Effects } from './effects.ts';
 import { heroMargin, heroWindow, heroWindows } from './hero-windows.ts';
 import type { HeroWindow } from './hero-windows.ts';
 import { LANDMARK_HEIGHT, disposeLandmarks, landmarkGeometry } from './landmarks.ts';
+import { LAMP_SLOTS, LampGlows, lampsOf, poolLamps } from './lamps.ts';
 import { Marks } from './marks.ts';
 import type { Anchor } from './marks.ts';
 import { NODE_MARK_HEIGHT, disposeNodes, nodeGeometry } from './nodes.ts';
 import { floraFor } from './presets.ts';
 import { buildIslandProps, buildValleyForest, disposePropLibrary, instancedMesh } from './props.ts';
 import type { IslandProps } from './props.ts';
+import { RAIN_SHED_SHARE, Rain } from './rain.ts';
 import { FrameLadder, HATCH_BY_SHADOWS, WATER_CELL_BY_DETAIL, drawingPixelRatio, qualityAt, qualityCeiling, shedNote, windowPixelRatio } from './quality.ts';
 import type { LadderChange, Quality } from './quality.ts';
 import { hashText, scatterIsland } from './scatter.ts';
 import { GROUND_UNIFORM, regionUniforms, shoreUniforms, waveUniforms } from './surface.ts';
 import { buildIslandTerrain, buildValleyTerrain, disposeTerrainMaterials } from './terrain.ts';
+import { easeWeather, lampShareAt, rainVelocity, starsAt, weatherGoals, wetFor } from './weather.ts';
+import type { WeatherLook } from './weather.ts';
 
 /** Draw distances, metres from an island's shoreline. Each pair is (switch on, switch off): the gap stops flicker at the edge. */
 const ISLAND_DRAWN = 1700;
@@ -55,8 +59,6 @@ const SMALL_PROPS = [220, 250] as const;
 const NODES_DRAWN = [320, 340] as const;
 /** The mirror only needs what is close: beyond this an island reflects as bare ground. */
 const REFLECTED_PROPS = 380;
-/** Clear-day mist never thins past this visibility, metres: B2's look needs air in it. */
-const THINNEST_MIST = 1300;
 /** Share of the sheet's width left as bare paper in the lobby (B2's 0.4). */
 const LOBBY_BARE_PAPER = 0.4;
 /** How far the eye picks out loot, metres. */
@@ -107,6 +109,30 @@ export interface LookProbe {
     /** The local player's figure on the page, in CSS pixels from the top left. Null when off screen. */
     subject: { x: number; y: number; width: number; height: number } | null;
   };
+  /** The weather as drawn: the rules' weather, eased, and what it turned into. */
+  weather: {
+    /** 0 dry, 0.6 steady rain, 1 a full storm. */
+    rain: number;
+    storm: number;
+    /** Fog weather, 0 to 1. */
+    veil: number;
+    overcast: number;
+    visibility: number;
+    /** Metres a second, the way it blows toward. */
+    wind: [number, number];
+    /** How near the next weather is, 0 to 1. */
+    ahead: number;
+    stars: number;
+    /** The share of lamp light that shows: 0 in daylight, 1 at night. */
+    lampShare: number;
+    wet: number;
+    /** Rain strokes drawn now, and how far the rain has fallen (metres, inside its box). */
+    strokes: number;
+    fallen: [number, number, number];
+    /** Lamps throwing a pool (of four slots), and glows drawn. */
+    pools: number;
+    glows: number;
+  };
   /** The frame-rate ladder: every change this session, and the best rung it may still climb to. */
   ladder: { changes: LadderChange[]; bestAllowed: number };
   /** Rungs shed by the frame-rate ladder, and what the look draws now. */
@@ -152,6 +178,10 @@ export class InkWashWorldView implements WorldView {
   private canvasWidth = 1;
   private canvasHeight = 1;
   private readonly effects = new Effects();
+  private readonly glows = new LampGlows();
+  private readonly rain = new Rain();
+  /** `&rain=0` leaves the rain's strokes out (the rings, the wet and the sky stay): to prove that in rain the land changes only where a stroke is drawn. */
+  private rainStrokes = true;
   private readonly islands: IslandView[] = [];
   private readonly beacon = new THREE.Group();
   private readonly matrix = new THREE.Matrix4();
@@ -165,7 +195,7 @@ export class InkWashWorldView implements WorldView {
   private height = 1;
   private pixelRatio = 1;
   private graphics: Settings['graphics'] | null = null;
-  private ceiling: Quality = { reflection: 0.75, fine: 1, ink: 2, resolution: 1 };
+  private ceiling: Quality = { weather: 1, reflection: 0.75, fine: 1, ink: 2, resolution: 1 };
   private quality: Quality = { ...this.ceiling };
   private ladder = new FrameLadder();
   private boil = false;
@@ -180,8 +210,10 @@ export class InkWashWorldView implements WorldView {
   private paintTime = 0;
   private paintSeconds = 0;
   private lastStateTime = 0;
-  private overcast = 0;
-  private visibility = THINNEST_MIST;
+  /** The weather as drawn: the rules' weather, eased. */
+  private weather: WeatherLook | null = null;
+  /** `settle()` asks the next frame to land on the rules' weather at once. */
+  private settleDue = false;
   private readonly ready: Anchor[] = [];
 
   // Probe (browser tests): the water's drawn height, read back from the graphics card
@@ -206,6 +238,7 @@ export class InkWashWorldView implements WorldView {
     this.benchDraws = Math.max(1, Math.min(64, Number(switches.get('bench')) || 1));
     this.heroPass = switches.get('hero') !== '0';
     this.stallMilliseconds = Math.max(0, Number(switches.get('stall')) || 0);
+    this.rainStrokes = switches.get('rain') !== '0';
 
     const post = createPost(renderer, this.camera);
     this.post = post;
@@ -223,7 +256,7 @@ export class InkWashWorldView implements WorldView {
     water.uniforms.uGround.value.set(...GROUND_UNIFORM);
 
     this.heroes.add(this.canoe.group, this.canoe.ashore);
-    this.scene.add(sky.mesh, water.mesh, buildValleyTerrain(), this.heroes, this.effects.group, this.beacon);
+    this.scene.add(sky.mesh, water.mesh, buildValleyTerrain(), this.heroes, this.effects.group, this.beacon, this.glows.mesh);
     for (const stand of buildValleyForest()) {
       this.scene.add(stand.mesh);
       this.forest.push({ ...stand, shown: true });
@@ -375,6 +408,7 @@ export class InkWashWorldView implements WorldView {
     const worldHeight = worldRatio === windowRatio ? canvas.y : Math.max(1, Math.floor(this.height * worldRatio));
     post.setSize(worldWidth, worldHeight, Math.max(0.25, this.quality.reflection), this.quality.ink, canvas.x, canvas.y, this.quality.fine);
     water.uniforms.uReflect.value = this.quality.reflection > 0 ? 1 : 0;
+    this.rain.resize(canvas.x, canvas.y);
     this.camera.aspect = this.width / this.height;
     this.camera.updateProjectionMatrix();
   }
@@ -408,9 +442,11 @@ export class InkWashWorldView implements WorldView {
       console.info(`Portage look: ${this.ladder.rung > rungBefore ? 'frames ran long' : 'frames are quick again'}, rung ${this.ladder.rung}, ${shedNote(this.ceiling, this.quality)}`);
     }
 
-    this.syncLight(state, jumped || this.frameCount <= 1);
+    this.syncLight(state, jumped || this.frameCount <= 1 || this.settleDue);
+    this.settleDue = false;
     this.syncWaves(state);
     const dips = this.canoe.sync(state, crewOf(state), this.paintSeconds, this.paintTime, this.stage !== 'lobby', jumped);
+    this.syncLamps(state);
     this.syncWake(state, dips);
     this.syncNodes(state);
     this.effects.update(this.paintSeconds);
@@ -420,15 +456,14 @@ export class InkWashWorldView implements WorldView {
 
   /** The time-of-day palette and the weather's mist. */
   private syncLight(state: GameState, snap: boolean): void {
-    const weather = WEATHER[state.weather.kind];
     const inFog = regionAt(crewOf(state).local.position.x, crewOf(state).local.position.z).fogWall;
-    const overcastGoal = overcastFor(state.weather.kind, state.weather.stormLevel);
-    const visibilityGoal = Math.min(THINNEST_MIST, weather.visibility * (inFog ? 0.35 : 1));
-    const ease = snap ? 1 : 1 - Math.exp(-this.paintSeconds * 0.8);
-    this.overcast += (overcastGoal - this.overcast) * ease;
-    this.visibility += (visibilityGoal - this.visibility) * ease;
+    const goal = weatherGoals(state.weather, inFog);
+    if (!this.weather) this.weather = { ...goal };
+    const look = this.weather;
+    easeWeather(look, goal, this.paintSeconds, snap);
 
-    const palette = paletteAt(selectTimeOfDay(state).hour, this.overcast);
+    const hour = selectTimeOfDay(state).hour;
+    const palette = paletteAt(hour, look.overcast, look.storm);
     setColour(GU.uLight.value, palette.light);
     setColour(GU.uShadowTint.value, palette.shadowTint);
     setColour(GU.uPaper.value, palette.paper);
@@ -445,10 +480,41 @@ export class InkWashWorldView implements WorldView {
     setColour(GU.uInkBlue.value, palette.inkBlue);
     setColour(GU.uFoam.value, palette.foam);
     GU.uSunGlow.value = palette.sunGlow;
-    GU.uOvercast.value = this.overcast;
+    GU.uOvercast.value = look.overcast;
     GU.uLightDir.value.set(...palette.lightDirection);
     GU.uSunDir.value.set(...palette.sunDirection);
-    GU.uFogDensity.value = mistDensity(this.visibility);
+    GU.uFogDensity.value = mistDensity(look.visibility);
+    GU.uStars.value = starsAt(hour, look);
+    GU.uDark.value = lampShareAt(hour, look);
+    GU.uWet.value = wetFor(look);
+    GU.uRain.value = look.rain;
+    GU.uVeil.value = look.veil;
+    GU.uWeatherDetail.value = this.quality.weather;
+
+    // The wind: its speed, and the way it blows. A dead calm keeps the last heading.
+    const windSpeed = Math.hypot(look.windX, look.windZ);
+    if (windSpeed > 0.05) GU.uWind.value.set(look.windX / windSpeed, look.windZ / windSpeed, windSpeed);
+    else GU.uWind.value.z = windSpeed;
+    // What is coming stands upwind, in its own colour, as high as it is near.
+    const coming = look.aheadStorm + look.aheadRain + look.aheadFog + look.aheadClear;
+    GU.uAhead.value.set(-GU.uWind.value.x, -GU.uWind.value.y, look.ahead, coming > 0 ? look.aheadFog / coming : 0);
+    setColour(GU.uAheadColor.value, bankColourAt(hour, look.aheadStorm, look.aheadRain, look.aheadFog, look.aheadClear));
+
+    const pen = rainInkAt(hour, look.overcast, look.storm);
+    this.rain.sync(look.rain, look.storm, rainVelocity(look), this.paintSeconds, pen.ink, pen.strength, this.quality.weather > 0 ? 1 : RAIN_SHED_SHARE);
+  }
+
+  /** The lights: a pool from each of the nearest four, a glow on every one that burns. */
+  private syncLamps(state: GameState): void {
+    const lamps = lampsOf(state, this.stage === 'lobby' ? { lantern: null, firebox: null } : this.canoe.lights());
+    const subject = crewOf(state).local.position;
+    const pools = poolLamps(lamps, subject.x, subject.z);
+    for (let slot = 0; slot < LAMP_SLOTS; slot += 1) {
+      const lamp = pools[slot];
+      GU.uLamp.value[slot].set(lamp?.position[0] ?? 0, lamp?.position[1] ?? 0, lamp?.position[2] ?? 0, lamp && lamp.strength > 0 ? lamp.reach : 0);
+      GU.uLampTint.value[slot].set(lamp?.tint[0] ?? 0, lamp?.tint[1] ?? 0, lamp?.tint[2] ?? 0, lamp?.strength ?? 0);
+    }
+    this.glows.sync(lamps);
   }
 
   /** The water surface: the rules engine's wave table at this moment, and the storm. */
@@ -618,7 +684,13 @@ export class InkWashWorldView implements WorldView {
     // Where the heroes are on the window: each gets a rectangle of the canvas, drawn at the canvas's own size.
     this.heroes.updateMatrixWorld();
     const windows = this.heroPass ? heroWindows(this.canoe.heroes(), camera, this.canvasWidth, this.canvasHeight, heroMargin(this.canvasHeight)) : [];
-    post.render(this.scene, camera, water.mesh, marks.scene, this.quality.reflection > 0, (pass) => this.thinForMirror(pass === 2), this.heroPass ? this.heroes : null, windows);
+    post.render(this.scene, camera, water.mesh, this.rainStrokes && this.rain.falling ? [this.rain.scene, marks.scene] : marks.scene, this.quality.reflection > 0, (pass) => this.beforePass(pass), this.heroPass ? this.heroes : null, windows);
+  }
+
+  /** Before each pass of the world (2 mirrored, 0 colour, 1 ink): the mirror sees less, and the ink buffer no washes of light. */
+  private beforePass(pass: number): void {
+    this.glows.mesh.visible = pass !== 1;
+    if (pass !== 1) this.thinForMirror(pass === 2);
   }
 
   /** The mirror sees bare ground on far islands: their trees and loot would be a few pixels, at a third of the frame's draw calls. */
@@ -646,6 +718,11 @@ export class InkWashWorldView implements WorldView {
   /** Test hook: draw every pass `draws` times from now on (`pass` names one pass only). The same as `&bench=N&benchpass=`. */
   bench(draws: number, pass = ''): void {
     if (this.post) Object.assign(this.post.bench, { draws: Math.max(1, Math.min(64, draws)), pass });
+  }
+
+  /** Test hook: land on the rules' weather at the next frame, without easing. For a staged view that is held still. */
+  settle(): void {
+    this.settleDue = true;
   }
 
   /** Test hook: hold every frame this many milliseconds from now on. 0 lets go. The same as `&stall=N`. */
@@ -719,6 +796,22 @@ export class InkWashWorldView implements WorldView {
         pen: thinned ? heroPen(2 * Math.tan((this.camera.fov * Math.PI) / 360) * depth) : 1,
         subject: figure && { x: figure.x / ratio, y: (this.canvasHeight - figure.y - figure.h) / ratio, width: figure.w / ratio, height: figure.h / ratio },
       },
+      weather: {
+        rain: this.weather?.rain ?? 0,
+        storm: this.weather?.storm ?? 0,
+        veil: this.weather?.veil ?? 0,
+        overcast: this.weather?.overcast ?? 0,
+        visibility: this.weather?.visibility ?? 0,
+        wind: [this.weather?.windX ?? 0, this.weather?.windZ ?? 0],
+        ahead: this.weather?.ahead ?? 0,
+        stars: GU.uStars.value,
+        lampShare: GU.uDark.value,
+        wet: GU.uWet.value,
+        strokes: this.rainStrokes ? this.rain.drawn : 0,
+        fallen: [...this.rain.fallen],
+        pools: GU.uLamp.value.filter((lamp) => lamp.w > 0).length,
+        glows: this.glows.mesh.count,
+      },
       ladder: { changes: this.ladder.changes.map((change) => ({ ...change })), bestAllowed: this.ladder.bestAllowed },
       rung: this.ladder.rung,
       quality: { ...this.quality },
@@ -736,6 +829,8 @@ export class InkWashWorldView implements WorldView {
   dispose(): void {
     this.canoe.dispose();
     this.effects.dispose();
+    this.glows.dispose();
+    this.rain.dispose();
     this.marks?.dispose();
     this.water?.dispose();
     this.post?.dispose();

@@ -183,6 +183,7 @@ export const lanternMastPart: AttachmentBuilder = (context) => {
   lit.visible = false;
   return {
     object: group,
+    lamp: [0, hook[1] - 0.225, hook[2]],
     update: (canoe) => {
       lit.visible = canoe.lanternLit;
       dark.visible = !canoe.lanternLit;

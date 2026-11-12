@@ -54,6 +54,9 @@ function unit(x: number, y: number, z: number): Direction {
   return [x / length, y / length, z / length];
 }
 
+/** The pen's ink (B2's `PAL.ink`). */
+const INK = hex('#2a2b33');
+
 /** B2 exactly: `art-r1/b2/src/palette.js` and `sky.js`. */
 export const DAY: Palette = {
   light: [1, 1, 1],
@@ -100,7 +103,7 @@ export const DUSK: Palette = {
 
 /** Night: a dim blue moonlight. Dark, but every shape still reads. Lantern light is step 3. */
 export const NIGHT: Palette = {
-  light: [0.34, 0.41, 0.58],
+  light: [0.38, 0.45, 0.62],
   shadowTint: hex('#6a74a0'),
   paper: hex('#7f90b8'),
   fog: hex('#262f47'),
@@ -129,6 +132,17 @@ const OVERCAST: Pick<Palette, 'skyTop' | 'skyLow' | 'cloud' | 'fog' | 'waterDeep
   waterDeep: hex('#4d6676'),
   waterMid: hex('#72878f'),
   waterPale: hex('#a1aeae'),
+};
+
+/** A storm pulls the overcast sky down to this: slate cloud, lead water. The foam stays bright, so the whitecaps show. */
+const STORM: typeof OVERCAST = {
+  skyTop: hex('#59646d'),
+  skyLow: hex('#8d979b'),
+  cloud: hex('#48535c'),
+  fog: hex('#7d898e'),
+  waterDeep: hex('#33485a'),
+  waterMid: hex('#54707c'),
+  waterPale: hex('#7d9197'),
 };
 
 const COLOUR_KEYS: ColourKey[] = [
@@ -160,10 +174,10 @@ export function twilightAt(hour: number): number {
 }
 
 /**
- * The palette for an hour of the day (0 to 24) and a cloud cover (0 clear to 1).
+ * The palette for an hour of the day (0 to 24), a cloud cover (0 clear to 1) and a storm level (0 to 1).
  * `paletteAt(12, 0)` is `DAY`, exactly.
  */
-export function paletteAt(hour: number, overcast: number): Palette {
+export function paletteAt(hour: number, overcast: number, storm = 0): Palette {
   const daylight = daylightAt(hour);
   const twilight = twilightAt(hour) * 0.85;
   const cover = clamp01(overcast);
@@ -187,7 +201,40 @@ export function paletteAt(hour: number, overcast: number): Palette {
     palette.light = mixRgb(palette.light, [palette.light[0] * 0.84, palette.light[1] * 0.86, palette.light[2] * 0.9], cover);
     palette.shadowTint = mixRgb(palette.shadowTint, [0.72, 0.74, 0.8], cover * 0.5);
   }
+  const trouble = clamp01(storm);
+  if (trouble > 0) {
+    // A storm darkens what the cloud had only greyed, and takes a quarter of the light. It keeps the night dark too.
+    const dim = mix(0.3, 1, daylight);
+    for (const key of Object.keys(STORM) as (keyof typeof STORM)[]) {
+      const slate = STORM[key];
+      palette[key] = mixRgb(palette[key], [slate[0] * dim, slate[1] * dim, slate[2] * dim], trouble * 0.9);
+    }
+    palette.light = mixRgb(palette.light, [palette.light[0] * 0.74, palette.light[1] * 0.78, palette.light[2] * 0.86], trouble);
+    palette.farTint = mixRgb(palette.farTint, [palette.farTint[0] * 0.6, palette.farTint[1] * 0.63, palette.farTint[2] * 0.68], trouble);
+  }
   return palette;
+}
+
+/**
+ * The rain's pen: its colour and how strongly it is laid on. Dark blue ink on a grey day. At night dark ink would
+ * not show, so the strokes go pale, as the night's own highlights are.
+ */
+export function rainInkAt(hour: number, overcast: number, storm: number): { ink: Rgb; strength: number } {
+  const palette = paletteAt(hour, overcast, storm);
+  const night = 1 - daylightAt(hour);
+  return { ink: mixRgb(mixRgb(INK, palette.inkBlue, 0.35), palette.foam, 0.7 * night), strength: mix(0.55, 0.36, night) };
+}
+
+/**
+ * The colour of the next weather's cloud as it stands on the horizon, from how much of it is storm, rain, fog
+ * and clearing (shares that sum to 1 or less): slate, grey, the fog's own pale tone, or the clear sky's light.
+ */
+export function bankColourAt(hour: number, storm: number, rain: number, fog: number, clear: number): Rgb {
+  const total = Math.max(1e-6, storm + rain + fog + clear);
+  const parts: [number, Rgb][] = [
+    [storm, paletteAt(hour, 0.9, 1).cloud], [rain, paletteAt(hour, 0.65).cloud], [fog, paletteAt(hour, 0.5).fog], [clear, paletteAt(hour, 0).skyLow],
+  ];
+  return parts.reduce<Rgb>((sum, [share, colour]) => [sum[0] + (colour[0] * share) / total, sum[1] + (colour[1] * share) / total, sum[2] + (colour[2] * share) / total], [0, 0, 0]);
 }
 
 /** Cloud cover per weather, 0 clear to 1. A storm scales with its level. */

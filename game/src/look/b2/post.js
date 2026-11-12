@@ -638,7 +638,8 @@ export function createPost(renderer, camera) {
     },
     // overlay: an optional scene of world-anchored marks, drawn over the finished sheet.
     // reflect: false skips the mirrored pass (water detail "low").
-    // onPass(pass): called before each scene pass (2 reflection, 0 colour, 1 ink), so the caller can thin out what the mirror sees.
+    // onPass(pass): called before each scene pass (2 reflection, 0 colour, 1 ink), so the caller can thin out what the mirror sees
+    // and keep washes of light out of the ink buffer.
     // heroes: the group holding the crew and the canoe (a child of the scene), or null to leave them in the world.
     // heroWindows: where they are on the window, in pixels from the bottom left: [{ x, y, w, h }].
     render(scene, cam, water, overlay = null, reflect = true, onPass = null, heroes = null, heroWindows = []) {
@@ -685,6 +686,7 @@ export function createPost(renderer, camera) {
       }
 
       GU.uPass.value = 1;
+      if (onPass) onPass(1);
       renderer.setRenderTarget(aux);
       for (let draw = times('ink'); draw > 0; draw -= 1) {
         renderer.clear();
@@ -737,9 +739,10 @@ export function createPost(renderer, camera) {
         GU.uFine.value = state.fine;
       }
 
-      if (overlay) {
+      // (one scene, or several in order: the rain's strokes go under the marks)
+      for (const layer of overlay ? [overlay].flat() : []) {
         renderer.setRenderTarget(null);
-        renderer.render(overlay, cam);
+        for (let draw = times('overlay'); draw > 0; draw -= 1) renderer.render(layer, cam);
       }
     },
     dispose() {

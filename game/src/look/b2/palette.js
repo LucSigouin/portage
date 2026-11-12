@@ -101,6 +101,19 @@ export const GU = {
   uWaterPale: { value: new THREE.Color(PAL.waterPale) },
   uInkBlue: { value: new THREE.Color(PAL.inkBlue) },
   uFoam: { value: new THREE.Color(PAL.foam) },
+  // ---- lamps and weather (set by lamps.ts and weather.ts through world-view.ts; the defaults are a dry, clear day) ----
+  uLamp: { value: Array.from({ length: 4 }, () => new THREE.Vector4()) }, // each lamp: where it is, and how far its light reaches in metres (0: out)
+  uLampTint: { value: Array.from({ length: 4 }, () => new THREE.Vector4()) }, // its colour and strength
+  uDark: { value: 0 }, // the share of lamp light that shows: 0 in daylight, 1 at night
+  uWet: { value: 0 }, // rain on the ground and the wood: 0 dry to 1
+  uRain: { value: 0 }, // 0 dry, 0.6 steady rain, 1 a full storm
+  uWind: { value: new THREE.Vector3(0, -1, 0) }, // the way the wind blows (x, z, unit) and its speed in metres a second
+  uVeil: { value: 0 }, // fog weather: 0 clear air to 1
+  uStars: { value: 0 },
+  uAhead: { value: new THREE.Vector4(0, -1, 0, 0) }, // where the next weather comes from (x, z, unit), how near it is (0 to 1), how low its cloud lies (fog: 1)
+  uAheadColor: { value: new THREE.Color(PAL.cloud) },
+  uAheadRain: { value: 0 }, // the next weather's rain, drawn as a veil under its cloud
+  uWeatherDetail: { value: 1 }, // 1 draws the weather's fine work (rings, whitecaps), 0 sheds it: the ladder's first rung
   ...WAVE_UNIFORMS,
 };
 
@@ -171,7 +184,9 @@ flat in vec4 vInfo;
 flat in float vSpent;
 layout(location = 0) out vec4 o0;
 uniform vec3 uLightDir, uPaper, uShadowTint, uFogColor, uLight;
-uniform float uFogDensity, uFlip, uTime, uFine, uHatch, uPxK, uSc, uHero;
+uniform float uFogDensity, uFlip, uTime, uFine, uHatch, uPxK, uSc, uHero, uDark, uWet, uVeil;
+uniform vec4 uLamp[4];
+uniform vec4 uLampTint[4];
 uniform int uPass;
 ${NOISE}
 ${DETAIL}
@@ -318,7 +333,10 @@ void main(){
 #else
   if (fine > 0.) base = drawDetail(int(vInfo.z + .5), base, vL, Lx, Ly, vec4(vL, vInfo.w), O.y, gOy, fine, px);
 #endif
-  base = mix(base, vec3(dot(base, vec3(.3, .5, .2))) * .55 + uPaper * .4, vSpent * .7) * uLight;
+  // (raw: the thing's own colours, before the hour's light. Rain darkens what faces the sky.)
+  vec3 raw = mix(base, vec3(dot(base, vec3(.3, .5, .2))) * .55 + uPaper * .4, vSpent * .7);
+  raw *= mix(vec3(1.), vec3(.8, .83, .9), uWet * smoothstep(.15, .6, n.y));
+  base = raw * uLight;
   // 3 flat tones with a hand-wobbled terminator
   float lit = dot(n, uLightDir) * .8 + n.y * .2;
   vec4 slow = vnoise4(O.xz * 1.9 + O.y * 1.6 + 2.);       // one lookup: terminator wobble (r), bloom (g)
@@ -337,10 +355,27 @@ void main(){
   float gran2 = vnoise(O.xz * 29. + O.y * 23. + 5.);
   c *= .95 + .1 * mix(bloom, gran1, .5 * (1. - smoothstep(.02, .07, px)));
   c *= 1. + .075 * (gran2 - .5) * (1. - smoothstep(.005, .014, px));
+  if (uDark > 0.) {
+    // lamp light: a warm pool in two flat tones with a hand-wobbled edge. Inside it a thing has its own colours back.
+    float best = 0.;
+    vec3 tint = vec3(0.);
+    for (int i = 0; i < 4; i++) {
+      vec3 d = uLamp[i].xyz - P;
+      float far = length(d);
+      // 1 at the flame, 0 where its reach ends; faces turned to the flame take more of it
+      float v = (1. - far / max(uLamp[i].w, 1e-3)) * (.6 + .4 * dot(n, d) / max(far, 1e-3)) * uLampTint[i].a;
+      if (v > best) { best = v; tint = uLampTint[i].rgb; }
+    }
+    float lv = best + wob * .35;
+    float la = fwidth(lv) * 1.2 + .004;
+    float pool = smoothstep(-la, la, lv - .07) * .42 + smoothstep(-la, la, lv - .36) * .58;
+    c = mix(c, raw * tint * (.94 + .12 * bloom), pool * uDark * .9);
+  }
   c = mix(c, vColor * mix(uLight, vec3(1.), smoothstep(.3, .9, glow)), glow);
   // morning mist
   float fog = 1. - exp(-dist * uFogDensity);
-  fog = clamp(fog + smoothstep(70., 320., dist) * smoothstep(7., 0., P.y) * .16, 0., 1.);
+  // (in fog weather the mist lies thick on the water: the foot of a near island softens before its top does)
+  fog = clamp(fog + smoothstep(70., 320., dist) * smoothstep(7., 0., P.y) * .16 + uVeil * smoothstep(20., 130., dist) * smoothstep(10., 0., P.y) * .34, 0., 1.);
   c = mix(c, uFogColor, fog * (1. - glow * .6));
   o0 = vec4(c, 1.);
 }`;

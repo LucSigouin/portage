@@ -105,6 +105,9 @@ export class CanoeView {
   /** One figure per player id, made the first time that player is seen. */
   private readonly members = new Map<number, Member>();
   private pieces: AttachmentPiece[] = [];
+  /** Where each attachment with a flame has it, in canoe space. */
+  private flames: { lantern: THREE.Vector3 | null; firebox: THREE.Vector3 | null } = { lantern: null, firebox: null };
+  private readonly flamePoint = new THREE.Vector3();
   private attachmentsKey = '';
   private tier = -1;
   /** The crew's one stroke clock: everyone paddling is in time. */
@@ -184,6 +187,19 @@ export class CanoeView {
       this.attachments.add(holder);
       return piece;
     });
+    const flame = (attachmentId: string): THREE.Vector3 | null => {
+      const spot = this.pieces[(state.canoe.attachments as string[]).indexOf(attachmentId)]?.lamp;
+      return spot ? new THREE.Vector3(...spot) : null;
+    };
+    this.flames = { lantern: flame('lantern_mast'), firebox: flame('firebox') };
+  }
+
+  /** Where the lantern's flame and the firebox's are drawn, in the world, as of the last `sync`. Null where the canoe has none. */
+  lights(): { lantern: [number, number, number] | null; firebox: [number, number, number] | null } {
+    this.group.updateMatrixWorld();
+    const world = (spot: THREE.Vector3 | null): [number, number, number] | null =>
+      spot && (this.flamePoint.copy(spot).applyMatrix4(this.group.matrixWorld).toArray() as [number, number, number]);
+    return { lantern: world(this.flames.lantern), firebox: world(this.flames.firebox) };
   }
 
   /**

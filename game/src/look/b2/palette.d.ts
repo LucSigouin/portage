@@ -40,6 +40,18 @@ export const GU: typeof WAVE_UNIFORMS & {
   uWaterPale: IUniform<Color>;
   uInkBlue: IUniform<Color>;
   uFoam: IUniform<Color>;
+  uLamp: IUniform<Vector4[]>;
+  uLampTint: IUniform<Vector4[]>;
+  uDark: IUniform<number>;
+  uWet: IUniform<number>;
+  uRain: IUniform<number>;
+  uWind: IUniform<Vector3>;
+  uVeil: IUniform<number>;
+  uStars: IUniform<number>;
+  uAhead: IUniform<Vector4>;
+  uAheadColor: IUniform<Color>;
+  uAheadRain: IUniform<number>;
+  uWeatherDetail: IUniform<number>;
   tNoise: IUniform<DataTexture>;
 };
 

@@ -48,7 +48,7 @@ describe('window size (the heroes)', () => {
 
   it('is never touched by the render scale or the ladder: neither is an input', () => {
     expect(windowPixelRatio.length).toBe(3);
-    for (const rung of [0, 8]) expect(drawingPixelRatio(1920, 1080, 1, 1, qualityAt(qualityCeiling(graphics), rung).resolution)).toBeLessThanOrEqual(windowPixelRatio(1920, 1080, 1));
+    for (const rung of [0, 9]) expect(drawingPixelRatio(1920, 1080, 1, 1, qualityAt(qualityCeiling(graphics), rung).resolution)).toBeLessThanOrEqual(windowPixelRatio(1920, 1080, 1));
   });
 });
 
@@ -67,13 +67,16 @@ const QUICK = 1 / 60;
 const LONG = 1 / 40;
 
 describe('quality ladder', () => {
-  it('sheds reflections first and resolution last', () => {
+  it('sheds the weather\'s fine work first, then reflections, and resolution last', () => {
     const shedOrder = LADDER.slice(1).map((rung) => Object.keys(rung)[0]);
-    expect(shedOrder).toEqual(['reflection', 'reflection', 'fine', 'ink', 'ink', 'resolution', 'resolution', 'resolution']);
+    expect(shedOrder).toEqual(['weather', 'reflection', 'reflection', 'fine', 'ink', 'ink', 'resolution', 'resolution', 'resolution']);
     const ceiling = qualityCeiling(graphics);
-    for (let rung = 0; rung <= 5; rung += 1) expect(qualityAt(ceiling, rung).resolution).toBe(1);
-    expect(qualityAt(ceiling, 6).resolution).toBeLessThan(1);
-    expect(qualityAt(ceiling, 1).reflection).toBeLessThan(ceiling.reflection);
+    // The first rung sheds weather detail and nothing else of the world.
+    expect(qualityAt(ceiling, 1)).toEqual({ ...ceiling, weather: 0 });
+    expect(shedNote(ceiling, qualityAt(ceiling, 1))).toBe('shed: weather detail off');
+    for (let rung = 0; rung <= 6; rung += 1) expect(qualityAt(ceiling, rung).resolution).toBe(1);
+    expect(qualityAt(ceiling, 7).resolution).toBeLessThan(1);
+    expect(qualityAt(ceiling, 2).reflection).toBeLessThan(ceiling.reflection);
   });
 
   it('never raises anything above the settings', () => {
@@ -88,9 +91,9 @@ describe('quality ladder', () => {
   });
 
   it('starts from B2 at the default settings', () => {
-    expect(qualityCeiling(graphics)).toEqual({ reflection: 0.75, fine: 1, ink: 2, resolution: 1 });
+    expect(qualityCeiling(graphics)).toEqual({ weather: 1, reflection: 0.75, fine: 1, ink: 2, resolution: 1 });
     expect(shedNote(qualityCeiling(graphics), qualityAt(qualityCeiling(graphics), 0))).toBe('nothing shed');
-    expect(shedNote(qualityCeiling(graphics), qualityAt(qualityCeiling(graphics), 7))).toContain('resolution 80%');
+    expect(shedNote(qualityCeiling(graphics), qualityAt(qualityCeiling(graphics), 8))).toContain('resolution 80%');
   });
 
   it('steps down after two seconds of long frames, and not before the warm-up', () => {

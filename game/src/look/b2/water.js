@@ -2,7 +2,7 @@
 // brush-broken reflections, white ink foam at the shore and in the wake.
 import * as THREE from 'three';
 import { GU, NOISE, glsl } from './palette.js';
-import { WAVES } from './waves.js';
+import { WAVES, WAVE_CHOP, WAVE_COUNT } from './waves.js';
 
 export const SHORE_ISLANDS = 4; // the water knows the ground of the nearest few islands
 
@@ -20,9 +20,35 @@ uniform vec4 uValley;      // half width at the camera's z, its change per metre
 uniform vec4 uGround;      // seabed depth, shelf width (in radii), valley wall slope, bump height
 uniform float uValleyZ, uReflect;
 uniform vec3 uWaterDeep, uWaterMid, uWaterPale, uInkBlue, uFoam, uLight, uSkyTop, uSkyLow;
-uniform float uTime, uFogDensity, uFine, uSc;
+uniform float uTime, uFogDensity, uFine, uSc, uDark, uRain, uWeatherDetail;
+uniform vec3 uWind;
 uniform vec3 uFogColor;
+uniform vec4 uLamp[4];
+uniform vec4 uLampTint[4];
 ${NOISE}
+${WAVES}
+
+// Rain on the water: each cell of the surface takes a drop now and then, and a ring opens from it and fades.
+// Returns (dark ring, white ring). A cell keeps its own time, so no two rings open together; a ring is clear
+// at both ends of its life, so none ever pops.
+vec2 rainRings(vec2 p, float cell, float t, float pxW, float level){
+  if (pxW > cell * .09) return vec2(0.);                 // too small to draw from here
+  vec2 g = p / cell;
+  vec2 id = floor(g);
+  float r = hash12(id + 3.7);
+  float clock = t * (.5 + .25 * r) + r * 13.;
+  float turn = floor(clock);
+  float life = clock - turn;                              // 0 as the drop lands, 1 as its ring is gone
+  vec2 h = vec2(hash12(id + turn * 7.13), hash12(id - turn * 3.71 + 11.));
+  float on = smoothstep(0., .12, level - hash12(id + turn * 1.37 + 5.) * .9);   // harder rain: more of the cells
+  float d = distance(fract(g), .28 + .44 * h) * cell;    // the whole ring stays inside its cell
+  float rad = cell * (.04 + .22 * sqrt(life));
+  float th = max(.011, pxW * .8);
+  float aa = pxW * .9 + .0005;
+  float ring = (1. - smoothstep(th, th + aa, abs(d - rad))) * (1. - life) * (1. - life) * smoothstep(0., .1, life);
+  ring *= on * (1. - smoothstep(cell * .045, cell * .09, pxW));
+  return vec2(ring * step(h.x, .45), ring * step(.45, h.x));
+}
 
 // The ground under the water, worked out the way the rules engine's terrainHeight does (islands as
 // domes with a shelf, the seabed, the valley walls), so the shallows and the foam sit on the real shore
@@ -120,7 +146,7 @@ void main(){
   suv.x += (rw.r - .5) * amp * 2.6 + (vnoise(P * 3.3 - t * .3) - .5) * amp * 1.4;
   suv.y += (rw.g - .5) * amp * 2.2;
   vec3 refl = uReflect > .5 ? texture(tRefl, suv).rgb : mix(uSkyLow, uSkyTop, .3);   // no mirrored pass: the water takes the sky
-  float k = mix(.34, .94, smoothstep(.0, .75, fres));
+  float k = mix(.34, .94, smoothstep(.0, .75, fres)) * (1. - .4 * min(uRain / .6, 1.));   // rain breaks the mirror up
   float gap = smoothstep(.6, .64, vnoise(P * 1.15 + vec2(t * .08, -t * .2)));
   k *= 1. - gap * .6;
   vec3 c = mix(body, mix(refl, body, .12), k);
@@ -178,10 +204,50 @@ void main(){
     if (wgt > .01) st += wgt * (strokes(Pr, 1., t, pxW) + strokes(Pr + 31.7, 3.6, t * .8, pxW) + strokes(Pr + 77.1, 13., t * .6, pxW));
     if (fineW > .01) st += fineW * strokes(Pr + 11.3, .4, t * 1.1, pxW) * .7;
   }
+  if (uWeatherDetail > .5) {
+    float pxR = max(length(dPx), length(dPy));
+    if (uRain > 0.) {
+      // rain: rings where the drops land, two sizes
+      vec2 rr = rainRings(P, 1.1, t, pxR, uRain) + rainRings(P + 37.3, .63, t * 1.13, pxR, uRain * .85);
+      st += rr * vec2(.8, .95);
+    }
+    float blow = smoothstep(5.5, 9.5, uWind.z);
+    if (blow > 0.) {
+      // whitecaps: white dry-brush marks that ride the water, more of them the harder the wind blows and the rougher
+      // the region is, and heavier on the crests of the rules' own chop. Each mark comes and goes on its own slow
+      // time, as the ripple strokes do, so the white on the water stays even: marks that broke only as a crest
+      // passed whitened the whole view and cleared it again every few seconds, and that is a pulse.
+      // (the chop: every wave but the long swell: see waves.js)
+      float crest = 0.;
+      for (int i = 1; i < ${WAVE_COUNT}; i++) crest += uWave[i].z * sin(dot(uWave[i].xy, vWorld.xz) + uWave[i].w);
+      float onCrest = smoothstep(-.2, .6, crest / ${WAVE_CHOP.toFixed(4)});
+      // (the marks are the ripple strokes' own, bigger and all white, laid along the crests of the chop's longest wave)
+      vec2 run = normalize(uWave[1].xy);
+      vec2 Pc = vec2(dot(P, vec2(-run.y, run.x)), dot(P, run));
+      vec2 caps = strokes(Pc + 53.1, 2.7, t * .6, pxR) + strokes(Pc + 19.4, 4.6, t * .5, pxR);
+      float rough = clamp((waterRoughness(vWorld.z) - 1.) / 3., 0., 1.);
+      foam = max(foam, clamp(caps.x + caps.y, 0., 1.) * blow * mix(.6, 1., rough) * mix(.75, 1., onCrest));
+    }
+  }
   c = mix(c, uInkBlue, clamp(st.x, 0., 1.) * .72);
   c = mix(c, uFoam, clamp(st.y, 0., 1.) * .9);
 
   c = mix(c, uFoam, foam);
+  if (uDark > 0.) {
+    // lamp light on the water: a warm pool in two flat tones, its edge moved about by the water's own slow noise
+    float best = 0.;
+    vec3 tint = vec3(0.);
+    for (int i = 0; i < 4; i++) {
+      float v = (1. - distance(uLamp[i].xyz, vWorld) / max(uLamp[i].w, 1e-3)) * uLampTint[i].a;
+      if (v > best) { best = v; tint = uLampTint[i].rgb; }
+    }
+    float lv = best + (w2 - .5) * .06;
+    float la = fwidth(lv) * 1.2 + .004;
+    float pool = smoothstep(-la, la, lv - .07) * .4 + smoothstep(-la, la, lv - .36) * .6;
+    // the lit water is a thin wash of the lamp's colour; the white strokes and the foam in it catch the light
+    vec3 lit = mix(c, ${glsl('#9aa9ad')} * tint, .36) + tint * clamp(st.y + foam, 0., 1.) * .34;
+    c = mix(c, lit, pool * uDark);
+  }
   // pigment granulation in the wash, drifting with the water
   c *= 1. + .05 * (vnoise(P * 6.5 + 3.) - .5) * (1. - smoothstep(12., 45., dist));
 
@@ -356,6 +422,12 @@ export function createWater(reflectionTexture, resolution) {
     uLight: GU.uLight,
     uSkyTop: GU.uSkyTop,
     uSkyLow: GU.uSkyLow,
+    uLamp: GU.uLamp,
+    uLampTint: GU.uLampTint,
+    uDark: GU.uDark,
+    uRain: GU.uRain,
+    uWind: GU.uWind,
+    uWeatherDetail: GU.uWeatherDetail,
     uWave: GU.uWave,
     uRegion: GU.uRegion,
     uWaveArea: GU.uWaveArea,
