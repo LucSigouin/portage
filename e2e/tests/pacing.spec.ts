@@ -63,10 +63,12 @@ function madeUpScreen(rate: number): void {
 interface Pacing {
   /** Frames drawn a second (of the made-up screen's clock, when there is one). */
   drawn: number;
-  /** Of the frames that came on time by the real clock, the share that carried exactly one rules step. */
-  oneStepOnTime: number;
-  /** How many frames came on time by the real clock: 10 to 23 ms after the one before. */
-  onTime: number;
+  /** Drawn frames that stood for something other than whole sixtieths of a second. */
+  offBeat: number;
+  /** Drawn frames that carried a different number of rules steps than the sixtieths they stood for. */
+  wrongSteps: number;
+  /** Frames drawn a second by the real clock: whether the machine kept up. */
+  realDrawn: number;
   /** Share of drawn frames by the rules steps they carried, 0 to 1. */
   steps: Record<string, number>;
   /** Drawn frames in which the canoe moved and the camera did not, or the other way round. */
@@ -106,7 +108,7 @@ async function watch(page: Page, seconds: number): Promise<Pacing> {
     const view = scope.portage.worldView;
     const madeUp = (window as unknown as { madeUpMilliseconds?: () => number }).madeUpMilliseconds;
     const clock = (): number => (madeUp ? madeUp() : performance.now());
-    const record = { rows: [] as number[][], info: null as any, state: null as any, last: null as any, since: clock(), clock, lastReal: 0 };
+    const record = { rows: [] as number[][], info: null as any, state: null as any, last: null as any, since: clock(), clock, sinceReal: performance.now() };
     scope.pacing = record;
     const sync = view.sync.bind(view);
     const render = view.render.bind(view);
@@ -126,31 +128,28 @@ async function watch(page: Page, seconds: number): Promise<Pacing> {
           Math.hypot(pose.target.x - last.tx, pose.target.y - last.ty, pose.target.z - last.tz),
           record.info.dueSeconds ?? -1,
           record.info.frameSeconds,
-          performance.now() - record.lastReal,
         ]);
       }
-      record.lastReal = performance.now();
       record.last = { tick: state.tick, x, z, tx: pose.target.x, ty: pose.target.y, tz: pose.target.z };
       render(pose);
     };
   });
   await page.waitForTimeout(seconds * 1000);
   return page.evaluate(() => {
-    const scope = window as unknown as { portage: { loop: any }; pacing: { rows: number[][]; since: number; clock: () => number } };
-    const { rows, since, clock } = scope.pacing;
+    const scope = window as unknown as { portage: { loop: any }; pacing: { rows: number[][]; since: number; sinceReal: number; clock: () => number } };
+    const { rows, since, sinceReal, clock } = scope.pacing;
     const elapsed = (clock() - since) / 1000;
-    let onTime = 0;
-    let oneStepOnTime = 0;
+    let offBeat = 0;
+    let wrongSteps = 0;
     const steps: Record<string, number> = {};
     const frameMilliseconds: Record<string, number> = {};
     const due = new Set<number>();
     let apart = 0;
     let together = 0;
-    for (const [count, canoe, camera, dueSeconds, frameSeconds, realGap] of rows as [number, number, number, number, number, number][]) {
-      if (realGap >= 10 && realGap <= 23) {
-        onTime += 1;
-        if (count === 1) oneStepOnTime += 1;
-      }
+    for (const [count, canoe, camera, dueSeconds, frameSeconds] of rows as [number, number, number, number, number][]) {
+      const sixtieths = frameSeconds * 60;
+      if (Math.abs(sixtieths - Math.round(sixtieths)) > 1e-6) offBeat += 1;
+      if (count !== Math.round(sixtieths)) wrongSteps += 1;
       steps[count] = (steps[count] ?? 0) + 1 / rows.length;
       const key = (Math.round(frameSeconds * 10000) / 10).toFixed(1);
       frameMilliseconds[key] = (frameMilliseconds[key] ?? 0) + 1;
@@ -162,7 +161,7 @@ async function watch(page: Page, seconds: number): Promise<Pacing> {
     }
     return {
       drawn: rows.length / elapsed, steps, apart, together, due: [...due], frameMilliseconds,
-      oneStepOnTime: onTime > 0 ? oneStepOnTime / onTime : 0, onTime,
+      offBeat, wrongSteps, realDrawn: rows.length / ((performance.now() - sinceReal) / 1000),
       screenMilliseconds: scope.portage.loop.screenMilliseconds ?? 0, frames: rows.length,
     };
   });
@@ -194,20 +193,24 @@ for (const rate of [30, 60, 75, 90, 144]) {
   });
 }
 
-test('the browser\'s own 60 Hz is unchanged: one rules step in every drawn frame that comes on time', async ({ page }) => {
+test('the browser\'s own 60 Hz display: every frame is whole sixtieths with as many rules steps, and one each when the machine keeps up', async ({ page }) => {
   await openAfloat(page, 0);
   const pacing = await watch(page, 8);
   tell('real 60', 60, pacing);
-  console.log(`  on time by the real clock: ${pacing.onTime} of ${pacing.frames} frames, ${(pacing.oneStepOnTime * 100).toFixed(1)}% of them with exactly one rules step`);
-  // The machine is shared: a real frame may run long, and a long frame rightly carries more steps.
-  // Frames that came on time must carry exactly one, there must be enough of them to judge by,
-  // and no frame at all may be empty or move the canoe without the camera.
-  expect(pacing.onTime).toBeGreaterThan(120);
-  expect(pacing.oneStepOnTime).toBeGreaterThan(0.99);
+  // Exact, however busy the machine: the screen is read as 60 Hz, every frame is told one sixtieth, stands for
+  // whole sixtieths and carries exactly that many rules steps, none is empty, and the canoe and the camera move together.
+  expect(Math.abs(pacing.screenMilliseconds - 1000 / 60)).toBeLessThan(0.5);
+  expect(pacing.due).toEqual([16.7]);
+  expect(pacing.offBeat).toBe(0);
+  expect(pacing.wrongSteps).toBe(0);
   expect(pacing.steps[0] ?? 0).toBe(0);
   expect(pacing.apart).toBe(0);
-  expect(pacing.due).toEqual([16.7]);
-  expect(Math.abs(pacing.screenMilliseconds - 1000 / 60)).toBeLessThan(0.5);
+  expect(pacing.frames).toBeGreaterThan(120);
+  // The machine is shared. A real frame that runs long rightly carries more than one step, so "one step in
+  // every frame" can only be judged when the machine kept up. The made-up 60 Hz screen above judges it always.
+  const keptUp = pacing.realDrawn > 57;
+  console.log(`  the machine ${keptUp ? 'kept up' : 'did NOT keep up, so the one-step count is not judged here'}: ${pacing.realDrawn.toFixed(1)} frames a second by the real clock`);
+  if (keptUp) expect(pacing.steps[1]).toBeGreaterThan(0.98);
 });
 
 test('with the cap off on a made-up 144 Hz screen, a frame with no rules step moves neither the canoe nor the camera', async ({ page }) => {
