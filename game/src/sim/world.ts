@@ -6,7 +6,7 @@ import type { IslandDefinition, IslandId, RegionDefinition } from '../data/types
 import { HULL_TIERS } from '../data/canoe.ts';
 import { TUNING } from '../data/tuning.ts';
 import {
-  ISLANDS, ISLANDS_BY_ID, REGIONS, VALLEY_HALF_WIDTH, VALLEY_NORTH_SHORE_Z, VALLEY_SOUTH_SHORE_Z,
+  ISLANDS, ISLANDS_BY_ID, QUARRY_BENCHES, REGIONS, VALLEY_HALF_WIDTH, VALLEY_NORTH_SHORE_Z, VALLEY_SOUTH_SHORE_Z,
   WAVE_TABLE, spotPosition,
 } from '../data/world.ts';
 import type { Vector3 } from './types.ts';
@@ -171,6 +171,62 @@ export function terrainHeight(x: number, z: number): number {
     if (islandHeight > height) height = islandHeight;
   }
   return height;
+}
+
+// --- Ground under feet --------------------------------------------------------
+
+/** The quarry's benches in the world: where the cut stands, how it is turned, and each block's top. */
+const QUARRY = (() => {
+  const { landmark, rows, columns, front, depth, firstColumnX, columnWidth, lip } = QUARRY_BENCHES;
+  for (const island of ISLANDS) {
+    const placed = island.landmarks.find((candidate) => candidate.kind === landmark);
+    if (!placed) continue;
+    const origin = spotPosition(island, placed.spot);
+    // The same turn the look gives a landmark: by its bearing and its island's.
+    const turn = -(placed.bearing + island.rotation);
+    const cosine = Math.cos(turn);
+    const sine = Math.sin(turn);
+    const tops: number[][] = [];
+    for (let row = 0; row < rows; row += 1) {
+      tops.push([]);
+      for (let column = 0; column < columns; column += 1) {
+        const x = firstColumnX + column * columnWidth;
+        const z = front + (row + 1) * depth;
+        tops[row].push(terrainHeight(origin.x + x * cosine + z * sine, origin.z - x * sine + z * cosine) + lip);
+      }
+    }
+    const left = firstColumnX - columnWidth / 2;
+    // No block is farther from the landmark's origin than its farthest corner.
+    const reach = Math.hypot(Math.max(-left, left + columns * columnWidth), Math.max(-front, front + rows * depth));
+    return { origin, cosine, sine, tops, left, reach };
+  }
+  return null;
+})();
+
+/** The top of the quarry bench over a point, or null when no bench is there. */
+function benchTopAt(x: number, z: number): number | null {
+  if (!QUARRY) return null;
+  const offsetX = x - QUARRY.origin.x;
+  const offsetZ = z - QUARRY.origin.z;
+  if (Math.abs(offsetX) > QUARRY.reach || Math.abs(offsetZ) > QUARRY.reach) return null;
+  const localX = offsetX * QUARRY.cosine - offsetZ * QUARRY.sine;
+  const localZ = offsetX * QUARRY.sine + offsetZ * QUARRY.cosine;
+  const column = Math.floor((localX - QUARRY.left) / QUARRY_BENCHES.columnWidth);
+  const row = Math.floor((localZ - QUARRY_BENCHES.front) / QUARRY_BENCHES.depth);
+  if (column < 0 || column >= QUARRY_BENCHES.columns || row < 0 || row >= QUARRY_BENCHES.rows) return null;
+  return QUARRY.tops[row][column];
+}
+
+/**
+ * The height feet stand at, metres: the terrain, or the flat top of a quarry bench where one is
+ * drawn on it. `terrainHeight` stays the smooth hill the look models its ground and fits its
+ * landmarks from; this is what walking, climbing and standing go by, so a bench's face is a wall
+ * and its top is a floor.
+ */
+export function groundHeight(x: number, z: number): number {
+  const height = terrainHeight(x, z);
+  const bench = benchTopAt(x, z);
+  return bench !== null && bench > height ? bench : height;
 }
 
 /** The island a point is on or right beside (inside 1.2 radii), or null. */

@@ -130,6 +130,8 @@
  *   `waterRoughnessAt(x, z, state.weather.stormLevel)`.
  * - `terrainHeight(x, z)`: ground height from the island table, the seabed and
  *   the valley walls. Negative is under water.
+ * - `groundHeight(x, z)`: where feet stand. The terrain, or the top of a quarry
+ *   bench where one is drawn on it. A player on foot is at this height.
  * - `regionAt`, `baseRoughnessAt`, `waterRoughnessAt`, `currentAt`,
  *   `valleyHalfWidth`: the region bands, their roughness and the Narrows current.
  * - `islandAt`, `nearestIsland`, `islandLanding`, `landingBerth`,
@@ -204,7 +206,7 @@ export type { SleepBlock } from './survival.ts';
 
 // --- World functions shared with rendering ----------------------------------
 export {
-  waveHeight, waveGradient, waveNormal, terrainHeight, regionAt, baseRoughnessAt, waterRoughnessAt,
+  waveHeight, waveGradient, waveNormal, terrainHeight, groundHeight, regionAt, baseRoughnessAt, waterRoughnessAt,
   currentAt, valleyHalfWidth, islandAt, nearestIsland, islandLanding, landingBerth, hullGrounding,
   bearingVector, bearingBetween, bearingDifference,
 } from './world.ts';

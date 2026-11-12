@@ -137,6 +137,8 @@ export const TUNING = {
     stormRampSeconds: 45,
     stormWarningSeconds: 90,
     windEasePerSecond: 0.15,
+    /** Radians per second the wind's bearing swings toward a new one. A full reversal takes about six seconds. */
+    windTurnPerSecond: 0.5,
     firstWeatherSeconds: 420,
     /** Weather changes that must pass after a storm before the next can be rolled. */
     changesBetweenStorms: 3,
