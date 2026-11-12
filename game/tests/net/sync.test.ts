@@ -375,6 +375,45 @@ describe('the host is the truth', () => {
     expect(rig.game.players.map((player) => player.position.x)).toEqual((JSON.parse(before) as GameState).players.map((player) => player.position.x));
   });
 
+  it('gives one wire one seat: joining again under other keys takes no more, and a friend still gets in', () => {
+    const rig = createRig();
+    const pair = createLoopbackPair();
+    rig.host.accept(pair.host);
+    const welcomed: number[] = [];
+    pair.guest.receive((message) => {
+      const heard = message as { type: string; playerId: number };
+      if (heard.type === 'welcome') welcomed.push(heard.playerId);
+    });
+    const say = (message: object): void => {
+      pair.guest.send(message);
+      pair.advance(0);
+      pair.advance(0);
+    };
+    const refused = rig.host.stats.refused;
+    // One wire asks three times, each time as somebody new.
+    for (const name of ['first', 'second', 'third']) say({ v, type: 'join', name: 'x', key: key(name) });
+    expect(rig.game.players.map((player) => [player.id, player.connected])).toEqual([[0, true], [1, true]]);
+    expect(welcomed).toEqual([1]);
+    expect(rig.host.guests).toEqual([1]);
+    expect(rig.host.stats.refused).toBe(refused + 2);
+    // Leaving first does not open the door either: the wire still has the one key it came with.
+    say({ v, type: 'leave' });
+    say({ v, type: 'join', name: 'y', key: key('fourth') });
+    expect(rig.game.players.map((player) => [player.id, player.connected])).toEqual([[0, true], [1, false]]);
+    expect(rig.host.stats.refused).toBe(refused + 3);
+    // The same key on the same wire is still the same guest coming back.
+    say({ v, type: 'join', name: 'x', key: key('first') });
+    expect(welcomed).toEqual([1, 1]);
+    expect(rig.game.players[1].connected).toBe(true);
+    // Two seats are left, and two friends get them.
+    const friends = ['Ann', 'Bo'].map((name) => rig.join(name));
+    rig.run(0.5);
+    expect(friends.map((friend) => [friend.link.status, friend.link.playerId])).toEqual([['playing', 2], ['playing', 3]]);
+    // The wire goes quiet: its one player is marked away, and nobody else is left counted as here.
+    rig.run(11);
+    expect(rig.game.players.map((player) => player.connected)).toEqual([true, false, true, true]);
+  });
+
   it('keeps the difficulty the host\'s: a guest cannot set it', () => {
     const { rig, ann } = ashoreRig();
     const refused = rig.host.stats.refused;

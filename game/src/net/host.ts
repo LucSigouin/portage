@@ -5,7 +5,8 @@
  *
  * - `accept(transport)`: one more wire. Whoever is on it is nobody until they
  *   `join`; then they are one player, and every later message on that wire is
- *   that player's. Nothing on the wire can name another.
+ *   that player's. Nothing on the wire can name another, and a second `join`
+ *   under another key is refused: one wire never holds two seats.
  * - `crewInput(input, playerId)`: the host's own input plus every guest's
  *   latest, indexed by player id, ready for `step`.
  * - `afterFrame(events, seconds)`: call once a frame after stepping and
@@ -41,7 +42,7 @@ export interface HostOptions {
 }
 
 export interface HostStats {
-  /** Messages thrown away: not a message, a field too many, sent before joining, a command only the host may give. */
+  /** Messages thrown away: not a message, a field too many, sent before joining, a command only the host may give, a join under a second key. */
   refused: number;
   /** State messages sent, whole and as changes. */
   statesSent: number;
@@ -66,6 +67,8 @@ interface Connection {
   transport: Transport;
   /** The one player this wire may act for. Null before `join` and after going away. */
   playerId: PlayerId | null;
+  /** The key this wire first joined with. A wire is one guest: it never gets to join under another. */
+  key: string | null;
   input: StepInput;
   inputSeq: number;
   inputAt: number;
@@ -137,7 +140,7 @@ export class HostLink {
       return;
     }
     const connection: Connection = {
-      transport, playerId: null, input: { ...NEUTRAL_INPUT }, inputSeq: -1, inputAt: 0, have: -1, eventsHeld: 0, eventsSentAt: 0,
+      transport, playerId: null, key: null, input: { ...NEUTRAL_INPUT }, inputSeq: -1, inputAt: 0, have: -1, eventsHeld: 0, eventsSentAt: 0,
       sitting: 0, lastCommandId: 0, results: new Map(), walk: new WalkTimeline(this.game.tick), waiting: [],
       heardAt: this.clock, open: true,
     };
@@ -291,6 +294,13 @@ export class HostLink {
   }
 
   private join(connection: Connection, rawName: string, key: string): void {
+    // One wire, one seat. A wire that asks again under another key would be handed a second player, and a third:
+    // every seat in the canoe, each one counted as here for as long as that one wire talks.
+    if (connection.key !== null && connection.key !== key) {
+      this.stats.refused += 1;
+      return;
+    }
+    connection.key = key;
     const game = this.game;
     const name = cleanPlayerName(rawName);
     let playerId = this.keys.get(key);
