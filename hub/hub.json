@@ -11,7 +11,7 @@
   ],
   "name": "Portage",
   "pitch": "A browser survival-crafting game. The valley flooded. You have a leaky canoe, and you bolt what you build onto it.",
-  "updated": "2026-11-11, end of day",
+  "updated": "2026-11-12",
   "status": {
     "done": [
       "Rules engine. Runs with no screen. 179 tests pass. A bot finishes the whole main quest.",
@@ -31,23 +31,44 @@
       "Weather and night: rain, storm, fog, stars, light from the lantern, the campfire and the Beacon, and the sky showing what is coming. Nothing flashes.",
       "Co-op groundwork: players who drop and come back, a host and guests kept in step, two tabs on one computer playing one game. 815 tests pass, plus 86 browser tests.",
       "Weather, night and the co-op groundwork are live on sigouin.net/portage (fourth deploy, commit 0d3a8fd). Two tabs played one game on the live site.",
-      "The workbench is public at sigouin.net/portage/workbench, for a phone anywhere. The reports and the hub stay on the home network."
+      "The workbench is public at sigouin.net/portage/workbench, for a phone anywhere. The reports and the hub stay on the home network.",
+      "Why it was choppy on a slower computer, measured. A one-link report a friend can run (?perf=1).",
+      "Smooth on slower computers: the game times the chip at load, two lower quality steps, even drawing on 75, 90 and 144 Hz screens.",
+      "Loose ends fixed in the valley, the weather and the canoe. A balance pass. A quest that could strand you is fixed for all 21 quests.",
+      "Friends join by a link: a relay, Host a crew and Join a crew in the lobby, and a guest whose walking answers at once. Proven on this Mac only. Not deployed.",
+      "The asset viewer: every drawn thing alone, on a grid. Live at https://sigouin.net/portage-assets/ .",
+      "A fresh scored review: look 8, speed 8, friends 8, first minutes 7, canoe 7, solid 6. 1098 tests pass, plus 118 browser tests."
     ],
     "running": [],
     "waiting": [
-      { "text": "The workbench: every step so far, in point form. Made for your phone.", "href": "workbench.html" },
-      "Stopped here on 2026-11-11, as Luc asked. Nothing is running.",
-      { "text": "Luc: watch a storm at night. Does it feel calm?", "href": "game/?shot=storm&live=1" },
-      { "text": "Luc: try co-op in two tabs. Open this one first (the host).", "href": "game/?host=lake&name=Luc" },
-      { "text": "Then this one in a second tab (the guest).", "href": "game/?join=lake&name=Sam" },
-      { "text": "Luc: the starting canoe is weathered grey, not red. Keep or bring the red back?", "href": "game/?shot=play" },
-      "Luc: invite the guys to the private GitHub repo (github.com/LucSigouin/portage, Settings, Collaborators).",
-      "Next, when you say: the relay so friends join by a link, speed on big screens, loose ends, balance, a scored review."
+      {
+        "text": "The workbench: every step so far, in point form. Made for your phone.",
+        "href": "workbench.html"
+      },
+      {
+        "text": "The review: six scores and sixteen fixes, worst first.",
+        "href": "docs/report-review.html"
+      },
+      "Luc: repair Claude Code (one command). No new worker can start until then, so the fix round waits.",
+      "Luc: six calls from the review. Build payoff, the first hull upgrade, trees hiding the player, the relay rate limit, crafts made early, steady 30 on very slow chips.",
+      "Luc: play the local build, then say go. Nothing built on Nov 12 is live except the asset viewer.",
+      "Luc: the relay needs your go and a small Cloudflare service before friends can join over the internet.",
+      {
+        "text": "Luc: the starting canoe is weathered grey, not red. Keep or bring the red back?",
+        "href": "game/?shot=play"
+      },
+      "Next: the fix round (ten fixes), then the three low points are scored again."
     ]
   },
   "addresses": [
-    { "label": "Tailscale (Luc's private device network, never changes)", "url": "http://100.110.210.9:5230/" },
-    { "label": "Same network as the Mac (this address changes when the Mac moves)", "url": "http://192.168.14.88:5230/" }
+    {
+      "label": "Tailscale (Luc's private device network, never changes)",
+      "url": "http://100.110.210.9:5230/"
+    },
+    {
+      "label": "Same network as the Mac (this address changes when the Mac moves)",
+      "url": "http://192.168.14.88:5230/"
+    }
   ],
   "rebuild": "node /Users/ls/Claude-Workspace/personal/portage/hub/build.mjs && node /Users/ls/Claude-Workspace/personal/portage/hub/check.mjs",
   "sections": [
@@ -86,39 +107,252 @@
           "title": "Jump to a main quest",
           "note": "Each link starts a game already played up to that quest, then hands you the keys. Your saves are not touched.",
           "links": [
-            { "title": "1. Bail out", "href": "game/?at=quest1", "see": "Bail the canoe, land on Home Knoll." },
-            { "title": "2. First haul", "href": "game/?at=quest2", "see": "Gather driftwood and fiber, make a stone knife." },
-            { "title": "3. Stop the leak", "href": "game/?at=quest3", "see": "Spruce gum and birch bark, cook pitch, patch the hull." },
-            { "title": "4. Something to eat", "href": "game/?at=quest4", "see": "Forage, boil water, cook a meal, sleep." },
-            { "title": "5. A proper edge", "href": "game/?at=quest5", "see": "Find the hatchet head at Cabin Roofs, make the hatchet." },
-            { "title": "6. Ribs and rails", "href": "game/?at=quest6", "see": "Pry bar and saw blade from the Boathouse, planks, ribbed hull." },
-            { "title": "7. Steady now", "href": "game/?at=quest7", "see": "Build the port outrigger, cross into the Reach." },
-            { "title": "8. The bellkeeper", "href": "game/?at=quest8", "see": "Reach Steeple Rock, meet Wren, sew sailcloth." },
-            { "title": "9. Catch the wind", "href": "game/?at=quest9", "see": "Mast and sail, rudder." },
-            { "title": "10. Voices", "href": "game/?at=quest10", "see": "Coil, battery, wire and crystal, long hull, radio." },
-            { "title": "11. Through the Narrows", "href": "game/?at=quest11", "see": "Second outrigger, lantern mast, reach Fire Tower Ridge." },
-            { "title": "12. The Beacon", "href": "game/?at=quest12", "see": "Stock food and water, cross the Fog, light the Beacon." }
+            {
+              "title": "1. Bail out",
+              "href": "game/?at=quest1",
+              "see": "Bail the canoe, land on Home Knoll."
+            },
+            {
+              "title": "2. First haul",
+              "href": "game/?at=quest2",
+              "see": "Gather driftwood and fiber, make a stone knife."
+            },
+            {
+              "title": "3. Stop the leak",
+              "href": "game/?at=quest3",
+              "see": "Spruce gum and birch bark, cook pitch, patch the hull."
+            },
+            {
+              "title": "4. Something to eat",
+              "href": "game/?at=quest4",
+              "see": "Forage, boil water, cook a meal, sleep."
+            },
+            {
+              "title": "5. A proper edge",
+              "href": "game/?at=quest5",
+              "see": "Find the hatchet head at Cabin Roofs, make the hatchet."
+            },
+            {
+              "title": "6. Ribs and rails",
+              "href": "game/?at=quest6",
+              "see": "Pry bar and saw blade from the Boathouse, planks, ribbed hull."
+            },
+            {
+              "title": "7. Steady now",
+              "href": "game/?at=quest7",
+              "see": "Build the port outrigger, cross into the Reach."
+            },
+            {
+              "title": "8. The bellkeeper",
+              "href": "game/?at=quest8",
+              "see": "Reach Steeple Rock, meet Wren, sew sailcloth."
+            },
+            {
+              "title": "9. Catch the wind",
+              "href": "game/?at=quest9",
+              "see": "Mast and sail, rudder."
+            },
+            {
+              "title": "10. Voices",
+              "href": "game/?at=quest10",
+              "see": "Coil, battery, wire and crystal, long hull, radio."
+            },
+            {
+              "title": "11. Through the Narrows",
+              "href": "game/?at=quest11",
+              "see": "Second outrigger, lantern mast, reach Fire Tower Ridge."
+            },
+            {
+              "title": "12. The Beacon",
+              "href": "game/?at=quest12",
+              "see": "Stock food and water, cross the Fog, light the Beacon."
+            }
           ]
         },
         {
           "title": "The 15 staged screens",
           "note": "Each picture opens that screen, held still. \"Play from here\" opens the same screen with the game running.",
           "links": [
-            { "title": "Lobby", "href": "game/?shot=lobby", "see": "Title and main menu.", "thumb": "shots/game-lobby.jpg", "also": [{ "title": "Play from here", "href": "game/?shot=lobby&live=1" }] },
-            { "title": "Settings", "href": "game/?shot=settings", "see": "Settings, opened from the lobby.", "thumb": "shots/game-settings.jpg", "also": [{ "title": "Play from here", "href": "game/?shot=settings&live=1" }] },
-            { "title": "Play", "href": "game/?shot=play", "see": "Paddling, with the on-screen meters.", "thumb": "shots/game-play.jpg", "also": [{ "title": "Play from here", "href": "game/?shot=play&live=1" }] },
-            { "title": "Island", "href": "game/?shot=island", "see": "On foot on an island.", "thumb": "shots/game-island.jpg", "also": [{ "title": "Play from here", "href": "game/?shot=island&live=1" }] },
-            { "title": "Inventory", "href": "game/?shot=inventory", "see": "Backpack and canoe cargo.", "thumb": "shots/game-inventory.jpg", "also": [{ "title": "Play from here", "href": "game/?shot=inventory&live=1" }] },
-            { "title": "Crafting", "href": "game/?shot=crafting", "see": "Recipes at a station.", "thumb": "shots/game-crafting.jpg", "also": [{ "title": "Play from here", "href": "game/?shot=crafting&live=1" }] },
-            { "title": "Canoe builder", "href": "game/?shot=builder", "see": "Hull tiers and attachments.", "thumb": "shots/game-builder.jpg", "also": [{ "title": "Play from here", "href": "game/?shot=builder&live=1" }] },
-            { "title": "Quest log", "href": "game/?shot=quests", "see": "Main and side quests.", "thumb": "shots/game-quests.jpg", "also": [{ "title": "Play from here", "href": "game/?shot=quests&live=1" }] },
-            { "title": "Map", "href": "game/?shot=map", "see": "The valley chart.", "thumb": "shots/game-map.jpg", "also": [{ "title": "Play from here", "href": "game/?shot=map&live=1" }] },
-            { "title": "Dialogue", "href": "game/?shot=dialogue", "see": "Talking to a survivor.", "thumb": "shots/game-dialogue.jpg", "also": [{ "title": "Play from here", "href": "game/?shot=dialogue&live=1" }] },
-            { "title": "Pause", "href": "game/?shot=pause", "see": "The pause menu.", "thumb": "shots/game-pause.jpg", "also": [{ "title": "Play from here", "href": "game/?shot=pause&live=1" }] },
-            { "title": "Storm", "href": "game/?shot=storm", "see": "Storm in rough water.", "thumb": "shots/game-storm.jpg", "also": [{ "title": "Play from here", "href": "game/?shot=storm&live=1" }] },
-            { "title": "Night", "href": "game/?shot=night", "see": "Night, with the lanterns lit.", "thumb": "shots/game-night.jpg", "also": [{ "title": "Play from here", "href": "game/?shot=night&live=1" }] },
-            { "title": "Upgraded canoe", "href": "game/?shot=upgraded", "see": "The canoe with everything bolted on.", "thumb": "shots/game-upgraded.jpg", "also": [{ "title": "Play from here", "href": "game/?shot=upgraded&live=1" }] },
-            { "title": "Beacon", "href": "game/?shot=beacon", "see": "The lit tower at dusk, the end of the main quest.", "thumb": "shots/game-beacon.jpg", "also": [{ "title": "Play from here", "href": "game/?shot=beacon&live=1" }] }
+            {
+              "title": "Lobby",
+              "href": "game/?shot=lobby",
+              "see": "Title and main menu.",
+              "thumb": "shots/game-lobby.jpg",
+              "also": [
+                {
+                  "title": "Play from here",
+                  "href": "game/?shot=lobby&live=1"
+                }
+              ]
+            },
+            {
+              "title": "Settings",
+              "href": "game/?shot=settings",
+              "see": "Settings, opened from the lobby.",
+              "thumb": "shots/game-settings.jpg",
+              "also": [
+                {
+                  "title": "Play from here",
+                  "href": "game/?shot=settings&live=1"
+                }
+              ]
+            },
+            {
+              "title": "Play",
+              "href": "game/?shot=play",
+              "see": "Paddling, with the on-screen meters.",
+              "thumb": "shots/game-play.jpg",
+              "also": [
+                {
+                  "title": "Play from here",
+                  "href": "game/?shot=play&live=1"
+                }
+              ]
+            },
+            {
+              "title": "Island",
+              "href": "game/?shot=island",
+              "see": "On foot on an island.",
+              "thumb": "shots/game-island.jpg",
+              "also": [
+                {
+                  "title": "Play from here",
+                  "href": "game/?shot=island&live=1"
+                }
+              ]
+            },
+            {
+              "title": "Inventory",
+              "href": "game/?shot=inventory",
+              "see": "Backpack and canoe cargo.",
+              "thumb": "shots/game-inventory.jpg",
+              "also": [
+                {
+                  "title": "Play from here",
+                  "href": "game/?shot=inventory&live=1"
+                }
+              ]
+            },
+            {
+              "title": "Crafting",
+              "href": "game/?shot=crafting",
+              "see": "Recipes at a station.",
+              "thumb": "shots/game-crafting.jpg",
+              "also": [
+                {
+                  "title": "Play from here",
+                  "href": "game/?shot=crafting&live=1"
+                }
+              ]
+            },
+            {
+              "title": "Canoe builder",
+              "href": "game/?shot=builder",
+              "see": "Hull tiers and attachments.",
+              "thumb": "shots/game-builder.jpg",
+              "also": [
+                {
+                  "title": "Play from here",
+                  "href": "game/?shot=builder&live=1"
+                }
+              ]
+            },
+            {
+              "title": "Quest log",
+              "href": "game/?shot=quests",
+              "see": "Main and side quests.",
+              "thumb": "shots/game-quests.jpg",
+              "also": [
+                {
+                  "title": "Play from here",
+                  "href": "game/?shot=quests&live=1"
+                }
+              ]
+            },
+            {
+              "title": "Map",
+              "href": "game/?shot=map",
+              "see": "The valley chart.",
+              "thumb": "shots/game-map.jpg",
+              "also": [
+                {
+                  "title": "Play from here",
+                  "href": "game/?shot=map&live=1"
+                }
+              ]
+            },
+            {
+              "title": "Dialogue",
+              "href": "game/?shot=dialogue",
+              "see": "Talking to a survivor.",
+              "thumb": "shots/game-dialogue.jpg",
+              "also": [
+                {
+                  "title": "Play from here",
+                  "href": "game/?shot=dialogue&live=1"
+                }
+              ]
+            },
+            {
+              "title": "Pause",
+              "href": "game/?shot=pause",
+              "see": "The pause menu.",
+              "thumb": "shots/game-pause.jpg",
+              "also": [
+                {
+                  "title": "Play from here",
+                  "href": "game/?shot=pause&live=1"
+                }
+              ]
+            },
+            {
+              "title": "Storm",
+              "href": "game/?shot=storm",
+              "see": "Storm in rough water.",
+              "thumb": "shots/game-storm.jpg",
+              "also": [
+                {
+                  "title": "Play from here",
+                  "href": "game/?shot=storm&live=1"
+                }
+              ]
+            },
+            {
+              "title": "Night",
+              "href": "game/?shot=night",
+              "see": "Night, with the lanterns lit.",
+              "thumb": "shots/game-night.jpg",
+              "also": [
+                {
+                  "title": "Play from here",
+                  "href": "game/?shot=night&live=1"
+                }
+              ]
+            },
+            {
+              "title": "Upgraded canoe",
+              "href": "game/?shot=upgraded",
+              "see": "The canoe with everything bolted on.",
+              "thumb": "shots/game-upgraded.jpg",
+              "also": [
+                {
+                  "title": "Play from here",
+                  "href": "game/?shot=upgraded&live=1"
+                }
+              ]
+            },
+            {
+              "title": "Beacon",
+              "href": "game/?shot=beacon",
+              "see": "The lit tower at dusk, the end of the main quest.",
+              "thumb": "shots/game-beacon.jpg",
+              "also": [
+                {
+                  "title": "Play from here",
+                  "href": "game/?shot=beacon&live=1"
+                }
+              ]
+            }
           ]
         }
       ]
@@ -133,7 +367,9 @@
               "title": "Open the audio lab",
               "href": "game/audio-lab.html",
               "see": "A button for every sound, plus sliders for weather, place and volume. Click \"Unlock audio\" first or nothing plays.",
-              "keys": ["Mouse: click a button to hear it"]
+              "keys": [
+                "Mouse: click a button to hear it"
+              ]
             }
           ]
         }
@@ -167,14 +403,49 @@
               "title": "Free play in look A",
               "href": "looks/a/",
               "see": "The lobby. Start a game and paddle around the island.",
-              "keys": ["W, S, A, D: paddle and steer", "Mouse drag: orbit the camera", "U: swap starter and upgraded canoe", "Esc: pause"]
+              "keys": [
+                "W, S, A, D: paddle and steer",
+                "Mouse drag: orbit the camera",
+                "U: swap starter and upgraded canoe",
+                "Esc: pause"
+              ]
             },
-            { "title": "Lobby", "href": "looks/a/?shot=lobby", "see": "Title and menu.", "thumb": "shots/look-a-lobby.jpg" },
-            { "title": "Play", "href": "looks/a/?shot=play", "see": "Starter canoe, paddling.", "thumb": "shots/look-a-play.jpg" },
-            { "title": "Upgraded canoe", "href": "looks/a/?shot=upgraded", "see": "Everything bolted on.", "thumb": "shots/look-a-upgraded.jpg" },
-            { "title": "Island", "href": "looks/a/?shot=island", "see": "Beached at the landing.", "thumb": "shots/look-a-island.jpg" },
-            { "title": "Settings", "href": "looks/a/?shot=settings", "see": "The settings panel.", "thumb": "shots/look-a-settings.jpg" },
-            { "title": "Pause", "href": "looks/a/?shot=pause", "see": "The pause menu.", "thumb": "shots/look-a-pause.jpg" }
+            {
+              "title": "Lobby",
+              "href": "looks/a/?shot=lobby",
+              "see": "Title and menu.",
+              "thumb": "shots/look-a-lobby.jpg"
+            },
+            {
+              "title": "Play",
+              "href": "looks/a/?shot=play",
+              "see": "Starter canoe, paddling.",
+              "thumb": "shots/look-a-play.jpg"
+            },
+            {
+              "title": "Upgraded canoe",
+              "href": "looks/a/?shot=upgraded",
+              "see": "Everything bolted on.",
+              "thumb": "shots/look-a-upgraded.jpg"
+            },
+            {
+              "title": "Island",
+              "href": "looks/a/?shot=island",
+              "see": "Beached at the landing.",
+              "thumb": "shots/look-a-island.jpg"
+            },
+            {
+              "title": "Settings",
+              "href": "looks/a/?shot=settings",
+              "see": "The settings panel.",
+              "thumb": "shots/look-a-settings.jpg"
+            },
+            {
+              "title": "Pause",
+              "href": "looks/a/?shot=pause",
+              "see": "The pause menu.",
+              "thumb": "shots/look-a-pause.jpg"
+            }
           ]
         },
         {
@@ -185,14 +456,49 @@
               "title": "Free play in look B",
               "href": "looks/b/",
               "see": "The lobby. Start a game and paddle around the island.",
-              "keys": ["W, S, A, D: paddle and steer", "Mouse drag: orbit the camera", "U: swap starter and upgraded canoe", "Esc: pause"]
+              "keys": [
+                "W, S, A, D: paddle and steer",
+                "Mouse drag: orbit the camera",
+                "U: swap starter and upgraded canoe",
+                "Esc: pause"
+              ]
             },
-            { "title": "Lobby", "href": "looks/b/?shot=lobby", "see": "Title and menu.", "thumb": "shots/look-b-lobby.jpg" },
-            { "title": "Play", "href": "looks/b/?shot=play", "see": "Starter canoe, paddling.", "thumb": "shots/look-b-play.jpg" },
-            { "title": "Upgraded canoe", "href": "looks/b/?shot=upgraded", "see": "Everything bolted on.", "thumb": "shots/look-b-upgraded.jpg" },
-            { "title": "Island", "href": "looks/b/?shot=island", "see": "Beached at the landing.", "thumb": "shots/look-b-island.jpg" },
-            { "title": "Settings", "href": "looks/b/?shot=settings", "see": "The settings panel.", "thumb": "shots/look-b-settings.jpg" },
-            { "title": "Pause", "href": "looks/b/?shot=pause", "see": "The pause menu.", "thumb": "shots/look-b-pause.jpg" }
+            {
+              "title": "Lobby",
+              "href": "looks/b/?shot=lobby",
+              "see": "Title and menu.",
+              "thumb": "shots/look-b-lobby.jpg"
+            },
+            {
+              "title": "Play",
+              "href": "looks/b/?shot=play",
+              "see": "Starter canoe, paddling.",
+              "thumb": "shots/look-b-play.jpg"
+            },
+            {
+              "title": "Upgraded canoe",
+              "href": "looks/b/?shot=upgraded",
+              "see": "Everything bolted on.",
+              "thumb": "shots/look-b-upgraded.jpg"
+            },
+            {
+              "title": "Island",
+              "href": "looks/b/?shot=island",
+              "see": "Beached at the landing.",
+              "thumb": "shots/look-b-island.jpg"
+            },
+            {
+              "title": "Settings",
+              "href": "looks/b/?shot=settings",
+              "see": "The settings panel.",
+              "thumb": "shots/look-b-settings.jpg"
+            },
+            {
+              "title": "Pause",
+              "href": "looks/b/?shot=pause",
+              "see": "The pause menu.",
+              "thumb": "shots/look-b-pause.jpg"
+            }
           ]
         },
         {
@@ -203,14 +509,49 @@
               "title": "Free play in look B2",
               "href": "looks/b2/",
               "see": "The lobby. Start a game and paddle around the island. Add &fps=1 to the address for the frame-rate readout.",
-              "keys": ["W, S, A, D: paddle and steer", "Mouse drag: orbit the camera", "U: swap starter and upgraded canoe", "Esc: pause"]
+              "keys": [
+                "W, S, A, D: paddle and steer",
+                "Mouse drag: orbit the camera",
+                "U: swap starter and upgraded canoe",
+                "Esc: pause"
+              ]
             },
-            { "title": "Lobby", "href": "looks/b2/?shot=lobby", "see": "Title and menu.", "thumb": "shots/look-b2-lobby.jpg" },
-            { "title": "Play", "href": "looks/b2/?shot=play", "see": "Starter canoe, paddling.", "thumb": "shots/look-b2-play.jpg" },
-            { "title": "Upgraded canoe", "href": "looks/b2/?shot=upgraded", "see": "Everything bolted on.", "thumb": "shots/look-b2-upgraded.jpg" },
-            { "title": "Island", "href": "looks/b2/?shot=island", "see": "Beached at the landing.", "thumb": "shots/look-b2-island.jpg" },
-            { "title": "Settings", "href": "looks/b2/?shot=settings", "see": "The settings panel.", "thumb": "shots/look-b2-settings.jpg" },
-            { "title": "Pause", "href": "looks/b2/?shot=pause", "see": "The pause menu.", "thumb": "shots/look-b2-pause.jpg" }
+            {
+              "title": "Lobby",
+              "href": "looks/b2/?shot=lobby",
+              "see": "Title and menu.",
+              "thumb": "shots/look-b2-lobby.jpg"
+            },
+            {
+              "title": "Play",
+              "href": "looks/b2/?shot=play",
+              "see": "Starter canoe, paddling.",
+              "thumb": "shots/look-b2-play.jpg"
+            },
+            {
+              "title": "Upgraded canoe",
+              "href": "looks/b2/?shot=upgraded",
+              "see": "Everything bolted on.",
+              "thumb": "shots/look-b2-upgraded.jpg"
+            },
+            {
+              "title": "Island",
+              "href": "looks/b2/?shot=island",
+              "see": "Beached at the landing.",
+              "thumb": "shots/look-b2-island.jpg"
+            },
+            {
+              "title": "Settings",
+              "href": "looks/b2/?shot=settings",
+              "see": "The settings panel.",
+              "thumb": "shots/look-b2-settings.jpg"
+            },
+            {
+              "title": "Pause",
+              "href": "looks/b2/?shot=pause",
+              "see": "The pause menu.",
+              "thumb": "shots/look-b2-pause.jpg"
+            }
           ]
         },
         {
@@ -221,14 +562,49 @@
               "title": "Free play in look C",
               "href": "looks/c/",
               "see": "The lobby. Start a game and paddle around the island.",
-              "keys": ["W, S, A, D: paddle and steer", "Mouse drag: orbit the camera", "U: swap starter and upgraded canoe", "Esc: pause"]
+              "keys": [
+                "W, S, A, D: paddle and steer",
+                "Mouse drag: orbit the camera",
+                "U: swap starter and upgraded canoe",
+                "Esc: pause"
+              ]
             },
-            { "title": "Lobby", "href": "looks/c/?shot=lobby", "see": "Title and menu.", "thumb": "shots/look-c-lobby.jpg" },
-            { "title": "Play", "href": "looks/c/?shot=play", "see": "Starter canoe, paddling.", "thumb": "shots/look-c-play.jpg" },
-            { "title": "Upgraded canoe", "href": "looks/c/?shot=upgraded", "see": "Everything bolted on.", "thumb": "shots/look-c-upgraded.jpg" },
-            { "title": "Island", "href": "looks/c/?shot=island", "see": "Beached at the landing.", "thumb": "shots/look-c-island.jpg" },
-            { "title": "Settings", "href": "looks/c/?shot=settings", "see": "The settings panel.", "thumb": "shots/look-c-settings.jpg" },
-            { "title": "Pause", "href": "looks/c/?shot=pause", "see": "The pause menu.", "thumb": "shots/look-c-pause.jpg" }
+            {
+              "title": "Lobby",
+              "href": "looks/c/?shot=lobby",
+              "see": "Title and menu.",
+              "thumb": "shots/look-c-lobby.jpg"
+            },
+            {
+              "title": "Play",
+              "href": "looks/c/?shot=play",
+              "see": "Starter canoe, paddling.",
+              "thumb": "shots/look-c-play.jpg"
+            },
+            {
+              "title": "Upgraded canoe",
+              "href": "looks/c/?shot=upgraded",
+              "see": "Everything bolted on.",
+              "thumb": "shots/look-c-upgraded.jpg"
+            },
+            {
+              "title": "Island",
+              "href": "looks/c/?shot=island",
+              "see": "Beached at the landing.",
+              "thumb": "shots/look-c-island.jpg"
+            },
+            {
+              "title": "Settings",
+              "href": "looks/c/?shot=settings",
+              "see": "The settings panel.",
+              "thumb": "shots/look-c-settings.jpg"
+            },
+            {
+              "title": "Pause",
+              "href": "looks/c/?shot=pause",
+              "see": "The pause menu.",
+              "thumb": "shots/look-c-pause.jpg"
+            }
           ]
         },
         {
@@ -249,26 +625,198 @@
       "groups": [
         {
           "links": [
-            { "title": "The original ask", "href": "docs/prompt.html", "see": "Luc's first message, word for word.", "from": "PROMPT.md" },
-            { "title": "Design brief", "href": "docs/brief.html", "see": "The design every worker builds from: rules, world, canoe, quests, screens.", "from": "BRIEF.md" },
-            { "title": "Report: rules engine", "href": "docs/report-rules-engine.html", "see": "What was built, the test counts, and the bot's run to the Beacon.", "from": "../scratch/portage/skye-report.md" },
-            { "title": "Report: client core and greybox", "href": "docs/report-client-greybox.html", "see": "The playable game in placeholder graphics: input, camera, panels, saves.", "from": "../scratch/portage/rocky-report.md" },
-            { "title": "Report: audio engine", "href": "docs/report-audio-engine.html", "see": "How the sound is made in code, and what is still unheard.", "from": "../scratch/portage/zuma-report.md" },
-            { "title": "Report: step 1, the look", "href": "docs/report-step1-look.html", "see": "B2 moved into the real game: what was checked, what each check caught when broken, and what is still a stand-in.", "from": "../scratch/portage/step1-look-report.md" },
-            { "title": "Report: step 1, menus and HUD", "href": "docs/report-step1-ui.html", "see": "The Ink & Wash interface on real game data: every screen, keyboard use, contrast, and the gaps left for later.", "from": "../scratch/portage/step1-ui-report.md" },
-            { "title": "Guide: how the look is built", "href": "docs/look-guide.html", "see": "For workers: where each drawn thing lives and how to add an attachment, landmark or survivor.", "from": "game/LOOK.md" },
-            { "title": "Report: the sharp player", "href": "docs/report-sharp.html", "see": "Why the player went blurry when zooming out, the fix, and what it did not fix (speed).", "from": "../scratch/portage/sharp-report.md" },
-            { "title": "Report: rules for a crew of four", "href": "docs/report-crew.html", "see": "Up to 4 players in one canoe, the F key, one-press scavenging, and the proof that solo did not change.", "from": "../scratch/portage/crew-report.md" },
-            { "title": "Report: tools belong to the crew", "href": "docs/report-tools.html", "see": "Luc's call that a found tool works for everyone, and how it was checked.", "from": "../scratch/portage/tools-report.md" },
-            { "title": "Report: item icons", "href": "docs/report-icons.html", "see": "The 54 icons, where they show, and the ones the worker doubts.", "from": "../scratch/portage/icons-report.md" },
-            { "title": "Report: the crew drawn properly", "href": "docs/report-crewfit.html", "see": "Seats, colours, paddling, bailing, sleeping, walking, and the finer pen on a far-away player.", "from": "../scratch/portage/crewfit-report.md" },
-            { "title": "Report: the canoe", "href": "docs/report-canoe.html", "see": "Four hull tiers, 19 attachments, three survivors, and the collisions left with a crew of four.", "from": "../scratch/portage/canoe-report.md" },
-            { "title": "Report: the crew HUD", "href": "docs/report-crewhud.html", "see": "The crew list, crew marks on compass and map, crew notes, and what networking will need from the HUD.", "from": "../scratch/portage/crewhud-report.md" },
-            { "title": "Report: weather and night", "href": "docs/report-weather.html", "see": "Rain, storm, fog, night and lamp light: what was built, what was left out so nothing flashes, and what each costs.", "from": "../scratch/portage/weather-report.md" },
-            { "title": "Report: co-op groundwork", "href": "docs/report-crewnet.html", "see": "Players who come and go, host and guest in step, two tabs playing together, and what the relay job needs.", "from": "../scratch/portage/crewnet-report.md" },
-            { "title": "Report: the valley", "href": "docs/report-world.html", "see": "Every landmark and scavenge node, 15 islands told apart, and what each view costs to draw.", "from": "../scratch/portage/world-report.md" },
-            { "title": "Guide: how the canoe is drawn", "href": "docs/look-canoe.html", "see": "For workers: hulls, attachments, seats and the checks that guard them.", "from": "game/LOOK-canoe.md" },
-            { "title": "Guide: how the valley is drawn", "href": "docs/look-world.html", "see": "For workers: landmarks, nodes, island dressing and detail by distance.", "from": "game/LOOK-world.md" }
+            {
+              "title": "The original ask",
+              "href": "docs/prompt.html",
+              "see": "Luc's first message, word for word.",
+              "from": "PROMPT.md"
+            },
+            {
+              "title": "Design brief",
+              "href": "docs/brief.html",
+              "see": "The design every worker builds from: rules, world, canoe, quests, screens.",
+              "from": "BRIEF.md"
+            },
+            {
+              "title": "Report: rules engine",
+              "href": "docs/report-rules-engine.html",
+              "see": "What was built, the test counts, and the bot's run to the Beacon.",
+              "from": "../scratch/portage/skye-report.md"
+            },
+            {
+              "title": "Report: client core and greybox",
+              "href": "docs/report-client-greybox.html",
+              "see": "The playable game in placeholder graphics: input, camera, panels, saves.",
+              "from": "../scratch/portage/rocky-report.md"
+            },
+            {
+              "title": "Report: audio engine",
+              "href": "docs/report-audio-engine.html",
+              "see": "How the sound is made in code, and what is still unheard.",
+              "from": "../scratch/portage/zuma-report.md"
+            },
+            {
+              "title": "Report: step 1, the look",
+              "href": "docs/report-step1-look.html",
+              "see": "B2 moved into the real game: what was checked, what each check caught when broken, and what is still a stand-in.",
+              "from": "../scratch/portage/step1-look-report.md"
+            },
+            {
+              "title": "Report: step 1, menus and HUD",
+              "href": "docs/report-step1-ui.html",
+              "see": "The Ink & Wash interface on real game data: every screen, keyboard use, contrast, and the gaps left for later.",
+              "from": "../scratch/portage/step1-ui-report.md"
+            },
+            {
+              "title": "Guide: how the look is built",
+              "href": "docs/look-guide.html",
+              "see": "For workers: where each drawn thing lives and how to add an attachment, landmark or survivor.",
+              "from": "game/LOOK.md"
+            },
+            {
+              "title": "Report: the sharp player",
+              "href": "docs/report-sharp.html",
+              "see": "Why the player went blurry when zooming out, the fix, and what it did not fix (speed).",
+              "from": "../scratch/portage/sharp-report.md"
+            },
+            {
+              "title": "Report: rules for a crew of four",
+              "href": "docs/report-crew.html",
+              "see": "Up to 4 players in one canoe, the F key, one-press scavenging, and the proof that solo did not change.",
+              "from": "../scratch/portage/crew-report.md"
+            },
+            {
+              "title": "Report: tools belong to the crew",
+              "href": "docs/report-tools.html",
+              "see": "Luc's call that a found tool works for everyone, and how it was checked.",
+              "from": "../scratch/portage/tools-report.md"
+            },
+            {
+              "title": "Report: item icons",
+              "href": "docs/report-icons.html",
+              "see": "The 54 icons, where they show, and the ones the worker doubts.",
+              "from": "../scratch/portage/icons-report.md"
+            },
+            {
+              "title": "Report: the crew drawn properly",
+              "href": "docs/report-crewfit.html",
+              "see": "Seats, colours, paddling, bailing, sleeping, walking, and the finer pen on a far-away player.",
+              "from": "../scratch/portage/crewfit-report.md"
+            },
+            {
+              "title": "Report: the canoe",
+              "href": "docs/report-canoe.html",
+              "see": "Four hull tiers, 19 attachments, three survivors, and the collisions left with a crew of four.",
+              "from": "../scratch/portage/canoe-report.md"
+            },
+            {
+              "title": "Report: the crew HUD",
+              "href": "docs/report-crewhud.html",
+              "see": "The crew list, crew marks on compass and map, crew notes, and what networking will need from the HUD.",
+              "from": "../scratch/portage/crewhud-report.md"
+            },
+            {
+              "title": "Report: weather and night",
+              "href": "docs/report-weather.html",
+              "see": "Rain, storm, fog, night and lamp light: what was built, what was left out so nothing flashes, and what each costs.",
+              "from": "../scratch/portage/weather-report.md"
+            },
+            {
+              "title": "Report: co-op groundwork",
+              "href": "docs/report-crewnet.html",
+              "see": "Players who come and go, host and guest in step, two tabs playing together, and what the relay job needs.",
+              "from": "../scratch/portage/crewnet-report.md"
+            },
+            {
+              "title": "Report: the valley",
+              "href": "docs/report-world.html",
+              "see": "Every landmark and scavenge node, 15 islands told apart, and what each view costs to draw.",
+              "from": "../scratch/portage/world-report.md"
+            },
+            {
+              "title": "Guide: how the canoe is drawn",
+              "href": "docs/look-canoe.html",
+              "see": "For workers: hulls, attachments, seats and the checks that guard them.",
+              "from": "game/LOOK-canoe.md"
+            },
+            {
+              "title": "Guide: how the valley is drawn",
+              "href": "docs/look-world.html",
+              "see": "For workers: landmarks, nodes, island dressing and detail by distance.",
+              "from": "game/LOOK-world.md"
+            },
+            {
+              "title": "Report: why it was choppy",
+              "href": "docs/report-perf-why.html",
+              "see": "This Mac made slower and measured: the cause, the suspects ruled out, and a ranked list of fixes.",
+              "from": "../scratch/portage/perf-why-report.md"
+            },
+            {
+              "title": "Report: the one-link performance readout",
+              "href": "docs/report-perf-readout.html",
+              "see": "What ?perf=1 measures, a full sample, and how it was checked.",
+              "from": "../scratch/portage/perf-readout-report.md"
+            },
+            {
+              "title": "Report: even drawing on every screen",
+              "href": "docs/report-perf-pacing.html",
+              "see": "The frame loop on 30 to 165 Hz screens, and the freeze on the first key press.",
+              "from": "../scratch/portage/perf-pacing-report.md"
+            },
+            {
+              "title": "Report: the quality stepper",
+              "href": "docs/report-perf-ladder.html",
+              "see": "The chip test at load, two lower steps, quick steps down, and what a slow chip gets now.",
+              "from": "../scratch/portage/perf-ladder-report.md"
+            },
+            {
+              "title": "Report: valley and weather loose ends",
+              "href": "docs/report-loose-vw.html",
+              "see": "Seven flaws fixed, with before and after pictures and the cost of each.",
+              "from": "../scratch/portage/loose-vw-report.md"
+            },
+            {
+              "title": "Report: canoe loose ends",
+              "href": "docs/report-loose-canoe.html",
+              "see": "What was fixed on the canoe, and what needs a rules change.",
+              "from": "../scratch/portage/loose-canoe-report.md"
+            },
+            {
+              "title": "Report: balance",
+              "href": "docs/report-balance.html",
+              "see": "The wind, the quarry, and the two numbers that changed, with the measurements behind them.",
+              "from": "../scratch/portage/balance-report.md"
+            },
+            {
+              "title": "Report: the quest soft lock",
+              "href": "docs/report-softlock.html",
+              "see": "The cause, the rule, and a table of all 21 quests and their 50 steps.",
+              "from": "../scratch/portage/softlock-report.md"
+            },
+            {
+              "title": "Report: the relay",
+              "href": "docs/report-relay.html",
+              "see": "Friends join by a link: what was built, where it would live, what it costs, and the seven deploy steps.",
+              "from": "../scratch/portage/relay-report.md"
+            },
+            {
+              "title": "Report: a guest's walking",
+              "href": "docs/report-walk.html",
+              "see": "How a guest's own steps answer at once, and what was added to the wire.",
+              "from": "../scratch/portage/walk-report.md"
+            },
+            {
+              "title": "Report: the asset viewer",
+              "href": "docs/report-viewer.html",
+              "see": "163 things in one page: how the look is reused and how it was checked.",
+              "from": "../scratch/portage/viewer-report.md"
+            },
+            {
+              "title": "Report: the scored review",
+              "href": "docs/report-review.html",
+              "see": "Six scores, sixteen fixes worst first, what is good as it is, and what nobody looked at.",
+              "from": "../scratch/portage/review-report.md"
+            }
           ]
         }
       ]
