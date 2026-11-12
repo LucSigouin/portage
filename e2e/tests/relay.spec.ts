@@ -116,6 +116,9 @@ async function arrive(context: BrowserContext, address: string, problems: string
   await page.goto(address);
   await page.waitForFunction(() => (window as unknown as { portage?: unknown }).portage !== undefined);
   await page.evaluate(() => document.fonts.ready);
+  // The page's handle is there one frame before the lobby is drawn. A key sent in between lands on nothing:
+  // wait for the menu a player would see (an invite link's card is drawn, and given the caret, in the same frame).
+  await page.locator('.iw-lobby-col .iw-mi').first().waitFor();
   return { page, sockets, sent };
 }
 
@@ -520,7 +523,8 @@ test('a build made with no relay has no crew entries, opens no socket, and ignor
   await player.page.locator('.iw-panel-save_slots').getByRole('button', { name: 'New game here' }).first().click();
   await inGame(player.page);
   await player.page.keyboard.press('Escape');
-  expect(await player.page.locator('.iw-panel-pause .iw-mi .iw-label').allInnerTexts()).toEqual(['Resume', 'Settings', 'How to Play', 'Save and quit to the lobby']);
+  // (The menu is drawn on the frame after the key: look until it is there.)
+  await expect(player.page.locator('.iw-panel-pause .iw-mi .iw-label')).toHaveText(['Resume', 'Settings', 'How to Play', 'Save and quit to the lobby']);
   expect(await player.page.evaluate(() => (window as unknown as { socketsMade: string[] }).socketsMade), 'sockets the page made').toEqual([]);
   expect(player.sockets).toEqual([]);
   expect(problems).toEqual([]);
