@@ -270,6 +270,14 @@ export class GuestLink {
     if (this.held.length > HISTORY) this.held.shift();
   }
 
+  /**
+   * Ask to join again, now. Harmless while still seated; the way back in at
+   * once for a guest whose screen was hidden long enough to be marked away.
+   */
+  knock(): void {
+    if (this.status === 'playing') this.sendJoin();
+  }
+
   /** Once a frame: run the clock, send again what was not answered, keep the host knowing this guest is here. */
   update(frameSeconds: number): void {
     if (this.status === 'closed' || this.status === 'refused') return;

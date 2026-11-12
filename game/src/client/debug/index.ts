@@ -38,10 +38,12 @@ export function applyDebugParameters(app: App, parameters: DebugParameters): voi
   if (parameters.atQuest !== null) {
     session.adoptGame(addIdleCrew(gameAtQuest(seed, parameters.atQuest), parameters.crew));
     lines.push(`started at quest ${parameters.atQuest}, seed ${seed}`);
-  } else if (parameters.crew > 1 && !parameters.bot) {
-    // `?crew=N` alone: straight into a new game with the crew aboard.
+  } else if ((parameters.crew > 1 || parameters.host !== null) && !parameters.bot) {
+    // `?crew=N` or `?host=ROOM` alone: straight into a new game, with the crew aboard.
     session.adoptGame(addIdleCrew(gameAtQuest(seed, 1), parameters.crew));
   }
+  if (parameters.host !== null) lines.push(`hosting room ${parameters.host}`);
+  if (parameters.join !== null) lines.push(`joining room ${parameters.join}`);
   if (parameters.crew > 1) lines.push(`crew of ${parameters.crew}: ${parameters.crew - 1} idle`);
 
   if (parameters.bot) {

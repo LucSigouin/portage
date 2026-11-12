@@ -18,6 +18,7 @@ import { setLocalPlayerId } from './look/crew.ts';
 import { createFrameLoop } from './client/loop.ts';
 import type { FrameLoop } from './client/loop.ts';
 import type { SessionStorage } from './client/session.ts';
+import { hostTabRoom, joinTabRoom } from './net/index.ts';
 
 /** Storage that forgets. The debug switches play in it, so real saves are never touched. */
 function createMemoryStorage(): SessionStorage {
@@ -36,6 +37,26 @@ function browserStorage(): SessionStorage {
     return window.localStorage;
   } catch {
     return createMemoryStorage();
+  }
+}
+
+const randomHex = (bytes: number): string =>
+  Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (byte) => byte.toString(16).padStart(2, '0')).join('');
+
+/**
+ * This browser's secret for a room and a name: the same one every time, so
+ * closing the window and joining again gets the same player back.
+ */
+function crewKey(room: string, name: string): string {
+  const slot = `portage.crew.key.${room}.${name}`;
+  try {
+    const kept = window.localStorage.getItem(slot);
+    if (kept) return kept;
+    const made = randomHex(16);
+    window.localStorage.setItem(slot, made);
+    return made;
+  } catch {
+    return randomHex(16);
   }
 }
 
@@ -69,8 +90,22 @@ function boot(): void {
     forceFrameRate: parameters.showFrameRate,
   });
   const session = app.session;
-  // The look draws its camera, prompts and marks for the player this screen plays.
+  // The look draws its camera, prompts and marks for the player this screen plays. A guest learns who that is from the host.
   setLocalPlayerId(session.localPlayerId);
+  session.subscribe((signal) => {
+    if (signal.type === 'game_started') setLocalPlayerId(session.localPlayerId);
+  });
+
+  // `?host=ROOM`: every game this session plays is open to the other tabs of this site.
+  if (parameters.host !== null) {
+    const roomName = parameters.host;
+    let room: { close(): void } | null = null;
+    session.playerName = parameters.name;
+    session.onShare = (link) => {
+      room?.close();
+      room = hostTabRoom(roomName, (transport) => link.accept(transport));
+    };
+  }
 
   worldView.mount(worldElement);
   gameInterface.mount(interfaceElement, (intent) => session.handleIntent(intent));
@@ -95,8 +130,45 @@ function boot(): void {
   });
   window.addEventListener('keyup', (event) => session.keyUp(event.code));
   window.addEventListener('blur', () => session.blur());
-  document.addEventListener('visibilitychange', () => app.setHidden(document.hidden));
-  window.addEventListener('pagehide', () => void session.saveNow());
+  // A hidden tab gets no display frames. A host goes on for its guests on a worker's tick instead.
+  let ticker: Worker | null = null;
+  let tickerFallback: number | null = null;
+  let lastTick = 0;
+  const tickUnseen = (): void => {
+    const now = performance.now();
+    const seconds = Math.min(Math.max(now - lastTick, 0) / 1000, 0.25);
+    lastTick = now;
+    if (document.hidden && session.host && session.crewed) app.frameUnseen(seconds);
+  };
+  const stopTicker = (): void => {
+    ticker?.terminate();
+    ticker = null;
+    if (tickerFallback !== null) window.clearInterval(tickerFallback);
+    tickerFallback = null;
+  };
+  const startTicker = (): void => {
+    stopTicker();
+    lastTick = performance.now();
+    // If the worker cannot start, the page's own timer still ticks, slowly.
+    const fallBack = (): void => {
+      ticker = null;
+      tickerFallback ??= window.setInterval(tickUnseen, 250);
+    };
+    try {
+      ticker = new Worker(new URL('./client/ticker.worker.ts', import.meta.url), { type: 'module' });
+      ticker.onmessage = tickUnseen;
+      ticker.onerror = fallBack;
+    } catch {
+      fallBack();
+    }
+  };
+  const followVisibility = (): void => {
+    app.setHidden(document.hidden);
+    if (document.hidden && session.host) startTicker();
+    else stopTicker();
+  };
+  document.addEventListener('visibilitychange', followVisibility);
+  window.addEventListener('pagehide', () => session.pageClosing());
 
   // --- Mouse: drag on the world to orbit, wheel to zoom ---------------------------
   worldElement.addEventListener('pointerdown', (event) => {
@@ -127,8 +199,12 @@ function boot(): void {
 
   const start = (): void => {
     // A handle for the console and for browser tests.
-    (window as unknown as { portage: unknown }).portage = { app, session, worldView };
+    (window as unknown as { portage: unknown }).portage = { app, session, worldView, loop, followVisibility };
     loop?.start();
+    // `?join=ROOM&name=...`: ask the host tab for a seat. The lobby shows until it answers.
+    if (parameters.join !== null) {
+      session.joinGame(joinTabRoom(parameters.join, randomHex(8)), { name: parameters.name, key: crewKey(parameters.join, parameters.name) });
+    }
   };
 
   if (parameters.sandbox || parameters.speed !== 1) {

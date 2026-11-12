@@ -14,5 +14,7 @@ export { createLoopbackPair } from './transport.ts';
 export type { LoopbackConditions, LoopbackPair, LoopbackStats, Transport } from './transport.ts';
 export { HostLink, STALE_INPUT_SECONDS } from './host.ts';
 export type { HostOptions, HostStats } from './host.ts';
+export { ROOM_PATTERN, hostTabRoom, joinTabRoom } from './tabs.ts';
+export type { ChannelLike } from './tabs.ts';
 export { GuestLink, HOST_SILENCE_SECONDS, blendStates } from './guest.ts';
 export type { CommandOutcome, GuestOptions, GuestStatus } from './guest.ts';

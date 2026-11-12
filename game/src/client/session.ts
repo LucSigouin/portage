@@ -326,6 +326,16 @@ export class Session {
     return this.guest;
   }
 
+  /**
+   * The page is going. A guest says so to the host; a host tells its guests
+   * and saves, with their players away.
+   */
+  pageClosing(): void {
+    this.guest?.close();
+    this.stopSharing();
+    this.saveNow();
+  }
+
   /** A guest goes back to the lobby: the wire is closed and nothing of the host's game is kept. */
   private leaveHost(): void {
     this.guest?.close();
@@ -365,6 +375,9 @@ export class Session {
     if (hidden) {
       this.input.releaseAll();
       if (this.game && this.slot !== null) this.saveNow();
+    } else {
+      // A guest hidden for a while may have been marked away: ask straight back in.
+      this.guest?.knock();
     }
   }
 
