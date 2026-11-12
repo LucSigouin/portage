@@ -1,5 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
-import { afterAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   ATTACHMENTS, BOTTLE_IDS, HULL_TIERS, ISLANDS, ISLANDS_BY_ID, ITEMS, LOOT_TABLES, MAIN_QUESTS, NODES, NODES_BY_ID,
   NODE_IDS, NPCS, QUESTS, QUEST_LIST, RECIPES, STOCK_FOOD_IDS, spotPosition,
@@ -158,9 +157,6 @@ describe('the tables', () => {
 // --- Every step of every quest, done early -------------------------------------
 
 type Step = QuestDefinition['objectives'][number];
-
-/** Everything the harness saw, so the report can print the table. */
-const audit: { quest: QuestId; step: number; text: string; kind: string; early: string; outcome: string }[] = [];
 
 function settle(state: GameState, events: GameEvent[], seconds = 0.4): void {
   events.push(...run(state, {}, seconds), ...drainEvents(state));
@@ -331,16 +327,10 @@ describe('every step of every quest, done before the quest is given', () => {
     '%s', (_name, { quest, objective, index }) => {
       const state = newGame(7);
       const events: GameEvent[] = [];
-      const row = { quest: quest.id, step: index + 1, text: objective.text, kind: objective.type, early: 'yes', outcome: '' };
-      audit.push(row);
-      const givenAtStart = state.quests[quest.id].status === 'active';
       if (cannotBeDoneEarly(quest, objective)) {
         // The Beacon lamp only answers once its quest is open and the rest is done: nothing to strand.
-        row.early = 'no: the node waits for the quest';
-        row.outcome = 'n/a';
         return;
       }
-      if (givenAtStart) row.early = 'it is open from the start';
 
       doStep(state, objective, events);
       useUp(state, objective, events);
@@ -372,14 +362,8 @@ describe('every step of every quest, done before the quest is given', () => {
 
       // 3. It paid once, and told the player.
       expect(events.filter((event) => event.type === 'quest_completed' && event.questId === quest.id)).toHaveLength(1);
-      row.outcome = 'finishes';
     },
   );
-
-  afterAll(() => {
-    const path = process.env.SOFTLOCK_AUDIT;
-    if (path) writeFileSync(path, `${JSON.stringify(audit, null, 1)}\n`);
-  });
 });
 
 // --- Telling the player ----------------------------------------------------------
@@ -449,7 +433,8 @@ describe('a hand-over', () => {
 // --- Saves that are already stuck -------------------------------------------------
 
 describe('a save that is already stuck', () => {
-  const stuckSave = readFileSync(new URL('./fixtures/stuck-v3-hatchet-head.json', import.meta.url), 'utf8');
+  const fixtures = import.meta.glob<string>('./fixtures/stuck-v3-*.json', { eager: true, query: '?raw', import: 'default' });
+  const stuckSave = fixtures['./fixtures/stuck-v3-hatchet-head.json'];
 
   it("is Luc's exact state: the hatchet made, the head gone for good, A proper edge open and one step short", () => {
     const saved = JSON.parse(stuckSave).state as GameState;
