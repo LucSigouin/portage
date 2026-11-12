@@ -50,7 +50,7 @@ const PLAN_SECONDS = Math.round(REFRESH_SECONDS + 3 * COST_SECONDS + RUN_IN_SECO
 const HARD_LIMIT_SECONDS = 52;
 
 /** The look's own switches that change the numbers. Named in the text so a test run is never mistaken for a real one. */
-const LOOK_SWITCHES = ['bench', 'benchpass', 'stall', 'rung', 'hold', 'hero', 'look'];
+const LOOK_SWITCHES = ['bench', 'benchpass', 'stall', 'rung', 'hold', 'chiptest', 'hero', 'look'];
 
 /** The world view's test hooks, when it is the Ink & Wash one. */
 interface Probed {

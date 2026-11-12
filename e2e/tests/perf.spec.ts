@@ -212,7 +212,8 @@ test('one link: it runs by itself, reports everything, copies, sends nothing and
   expect(data.watched!.frameTimes.count).toBeGreaterThan(800);
   const [top, last, low] = ['Top quality', 'Lowest rung', 'Low preset'].map((name) => costOf(result, name));
   expect([top.rung, top.worldWidth, top.worldHeight]).toEqual([0, 1920, 1080]);
-  expect([last.rung, last.worldWidth, last.worldHeight]).toEqual([9, 1382, 777]);
+  // The ladder's last rung: the world at half size.
+  expect([last.rung, last.worldWidth, last.worldHeight]).toEqual([11, 960, 540]);
   expect([low.rung, low.worldWidth, low.worldHeight]).toEqual([0, 1440, 810]);
   for (const cost of [top, last, low]) {
     expect(cost.milliseconds).toBeGreaterThan(0.5);
