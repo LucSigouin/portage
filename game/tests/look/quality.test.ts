@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { createDefaultSettings } from '../../src/settings/index.ts';
 import { createFrameLoop } from '../../src/client/loop.ts';
 import {
-  ASK_AGAIN_SECONDS, CLIMB_AFTER_SECONDS, DOWN_AGAIN_SECONDS, FAILS_ALLOWED, FrameLadder, LADDER, LADDER_REST_SECONDS, PIXEL_BUDGET, WARM_UP_SECONDS,
+  ASK_AGAIN_SECONDS, CLIMB_AFTER_SECONDS, DOWN_AGAIN_SECONDS, FAILS_ALLOWED, FINDING_SECONDS, FrameLadder, LADDER, LADDER_REST_SECONDS, PIXEL_BUDGET, WARM_UP_SECONDS,
   WINDOW_PIXEL_LIMIT, WORLD_FLOOR, climbTo, drawingPixelRatio, fitMilliseconds, fittingRung, qualityAt, qualityCeiling, shedNote, windowPixelRatio,
 } from '../../src/look/quality.ts';
 
@@ -231,6 +231,27 @@ describe('quality ladder', () => {
     expect(ups(lobby)).toBe(0);
   });
 
+  it('quick steps down end after thirty seconds, even on a chip whose frames are never good for ten seconds running', () => {
+    // A shared chip: three seconds of long frames in every eight, on every rung. It never has ten good seconds.
+    const ladder = new FrameLadder();
+    run(ladder, 300, (_rung, time) => (time % 8 < 3 ? LONG : QUICK));
+    expect(ladder.changes.length).toBeGreaterThan(4);
+    expect(ups(ladder)).toBe(0);
+    for (let index = 1; index < ladder.changes.length; index += 1) {
+      // Thirty and ten, written out.
+      if (ladder.changes[index].at > 30) expect(ladder.changes[index].at - ladder.changes[index - 1].at).toBeGreaterThanOrEqual(10);
+    }
+    expect(FINDING_SECONDS).toBe(30);
+    // And a new game gives it thirty more, no longer.
+    const again = new FrameLadder();
+    run(again, 60, () => QUICK);
+    again.find();
+    run(again, 300, (_rung, time) => (time % 8 < 3 ? LONG : QUICK), 60);
+    const late = again.changes.filter((change) => change.at > 60 + 30);
+    expect(late.length).toBeGreaterThan(1);
+    for (const change of late) expect(change.at - again.changes[again.changes.indexOf(change) - 1].at).toBeGreaterThanOrEqual(10);
+  });
+
   it('does not pump: a rung that runs long twice is left alone for the session', () => {
     // This machine cannot hold rung 0 and is fine on rung 1.
     const ladder = new FrameLadder();
@@ -309,9 +330,13 @@ describe('the gap a frame was meant to have (dueSeconds)', () => {
   });
 
   it('a fast chip keeps rung 0 on 30, 75, 90 and 144 Hz screens, with and without the 60 cap', () => {
-    // [screen Hz, frames a second the cap asks for (0 = every display frame), display frames between drawn frames]
-    for (const [hertz, cap, every] of [[30, 60, 1], [60, 30, 2], [75, 60, 2], [75, 0, 1], [90, 60, 2], [90, 0, 1], [144, 60, 3], [144, 0, 1], [165, 60, 3]] as const) {
+    // [screen Hz, frames a second the cap asks for (0 = every display frame), frames a second the loop then draws]
+    for (const [hertz, cap, rate] of [
+      [30, 60, 30], [30, 0, 30], [60, 60, 60], [60, 30, 30], [75, 60, 60], [75, 0, 75], [90, 60, 60], [90, 0, 90], [120, 60, 60], [144, 60, 60], [144, 0, 144],
+      [144, 90, 90], [165, 60, 60],
+    ] as const) {
       // The game's own loop on a made-up screen: the chip is instant, so every gap is the screen's and the cap's.
+      // The loop says what gap each frame was meant to have, as it does in the game.
       const ladder = new FrameLadder();
       let pending: ((timestamp: number) => void) | null = null;
       let now = 0;
@@ -319,9 +344,9 @@ describe('the gap a frame was meant to have (dueSeconds)', () => {
       const loop = createFrameLoop({
         clock: { requestFrame: (callback) => { pending = callback; return 1; }, cancelFrame: () => { pending = null; }, now: () => now },
         frameRateCap: () => cap,
-        frame: (frameSeconds) => {
+        frame: (frameSeconds, dueSeconds) => {
           drawn += 1;
-          ladder.note(frameSeconds, every / hertz);
+          ladder.note(frameSeconds, dueSeconds);
         },
       });
       loop.start();
@@ -332,8 +357,37 @@ describe('the gap a frame was meant to have (dueSeconds)', () => {
         pending = null;
         callback?.(now);
       }
-      expect(drawn / 300).toBeCloseTo(hertz / every, 0);
+      expect(drawn / 300).toBeCloseTo(rate, 0);
       expect(`${hertz} Hz cap ${cap}: rung ${ladder.rung}, ${ladder.changes.length} changes`).toBe(`${hertz} Hz cap ${cap}: rung 0, 0 changes`);
+    }
+  });
+
+  it('a slow chip on a fast screen is still seen: frames that take two beats are long whatever the screen', () => {
+    // 144 Hz screen under the 60 cap, and the chip needs 25 ms on rung 0: the loop hands on frames of two beats.
+    for (const hertz of [60, 75, 144]) {
+      const ladder = new FrameLadder();
+      let pending: ((timestamp: number) => void) | null = null;
+      let now = 0;
+      let busyUntil = 0;
+      const loop = createFrameLoop({
+        clock: { requestFrame: (callback) => { pending = callback; return 1; }, cancelFrame: () => { pending = null; }, now: () => now },
+        frameRateCap: () => 60,
+        frame: (frameSeconds, dueSeconds) => {
+          ladder.note(frameSeconds, dueSeconds);
+          busyUntil = now + (ladder.rung === 0 ? 25 : 4);
+        },
+      });
+      loop.start();
+      for (let tick = 0; tick < 60 * hertz; tick += 1) {
+        now = (tick * 1000) / hertz;
+        if (now < busyUntil) continue;
+        const callback = pending as ((timestamp: number) => void) | null;
+        pending = null;
+        callback?.(now);
+      }
+      // Down in the first seconds, then one try at the top (this ladder climbs without asking), and it is left alone.
+      expect(`${hertz} Hz: ${moves(ladder).join(' ')}`).toBe(`${hertz} Hz: 0>1 1>0 0>1`);
+      expect(ladder.changes[0].at).toBeLessThan(6);
     }
   });
 
@@ -464,6 +518,18 @@ describe('the chip test: start on the rung that fits', () => {
     run(ladder, 600, (rung) => (rung === 0 ? LONG : QUICK), 0, { costAt: () => 5 });
     expect(moves(ladder)).toEqual(['1>0', '0>1']);
     expect(ladder.bestAllowed).toBe(1);
+  });
+
+  it('a climb of several rungs that fails goes back in one change, and every climb after it is one rung', () => {
+    // The test says the top fits with room to spare. Play says only rung 5 and below hold: the test cannot be trusted here.
+    const ladder = new FrameLadder({ ask: true });
+    ladder.startOn(8);
+    run(ladder, 900, (rung) => (rung < 5 ? LONG : QUICK), 0, { costAt: () => 5 });
+    expect(moves(ladder)).toEqual(['8>0', '0>8', '8>7', '7>6', '6>5', '5>4', '4>5']);
+    // One failed try for a rung, two in the session: the jump, and the rung above the one that holds.
+    expect(failedTries(ladder)).toBe(2);
+    expect(ladder.bestAllowed).toBe(5);
+    for (let index = 1; index < ladder.changes.length; index += 1) expect(ladder.changes[index].at - ladder.changes[index - 1].at).toBeGreaterThanOrEqual(10);
   });
 
   it('without an answer it does not climb', () => {

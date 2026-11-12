@@ -116,11 +116,13 @@ export function shedNote(ceiling: Quality, quality: Quality): string {
 export const WARM_UP_SECONDS = 3;
 /** While the ladder is still finding its level, a step down may follow a step down after this many seconds. */
 export const DOWN_AGAIN_SECONDS = 2;
+/** Finding its level lasts this long at most. A chip whose frames are never good for ten seconds running must not keep stepping every two. */
+export const FINDING_SECONDS = 30;
 /** Every other pair of changes is at least this many seconds apart. */
 export const LADDER_REST_SECONDS = 10;
 /** Seconds of good frames before it tries the rung above. */
 export const CLIMB_AFTER_SECONDS = 10;
-/** A rung that ran long this many times is out for the session. One that ran long straight after a climb is out at once. */
+/** A rung that ran long this many times is out for the session. One that was climbed to and then ran long is out at once. */
 export const FAILS_ALLOWED = 2;
 /** A rung the chip test turned down is asked about again after a minute of good frames, then after five. Then it is out for the session. */
 export const ASK_AGAIN_SECONDS: readonly number[] = [60, 300];
@@ -199,13 +201,14 @@ export interface LadderChange {
  * - A frame is judged against the gap it was meant to have (`dueSeconds`), so a 30 Hz screen is not a slow chip.
  * - Down: two seconds of long frames step one rung down (two rungs under 29 a second on a 60 Hz screen, three under 20).
  * - Finding its level: at the start, after a settings change and when a game begins, steps down may follow each
- *   other two seconds apart. That ends at the first ten seconds of good frames. From then on every change is ten
- *   seconds from the last.
+ *   other two seconds apart. That ends at the first ten seconds of good frames, or after thirty seconds, whichever
+ *   comes first. From then on every change is ten seconds from the last.
  * - Up: ten seconds of good frames step one rung back up. With `ask` set it asks first (`asking`, `answer`): the
  *   world view times the rung above and the ladder only climbs to a rung that fits. A rung turned down is asked
  *   about twice more (after one minute, then five), then left alone.
- * - Never pumping: a rung that runs long straight after a climb is out for the session, and so is one that ran
- *   long twice. So a player sees a rung tried and dropped once at most.
+ * - Never pumping: a rung that was climbed to and then runs long is out for the session, and so is one that ran
+ *   long twice. So a player sees a rung tried and dropped once at most. A failed climb goes back to the rung it
+ *   left in one change, and after a failed climb of several rungs every later climb is one rung.
  *
  * A settings change resets it.
  */
@@ -227,6 +230,9 @@ export class FrameLadder {
   private cameFrom = 0;
   /** Still finding its level: no rung has held for ten seconds since the start, the last reset or the last `find()`. */
   private finding = true;
+  private findingUntil = FINDING_SECONDS;
+  /** A climb of more than one rung is allowed. Not after one has failed: the chip test was wrong about the room, so it is one rung at a time from then on. */
+  private jumps = true;
   private wanted: number | null = null;
   private skipFrame = false;
   private slowWindows = 0;
@@ -265,6 +271,7 @@ export class FrameLadder {
     this.refusals = LADDER.map(() => 0);
     this.lastChange = Number.NEGATIVE_INFINITY;
     this.lastWentUp = false;
+    this.jumps = true;
     this.warmUntil = this.clock + WARM_UP_SECONDS;
     this.find();
   }
@@ -277,6 +284,7 @@ export class FrameLadder {
   /** The work has changed (a game begins): find the level again, with quick steps down allowed. */
   find(): void {
     this.finding = true;
+    this.findingUntil = this.clock + FINDING_SECONDS;
     this.wanted = null;
     this.slowWindows = 0;
     this.slowest = 0;
@@ -309,7 +317,7 @@ export class FrameLadder {
     this.skipFrame = true;
     this.windowSeconds = 0;
     this.windowDue = 0;
-    if (rung !== null) return this.move(Math.max(this.best, Math.min(asked, rung)));
+    if (rung !== null) return this.move(Math.max(this.best, this.jumps ? Math.min(asked, rung) : asked));
     this.refusals[asked] += 1;
     if (this.refusals[asked] > ASK_AGAIN_SECONDS.length) this.best = Math.max(this.best, asked + 1);
     this.goodSeconds = 0;
@@ -336,6 +344,7 @@ export class FrameLadder {
     this.windowSeconds = 0;
     this.windowDue = 0;
     if (this.clock <= this.warmUntil || this.hold) return false;
+    if (this.clock > this.findingUntil) this.finding = false;
     if (lateness > LONG_SHARE) {
       this.slowWindows += lateness > 1.8 ? 2 : 1;
       this.slowest = Math.max(this.slowest, lateness);
@@ -355,9 +364,14 @@ export class FrameLadder {
       const climbFailed = this.lastWentUp;
       this.fails[this.rung] += 1;
       if (climbFailed || this.fails[this.rung] >= FAILS_ALLOWED) this.best = Math.max(this.best, this.rung + 1);
-      // Further in one change when badly behind, but after a climb no further than the rung that held.
+      // A climb that failed goes straight back to the rung that held, in one change, however far the climb was.
+      if (climbFailed) {
+        if (this.cameFrom - this.rung > 1) this.jumps = false;
+        return this.move(this.cameFrom);
+      }
+      // Further in one change when badly behind.
       const drop = this.slowest > 3 ? 3 : this.slowest > 2.04 ? 2 : 1;
-      return this.move(Math.min(climbFailed ? this.cameFrom : last, this.rung + drop));
+      return this.move(Math.min(last, this.rung + drop));
     }
     if (this.rung > this.best && rested >= LADDER_REST_SECONDS
       && this.goodSeconds >= (ASK_AGAIN_SECONDS[this.refusals[this.rung - 1] - 1] ?? CLIMB_AFTER_SECONDS)) {

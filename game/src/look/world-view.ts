@@ -719,6 +719,9 @@ export class InkWashWorldView implements WorldView {
     const draw = (): void => post.render(this.scene, camera, water.mesh, this.rainStrokes && this.rain.falling ? [this.rain.scene, marks.scene] : marks.scene, this.quality.reflection > 0, (pass) => this.beforePass(pass), this.heroPass ? this.heroes : null, windows);
     if (this.chipTestDue) this.startOnFittingRung(draw);
     else if (this.ladder.asking !== null) this.answerLadder(this.ladder.asking, draw);
+    else return draw();
+    // The timing drew frames nobody sees: the frame's own counts are the last draw's alone.
+    renderer.info.reset();
     draw();
   }
 
