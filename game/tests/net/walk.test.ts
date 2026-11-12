@@ -12,7 +12,7 @@ import {
   readClientMessage, readWalkRun,
 } from '../../src/net/index.ts';
 import type { GuestOptions, LoopbackConditions } from '../../src/net/index.ts';
-import { FIXED_STEP, NEUTRAL_INPUT, drainEvents, groundHeight, hashState, selectInteractable, terrainHeight } from '../../src/sim/index.ts';
+import { FIXED_STEP, NEUTRAL_INPUT, drainEvents, groundHeight, hashState, selectInteractable, step, terrainHeight } from '../../src/sim/index.ts';
 import type { GameState, StepInput } from '../../src/sim/index.ts';
 import { newGame, standOn } from '../support.ts';
 import { createRig, key } from './rig.ts';
@@ -541,6 +541,54 @@ describe('when guess and truth differ', () => {
     expect(worstEase).toBe(0);
     expect(gap(waiting, shown())).toBe(0);
     expect(gap(host(), shown())).toBeLessThan(1e-9);
+  });
+});
+
+describe('a host that draws slowly', () => {
+  it('at 30 frames a second the host runs two steps on one input: a key change can slip by a step, eased, never a jump', () => {
+    const game = campGame();
+    const rig = createRig({ game });
+    const sam = rig.join('Sam', undefined, { delay: 0.06 });
+    rig.run(3);
+    seatByFire(game);
+    rig.run(3);
+    const shown = () => sam.link.view()!.players[1]!.position;
+    const random = seeded(5);
+    let worstSlip = 0;
+    let worstEase = 0;
+    let worstFrame = 0;
+    let worstStopped = 0;
+    for (let leg = 0; leg < 200; leg += 1) {
+      const next = wander(random, shown());
+      const still = leg % 2 === 1;
+      const frames = still ? 36 : Math.round(next.seconds * 30) * 2 + (leg % 4 === 0 ? 1 : 0);
+      for (let count = 0; count < frames; count += 1) {
+        // The host: one frame for every two of the guest's, two steps of the rules in it.
+        sam.pair.advance(FIXED_STEP);
+        if (count % 2 === 0) {
+          step(game, rig.host.crewInput({ ...NEUTRAL_INPUT }, 0), 2 * FIXED_STEP);
+          rig.host.afterFrame(drainEvents(game), 2 * FIXED_STEP);
+        }
+        const before = { ...shown() };
+        sam.link.update(FIXED_STEP);
+        sam.link.sendInput({ ...NEUTRAL_INPUT, ...(still ? {} : next.input) });
+        sam.link.takeEvents();
+        worstFrame = Math.max(worstFrame, gap(before, shown()));
+        worstSlip = Math.max(worstSlip, sam.link.walk.slip);
+        worstEase = Math.max(worstEase, sam.link.walk.eased);
+      }
+      if (still) worstStopped = Math.max(worstStopped, gap(game.players[1]!.position, shown()));
+      for (const player of game.players) Object.assign(player, { hunger: 100, thirst: 100, energy: 100 });
+    }
+    console.log(`WALK host at 30 frames a second, 100 walks: largest slip ${(worstSlip * 100).toFixed(2)} cm, largest one-frame correction ${(worstEase * 100).toFixed(2)} cm, `
+      + `longest frame ${(worstFrame * 100).toFixed(2)} cm, worst ${(worstStopped * 100).toFixed(3)} cm from the host 0.6 s after a stop, cuts ${sam.link.walk.cuts}`);
+    // One running step at most, taken out a little a frame.
+    expect(worstSlip).toBeLessThanOrEqual(2 * RUN_STEP);
+    expect(worstEase).toBeLessThanOrEqual(0.03);
+    expect(worstFrame).toBeLessThanOrEqual(RUN_STEP + 0.03);
+    expect(worstStopped).toBeLessThan(0.01);
+    expect(sam.link.walk.cuts).toBe(0);
+    expect(sam.link.mismatches).toBe(0);
   });
 });
 
