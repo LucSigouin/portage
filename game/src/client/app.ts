@@ -144,8 +144,11 @@ export class App {
     }
   }
 
-  /** One frame. `frameSeconds` is the time it stands for, already clamped. */
-  frame(frameSeconds: number): void {
+  /**
+   * One frame. `frameSeconds` is the time it stands for, already clamped. `dueSeconds` is the gap
+   * the loop meant it to have (what the screen and the frame-rate cap allow), handed on to the look.
+   */
+  frame(frameSeconds: number, dueSeconds?: number): void {
     const session = this.session;
     this.elapsedSeconds += frameSeconds;
 
@@ -168,6 +171,7 @@ export class App {
 
     const frame: FrameInfo = {
       frameSeconds,
+      ...(dueSeconds === undefined ? {} : { dueSeconds }),
       simulatedSeconds: session.simulatedSeconds,
       elapsedSeconds: this.elapsedSeconds,
       paused: session.paused,

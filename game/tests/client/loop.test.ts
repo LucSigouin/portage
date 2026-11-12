@@ -342,6 +342,22 @@ describe('one frame of the app', () => {
     expect(seen.models.at(-1)).toMatchObject({ paused: true, panel: { id: 'pause' } });
   });
 
+  it('tells the world view the gap the frame was meant to have, and leaves it out when the loop gave none', () => {
+    const { app, seen } = appWith();
+    app.frame(1 / 60);
+    expect('dueSeconds' in seen.frames.at(-1)!).toBe(false);
+    app.frame(1 / 60, 1 / 144);
+    expect(seen.frames.at(-1)!.dueSeconds).toBe(1 / 144);
+    // Straight from the loop: a 60 cap on a 144 Hz screen is due every sixtieth, no cap is due every display frame.
+    for (const [cap, expected] of [[60, 1 / 60], [0, 1 / 144], [30, 1 / 30]] as const) {
+      const clock = new FakeClock();
+      const loop = createFrameLoop({ clock, frame: (frameSeconds, dueSeconds) => app.frame(frameSeconds, dueSeconds), frameRateCap: () => cap });
+      startOn(loop, clock, 1000 / 144);
+      for (let refresh = 0; refresh < 30; refresh += 1) clock.refresh(1000 / 144);
+      expect(seen.frames.at(-1)!.dueSeconds).toBeCloseTo(expected, 6);
+    }
+  });
+
   it('follows the screen with the stage and the audio scene', () => {
     const { app, seen } = appWith();
     app.frame(1 / 60);

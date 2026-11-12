@@ -193,7 +193,7 @@ function boot(): void {
       cancelFrame: (handle) => window.cancelAnimationFrame(handle),
       now: () => performance.now(),
     },
-    frame: (frameSeconds) => app.frame(frameSeconds),
+    frame: (frameSeconds, dueSeconds) => app.frame(frameSeconds, dueSeconds),
     frameRateCap: () => session.settings.graphics.fpsCap,
   });
 

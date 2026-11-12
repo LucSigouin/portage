@@ -118,7 +118,7 @@ function onScreen(hertz: number, cap: number, scene: 'play' | 'lobby' | 'paused'
     frame: (frameSeconds, dueSeconds) => {
       frames += 1;
       due = dueSeconds;
-      app.frame(frameSeconds);
+      app.frame(frameSeconds, dueSeconds);
     },
     frameRateCap: () => session.settings.graphics.fpsCap,
   });

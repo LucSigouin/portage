@@ -58,6 +58,12 @@ export type * from './viewmodels/types.ts';
 export interface FrameInfo {
   /** Real seconds since the last frame, clamped. Use it for effects that run while paused. */
   frameSeconds: number;
+  /**
+   * The gap this frame was meant to have, in seconds: what the screen and the frame-rate cap allow.
+   * 1/60 on a 60 Hz screen, 1/144 on a 144 Hz screen drawing every frame, 1/30 under a 30 cap.
+   * Absent means 1/60.
+   */
+  dueSeconds?: number;
   /** Seconds the simulation advanced this frame. 0 while paused. */
   simulatedSeconds: number;
   /** Real seconds since the app started. For idle motion: flags, smoke, the lobby. */
