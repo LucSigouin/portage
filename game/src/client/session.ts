@@ -14,7 +14,8 @@ import {
 } from '../settings/index.ts';
 import type { InputAction, Settings, SettingsStorage } from '../settings/index.ts';
 import {
-  FIXED_STEP, NEUTRAL_INPUT, createGame, dispatch, drainEvents, playerOf, selectInteractable, step,
+  FIXED_STEP, NEUTRAL_INPUT, connectedPlayers, createGame, dispatch, drainEvents, playerOf, selectInteractable,
+  setConnected, step,
 } from '../sim/index.ts';
 import type { Command, CommandResult, GameEvent, GameState, PlayerId, StepInput } from '../sim/index.ts';
 import { InputController } from './input.ts';
@@ -90,8 +91,10 @@ export class Session {
    * the view-models are built for them. Always 0 until the networking step.
    */
   localPlayerId: PlayerId = 0;
-  /** Players in a new game, 1 to 4 (`?crew=N`). The extra ones sit idle. */
+  /** Players in a new game, 1 to 4 (`?crew=N`). The extra ones are away stand-ins. */
   crewSize = 1;
+  /** The player whose browser runs a shared game. Null while the game is not shared. */
+  hostId: PlayerId | null = null;
   /** The slot the game autosaves into. Null for a staged game that never saves. */
   slot: number | null = null;
   /** The scene behind the lobby: a game nobody plays. */
@@ -144,10 +147,21 @@ export class Session {
     return this.game ?? this.backdrop;
   }
 
-  /** True while the simulation does not advance. */
+  /** True while two or more players are playing (not away): then nothing pauses the game. */
+  get crewed(): boolean {
+    return this.game !== null && connectedPlayers(this.game).length >= 2;
+  }
+
+  /**
+   * True while the simulation does not advance. Alone, a hidden tab and every
+   * full panel pause it. With a crew playing nothing does: the panels open
+   * over a world that keeps running.
+   */
   get paused(): boolean {
+    if (this.screen === 'game' && this.frozen) return true;
+    if (this.crewed) return false;
     if (this.hidden) return true;
-    return this.screen === 'game' && (this.frozen || pausesSimulation(this.panels));
+    return this.screen === 'game' && pausesSimulation(this.panels);
   }
 
   get hasDriver(): boolean {
@@ -194,6 +208,7 @@ export class Session {
   newGame(slot: number): boolean {
     if (!Number.isInteger(slot) || slot < 0 || slot >= SAVE_SLOT_COUNT) return false;
     const state = createGame(this.randomSeed(), { difficulty: this.settings.gameplay.difficulty, crew: this.crewSize });
+    this.onlyLocalPlayerPresent(state);
     this.enterGame(state, slot);
     this.saveNow();
     return true;
@@ -207,8 +222,15 @@ export class Session {
       this.sound('error');
       return false;
     }
+    // A save from a shared game: the others are not here now. They keep their place for when they are.
+    this.onlyLocalPlayerPresent(result.state);
     this.enterGame(result.state, slot);
     return true;
+  }
+
+  /** Everyone but the player this screen plays is away, until someone joins as them. */
+  private onlyLocalPlayerPresent(state: GameState): void {
+    for (const player of state.players) setConnected(state, player.id, player.id === playerOf(state, this.localPlayerId).id, true);
   }
 
   /** Load the newest save. */

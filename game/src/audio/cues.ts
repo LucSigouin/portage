@@ -951,6 +951,7 @@ export const EVENT_CUES: { [Type in GameEventType]: CueName | CueResolver<Type> 
   // Silent: saving is bookkeeping, not something the player should hear.
   autosave_requested: null,
   game_completed: 'beacon_lit',
+  crew_changed: null,
 };
 
 /** Event types that are silent on purpose. */

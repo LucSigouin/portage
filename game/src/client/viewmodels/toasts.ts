@@ -6,7 +6,7 @@ import type { ItemId } from '../../data/index.ts';
 import type { GameEvent, GameState, PlayerId } from '../../sim/index.ts';
 import { selectTimeOfDay } from '../../sim/index.ts';
 import { countedName, itemName, needsText } from './format.ts';
-import { crewMark } from './hud.ts';
+import { crewName } from './hud.ts';
 import type { ToastModel, Tone } from './types.ts';
 
 export interface ToastInput {
@@ -32,7 +32,7 @@ export function isCrewNote(event: GameEvent): boolean {
  */
 function finderName(event: GameEvent, state: GameState, readerId: PlayerId): string | null {
   if (state.players.length < 2 || event.playerId === undefined) return null;
-  return event.playerId === readerId ? 'You' : crewMark(event.playerId).label;
+  return event.playerId === readerId ? 'You' : crewName(state, event.playerId);
 }
 
 /**
@@ -123,6 +123,12 @@ export function toastForEvent(event: GameEvent, state: GameState, readerId: Play
       return toast('No room for the reward. Claim it from the inventory.', 'warning');
     case 'game_completed':
       return toast('The Beacon is lit.', 'good');
+    case 'crew_changed': {
+      // Your own coming and going is no news to you.
+      if (event.who === readerId) return null;
+      const name = crewName(state, event.who);
+      return toast({ joined: `${name} joined the crew`, away: `${name} is away`, back: `${name} is back` }[event.change]);
+    }
     // The HUD, the prompt or the dialogue panel already shows these.
     case 'ate':
     case 'drank':

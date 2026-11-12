@@ -10,7 +10,7 @@ import {
 import type { Command, Container, GameState, InventoryView, ItemStack, Missing, PlayerId, QuestView } from '../../sim/index.ts';
 import type { InterfaceIntent } from '../intents.ts';
 import { cardinalName, countedName, distanceText, itemName, needsText } from './format.ts';
-import { crewElsewhere, crewMark, objectiveRows } from './hud.ts';
+import { crewElsewhere, crewTag, objectiveRows } from './hud.ts';
 import type {
   BuildRowModel, ButtonModel, CostRowModel, ItemSlotModel, MapIslandModel, MapMarkerModel, PanelModel,
   QuestRowModel, RecipeRowModel,
@@ -282,7 +282,7 @@ export function buildMapPanel(state: GameState, playerId: PlayerId = 0): PanelBo
   for (const { player } of crewElsewhere(state, playerId)) {
     markers.push({
       kind: 'crew', left: mapLeft(player.position.x), top: mapTop(player.position.z),
-      ...crewMark(player.id), crewIndex: state.players.indexOf(player),
+      ...crewTag(player), crewIndex: state.players.indexOf(player),
     });
   }
   return {

@@ -88,6 +88,7 @@ export const SAMPLE_EVENTS: { [Type in GameEventType]: Extract<GameEvent, { type
   rewards_pending: { type: 'rewards_pending' },
   autosave_requested: { type: 'autosave_requested', reason: 'landing' },
   game_completed: { type: 'game_completed' },
+  crew_changed: { type: 'crew_changed', who: 1, change: 'away' },
 };
 
 export const ALL_EVENTS: GameEvent[] = Object.values(SAMPLE_EVENTS);

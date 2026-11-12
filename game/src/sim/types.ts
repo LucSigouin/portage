@@ -4,7 +4,7 @@ import type {
 } from '../data/types.ts';
 
 /** Bump when the shape of GameState changes; add a migration in `src/save/`. */
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 
 /** The crew: one to four players share the canoe. */
 export const MAXIMUM_PLAYERS = 4;
@@ -67,8 +67,20 @@ export interface NodeState {
   leftover: ItemStack[];
 }
 
+/** Longest name a player may carry, in letters. The crew list has room for this many. */
+export const MAXIMUM_NAME_LENGTH = 12;
+
 export interface PlayerState {
   id: PlayerId;
+  /** What the player typed as their name, at most `MAXIMUM_NAME_LENGTH` letters. Empty: show the crew mark's label. */
+  name: string;
+  /**
+   * False while the player is away: their screen closed or never opened. They keep
+   * their seat or their spot ashore, their backpack and their place in the crew; their
+   * meters stand still, they cannot fail and the night does not wait for them.
+   * Change it only through `setConnected`.
+   */
+  connected: boolean;
   mode: 'canoe' | 'foot';
   /** Seat in the canoe while aboard, 0 to 3 (see `seatTransformForHull`). null on foot. */
   seat: number | null;
@@ -273,6 +285,8 @@ export type FailureReason =
   | 'quest_not_ready'
   | 'tool_not_owned'
   | 'nothing_to_claim'
+  /** The command was sent for a player who is away. */
+  | 'player_away'
   | 'invalid_amount';
 
 /**
@@ -360,6 +374,8 @@ type GameEventBody =
   | { type: 'planter_harvested' }
   | { type: 'rewards_pending' }
   | { type: 'autosave_requested'; reason: 'landing' | 'sleeping' }
-  | { type: 'game_completed' };
+  | { type: 'game_completed' }
+  /** The crew changed: `who` joined, went away or came back. Crew-wide: it carries no `playerId`. */
+  | { type: 'crew_changed'; who: PlayerId; change: 'joined' | 'away' | 'back' };
 
 export type GameEventType = GameEvent['type'];

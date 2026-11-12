@@ -53,14 +53,14 @@ describe('the Ink & Wash theme', () => {
     expect(theme).toMatch(/\.iw :focus-visible,\s*\.iw\.iw-by-keys :focus \{\s*outline: 0\.15rem solid var\(--iw-rust-deep\)/);
   });
 
-  it('never dims words: no opacity on anything but washes, the dimmed lobby and unseen inputs', () => {
+  it('never dims words: no opacity on anything but washes, an away crewmate\'s toque and meters, the dimmed lobby and unseen inputs', () => {
     const dimmed = [...theme.matchAll(/([^{}]+)\{[^{}]*?\bopacity:\s*([\d.]+)/g)]
       .map((match) => ({ selector: match[1]!.trim().split('\n').pop()!.trim(), opacity: Number(match[2]) }))
       .filter((rule) => rule.opacity < 1)
       .map((rule) => rule.selector);
     expect(dimmed.sort()).toEqual([
       '.iw-bar i', '.iw-ico .iw-wash', '.iw-lobby.iw-dim .iw-lobby-col', '.iw-lobby::after', '.iw-logo-row .iw-seal-holder',
-      '.iw-tg input', '.iw-tk', '.iw-tk.iw-big',
+      '.iw-tg input', '.iw-tk', '.iw-tk.iw-big', '.iw-mate.iw-away .iw-mate-meters',
     ].sort());
   });
 

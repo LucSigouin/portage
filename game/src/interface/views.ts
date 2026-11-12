@@ -81,17 +81,22 @@ const METER_ICON = { hunger: ICON.hunger, thirst: ICON.thirst, energy: ICON.ener
  * The crew list, hung under the vitals card: one row a player. Their toque in their own colour,
  * their label, three small meters in the order of the big ones above, where they are and how far.
  * A low meter is marked three ways: its bar is ringed in rust, the row gets a rust mark, and the
- * words say which. Nothing in it moves.
+ * words say which. An away player's toque and meters are washed out and their name is tagged
+ * "away"; the words keep their full ink. Nothing in it moves.
  */
 export function crewView(crew: CrewRowModel[], patterned: boolean): ViewNode {
   return h('div.iw-crew.iw-paper', { key: 'crew', role: 'group', 'aria-label': 'Crew' },
     h('i.iw-tape'),
     crew.map((mate) => h('div.iw-mate', {
       key: mate.playerId, 'data-player': mate.playerId, 'data-where': mate.where,
-      class: classes(mate.you && 'iw-you', mate.lowText !== '' && 'iw-low'),
+      class: classes(mate.you && 'iw-you', mate.lowText !== '' && 'iw-low', mate.away && 'iw-away'),
     },
     icon(toqueIcon(mate.color), 'iw-mate-toque'),
-    h('span.iw-mate-name', null, mate.label, mate.you ? h('small.iw-kind', null, 'you') : null),
+    // One tag at most: you, or away, or who hosts.
+    h('span.iw-mate-name', null, mate.label,
+      mate.you ? h('small.iw-kind', null, 'you')
+        : mate.away ? h('small.iw-kind', null, 'away')
+          : mate.host ? h('small.iw-kind', null, 'host') : null),
     h('span.iw-mate-meters', null, mate.meters.map((meter) => h('span.iw-bar', {
       key: meter.id, role: 'img', 'aria-label': `${meter.label} ${meter.value}`, title: `${meter.label} ${meter.value}`,
       class: classes(`iw-bar-${meter.id}`, patterned && `iw-${meter.pattern}`, meter.low && 'iw-low'),

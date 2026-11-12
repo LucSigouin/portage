@@ -119,6 +119,8 @@ const BED_COMMANDS: Command['type'][] = ['sleep', 'wake', 'track_quest', 'set_di
  */
 export function dispatch(state: GameState, command: Command, playerId: PlayerId = 0): CommandResult {
   const player = playerOf(state, playerId);
+  // Nobody acts for a player who is away.
+  if (!player.connected) return failure('player_away');
   if (player.dialogue && !DIALOGUE_COMMANDS.includes(command.type)) return failure('in_dialogue');
   // Doing anything else gets a waiting sleeper up.
   if (player.asleep && !BED_COMMANDS.includes(command.type)) player.asleep = false;
