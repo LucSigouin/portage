@@ -12,23 +12,38 @@
  * |---|---|---|
  * | guest | `join` | I am `name`. `key` is my secret for this room: the same key gets the same player back. |
  * | host | `welcome` | You are player `playerId`. Here is the whole state, snapshot `id`. Commands count from 1 in this `sitting`. |
- * | guest | `input` | What I hold this step (`StepInput`), numbered `seq`. Also what I have: snapshot `have`, `events` so far. |
- * | guest | `command` | Do this for me (`Command`), numbered `id`. Sent again until its result comes. |
+ * | guest | `input` | What I hold this step (`StepInput`), numbered `seq`. Also what I have: snapshot `have`, `events` so far. And my walking: I have taken `step` steps of 1/60 s, and `walk` is what I held on the last few stretches of them. |
+ * | guest | `command` | Do this for me (`Command`), numbered `id`, once you have walked me through my step `at`. Sent again until its result comes. |
  * | host | `result` | What command `id` did (`CommandResult`). |
- * | host | `state` | Snapshot `id` at step `step`: the top-level keys that changed since snapshot `base` (all of them when `base` is null), and the fingerprint of the whole. `ack` is the last `input.seq` the host had. |
+ * | host | `state` | Snapshot `id` at step `step`: the top-level keys that changed since snapshot `base` (all of them when `base` is null), and the fingerprint of the whole. `ack` is the last `input.seq` the host had; `walked` is how many of this guest's steps the host has walked. |
  * | host | `events` | The events numbered from `first`, as they happen. Sent again until the guest has them. |
  * | guest | `ping` | Still here, and what I have. The host sends it straight back. |
  * | both | `leave` | Going, or (from the host) why you cannot stay. |
  */
 import { ATTACHMENTS, ITEMS, NPCS, QUESTS, RECIPES, TOOL_IDS } from '../data/index.ts';
 import type { Command, CommandResult, GameEvent, GameState, PlayerId, StepInput } from '../sim/index.ts';
+import { WALK_RUNS_SENT, readWalkRun } from './walk.ts';
+import type { WireRun } from './walk.ts';
 
-/** Bump when a message changes shape. Host and guest must match. */
-export const PROTOCOL_VERSION = 1;
+/**
+ * Bump when a message changes shape. Host and guest must match.
+ * 2: a guest's walking is numbered by step (`input.step`, `input.walk`, `command.at`, `state.walked`, `welcome.walked`).
+ */
+export const PROTOCOL_VERSION = 2;
 
 export interface JoinMessage { v: number; type: 'join'; name: string; key: string }
-export interface InputMessage { v: number; type: 'input'; seq: number; have: number; events: number; input: StepInput }
-export interface CommandMessage { v: number; type: 'command'; id: number; command: Command }
+export interface InputMessage {
+  v: number; type: 'input'; seq: number; have: number; events: number; input: StepInput;
+  /** Steps of 1/60 s this guest has taken in this sitting. `walk` says what it held on them. */
+  step: number;
+  /** The last few stretches of those steps, oldest first: where each began and what was held on foot. */
+  walk: WireRun[];
+}
+export interface CommandMessage {
+  v: number; type: 'command'; id: number; command: Command;
+  /** The guest had taken this many steps when it asked: the host runs the command once it has walked the guest that far. */
+  at: number;
+}
 export interface PingMessage { v: number; type: 'ping'; time: number; have: number; events: number }
 export interface GuestLeaveMessage { v: number; type: 'leave' }
 
@@ -60,6 +75,8 @@ export interface WelcomeMessage {
   state: GameState;
   /** Events the host had sent before this: the next one is numbered this. */
   events: number;
+  /** How many of this guest's steps the host has walked. 0 at the start of a sitting. */
+  walked: number;
 }
 export interface StateMessage {
   v: number;
@@ -70,6 +87,8 @@ export interface StateMessage {
   hash: string;
   /** The last `input.seq` the host had from this guest. */
   ack: number;
+  /** How many of this guest's steps (`input.step`) the host had walked when it took this snapshot. */
+  walked: number;
   /** The snapshot `changed` is against. Null: `changed` is the whole state. */
   base: number | null;
   changed: Partial<GameState>;
@@ -203,17 +222,25 @@ export function readClientMessage(raw: unknown): ClientMessage | null {
       if (typeof raw.key !== 'string' || !KEY_PATTERN.test(raw.key)) return null;
       return { v, type: 'join', name: raw.name, key: raw.key };
     case 'input': {
-      if (!hasOnly(raw, ['v', 'type', 'seq', 'have', 'events', 'input'])) return null;
+      if (!hasOnly(raw, ['v', 'type', 'seq', 'have', 'events', 'input', 'step', 'walk'])) return null;
       const input = readInput(raw.input);
       if (!input || !isWhole(raw.seq, 0, Number.MAX_SAFE_INTEGER)) return null;
       if (!isWhole(raw.have, -1, Number.MAX_SAFE_INTEGER) || !isWhole(raw.events, 0, Number.MAX_SAFE_INTEGER)) return null;
-      return { v, type: 'input', seq: raw.seq, have: raw.have, events: raw.events, input };
+      if (!isWhole(raw.step, 0, Number.MAX_SAFE_INTEGER) || !Array.isArray(raw.walk) || raw.walk.length > WALK_RUNS_SENT) return null;
+      const walk: WireRun[] = [];
+      for (const entry of raw.walk) {
+        const run = readWalkRun(entry);
+        // Each stretch begins after the one before it, and before the step the guest says it is on.
+        if (!run || run[0] >= raw.step || (walk.length > 0 && run[0] <= walk.at(-1)![0])) return null;
+        walk.push(run);
+      }
+      return { v, type: 'input', seq: raw.seq, have: raw.have, events: raw.events, input, step: raw.step, walk };
     }
     case 'command': {
-      if (!hasOnly(raw, ['v', 'type', 'id', 'command'])) return null;
+      if (!hasOnly(raw, ['v', 'type', 'id', 'command', 'at'])) return null;
       const command = readCommand(raw.command);
-      if (!command || !isWhole(raw.id, 1, Number.MAX_SAFE_INTEGER)) return null;
-      return { v, type: 'command', id: raw.id, command };
+      if (!command || !isWhole(raw.id, 1, Number.MAX_SAFE_INTEGER) || !isWhole(raw.at, 0, Number.MAX_SAFE_INTEGER)) return null;
+      return { v, type: 'command', id: raw.id, command, at: raw.at };
     }
     case 'ping':
       if (!hasOnly(raw, ['v', 'type', 'time', 'have', 'events'])) return null;
@@ -238,11 +265,11 @@ export function readHostMessage(raw: unknown): HostMessage | null {
   switch (raw.type) {
     case 'welcome':
       return whole(raw.session) && whole(raw.sitting) && isWhole(raw.playerId, 0, 3) && isWhole(raw.hostId, 0, 3) && whole(raw.id) && whole(raw.step)
-        && typeof raw.hash === 'string' && isRecord(raw.state) && Array.isArray(raw.state.players) && whole(raw.events)
+        && typeof raw.hash === 'string' && isRecord(raw.state) && Array.isArray(raw.state.players) && whole(raw.events) && whole(raw.walked)
         ? raw as unknown as WelcomeMessage : null;
     case 'state':
       return whole(raw.id) && whole(raw.step) && typeof raw.hash === 'string' && isWhole(raw.ack, -1, Number.MAX_SAFE_INTEGER)
-        && (raw.base === null || whole(raw.base)) && isRecord(raw.changed)
+        && (raw.base === null || whole(raw.base)) && isRecord(raw.changed) && whole(raw.walked)
         ? raw as unknown as StateMessage : null;
     case 'events':
       return whole(raw.first) && whole(raw.step) && Array.isArray(raw.events) ? raw as unknown as EventsMessage : null;

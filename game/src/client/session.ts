@@ -490,6 +490,9 @@ export class Session {
     const input = this.input.sample(this.inputSnapshot(), cameraYaw);
     this.lastInput = input;
     guest.sendInput(input);
+    // The keys just walked this guest's own figure: draw it, and aim the camera, where it is now and not a frame late.
+    const walked = guest.view() ?? view;
+    this.game = walked;
 
     for (const outcome of guest.takeResults()) {
       const result = outcome.result;
@@ -500,7 +503,7 @@ export class Session {
       }
     }
     const events = guest.takeEvents();
-    this.followEvents(view, events);
+    this.followEvents(walked, events);
     return events;
   }
 

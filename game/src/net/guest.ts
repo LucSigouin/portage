@@ -6,7 +6,10 @@
  * - `truth`: the newest state the host sent, exactly (its fingerprint is checked).
  * - `view()`: the state to draw. A beat behind the truth, with the canoe, the
  *   players and the clock moved smoothly between the two states it sits
- *   between, so fifteen states a second draw as sixty frames.
+ *   between, so fifteen states a second draw as sixty frames. One thing in it
+ *   is not behind: this guest's own player on foot, drawn where its own keys
+ *   have walked it (`walk.ts`). That is a layer over the view: `truth` and the
+ *   fingerprints never see it.
  * - `sendInput(input)`, `sendCommand(command)`, `takeEvents()`, `takeResults()`:
  *   what a solo session does with the rules engine, done over the wire.
  * - `update(seconds)`: call once a frame. Runs the clock, the resends and the pings.
@@ -16,6 +19,7 @@ import type { Command, CommandResult, GameEvent, GameState, PlayerId, PlayerStat
 import { PROTOCOL_VERSION, readHostMessage } from './messages.ts';
 import type { ClientMessage, LeaveReason } from './messages.ts';
 import type { Transport } from './transport.ts';
+import { WalkPredictor } from './walk.ts';
 
 export interface GuestOptions {
   /** The name to play under. The host cuts it to 12 letters. */
@@ -24,6 +28,12 @@ export interface GuestOptions {
   key: string;
   /** How far behind the newest state the view runs, in steps of 1/60 s. Default 6 (a tenth of a second). */
   delaySteps?: number;
+  /**
+   * Draw this guest's own walking at once, ahead of the host's answer. Default
+   * true. False draws the guest's own player a beat behind like everyone else
+   * (the walk is still sent: the host walks the guest by it either way).
+   */
+  predictWalk?: boolean;
 }
 
 /**
@@ -49,7 +59,19 @@ const JOIN_RESEND_SECONDS = 0.5;
 const COMMAND_RESEND_SECONDS = 0.25;
 /** While nothing changes, the input still goes out this often: it is also the guest's "still here". */
 const INPUT_RESEND_SECONDS = 0.05;
+/**
+ * While walking, and while only the camera bearing changes, the input goes out this often: 30 a second. A lost one
+ * then holds the host's walking up by a thirtieth of a second, not a twentieth.
+ */
+const INPUT_TURN_SECONDS = 1 / 30 - 0.002;
+/** A key going down or up is sent at once, and again on this many frames after: on a line that loses one in five, one in 125 is late. */
+const KEY_CHANGE_REPEATS = 2;
 const PING_SECONDS = 1;
+/** Commands after which the host holds the player still or takes them aboard: the guest's own walk stops with the asking. */
+const HOLDING_COMMANDS: ReadonlySet<Command['type']> = new Set(['talk', 'sleep', 'board']);
+/** The walk waits this long at most for the answer to such a command, and this long after a yes for the state that shows it. */
+const HOLD_ANSWER_SECONDS = 3;
+const HOLD_SHOWN_SECONDS = 1;
 /** No word from the host for this long: ask to join again. */
 export const HOST_SILENCE_SECONDS = 3;
 /** The view snaps instead of sliding when it is this many steps off (a join, a long stall). */
@@ -63,7 +85,13 @@ interface Held {
   id: number;
   step: number;
   state: GameState;
+  /** How many of this guest's own steps the host had walked. */
+  walked: number;
 }
+
+/** Everything a player holds but the camera bearing, as text: a change here is a key going down or up. */
+const keysOf = (input: StepInput): string =>
+  `${input.paddle},${input.steer},${input.powerStroke},${input.bail},${input.moveX},${input.moveY},${input.run}`;
 
 /** The short way round from one bearing to another, taken `share` of the way. */
 function turnToward(from: number, to: number, share: number): number {
@@ -134,8 +162,26 @@ export class GuestLink {
   private inputSeq = 0;
   private inputSentAt = -Infinity;
   private inputSent = '';
+  private keysSent = '';
+  /** The step count the last input message carried. */
+  private stepSent = 0;
+  /** Send the next input at once: a command just went, and the host runs it once it knows the walk up to it. */
+  private inputDue = false;
+  /** Frames left on which the input is sent again whatever it holds: a key just changed. */
+  private repeats = 0;
+  private frameSeconds = 0;
+  private readonly predictWalk: boolean;
+  /** This guest's own walking: its numbered steps, and where they put its figure. */
+  readonly walk = new WalkPredictor();
+  /**
+   * A command that will hold the player still was asked: no walking from the
+   * step it was asked at, until the host says no, or says yes and shows it.
+   */
+  private hold: { id: number; at: number; since: number; answered: { clock: number; truthId: number } | null } | null = null;
+  /** The view without this guest's own walk, worked out once a frame. */
+  private base: GameState | null = null;
   private nextCommandId = 1;
-  private pending: { id: number; command: Command; quiet: boolean; sentAt: number }[] = [];
+  private pending: { id: number; command: Command; quiet: boolean; sentAt: number; at: number }[] = [];
   private outcomes: CommandOutcome[] = [];
   /** Events numbered below this have arrived. */
   private nextEvent = 0;
@@ -148,6 +194,7 @@ export class GuestLink {
     this.name = options.name;
     this.key = options.key;
     this.delaySteps = options.delaySteps ?? 6;
+    this.predictWalk = options.predictWalk ?? true;
     transport.receive((raw) => this.onMessage(raw), () => this.end('closed', 'closed'));
     this.sendJoin();
   }
@@ -209,11 +256,17 @@ export class GuestLink {
           this.sitting = message.sitting;
           this.pending = [];
           this.nextCommandId = 1;
+          // And steps count from 0 again.
+          this.walk.reset();
+          this.hold = null;
+          this.stepSent = 0;
         }
         this.playerId = message.playerId;
         this.hostId = message.hostId;
         this.nextEvent = Math.max(this.nextEvent, message.events);
-        if (message.id > (this.held.at(-1)?.id ?? -1)) this.hold({ id: message.id, step: message.step, state: message.state }, message.hash);
+        if (message.id > (this.held.at(-1)?.id ?? -1)) {
+          this.keep({ id: message.id, step: message.step, state: message.state, walked: message.walked }, message.hash);
+        }
         this.status = 'playing';
         break;
       }
@@ -231,7 +284,7 @@ export class GuestLink {
           if (!base) return;
           state = { ...base.state, ...message.changed };
         }
-        this.hold({ id: message.id, step: message.step, state }, message.hash);
+        this.keep({ id: message.id, step: message.step, state, walked: message.walked }, message.hash);
         break;
       }
       case 'events': {
@@ -247,6 +300,11 @@ export class GuestLink {
         if (index < 0) return;
         const [entry] = this.pending.splice(index, 1);
         this.outcomes.push({ id: entry!.id, command: entry!.command, result: message.result, quiet: entry!.quiet });
+        if (this.hold?.id === entry!.id) {
+          // No: walk on. Yes: stand until a newer state shows what it did.
+          this.hold = message.result.ok
+            ? { ...this.hold, answered: { clock: this.clock, truthId: this.held.at(-1)?.id ?? -1 } } : null;
+        }
         break;
       }
       case 'ping':
@@ -259,7 +317,7 @@ export class GuestLink {
   }
 
   /** Keep a state as the truth, if it is the state the host says it is. */
-  private hold(entry: Held, hash: string): void {
+  private keep(entry: Held, hash: string): void {
     if (hashState(entry.state) !== hash) {
       this.mismatches += 1;
       this.needWhole = true;
@@ -268,6 +326,20 @@ export class GuestLink {
     this.needWhole = false;
     this.held.push(entry);
     if (this.held.length > HISTORY) this.held.shift();
+    this.base = null;
+  }
+
+  /** True while this guest's walk must stand: a command that holds the player was asked and is not settled. */
+  private get walkHeld(): boolean {
+    const hold = this.hold;
+    if (!hold) return false;
+    const newest = this.held.at(-1);
+    const settled = hold.answered === null
+      ? this.clock - hold.since > HOLD_ANSWER_SECONDS || !this.pending.some((entry) => entry.id === hold.id)
+      : this.clock - hold.answered.clock > HOLD_SHOWN_SECONDS
+        || (newest !== undefined && newest.id > hold.answered.truthId && newest.walked >= hold.at);
+    if (settled) this.hold = null;
+    return !settled;
   }
 
   /**
@@ -282,6 +354,8 @@ export class GuestLink {
   update(frameSeconds: number): void {
     if (this.status === 'closed' || this.status === 'refused') return;
     this.clock += frameSeconds;
+    this.frameSeconds = frameSeconds;
+    this.base = null;
     if (this.status === 'joining' || !this.hostHeard) {
       if (this.clock - this.joinSentAt >= JOIN_RESEND_SECONDS) this.sendJoin();
     }
@@ -290,7 +364,7 @@ export class GuestLink {
     for (const entry of this.pending) {
       if (this.clock - entry.sentAt < COMMAND_RESEND_SECONDS) continue;
       entry.sentAt = this.clock;
-      this.send({ v: PROTOCOL_VERSION, type: 'command', id: entry.id, command: entry.command });
+      this.send({ v: PROTOCOL_VERSION, type: 'command', id: entry.id, command: entry.command, at: entry.at });
     }
     if (this.clock - this.pingSentAt >= PING_SECONDS) {
       this.pingSentAt = this.clock;
@@ -307,15 +381,40 @@ export class GuestLink {
     this.displayStep = Math.min(this.displayStep, newest);
   }
 
-  /** What this guest's player holds this frame. Sent when it changes, and a few times a second while it does not. */
+  /**
+   * What this guest's player holds this frame. Call once a frame, after
+   * `update`. Takes the frame's steps of this guest's own walk (so `view()`
+   * shows them at once), and sends the input: at once when a key changes (and
+   * on the two frames after), 30 times a second while walking or while the
+   * camera turns, and 20 times a second while nothing does.
+   */
   sendInput(input: StepInput): void {
     if (this.status !== 'playing') return;
+    const truth = this.held.at(-1);
+    if (truth) this.walk.advance(this.frameSeconds, input, !this.walkHeld, truth.state, this.playerId, truth.walked);
+    this.frameSeconds = 0;
+
     const text = JSON.stringify(input);
-    if (text === this.inputSent && this.clock - this.inputSentAt < INPUT_RESEND_SECONDS) return;
+    const keys = keysOf(input);
+    const since = this.clock - this.inputSentAt;
+    const walking = Math.hypot(input.moveX, input.moveY) > 0.01;
+    const changed = walking || text !== this.inputSent || this.walk.changedSince(this.stepSent);
+    const keyChanged = keys !== this.keysSent;
+    const repeat = this.repeats > 0;
+    if (repeat) this.repeats -= 1;
+    if (keyChanged) this.repeats = KEY_CHANGE_REPEATS;
+    const send = this.inputDue || keyChanged || repeat || (changed && since >= INPUT_TURN_SECONDS) || since >= INPUT_RESEND_SECONDS;
+    if (!send) return;
+    this.inputDue = false;
     this.inputSent = text;
+    this.keysSent = keys;
     this.inputSentAt = this.clock;
+    this.stepSent = this.walk.step;
     this.inputSeq += 1;
-    this.send({ v: PROTOCOL_VERSION, type: 'input', seq: this.inputSeq, have: this.have, events: this.nextEvent, input });
+    this.send({
+      v: PROTOCOL_VERSION, type: 'input', seq: this.inputSeq, have: this.have, events: this.nextEvent, input,
+      step: this.walk.step, walk: this.walk.wireRuns(),
+    });
   }
 
   /** Ask the host to run a command for this guest's player. The answer comes through `takeResults`. Returns its number. */
@@ -323,8 +422,11 @@ export class GuestLink {
     const id = this.nextCommandId;
     this.nextCommandId += 1;
     if (this.status !== 'playing') return id;
-    this.pending.push({ id, command, quiet, sentAt: this.clock });
-    this.send({ v: PROTOCOL_VERSION, type: 'command', id, command });
+    const at = this.walk.step;
+    this.pending.push({ id, command, quiet, sentAt: this.clock, at });
+    if (HOLDING_COMMANDS.has(command.type) && !this.hold) this.hold = { id, at, since: this.clock, answered: null };
+    this.inputDue = true;
+    this.send({ v: PROTOCOL_VERSION, type: 'command', id, command, at });
     return id;
   }
 
@@ -341,10 +443,27 @@ export class GuestLink {
   }
 
   /**
-   * The state to draw this frame, or null before the welcome. The same object
-   * as `truth` when the view has caught up with it; otherwise a new one each call.
+   * The state to draw this frame, or null before the welcome: the view a beat
+   * behind, with this guest's own player on foot drawn where its own walk has
+   * it. While that player is aboard (or `predictWalk` is off) it is the view
+   * as it is: the same object as `truth` when the view has caught up with it.
    */
   view(): GameState | null {
+    const base = this.base ??= this.behind();
+    const shown = this.walk.shown;
+    if (!base || !shown || !this.predictWalk) return base;
+    const me = base.players.find((player) => player.id === this.playerId);
+    // Drawn aboard until the view itself shows the landing, and on the spot it left until the view shows the boarding.
+    if (!me || me.mode !== 'foot') return base;
+    return {
+      ...base,
+      players: base.players.map((player) => (player === me
+        ? { ...me, position: shown.position, heading: shown.heading, running: shown.running, exerting: shown.exerting } : player)),
+    };
+  }
+
+  /** The view a beat behind the truth, everything in it placed between the two states it sits between. */
+  private behind(): GameState | null {
     const newest = this.held.at(-1);
     if (!newest) return null;
     if (this.displayStep >= newest.step) return newest.state;

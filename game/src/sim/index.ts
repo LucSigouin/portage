@@ -181,6 +181,8 @@
 export { createGame, step, drainEvents, hashState, FIXED_STEP, NEUTRAL_INPUT, addPlayer } from './step.ts';
 export { setConnected, setPlayerName, cleanPlayerName } from './step.ts';
 export { dispatch } from './commands.ts';
+// The on-foot step by itself, for a guest's screen to walk its own player ahead of the host's answer (`src/net/walk.ts`).
+export { stepOnFoot } from './foot.ts';
 export { playerOf, playersAboard, connectedPlayers, eventsFor } from './inventory.ts';
 
 // --- State, input, commands, events -----------------------------------------

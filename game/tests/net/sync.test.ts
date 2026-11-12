@@ -250,7 +250,7 @@ describe('events and commands over a bad line', () => {
     pair.advance(0);
     const playerId = heard.find((message) => message.type === 'welcome')!.playerId!;
     const send = (id: number, toolId: 'bailing_can' | null): void => {
-      pair.guest.send({ v, type: 'command', id, command: { type: 'select_tool', toolId } });
+      pair.guest.send({ v, type: 'command', id, command: { type: 'select_tool', toolId }, at: 0 });
       pair.advance(0);
       pair.advance(0);
     };
@@ -329,10 +329,10 @@ describe('the host is the truth', () => {
     const refused = rig.host.stats.refused;
     const before = frozen(rig.game);
     // Bo tries to eat Ann's berries, and the host's, by naming them every way a message could.
-    bo.pair.guest.send({ v, type: 'command', id: 1, command: { type: 'eat', itemId: 'berries' }, playerId: 1 });
-    bo.pair.guest.send({ v, type: 'command', id: 1, command: { type: 'eat', itemId: 'berries', playerId: 0 } });
-    bo.pair.guest.send({ v, type: 'command', id: 1, playerId: 0, command: { type: 'discard', from: 'backpack', itemId: 'berries', count: 3 } });
-    bo.pair.guest.send({ v, type: 'input', seq: 9999, have: 0, events: 0, playerId: 0, input: { ...NEUTRAL_INPUT, moveX: 1 } });
+    bo.pair.guest.send({ v, type: 'command', id: 1, command: { type: 'eat', itemId: 'berries' }, at: 0, playerId: 1 });
+    bo.pair.guest.send({ v, type: 'command', id: 1, command: { type: 'eat', itemId: 'berries', playerId: 0 }, at: 0 });
+    bo.pair.guest.send({ v, type: 'command', id: 1, at: 0, playerId: 0, command: { type: 'discard', from: 'backpack', itemId: 'berries', count: 3 } });
+    bo.pair.guest.send({ v, type: 'input', seq: 9999, have: 0, events: 0, playerId: 0, input: { ...NEUTRAL_INPUT, moveX: 1 }, step: 600, walk: [[0, 1, 0, 0, 0]] });
     bo.pair.advance(0);
     expect(rig.host.stats.refused).toBe(refused + 4);
     expect(frozen(rig.game)).toBe(before);
@@ -348,8 +348,8 @@ describe('the host is the truth', () => {
     const refused = rig.host.stats.refused;
     const before = frozen(rig.game);
     const forged = { ...rig.game, time: 0, tools: ['hatchet', 'saw'], players: [] };
-    bo.pair.guest.send({ v, type: 'state', id: 99999, step: 99999, hash: 'feedface', ack: 0, base: null, changed: forged });
-    bo.pair.guest.send({ v, type: 'welcome', session: 42, playerId: 0, hostId: 2, id: 1, step: 1, hash: 'x', state: forged, events: 0 });
+    bo.pair.guest.send({ v, type: 'state', id: 99999, step: 99999, hash: 'feedface', ack: 0, walked: 0, base: null, changed: forged });
+    bo.pair.guest.send({ v, type: 'welcome', session: 42, playerId: 0, hostId: 2, id: 1, step: 1, hash: 'x', state: forged, events: 0, walked: 0 });
     bo.pair.guest.send({ v, type: 'events', first: 0, step: 1, events: [{ type: 'game_completed' }] });
     bo.pair.guest.send({ v, type: 'result', id: 1, result: { ok: true, gained: [{ itemId: 'hatchet', count: 1 }], spent: [] } });
     bo.pair.advance(0);
@@ -364,8 +364,8 @@ describe('the host is the truth', () => {
     rig.host.accept(pair.host);
     const refused = rig.host.stats.refused;
     const before = frozen(rig.game);
-    pair.guest.send({ v, type: 'input', seq: 1, have: -1, events: 0, input: { ...NEUTRAL_INPUT, moveX: 1 } });
-    pair.guest.send({ v, type: 'command', id: 1, command: { type: 'toggle_lantern' } });
+    pair.guest.send({ v, type: 'input', seq: 1, have: -1, events: 0, input: { ...NEUTRAL_INPUT, moveX: 1 }, step: 600, walk: [[0, 1, 0, 0, 0]] });
+    pair.guest.send({ v, type: 'command', id: 1, command: { type: 'toggle_lantern' }, at: 0 });
     pair.guest.send({ v, type: 'ping', time: 0, have: -1, events: 0 });
     pair.advance(0);
     rig.run(1);
@@ -443,8 +443,8 @@ describe('the host is the truth', () => {
     const rig = createRig();
     const sam = rig.join('Sam');
     rig.run(0.5);
-    sam.pair.guest.send({ v, type: 'input', seq: 9000, have: -1, events: 0, input: { ...NEUTRAL_INPUT, paddle: 1 } });
-    sam.pair.guest.send({ v, type: 'input', seq: 8000, have: -1, events: 0, input: { ...NEUTRAL_INPUT, paddle: -1 } });
+    sam.pair.guest.send({ v, type: 'input', seq: 9000, have: -1, events: 0, input: { ...NEUTRAL_INPUT, paddle: 1 }, step: 0, walk: [] });
+    sam.pair.guest.send({ v, type: 'input', seq: 8000, have: -1, events: 0, input: { ...NEUTRAL_INPUT, paddle: -1 }, step: 0, walk: [] });
     sam.pair.advance(0);
     expect(rig.host.crewInput({ ...NEUTRAL_INPUT }, 0)[1]).toMatchObject({ paddle: 1 });
   });

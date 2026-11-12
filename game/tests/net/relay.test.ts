@@ -10,6 +10,7 @@ import {
   RelayGuestWire, RelayHostRoom, makeRoomCode, readRoomCode, resolveRelayAddress, showRoomCode,
 } from '../../src/net/relay.ts';
 import type { RelayFailure } from '../../src/net/relay.ts';
+import { PROTOCOL_VERSION } from '../../src/net/index.ts';
 import type { Transport } from '../../src/net/index.ts';
 import { hashState } from '../../src/sim/index.ts';
 import { key } from './rig.ts';
@@ -112,8 +113,10 @@ describe('a game through the relay', () => {
     }
     expect(rig.relay.frames.lost).toBeGreaterThan(300);
     expect(seats.map((seat) => seat.link.mismatches)).toEqual([0, 0, 0]);
-    // Every command got its answer, once.
-    for (const seat of seats) expect(seat.results.map((outcome) => outcome.id)).toEqual(seat.results.map((_, index) => index + 1));
+    // Every command got its answer, once. (An answer lost on the line comes again, and may then come after the next one's.)
+    for (const seat of seats) {
+      expect(seat.results.map((outcome) => outcome.id).sort((first, second) => first - second)).toEqual(seat.results.map((_, index) => index + 1));
+    }
     expect(await rig.settle(20)).toBe(true);
     for (const seat of seats) expect(hashState(seat.link.truth!)).toBe(rig.hostHash());
     // And what the guests ate, the host's game ate.
@@ -223,7 +226,7 @@ describe('the wire itself', () => {
     // A window that joins and then stops listening: it will not close its own socket when told to leave.
     const stuck = rig.relay.open(`${ADDRESS}/room/${CODE}?role=guest`, [RELAY_PROTOCOL]) as FakeSocket;
     await rig.run(0.1);
-    stuck.send(JSON.stringify([{ v: 1, type: 'join', name: 'Sam', key: key('Sam') }]));
+    stuck.send(JSON.stringify([{ v: PROTOCOL_VERSION, type: 'join', name: 'Sam', key: key('Sam') }]));
     await rig.run(0.5);
     expect(rig.game.players[1]).toMatchObject({ name: 'Sam', connected: true });
     expect(rig.relay.rooms.get(CODE)!.size).toBe(2);

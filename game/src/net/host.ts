@@ -12,14 +12,20 @@
  *   draining. Sends the frame's events at once, the state about 15 times a
  *   second, and marks away whoever has gone quiet.
  *
- * A guest's command runs the moment it arrives, between two of the host's
- * frames, through the same `dispatch` the host's own keys use.
+ * A guest's command runs between two of the host's frames, through the same
+ * `dispatch` the host's own keys use: the moment it arrives, or, for a guest
+ * on foot, once the host has walked them to where they were when they asked.
+ *
+ * A guest on foot is walked through its own numbered steps (`walk.ts`), one
+ * for each step of the host: so its own screen can show the same walk at once
+ * and be right. The host still takes no position from anyone.
  */
 import { addPlayer, dispatch, hashState, setConnected, setPlayerName, cleanPlayerName, NEUTRAL_INPUT } from '../sim/index.ts';
 import type { CommandResult, GameEvent, GameState, PlayerId, StepInput } from '../sim/index.ts';
 import { PROTOCOL_VERSION, isOtherVersion, readClientMessage } from './messages.ts';
 import type { ClientMessage, HostMessage, LeaveReason } from './messages.ts';
 import type { Transport } from './transport.ts';
+import { WalkTimeline } from './walk.ts';
 
 export interface HostOptions {
   /** The game being shared. The link changes it only through the rules engine. */
@@ -53,6 +59,8 @@ const EVENT_LOG = 512;
 const EVENT_RESEND_SECONDS = 0.3;
 /** Results kept per guest, to answer a command that is sent twice. */
 const RESULTS_KEPT = 32;
+/** A command waits this long at most for the guest's walk to reach the step it was asked at. */
+export const COMMAND_WAIT_SECONDS = 1;
 
 interface Connection {
   transport: Transport;
@@ -71,6 +79,10 @@ interface Connection {
   /** The last command run for this guest in this sitting. They count from 1, with no gaps. */
   lastCommandId: number;
   results: Map<number, CommandResult>;
+  /** The guest's walk on foot, step by step. */
+  walk: WalkTimeline;
+  /** Commands taken and not yet run: each waits for the walk to reach the step it was asked at. In order. */
+  waiting: { message: Extract<ClientMessage, { type: 'command' }>; since: number }[];
   heardAt: number;
   open: boolean;
 }
@@ -126,7 +138,8 @@ export class HostLink {
     }
     const connection: Connection = {
       transport, playerId: null, input: { ...NEUTRAL_INPUT }, inputSeq: -1, inputAt: 0, have: -1, eventsHeld: 0, eventsSentAt: 0,
-      sitting: 0, lastCommandId: 0, results: new Map(), heardAt: this.clock, open: true,
+      sitting: 0, lastCommandId: 0, results: new Map(), walk: new WalkTimeline(this.game.tick), waiting: [],
+      heardAt: this.clock, open: true,
     };
     this.connections.push(connection);
     transport.receive(
@@ -154,6 +167,7 @@ export class HostLink {
     if (playerId === null) return;
     connection.playerId = null;
     connection.input = { ...NEUTRAL_INPUT };
+    connection.waiting = [];
     // Someone else may already be playing them on a new wire.
     if (!this.connections.some((other) => other !== connection && other.playerId === playerId)) setConnected(this.game, playerId, false);
   }
@@ -184,11 +198,11 @@ export class HostLink {
       this.stats.refused += 1;
       return;
     }
-    this.fromPlayer(connection, connection.playerId, message);
+    this.fromPlayer(connection, message);
   }
 
-  /** Everything a joined guest may say. `playerId` comes from the wire, never from the message. */
-  private fromPlayer(connection: Connection, playerId: PlayerId, message: Exclude<ClientMessage, { type: 'join' }>): void {
+  /** Everything a joined guest may say. Whose it is comes from the wire (`connection.playerId`), never from the message. */
+  private fromPlayer(connection: Connection, message: Exclude<ClientMessage, { type: 'join' }>): void {
     switch (message.type) {
       case 'input':
         // An older input that arrives late does not undo a newer one.
@@ -199,6 +213,8 @@ export class HostLink {
           // The guest could not use the changes it was sent: start it over from a whole state.
           if (message.have === -1) connection.have = -1;
         }
+        // The walk is told a few stretches at a time, so one that arrives late or twice still only adds what was missing.
+        connection.walk.heard(message.step, message.walk);
         this.heardHolding(connection, message.have, message.events);
         break;
       case 'ping':
@@ -216,10 +232,8 @@ export class HostLink {
         // In order, one at a time: a later one waits for the guest to send the earlier one again.
         if (message.id !== last + 1) break;
         connection.lastCommandId = message.id;
-        const result = this.run(playerId, message);
-        connection.results.set(message.id, result);
-        if (connection.results.size > RESULTS_KEPT) connection.results.delete(connection.results.keys().next().value!);
-        this.send(connection, { v: PROTOCOL_VERSION, type: 'result', id: message.id, result });
+        connection.waiting.push({ message, since: this.clock });
+        this.runWaiting(connection);
         break;
       }
       case 'leave':
@@ -232,6 +246,29 @@ export class HostLink {
     // Only ever what this host sent: a guest cannot claim a snapshot from the future.
     if (have < this.nextSnapshotId && have > connection.have) connection.have = have;
     if (events <= this.eventCount && events > connection.eventsHeld) connection.eventsHeld = events;
+  }
+
+  private onFoot(playerId: PlayerId): boolean {
+    return this.game.players.find((player) => player.id === playerId)?.mode === 'foot';
+  }
+
+  /**
+   * Run the commands whose turn has come, in order. A guest on foot asked from
+   * where its own screen had it: the command waits until the host has walked
+   * it there (a moment), so what was in reach on its screen is in reach here.
+   */
+  private runWaiting(connection: Connection): void {
+    while (connection.waiting.length > 0 && connection.playerId !== null) {
+      const { message, since } = connection.waiting[0]!;
+      connection.walk.account(this.game.tick);
+      const due = !this.onFoot(connection.playerId) || connection.walk.reached(message.at) || this.clock - since >= COMMAND_WAIT_SECONDS;
+      if (!due) return;
+      connection.waiting.shift();
+      const result = this.run(connection.playerId, message);
+      connection.results.set(message.id, result);
+      if (connection.results.size > RESULTS_KEPT) connection.results.delete(connection.results.keys().next().value!);
+      this.send(connection, { v: PROTOCOL_VERSION, type: 'result', id: message.id, result });
+    }
   }
 
   private run(playerId: PlayerId, message: Extract<ClientMessage, { type: 'command' }>): CommandResult {
@@ -286,6 +323,8 @@ export class HostLink {
       this.nextSitting += 1;
       connection.lastCommandId = 0;
       connection.results.clear();
+      connection.walk = new WalkTimeline(game.tick);
+      connection.waiting = [];
     }
     connection.playerId = playerId;
     if (name !== '') setPlayerName(game, playerId, name);
@@ -296,6 +335,7 @@ export class HostLink {
     this.send(connection, {
       v: PROTOCOL_VERSION, type: 'welcome', session: this.session, sitting: connection.sitting, playerId, hostId: this.hostPlayerId,
       id: snapshot.id, step: snapshot.step, hash: snapshot.hash, state: snapshot.state, events: this.eventCount,
+      walked: connection.walk.walked,
     });
   }
 
@@ -311,12 +351,20 @@ export class HostLink {
     return snapshot;
   }
 
-  /** The host's own input and every guest's latest, by player id. A guest gone quiet holds nothing. */
+  /**
+   * The host's own input and every guest's, by player id. A guest aboard holds
+   * its latest input, or nothing once it has gone quiet. A guest on foot holds
+   * the next step of its own walk, or nothing while that has not arrived.
+   */
   crewInput(input: StepInput, playerId: PlayerId): (StepInput | undefined)[] {
     const inputs: (StepInput | undefined)[] = [];
     for (const connection of this.connections) {
       if (connection.playerId === null) continue;
-      inputs[connection.playerId] = this.clock - connection.inputAt > STALE_INPUT_SECONDS ? undefined : connection.input;
+      connection.walk.account(this.game.tick);
+      this.runWaiting(connection);
+      const step = connection.walk.next(this.onFoot(connection.playerId));
+      inputs[connection.playerId] = step !== null ? step
+        : this.clock - connection.inputAt > STALE_INPUT_SECONDS ? undefined : connection.input;
     }
     inputs[playerId] = input;
     return inputs;
@@ -332,6 +380,12 @@ export class HostLink {
 
     for (const connection of [...this.connections]) {
       if (connection.playerId !== null && this.clock - connection.heardAt > this.silenceSeconds) this.goneAway(connection);
+    }
+    // Count the steps just run on each guest's walk, so the state below says how far each was walked.
+    for (const connection of this.connections) {
+      if (connection.playerId === null) continue;
+      connection.walk.account(this.game.tick);
+      this.runWaiting(connection);
     }
 
     if (events.length > 0) {
@@ -374,7 +428,7 @@ export class HostLink {
     this.stats.statesSent += 1;
     this.send(connection, {
       v: PROTOCOL_VERSION, type: 'state', id: snapshot.id, step: snapshot.step, hash: snapshot.hash,
-      ack: connection.inputSeq, base: base ? base.id : null, changed,
+      ack: connection.inputSeq, walked: connection.walk.walked, base: base ? base.id : null, changed,
     });
   }
 

@@ -303,3 +303,55 @@ test('a host whose tab is hidden keeps the game going for its guest', async ({ c
   expect((await read(guest)).mismatches).toBe(0);
   expect(problems).toEqual([]);
 });
+
+test('a guest\'s own walking is on its screen within a frame or two of the key, and ends where the host has it', async ({ context }) => {
+  const problems: string[] = [];
+  const room = `spec-walk-${Date.now().toString(36)}`;
+  const host = await open(context, `?host=${room}&name=Luc`, problems);
+  await inGame(host);
+  const guest = await open(context, `?join=${room}&name=Sam`, problems);
+  await inGame(guest);
+  await expect(host.locator('.iw-crew .iw-mate')).toHaveCount(2);
+  await stage(host, PUT_CREW_ASHORE);
+  await expect.poll(async () => (await read(guest)).players[1]!.mode, { message: 'the guest sees itself ashore' }).toBe('foot');
+  await guest.waitForTimeout(600);
+
+  // Watch the guest's own figure and its camera frame by frame, from inside the page, while W goes down.
+  await guest.evaluate(() => {
+    const portage = (window as unknown as { portage: { session: any; app: any } }).portage;
+    const log: { held: boolean; x: number; z: number; aimX: number; aimZ: number; eased: number }[] = [];
+    (window as unknown as { walkLog: unknown }).walkLog = log;
+    const watch = (): void => {
+      const session = portage.session;
+      const me = session.game.players[session.localPlayerId];
+      log.push({
+        held: session.input.isHeld('moveForward'), x: me.position.x, z: me.position.z,
+        aimX: portage.app.lastPose.target.x, aimZ: portage.app.lastPose.target.z, eased: session.guest.walk.eased,
+      });
+      if (log.length < 600) requestAnimationFrame(watch);
+    };
+    requestAnimationFrame(watch);
+  });
+  await guest.waitForTimeout(200);
+  await hold(guest, 'KeyW', 700);
+  await guest.waitForTimeout(700);
+  const log = await guest.evaluate(() => (window as unknown as { walkLog: { held: boolean; x: number; z: number; aimX: number; aimZ: number; eased: number }[] }).walkLog);
+  const pressed = log.findIndex((entry) => entry.held);
+  expect(pressed, 'the key was seen').toBeGreaterThan(0);
+  const still = log[pressed - 1]!;
+  const moved = log.findIndex((entry, index) => index >= pressed && Math.hypot(entry.x - still.x, entry.z - still.z) > 1e-6);
+  const aimed = log.findIndex((entry, index) => index >= pressed && Math.hypot(entry.aimX - still.aimX, entry.aimZ - still.aimZ) > 1e-6);
+  // The watcher may run just before or just after the game's own frame: so at most the frame after the key, never the view's beat (six or more).
+  expect(moved - pressed, 'frames from the key to the figure moving').toBeLessThanOrEqual(2);
+  expect(aimed - pressed, 'frames from the key to the camera moving').toBeLessThanOrEqual(2);
+  // Nothing was put right on the way: the host walked the same steps.
+  expect(Math.max(...log.map((entry) => entry.eased)), 'the largest one-frame correction, metres').toBeLessThanOrEqual(0.03);
+
+  // Stopped: the guest's figure is where the host has the guest's player, and they agree on the game.
+  const onGuest = (await read(guest)).players[1]!;
+  const onHost = (await read(host)).players[1]!;
+  expect(Math.hypot(onGuest.x - onHost.x, onGuest.z - onHost.z)).toBeLessThan(0.01);
+  expect(Math.hypot(onHost.x - still.x, onHost.z - still.z), 'the host walked the guest').toBeGreaterThan(1);
+  expect((await read(guest)).mismatches).toBe(0);
+  expect(problems).toEqual([]);
+});
