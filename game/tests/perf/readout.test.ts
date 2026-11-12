@@ -306,7 +306,8 @@ describe('the readout keeps to itself', () => {
     const stripped = mainSource.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     // Never a plain import: that would put the readout in every player's first download.
     expect(/^import[^;]*perf\//m.test(stripped)).toBe(false);
-    expect(stripped).toMatch(/if \(perf\) void import\('\.\/client\/perf\/readout\.ts'\)/);
+    expect(/^import[^;]*debug\/index/m.test(stripped)).toBe(false);
+    expect(stripped).toMatch(/if \(perf\) void import\('\.\/client\/debug\/index\.ts'\)\.then\(\(debug\) => debug\.runPerfReadout\(/);
     expect(stripped).toMatch(/storage: parameters\.sandbox \|\| perf \? createMemoryStorage\(\) : browserStorage\(\)/);
   });
 });

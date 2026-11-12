@@ -203,7 +203,7 @@ function boot(): void {
     // A handle for the console and for browser tests.
     (window as unknown as { portage: unknown }).portage = { app, session, worldView, loop, followVisibility };
     loop?.start();
-    if (perf) void import('./client/perf/readout.ts').then((readout) => readout.runPerfReadout(app, worldView, loop));
+    if (perf) void import('./client/debug/index.ts').then((debug) => debug.runPerfReadout(app, worldView, loop));
     // `?join=ROOM&name=...`: ask the host tab for a seat. The lobby shows until it answers.
     if (parameters.join !== null) {
       session.joinGame(joinTabRoom(parameters.join, randomHex(8)), { name: parameters.name, key: crewKey(parameters.join, parameters.name) });

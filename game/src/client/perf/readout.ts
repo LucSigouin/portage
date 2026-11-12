@@ -1,7 +1,8 @@
 /**
  * The performance readout, `?perf=1`: one link a player opens, waits half a
  * minute, and pastes the text back, so we learn what their computer does with
- * the game. `main.ts` loads this file only when the switch is there.
+ * the game. `main.ts` asks for it only when the switch is there. It rides in
+ * the debug chunk (`client/debug/index.ts`), which a normal game never loads.
  *
  * It plays one staged view, the same for everyone, with nobody at the keys:
  *

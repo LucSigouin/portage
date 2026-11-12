@@ -134,7 +134,7 @@ test('one link: it runs by itself, reports everything, copies, sends nothing and
   await page.waitForTimeout(1500);
   const normal = seen.requests.map((request) => request.url);
   expect(normal.length).toBeGreaterThan(0);
-  expect(normal.filter((url) => /\/perf\/|readout|staging|\/bot\//i.test(new URL(url).pathname))).toEqual([]);
+  expect(normal.filter((url) => /\/perf\/|readout|staging|\/bot\/|debug-|debug\/index/i.test(new URL(url).pathname))).toEqual([]);
   expect(await page.evaluate(() => 'portagePerf' in window)).toBe(false);
   expect(await page.locator('.pf-root').count()).toBe(0);
 
