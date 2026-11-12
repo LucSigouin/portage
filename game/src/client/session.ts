@@ -8,7 +8,7 @@
  */
 import { MAIN_QUESTS, TUNING } from '../data/index.ts';
 import { SAVE_SLOT_COUNT, createAutosaver, createSaveStore } from '../save/index.ts';
-import type { Autosaver, SaveStore, SlotSummary, StorageLike } from '../save/index.ts';
+import type { AutosaveReason, Autosaver, SaveStore, SlotSummary, StorageLike } from '../save/index.ts';
 import {
   DEFAULT_KEY_BINDINGS, ACTION_LABELS, clearBinding, cloneKeyBindings, loadSettings, saveSettings,
 } from '../settings/index.ts';
@@ -57,7 +57,7 @@ export type SessionSignal =
   | { type: 'game_started'; slot: number | null }
   | { type: 'notice'; text: string; tone: Tone }
   | { type: 'interface_sound'; sound: InterfaceSound }
-  | { type: 'saved'; slot: number; reason: 'landing' | 'sleeping' | 'timer' | 'manual' }
+  | { type: 'saved'; slot: number; reason: AutosaveReason | 'manual' }
   | { type: 'driver_finished' };
 
 /** The seed the lobby backdrop plays on. */

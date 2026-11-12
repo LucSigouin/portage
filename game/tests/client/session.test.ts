@@ -211,6 +211,50 @@ describe('autosave', () => {
     expect(timerSaves()).toBe(1);
   });
 
+  it('a browser that dies takes little with it: the knife just made and the quest just completed are in the save', () => {
+    const h = harness();
+    const { session, storage } = h;
+    // No timer at all, to show these two saves do not lean on it.
+    session.handleIntent({ type: 'change_setting', setting: 'gameplay.autosaveIntervalSeconds', value: 0 });
+    session.newGame(0);
+    const saves = (): string[] => h.signals.flatMap((signal) => (signal.type === 'saved' ? [signal.reason] : []));
+    expect(saves()).toEqual(['manual']);
+    expect(savedState(storage, 0).tools).toEqual(['bailing_can']);
+
+    // Minutes of play, and nothing has asked for a save.
+    frames(session, 30);
+    give(session.game!, 'stone', 2);
+    give(session.game!, 'driftwood', 1);
+    give(session.game!, 'fiber', 2);
+    expect(saves()).toEqual(['manual']);
+    // The knife is made, as from the crafting panel.
+    session.handleIntent({ type: 'command', command: { type: 'craft', recipeId: 'stone_knife', count: 1 } });
+    expect(savedState(storage, 0).tools, 'not yet: the event is still queued').toEqual(['bailing_can']);
+    session.advance(FIXED_STEP, 0);
+    expect(saves()).toEqual(['manual', 'tool']);
+    expect(savedState(storage, 0).tools).toEqual(['bailing_can', 'stone_knife']);
+
+    // The first quest completes: bailed dry, then ashore on Home Knoll.
+    session.game!.canoe.waterLevel = 0;
+    standOn(session.game!, 'home_knoll');
+    const events: string[] = [];
+    for (let frame = 0; frame < 30; frame += 1) events.push(...session.advance(FIXED_STEP, 0).map((event) => event.type));
+    expect(events).toContain('quest_completed');
+    expect(saves()).toEqual(['manual', 'tool', 'quest']);
+    expect(savedState(storage, 0).quests.bail_out.status).toBe('completed');
+
+    // The browser dies here: no page-close save, nothing more. Another session on the same storage has it all.
+    const played = session.game!.playedSeconds;
+    const after = harness(storage);
+    expect(after.session.continueGame()).toBe(true);
+    expect(after.session.game!.tools).toEqual(['bailing_can', 'stone_knife']);
+    expect(after.session.game!.quests.bail_out.status).toBe('completed');
+    expect(after.session.game!.quests.first_haul.status).toBe('active');
+    // What is lost is the half second since the quest completed, not the minutes since the last landing.
+    expect(played - after.session.game!.playedSeconds).toBeGreaterThanOrEqual(0);
+    expect(played - after.session.game!.playedSeconds).toBeLessThan(0.5);
+  });
+
   it('never writes a save for a staged game', () => {
     const h = harness();
     const donor = harness();

@@ -174,7 +174,8 @@
  * - Cargo and aboard stations are in reach when aboard, within 8 m of the
  *   canoe, or at a camp on the island where the canoe is beached.
  * - `autosave_requested` events fire on landing and sleeping; the save layer
- *   in `src/save/` adds the timer.
+ *   in `src/save/` adds the timer, and saves by itself when a quest completes
+ *   and when a tool joins the belt.
  */
 
 // --- Core -------------------------------------------------------------------

@@ -128,7 +128,7 @@ export interface Settings {
   };
   gameplay: {
     difficulty: Difficulty;
-    /** Seconds between timed autosaves. 0 = only on landing and sleeping. */
+    /** Seconds between timed autosaves. 0 = no timer: only on landing, sleeping, a quest completed and a new tool. */
     autosaveIntervalSeconds: number;
     hints: boolean;
   };

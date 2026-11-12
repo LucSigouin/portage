@@ -345,6 +345,49 @@ describe('autosave', () => {
     expect(autosaver.update(state, [], 60)).toBeNull(); // the timer restarted
   });
 
+  it('saves when a quest completes and when a tool joins the belt, timer or no timer', () => {
+    const storage = new FakeStorage();
+    const store = createSaveStore(storage, () => 1);
+    const autosaver = createAutosaver(store, 0, 0);
+    const state = newGame();
+    const frame = (): ReturnType<typeof autosaver.update> => {
+      const events = state.events;
+      state.events = [];
+      return autosaver.update(state, events, 1 / 60);
+    };
+    state.events = [];
+    expect(frame()).toBeNull();
+    expect(store.load(0).ok).toBe(false);
+
+    // A tool is made: the knife, with the quest that wants it still short of driftwood.
+    give(state, 'stone', 2);
+    give(state, 'driftwood', 1);
+    give(state, 'fiber', 2);
+    expect(dispatch(state, { type: 'craft', recipeId: 'stone_knife' }).ok).toBe(true);
+    expect(state.events.map((event) => event.type)).not.toContain('quest_completed');
+    expect(frame()).toBe('tool');
+    let saved = store.load(0);
+    expect(saved.ok && saved.state.tools).toEqual(['bailing_can', 'stone_knife']);
+    // A tool that is found counts the same: it is on the belt, and it would be lost the same.
+    state.events = [{ type: 'item_gained', itemId: 'pry_bar', count: 1, container: 'belt', playerId: 0 }];
+    expect(frame()).toBe('tool');
+    // What goes into a pack does not save: that would be every scavenge.
+    state.events = [{ type: 'item_gained', itemId: 'driftwood', count: 3, container: 'backpack', playerId: 0 }];
+    expect(frame()).toBeNull();
+
+    // A quest completes: the first one, bailed dry and landed.
+    state.canoe.waterLevel = 0;
+    standOn(state, 'home_knoll');
+    run(state, {}, 0.05);
+    state.events = [{ type: 'quest_completed', questId: 'bail_out' }];
+    expect(frame()).toBe('quest');
+    // When the rules ask by name in the same frame, that is the reason given.
+    state.events = [{ type: 'quest_completed', questId: 'first_haul' }, { type: 'autosave_requested', reason: 'landing' }];
+    expect(frame()).toBe('landing');
+    saved = store.load(0);
+    expect(saved.ok && saved.state.players[0].mode).toBe('foot');
+  });
+
   it('turns the timer off at interval 0 and reports nothing when the save fails', () => {
     const storage = new FakeStorage();
     const store = createSaveStore(storage, () => 1);

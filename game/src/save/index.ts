@@ -1,7 +1,8 @@
 /**
  * Saves: versioned JSON, three slots in a `Storage`-shaped store, and an
- * autosaver (on landing, on sleeping, and on a timer). No DOM in here: pass
- * `window.localStorage` in from the client, or a fake in tests.
+ * autosaver (on landing, on sleeping, when a quest completes, when a tool
+ * joins the belt, and on a timer). No DOM in here: pass `window.localStorage`
+ * in from the client, or a fake in tests.
  */
 import { MAIN_QUESTS } from '../data/quests.ts';
 import { TUNING } from '../data/tuning.ts';
@@ -215,13 +216,21 @@ export function createSaveStore(storage: StorageLike, now: () => number = () => 
   };
 }
 
+/**
+ * Why an autosave was made. `quest` and `tool` are the two moments a player would least want to lose to a
+ * browser that dies: a quest just completed, a tool just made or found. Without them the last save could be
+ * a whole timer behind (five minutes by default).
+ */
+export type AutosaveReason = 'landing' | 'sleeping' | 'quest' | 'tool' | 'timer';
+
 export interface Autosaver {
   /**
    * Call once per frame with the events drained that frame and the real
-   * frame time. Saves on landing, on sleeping, and when the timer runs out.
-   * Returns the reason when it saved, otherwise null.
+   * frame time. Saves on landing, on sleeping, when a quest completes, when
+   * a tool joins the belt, and when the timer runs out. Returns the reason
+   * when it saved, otherwise null.
    */
-  update(state: GameState, events: readonly GameEvent[], frameSeconds: number): 'landing' | 'sleeping' | 'timer' | null;
+  update(state: GameState, events: readonly GameEvent[], frameSeconds: number): AutosaveReason | null;
   /** Change the timer. 0 turns timed autosave off. */
   setIntervalSeconds(seconds: number): void;
 }
@@ -233,10 +242,15 @@ export function createAutosaver(store: SaveStore, slot: number, intervalSeconds:
   return {
     update(state, events, frameSeconds) {
       sinceSave += frameSeconds;
-      let reason: 'landing' | 'sleeping' | 'timer' | null = null;
+      let asked: AutosaveReason | null = null;
+      let earned: AutosaveReason | null = null;
       for (const event of events) {
-        if (event.type === 'autosave_requested') reason = event.reason;
+        if (event.type === 'autosave_requested') asked = event.reason;
+        else if (event.type === 'quest_completed') earned = 'quest';
+        else if (event.type === 'item_gained' && event.container === 'belt') earned ??= 'tool';
       }
+      // What the rules asked for by name comes first, then what was just earned, then the clock.
+      let reason: AutosaveReason | null = asked ?? earned;
       if (reason === null && interval > 0 && sinceSave >= interval) reason = 'timer';
       if (reason === null) return null;
       if (!store.save(slot, state)) return null;

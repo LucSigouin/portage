@@ -71,7 +71,7 @@ export function settingsRows(settings: Settings, tab: SettingsTabId): SettingRow
         choice('gameplay.difficulty', 'Difficulty', settings.gameplay.difficulty, limits.difficulties,
           (difficulty) => (difficulty === 'relaxed' ? 'Relaxed (meters drain 40% slower)' : 'Standard')),
         choice('gameplay.autosaveIntervalSeconds', 'Autosave', settings.gameplay.autosaveIntervalSeconds, limits.autosaveIntervals,
-          (seconds) => (seconds === 0 ? 'On landing and sleeping only' : `Every ${seconds / 60} min, and on landing and sleeping`)),
+          (seconds) => (seconds === 0 ? 'On landing, sleeping, quests and tools only' : `Every ${seconds / 60} min, and on landing, sleeping, quests and tools`)),
         toggle('gameplay.hints', 'Show hints', settings.gameplay.hints),
       ];
     case 'accessibility':
