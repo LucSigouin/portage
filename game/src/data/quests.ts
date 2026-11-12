@@ -73,7 +73,7 @@ export const MAIN_QUESTS: QuestDefinition[] = [
   mainQuest(5, 'a_proper_edge', 'A proper edge',
     'There is a hatchet head in an attic at Cabin Roofs. Give it a handle.',
     [
-      { type: 'have_item', itemId: 'hatchet_head', count: 1, text: 'Find the hatchet head at Cabin Roofs' },
+      { type: 'have_item', itemId: 'hatchet_head', count: 1, madeInto: { toolId: 'hatchet' }, text: 'Find the hatchet head at Cabin Roofs' },
       { type: 'have_tool', toolId: 'hatchet', text: 'Make the hatchet' },
     ]),
   mainQuest(6, 'ribs_and_rails', 'Ribs and rails',
@@ -96,7 +96,7 @@ export const MAIN_QUESTS: QuestDefinition[] = [
     [
       { type: 'land', islandId: 'steeple_rock', text: 'Land on Steeple Rock' },
       { type: 'talk', npcId: 'wren', text: 'Meet Wren' },
-      { type: 'have_item', itemId: 'sailcloth', count: 2, text: 'Sew sailcloth' },
+      { type: 'have_item', itemId: 'sailcloth', count: 2, madeInto: { attachmentId: 'mast_sail' }, text: 'Sew sailcloth' },
     ]),
   mainQuest(9, 'catch_the_wind', 'Catch the wind',
     'Step a mast, hang a rudder, and let the wind work.',
@@ -108,9 +108,9 @@ export const MAIN_QUESTS: QuestDefinition[] = [
     'Tink says a radio would hear the Beacon. Coil, battery and wire from the Reach, a crystal from the far end of the Truss Bridge, and a hull long enough to carry it.',
     [
       { type: 'talk', npcId: 'tink', text: 'Meet Tink at Scrapyard Bar' },
-      { type: 'have_item', itemId: 'copper_coil', count: 1, text: 'Strip a copper coil' },
-      { type: 'have_item', itemId: 'battery', count: 1, text: 'Find a battery' },
-      { type: 'have_item', itemId: 'radio_crystal', count: 1, text: 'Find the radio crystal on the Truss Bridge' },
+      { type: 'have_item', itemId: 'copper_coil', count: 1, madeInto: { attachmentId: 'radio' }, text: 'Strip a copper coil' },
+      { type: 'have_item', itemId: 'battery', count: 1, madeInto: { attachmentId: 'radio' }, text: 'Find a battery' },
+      { type: 'have_item', itemId: 'radio_crystal', count: 1, madeInto: { attachmentId: 'radio' }, text: 'Find the radio crystal on the Truss Bridge' },
       { type: 'hull', tier: 3, text: 'Build the long hull' },
       { type: 'attachment', attachmentId: 'radio', text: 'Build the radio' },
     ]),

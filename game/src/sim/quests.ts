@@ -1,4 +1,4 @@
-import type { ItemId, NodeId, NpcId, ObjectiveDefinition, QuestId } from '../data/types.ts';
+import type { ItemId, MadeInto, NodeId, NpcId, ObjectiveDefinition, QuestId } from '../data/types.ts';
 import { STOCK_FOOD_IDS } from '../data/items.ts';
 import { MAIN_QUESTS, QUESTS, QUEST_LIST } from '../data/quests.ts';
 import { connectedPlayers, countHeld, countInStacks, emit, grantItems, removeFromStacks } from './inventory.ts';
@@ -27,6 +27,11 @@ export function nodeUsed(state: GameState, nodeId: NodeId): boolean {
   return nodeState !== undefined && nodeState.readyAt[0] === null;
 }
 
+/** True once the tool is on the belt or the attachment is on the canoe. Neither is ever lost. */
+function madeIntoExists(state: GameState, madeInto: MadeInto): boolean {
+  return 'toolId' in madeInto ? state.tools.includes(madeInto.toolId) : state.canoe.attachments.includes(madeInto.attachmentId);
+}
+
 /**
  * Progress of an objective read straight from the state, or null for
  * objectives that only advance through events (craft, sleep, talk). Quests
@@ -39,6 +44,9 @@ function measuredProgress(state: GameState, objective: ObjectiveDefinition): num
     case 'land':
       return state.players.some((player) => player.mode === 'foot' && player.islandId === objective.islandId) ? 1 : 0;
     case 'have_item':
+      // An ingredient that has been made into the thing counts as found, even though it is gone.
+      if (objective.madeInto && madeIntoExists(state, objective.madeInto)) return objective.count;
+      return Math.min(objective.count, countHeld(state, objective.itemId));
     case 'deliver':
       return Math.min(objective.count, countHeld(state, objective.itemId));
     case 'have_tool':
@@ -100,17 +108,45 @@ export function questGateOpen(state: GameState, questId: QuestId, nodeId: NodeId
     (objective.type === 'node' && objective.nodeId === nodeId) || progress[index] >= objectiveRequired(objective));
 }
 
+/** True while a quest is open: given to the crew and not yet handed in. */
+const isOpen = (questState: QuestState): boolean => questState.status === 'active' || questState.status === 'ready';
+
+/**
+ * Whether a step is remembered before its quest is given. Everything is, but
+ * three kinds of step belong to the quest's own time: a hand-over (checked
+ * live, when the quest asks), and the tutorial acts craft and sleep ("boil
+ * water", "cook a meal", "sleep at the lean-to"). Those repeat from things
+ * that grow back, so doing them again can never strand a quest.
+ */
+const countsBeforeGiven = (objective: ObjectiveDefinition): boolean =>
+  objective.type !== 'deliver' && objective.type !== 'craft' && objective.type !== 'sleep';
+
 function setProgress(state: GameState, questId: QuestId, index: number, value: number): void {
   const questState = state.quests[questId];
   if (questState.progress[index] === value) return;
   const advanced = value > questState.progress[index];
   questState.progress[index] = value;
-  if (advanced) {
+  // A quest the crew has not been given yet remembers in silence. It tells them when it is given.
+  if (advanced && isOpen(questState)) {
     emit(state, {
       type: 'quest_advanced', questId, objectiveIndex: index, progress: value,
       required: objectiveRequired(QUESTS[questId].objectives[index]),
     });
   }
+}
+
+/**
+ * A quest has just been given: say which steps it already carries (done
+ * before it was given), so the quest log and the toasts show them ticked.
+ */
+function announceCarriedProgress(state: GameState, questId: QuestId): void {
+  const definition = QUESTS[questId];
+  definition.objectives.forEach((objective, index) => {
+    const progress = state.quests[questId].progress[index];
+    if (progress > 0) {
+      emit(state, { type: 'quest_advanced', questId, objectiveIndex: index, progress, required: objectiveRequired(objective) });
+    }
+  });
 }
 
 /**
@@ -148,6 +184,7 @@ function completeQuest(state: GameState, questId: QuestId, actor: PlayerState): 
       state.quests[next.id].status = 'active';
       if (state.trackedQuestId === questId || state.trackedQuestId === null) state.trackedQuestId = next.id;
       emit(state, { type: 'quest_started', questId: next.id });
+      announceCarriedProgress(state, next.id);
     } else {
       if (state.trackedQuestId === questId) state.trackedQuestId = null;
       emit(state, { type: 'game_completed' });
@@ -168,19 +205,24 @@ export function updateQuests(state: GameState, actor: PlayerState = defaultActor
     let changed = false;
     for (const definition of QUEST_LIST) {
       const questState = state.quests[definition.id];
+      if (questState.status === 'completed') continue;
       if (questState.status === 'locked' && definition.kind === 'side'
         && definition.requiresQuests.every((required) => state.quests[required].status === 'completed')) {
         questState.status = 'available';
         changed = true;
       }
-      if (questState.status !== 'active' && questState.status !== 'ready') continue;
+      // The one rule: every quest that is not finished keeps its own record from the first moment of the game,
+      // whether or not it has been given yet. A step done early is already ticked when the quest arrives.
+      // The exceptions are in `countsBeforeGiven`.
       definition.objectives.forEach((objective, index) => {
+        if (!isOpen(questState) && !countsBeforeGiven(objective)) return;
         const measured = measuredProgress(state, objective);
         if (measured === null) return;
         // Deliveries are checked live. Everything else latches.
         const value = objective.type === 'deliver' ? measured : Math.max(questState.progress[index], measured);
         setProgress(state, definition.id, index, value);
       });
+      if (!isOpen(questState)) continue;
       const done = objectivesDone(state, definition.id);
       if (done && definition.autoComplete) {
         completeQuest(state, definition.id, actor);
@@ -199,9 +241,10 @@ export function updateQuests(state: GameState, actor: PlayerState = defaultActor
 function advanceEventObjectives(state: GameState, matches: (objective: ObjectiveDefinition) => boolean, amount: number): void {
   for (const definition of QUEST_LIST) {
     const questState = state.quests[definition.id];
-    if (questState.status !== 'active') continue;
+    if (questState.status === 'completed') continue;
     definition.objectives.forEach((objective, index) => {
       if (!matches(objective)) return;
+      if (!isOpen(questState) && !countsBeforeGiven(objective)) return;
       setProgress(state, definition.id, index, Math.min(objectiveRequired(objective), questState.progress[index] + amount));
     });
   }
@@ -225,6 +268,7 @@ export function acceptQuest(state: GameState, questId: QuestId, actor: PlayerSta
   state.quests[questId].status = 'active';
   if (state.trackedQuestId === null) state.trackedQuestId = questId;
   emit(state, { type: 'quest_started', questId });
+  announceCarriedProgress(state, questId);
   updateQuests(state, actor);
   return true;
 }
