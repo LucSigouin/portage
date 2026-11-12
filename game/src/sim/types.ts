@@ -150,8 +150,13 @@ export interface WeatherState {
   nextSeconds: number;
   /** 0 to 1. Eases in and out; scales the storm roughness bonus. */
   stormLevel: number;
-  /** Bearing the wind blows toward, radians. */
+  /** Bearing the wind blows toward, radians. It swings to a new bearing, it never jumps. */
   windDirection: number;
+  /**
+   * Radians the wind still has to swing, signed (positive is clockwise). 0 when it is steady.
+   * A save from before the wind swung has no such number: missing reads as 0, so it loads as it is.
+   */
+  windTurn?: number;
   /** Metres per second, eased toward `windTarget`. */
   windSpeed: number;
   windTarget: number;
