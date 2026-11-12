@@ -79,6 +79,8 @@ interface Picture {
   inked: number;
   /** Pixels with alpha 255. */
   solid: number;
+  /** Pixels with any alpha. */
+  covered: number;
 }
 
 /** Keep the stage's pixels in the page under `name` (the pipeline's canvas, or the see-through one) and say what is in them. */
@@ -96,11 +98,13 @@ function takePicture(page: Page, name: string): Promise<Picture> {
     const corner = [data[0], data[1], data[2], data[3]];
     let inked = 0;
     let solid = 0;
+    let covered = 0;
     for (let at = 0; at < data.length; at += 4) {
+      if (data[at + 3] > 0) covered += 1;
       if (Math.abs(data[at] - corner[0]) + Math.abs(data[at + 1] - corner[1]) + Math.abs(data[at + 2] - corner[2]) > 40) inked += 1;
       if (data[at + 3] === 255) solid += 1;
     }
-    return { width: copy.width, height: copy.height, corner, inked, solid };
+    return { width: copy.width, height: copy.height, corner, inked, solid, covered };
   }, name);
 }
 
@@ -212,7 +216,13 @@ test('the grid and the three backgrounds switch', async ({ page }) => {
 
 test('the saved picture is the thing alone on a see-through background', async ({ page }) => {
   const problems = watchConsole(page);
-  await openViewer(page, '?thing=crew%2Fplayer-2&pose=pull');
+  // the thing alone on the stage, see-through, grid off: what the picture should hold
+  await openViewer(page, '?thing=crew%2Fplayer-2&pose=pull&bg=checker&grid=0');
+  const alone = await takePicture(page, 'alone');
+  // then the grid goes on, and the picture is saved: the grid is not in it
+  await andDrawn(page, () => page.getByRole('button', { name: 'Grid', exact: true }).click());
+  const withGrid = await takePicture(page, 'withGridOn');
+  expect(withGrid.covered).toBeGreaterThan(alone.covered * 1.3);
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Save picture' }).click()]);
   expect(download.suggestedFilename()).toBe('portage-crew-player-2.png');
   const path = await download.path();
@@ -240,20 +250,15 @@ test('the saved picture is the thing alone on a see-through background', async (
     // the corners and the four edges' middles are see-through
     const alphaAt = (x: number, y: number): number => pixels[(y * image.width + x) * 4 + 3];
     const edges = [alphaAt(0, 0), alphaAt(image.width - 1, 0), alphaAt(0, image.height - 1), alphaAt(image.width - 1, image.height - 1), alphaAt(image.width >> 1, 0), alphaAt(image.width >> 1, image.height - 1)];
-    // the ground grid is not in it: nothing partly see-through runs the width of the picture along the floor
-    for (let y = 0; y < image.height; y += 1) {
-      let row = 0;
-      for (let x = 0; x < image.width; x += 1) if (alphaAt(x, y) > 0) row += 1;
-      if (row > image.width * 0.6) grey += 1;
-    }
-    return { width: image.width, height: image.height, clear, solid, edges, longRows: grey };
+    for (let at = 3; at < pixels.length; at += 4) if (pixels[at] > 0) grey += 1;
+    return { width: image.width, height: image.height, clear, solid, edges, covered: grey };
   }, base64);
   const total = result.width * result.height;
-  console.log(`saved picture ${result.width}x${result.height}: ${(100 * result.clear / total).toFixed(1)}% see-through, ${result.solid} solid pixels, edges ${result.edges.join(',')}, rows across the width ${result.longRows}`);
+  console.log(`saved picture ${result.width}x${result.height}: ${(100 * result.clear / total).toFixed(1)}% see-through, ${result.solid} solid pixels, edges ${result.edges.join(',')}, covered ${result.covered} against ${alone.covered} alone, ${withGrid.covered} with the grid on screen`);
   expect(result.edges).toEqual([0, 0, 0, 0, 0, 0]);
   expect(result.clear / total).toBeGreaterThan(0.6);
   expect(result.solid).toBeGreaterThan(2000);
-  expect(result.longRows).toBe(0);
+  expect(Math.abs(result.covered - alone.covered) / alone.covered).toBeLessThan(0.02);
   expect(problems).toEqual([]);
 });
 
