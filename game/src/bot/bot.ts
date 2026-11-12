@@ -67,9 +67,64 @@ export interface BotReport {
   state: GameState;
 }
 
+/**
+ * How well the bot looks after itself. `CAREFUL` is the bot as it always was: a player who knows
+ * the game. `CARELESS` is nearer a first-time player: it eats and drinks only once the warning is
+ * on screen, bails late and not for long, spends its energy as fast as it comes, dithers, wanders,
+ * sets off for the wrong island, drops things, and takes no notice of a storm until it breaks.
+ */
+export interface BotHabits {
+  /** Eats once hunger is below `eatBelow`, and keeps eating up to `eatUntil`. */
+  eatBelow: number;
+  eatUntil: number;
+  /** Drinks once thirst is below `drinkBelow`, up to `drinkUntil`. */
+  drinkBelow: number;
+  drinkUntil: number;
+  /** Hunger points of food it likes to have along before it stops picking any up. */
+  larder: number;
+  /** Drinks (clean or to boil) it scoops up to at the canoe. */
+  waterCarried: number;
+  /** Bails once the water in the hull reaches `bailAt`, down to `bailUntil`. */
+  bailAt: number;
+  bailUntil: number;
+  /** Power strokes until energy falls to `powerUntil`, runs until `runUntil`; each starts again 20 above. */
+  powerUntil: number;
+  runUntil: number;
+  /** Seconds lost before each scavenge and each craft: finding the spot, reading the panel. */
+  hesitation: number;
+  /** One trip in this many goes to the wrong island first. 0: never. */
+  detourEvery: number;
+  /** One scavenge in this many is followed by a wander across the island. 0: never. */
+  wanderEvery: number;
+  /** One scavenge in this many, a stack from the backpack is dropped for good. 0: never. */
+  wasteEvery: number;
+  /** Takes no notice of a storm in the forecast: shelters only once it has broken. */
+  ignoresForecast: boolean;
+  /**
+   * Keeps its hands off what it gathered for stock food. The careful bot never needed to and is
+   * left as it was, so its runs stay comparable. The careless one eats late and a lot at once:
+   * without this it eats its own apples and then waits three days for the trees.
+   */
+  guardsIngredients: boolean;
+}
+
+export const CAREFUL: BotHabits = {
+  eatBelow: 55, eatUntil: 55, drinkBelow: 50, drinkUntil: 50, larder: 80, waterCarried: 6,
+  bailAt: 50, bailUntil: 6, powerUntil: 55, runUntil: 50,
+  hesitation: 0, detourEvery: 0, wanderEvery: 0, wasteEvery: 0, ignoresForecast: false, guardsIngredients: false,
+};
+
+export const CARELESS: BotHabits = {
+  eatBelow: 25, eatUntil: 60, drinkBelow: 25, drinkUntil: 60, larder: 30, waterCarried: 2,
+  bailAt: 75, bailUntil: 40, powerUntil: 20, runUntil: 20,
+  hesitation: 4, detourEvery: 4, wanderEvery: 5, wasteEvery: 8, ignoresForecast: true, guardsIngredients: true,
+};
+
 export interface BotDriverOptions {
   /** Stop after this quest completes. */
   untilQuest?: QuestId;
+  /** How carefully it plays. Default `CAREFUL`. */
+  habits?: BotHabits;
   /** Receives a line per high-level action. */
   log?: (line: string) => void;
   /**
@@ -103,6 +158,8 @@ export interface BotDriver {
 }
 
 class BotStuck extends Error {}
+/** Thrown into the bot's script when the rules wash it ashore, so it drops what it was doing and plans afresh. */
+class WashedAshore extends Error {}
 
 const clamp = (value: number, minimum: number, maximum: number): number => Math.max(minimum, Math.min(maximum, value));
 const distance = (first: Point, second: Point): number => Math.hypot(first.x - second.x, first.z - second.z);
@@ -157,6 +214,15 @@ const FOOD_IDS = (Object.keys(ITEMS) as ItemId[]).filter((itemId) => {
 /** Build a driver that plays `state` forward from wherever it is. */
 export function createBotDriver(state: GameState, options: BotDriverOptions = {}): BotDriver {
   const log = (line: string): void => options.log?.(`${(state.playedSeconds / 60).toFixed(1).padStart(6)}  ${line}`);
+  const habits = options.habits ?? CAREFUL;
+  // The bot's own dice, for its lapses. Seeded from the game's seed and never the game's dice, so a
+  // lapse changes nothing but what the bot does. A careful bot never rolls them.
+  let dice = (state.seed ^ 0x51ed270b) >>> 0;
+  const roll = (sides: number): number => {
+    dice = (Math.imul(dice, 1664525) + 1013904223) >>> 0;
+    return (dice >>> 8) % sides;
+  };
+  const lapse = (oneIn: number): boolean => oneIn > 0 && roll(oneIn) === 0;
 
   // --- Reading the state ----------------------------------------------------
 
@@ -309,14 +375,16 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
     if (player.dialogue || state.tick - lastUpkeepTick < 30) return;
     lastUpkeepTick = state.tick;
     const spare = (itemId: ItemId): number => inReach(itemId) - (reserved.get(itemId) ?? 0);
-    if (player.thirst < 50 && spare('clean_water') <= 0 && selectInventory(state).stations.includes('fire')) {
+    const thirsty = player.thirst < habits.drinkBelow;
+    if (thirsty && spare('clean_water') <= 0 && selectInventory(state).stations.includes('fire')) {
       // Fire in reach and nothing to drink: scoop and boil.
       if (inReach('dirty_water') < 3) send({ type: 'fill_water', count: 4 });
       useFire();
     }
-    while (player.thirst < 50 && spare('clean_water') > 0) must({ type: 'drink', itemId: 'clean_water' });
+    while (thirsty && player.thirst < habits.drinkUntil && spare('clean_water') > 0) must({ type: 'drink', itemId: 'clean_water' });
     if (player.thirst < 12 && inReach('dirty_water') > 0) must({ type: 'drink', itemId: 'dirty_water' });
-    for (let guard = 0; guard < 6 && player.hunger < 55; guard += 1) {
+    const hungry = player.hunger < habits.eatBelow;
+    for (let guard = 0; hungry && guard < 6 && player.hunger < habits.eatUntil; guard += 1) {
       // Finish small stacks first: every stack eaten is a slot back.
       const candidates = FOOD_IDS
         .filter((itemId) => spare(itemId) > 0 && !(itemId === 'cattail_root' && !questDone('something_to_eat')))
@@ -350,7 +418,7 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
   /** Scoop flood water for the next fire, when at the canoe. */
   const scoopWater = (): void => {
     if (!selectInventory(state).cargoAccessible) return;
-    const short = 6 - held('clean_water') - held('dirty_water');
+    const short = habits.waterCarried - held('clean_water') - held('dirty_water');
     if (short > 0) send({ type: 'fill_water', count: short });
   };
 
@@ -398,8 +466,8 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
           index += 1;
           continue;
         }
-        if (player.energy > 70) runOn = true;
-        if (player.energy < 50) runOn = false;
+        if (player.energy > habits.runUntil + 20) runOn = true;
+        if (player.energy < habits.runUntil) runOn = false;
         upkeep();
         yield {
           ...NEUTRAL_INPUT,
@@ -481,8 +549,15 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
   function* harvest(node: NodeDefinition, actionIndex: number): Generator<StepInput> {
     const action = node.actions[actionIndex];
     yield* walkTo(node.position, 1.6);
+    if (habits.hesitation > 0) yield* idle(habits.hesitation);
     if (action.energyCost > 0 && player.energy < action.energyCost + 12) yield* rest(40);
     if (player.selectedTool !== action.tool) must({ type: 'select_tool', toolId: action.tool });
+    // Something left here on an earlier visit is in the way: it comes first, room made for it if need be.
+    for (let guard = 0; guard < 6 && (state.nodes[node.id]?.leftover.length ?? 0) > 0; guard += 1) {
+      send({ type: 'scavenge' });
+      yield NEUTRAL_INPUT;
+      if ((state.nodes[node.id]?.leftover.length ?? 0) > 0 && !makeRoom()) break;
+    }
     if (nodeReady(node, actionIndex)) {
       const target = selectInteractable(state);
       if (!target || target.kind !== 'node' || target.nodeId !== node.id || !target.available || target.actionIndex !== actionIndex) {
@@ -505,6 +580,19 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
       const target = selectInteractable(state);
       if (target?.kind === 'node' && target.nodeId === node.id) send({ type: 'scavenge' });
       yield NEUTRAL_INPUT;
+    }
+    if (lapse(habits.wasteEvery) && player.backpack.length > 0) {
+      const dropped = player.backpack[roll(player.backpack.length)];
+      log(`careless: dropped ${dropped.count} ${dropped.itemId}`);
+      send({ type: 'discard', from: 'backpack', itemId: dropped.itemId, count: dropped.count });
+    }
+    if (lapse(habits.wanderEvery) && player.islandId) {
+      const spots = NODES_BY_ISLAND[player.islandId].filter((other) => other.reach === 'foot');
+      const far = spots[roll(spots.length)];
+      if (far && findFootPath(player.islandId, player.position, far.position)) {
+        log(`careless: wandering off toward ${far.id}`);
+        yield* walkTo(far.position, 2);
+      }
     }
   }
 
@@ -541,13 +629,13 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
   const paddleToward = (target: Point): StepInput => {
     upkeep();
     manageSail();
-    if (canoe.waterLevel >= 50) bailing = true;
-    if (canoe.waterLevel <= 6) bailing = false;
+    if (canoe.waterLevel >= habits.bailAt) bailing = true;
+    if (canoe.waterLevel <= habits.bailUntil) bailing = false;
     // Rough water is filling the hull faster than a can empties it: keep moving.
     if (bailing && !canoe.takingWater) return { ...NEUTRAL_INPUT, bail: true };
     const turn = bearingDifference(bearingBetween(canoe.position.x, canoe.position.z, target.x, target.z), canoe.heading);
-    if (player.energy > 75) powerOn = true;
-    if (player.energy < 55) powerOn = false;
+    if (player.energy > habits.powerUntil + 20) powerOn = true;
+    if (player.energy < habits.powerUntil) powerOn = false;
     return {
       ...NEUTRAL_INPUT,
       paddle: Math.abs(turn) < 1.1 ? 1 : 0.2,
@@ -586,7 +674,7 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
     for (;;) {
       const weather = state.weather;
       const stormNow = weather.kind === 'storm' || weather.stormLevel > 0.02;
-      const stormSoon = weather.nextKind === 'storm' && weather.secondsRemaining < travelSeconds;
+      const stormSoon = !habits.ignoresForecast && weather.nextKind === 'storm' && weather.secondsRemaining < travelSeconds;
       if (!stormNow && !stormSoon) break;
       if (!waited) {
         log(`waiting out a storm (${weather.kind}, next ${weather.nextKind} in ${weather.secondsRemaining.toFixed(0)} s)`);
@@ -614,7 +702,7 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
     const goal = islandLanding(destination).approach;
     const stormNow = weather.kind === 'storm' || weather.stormLevel > 0.02;
     const eta = (distance(canoe.position, goal) * 1.15) / 2 + 25;
-    if (!stormNow && !(weather.nextKind === 'storm' && weather.secondsRemaining < eta)) return null;
+    if (!stormNow && (habits.ignoresForecast || !(weather.nextKind === 'storm' && weather.secondsRemaining < eta))) return null;
     if (!stormWouldSwamp(canoe.position, goal)) return null;
     const timeLeft = stormNow ? 0 : weather.secondsRemaining;
     let best: IslandId | null = null;
@@ -690,10 +778,26 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
     throw new BotStuck(`could not land on ${islandId}`);
   }
 
-  function* travelTo(islandId: IslandId): Generator<StepInput> {
+  function* travelTo(islandId: IslandId, direct = false): Generator<StepInput> {
     for (let leg = 0; leg < 8; leg += 1) {
       if (here() === islandId) return;
       if (!canReachIsland(islandId, limits())) throw new BotStuck(`${islandId} is out of reach at stability ${limits().stability}`);
+      if (player.mode === 'foot' && !direct && lapse(habits.detourEvery)) {
+        const others = ISLANDS.filter((definition) => definition.id !== islandId && definition.id !== here()
+          && canReachIsland(definition.id, limits()) && distance(canoe.position, definition.center) < 700);
+        if (others.length > 0) {
+          const wrong = others[roll(others.length)].id;
+          log(`careless: heading for ${wrong} by mistake`);
+          try {
+            yield* travelTo(wrong, true);
+          } catch (error) {
+            // A mistaken trip that cannot be finished is just given up.
+            if (!(error instanceof BotStuck)) throw error;
+            log(`careless: gave up on ${wrong}`);
+          }
+          continue;
+        }
+      }
       if (player.mode === 'foot') {
         yield* sweepIsland();
         yield* sleepIfNight();
@@ -733,8 +837,8 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
     for (let guard = 0; guard < 40; guard += 1) {
       const want = wanted();
       const foodHeld = FOOD_IDS.reduce((sum, itemId) => sum + held(itemId) * ITEMS[itemId].edible!.hunger, 0);
-      const wantsFood = foodHeld < 80;
-      const wantsWater = held('clean_water') + held('dirty_water') < 3;
+      const wantsFood = foodHeld < habits.larder;
+      const wantsWater = held('clean_water') + held('dirty_water') < Math.min(3, habits.waterCarried);
       let best: { node: NodeDefinition; actionIndex: number; cost: number } | null = null;
       for (const node of NODES_BY_ISLAND[islandId]) {
         node.actions.forEach((action, actionIndex) => {
@@ -876,6 +980,7 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
         }
         yield* walkToCanoe();
       }
+      if (habits.hesitation > 0) yield* idle(habits.hesitation);
       const result = send({ type: 'craft', recipeId: recipe.id, count: times });
       if (result.ok) {
         log(`craft ${times} x ${recipe.id}`);
@@ -966,13 +1071,13 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
       useFire();
       upkeep();
       const spareWater = inReach('clean_water') - (reserved.get('clean_water') ?? 0);
-      if (player.thirst < 40 && spareWater <= 0) {
+      if (player.thirst < Math.min(40, habits.drinkBelow) && spareWater <= 0) {
         log('out of water: boiling some');
         yield* ensureItems([{ itemId: 'clean_water', count: held('clean_water') + 5 }]);
         upkeep();
       }
       const foodInReach = FOOD_IDS.some((itemId) => inReach(itemId) > 0 && itemId !== 'raw_fish');
-      if (player.hunger < 40 && !foodInReach) {
+      if (player.hunger < Math.min(40, habits.eatBelow) && !foodInReach) {
         log('out of food: foraging');
         for (let guard = 0; guard < 3; guard += 1) {
           const sources = ['berries', 'apple', 'mushroom', 'cattail_root']
@@ -1044,7 +1149,11 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
       const plan: { recipe: RecipeDefinition; count: number } = best;
       log(`stock food: ${plan.count} x ${plan.recipe.id}`);
       extraWanted = new Map(plan.recipe.inputs.map((input) => [input.itemId, input.count * plan.count]));
+      // What goes into the stock food is not for eating on the way.
+      const kept = plan.recipe.inputs.filter((input) => habits.guardsIngredients && ITEMS[input.itemId].edible && !reserved.has(input.itemId));
+      for (const input of kept) reserved.set(input.itemId, input.count * plan.count);
       yield* craftRecipe(plan.recipe, plan.count);
+      for (const input of kept) reserved.delete(input.itemId);
     }
     extraWanted = new Map();
     yield* ensureItems([{ itemId: 'clean_water', count: cleanWater }]);
@@ -1123,26 +1232,37 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
 
   function* play(): Generator<StepInput> {
     for (const quest of MAIN_QUESTS) {
-      for (let guard = 0; guard < 60 && !questDone(quest.id); guard += 1) {
-        const view = selectActiveQuests(state).find((entry) => entry.questId === quest.id);
-        if (!view) {
-          yield NEUTRAL_INPUT;
-          continue;
-        }
-        const index = view.objectives.findIndex((entry) => !entry.done);
-        if (index === -1) {
-          yield* idle(0.25);
-          continue;
-        }
-        for (const extra of STRATEGY) {
-          if (extra.questId === quest.id && extra.beforeObjective === index) {
-            for (const attachmentId of extra.attachments) yield* ensureAttachment(attachmentId);
+      // Every fail earns a few more tries: it costs cargo, and the step has to be planned again.
+      for (let guard = 0; guard < 60 + 6 * state.statistics.fails && !questDone(quest.id); guard += 1) {
+        try {
+          const view = selectActiveQuests(state).find((entry) => entry.questId === quest.id);
+          if (!view) {
+            yield NEUTRAL_INPUT;
+            continue;
           }
+          const index = view.objectives.findIndex((entry) => !entry.done);
+          if (index === -1) {
+            yield* idle(0.25);
+            continue;
+          }
+          for (const extra of STRATEGY) {
+            if (extra.questId === quest.id && extra.beforeObjective === index) {
+              for (const attachmentId of extra.attachments) yield* ensureAttachment(attachmentId);
+            }
+          }
+          yield* maintain();
+          log(`[${quest.name}] ${view.objectives[index].text}`);
+          yield* pursue(quest, quest.objectives[index]);
+          yield* idle(0.25);
+        } catch (error) {
+          if (!(error instanceof WashedAshore)) throw error;
+          // Washed ashore at the respawn point, canoe beside it, half the cargo gone: start the step over.
+          log('washed ashore: picking up again');
+          bailing = false;
+          powerOn = false;
+          runOn = false;
+          yield NEUTRAL_INPUT;
         }
-        yield* maintain();
-        log(`[${quest.name}] ${view.objectives[index].text}`);
-        yield* pursue(quest, quest.objectives[index]);
-        yield* idle(0.25);
       }
       if (!questDone(quest.id)) throw new BotStuck(`quest ${quest.id} never completed`);
       if (options.untilQuest === quest.id) return;
@@ -1152,11 +1272,14 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
   const script = play();
   let finished = false;
   let stoppedBecause: string | null = null;
+  let failsSeen = state.statistics.fails;
   return {
     next(): StepInput | null {
       if (finished) return null;
       try {
-        const result = script.next();
+        const washed = state.statistics.fails !== failsSeen;
+        failsSeen = state.statistics.fails;
+        const result = washed ? script.throw(new WashedAshore()) : script.next();
         if (!result.done) return result.value;
       } catch (error) {
         if (!(error instanceof BotStuck)) throw error;
@@ -1182,7 +1305,7 @@ export function runBot(options: BotOptions): BotReport {
   const player = state.players[0];
   const canoe = state.canoe;
   const log = (line: string): void => options.log?.(`${(state.playedSeconds / 60).toFixed(1).padStart(6)}  ${line}`);
-  const driver = createBotDriver(state, { untilQuest: options.untilQuest, log: options.log });
+  const driver = createBotDriver(state, { untilQuest: options.untilQuest, log: options.log, habits: options.habits });
 
   const reports: QuestReport[] = [];
   const freshTally = (): Omit<QuestReport, 'questId' | 'name' | 'completedAtSeconds' | 'completedAtClock'> => ({

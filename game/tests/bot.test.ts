@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { MAIN_QUESTS } from '../src/data/index.ts';
-import { BOT_SEED, HUMAN_TIME_FACTOR, formatReport, runBot } from '../src/bot/bot.ts';
+import { MAIN_QUESTS, TUNING } from '../src/data/index.ts';
+import { BOT_SEED, CAREFUL, CARELESS, HUMAN_TIME_FACTOR, createBotDriver, formatReport, runBot } from '../src/bot/bot.ts';
 import type { BotReport } from '../src/bot/bot.ts';
+import { FIXED_STEP, createGame, drainEvents, step } from '../src/sim/index.ts';
 
 const SEED = BOT_SEED;
 
@@ -66,5 +67,81 @@ describe('the headless bot', () => {
     const second = runBot({ seed: 5, untilQuest: 'steady_now' });
     expect(first.totalSeconds).toBe(second.totalSeconds);
     expect(first.state).toEqual(second.state);
+  });
+});
+
+describe('a careless player', () => {
+  it('is the same bot with worse habits, and the careful bot is the default', () => {
+    expect(runBot({ seed: 5, untilQuest: 'stop_the_leak' }).state).toEqual(runBot({ seed: 5, untilQuest: 'stop_the_leak', habits: CAREFUL }).state);
+    // Slow to eat and drink, late to bail, quick to spend energy, and given to lapses.
+    expect(CARELESS.eatBelow).toBeLessThanOrEqual(TUNING.survival.lowMeterWarning);
+    expect(CARELESS.drinkBelow).toBeLessThanOrEqual(TUNING.survival.lowMeterWarning);
+    expect(CARELESS.bailAt).toBeGreaterThan(TUNING.canoe.swampWarningLevel);
+    expect(CARELESS.bailUntil).toBeGreaterThan(CAREFUL.bailUntil);
+    expect(CARELESS.powerUntil).toBeLessThan(TUNING.survival.lowMeterWarning);
+    expect(CARELESS.hesitation).toBeGreaterThan(0);
+    expect(CARELESS.detourEvery).toBeGreaterThan(0);
+    expect(CARELESS.wanderEvery).toBeGreaterThan(0);
+    expect(CARELESS.wasteEvery).toBeGreaterThan(0);
+    expect(CARELESS.ignoresForecast).toBe(true);
+  });
+
+  it('still lights the Beacon on all six seeds: slower, under the warnings, failing now and then but never stuck', () => {
+    const lines: string[] = [];
+    let fails = 0;
+    for (const seed of [BOT_SEED, 1, 2, 7, 20, 33]) {
+      const report = runBot({ seed, habits: CARELESS, maximumSeconds: 6 * 3600 });
+      expect(report.stoppedBecause, `seed ${seed}`).toBeNull();
+      expect(report.completed, `seed ${seed}`).toBe(true);
+      expect(report.quests.map((quest) => quest.questId)).toEqual(MAIN_QUESTS.map((quest) => quest.id));
+      const minutes = report.totalSeconds / 60;
+      const lowestEnergy = Math.min(...report.quests.map((quest) => quest.lowestEnergy));
+      const lowestFed = Math.min(...report.quests.map((quest) => Math.min(quest.lowestHunger, quest.lowestThirst)));
+      lines.push(`seed ${seed}: ${minutes.toFixed(1)} min, ${report.fails} fails, lowest energy ${lowestEnergy.toFixed(0)}, lowest hunger or thirst ${lowestFed.toFixed(0)}`);
+      // It really played carelessly: its meters went under the warning line, where the careful bot's never go.
+      expect(lowestEnergy, `seed ${seed} energy`).toBeLessThan(TUNING.survival.lowMeterWarning);
+      expect(lowestFed, `seed ${seed} hunger and thirst`).toBeLessThan(TUNING.survival.lowMeterWarning);
+      // It pays in time, not in a wall: under five hours, and a fail is an accident, not a habit.
+      expect(minutes, `seed ${seed} minutes`).toBeGreaterThan(100);
+      expect(minutes, `seed ${seed} minutes`).toBeLessThan(300);
+      expect(report.fails, `seed ${seed} fails`).toBeLessThanOrEqual(3);
+      fails += report.fails;
+    }
+    console.log(`careless bot:\n${lines.join('\n')}`);
+    expect(fails).toBeLessThanOrEqual(6);
+  });
+
+  it('is repeatable too: its lapses come from its own dice, seeded by the game', () => {
+    const first = runBot({ seed: 5, untilQuest: 'a_proper_edge', habits: CARELESS });
+    const second = runBot({ seed: 5, untilQuest: 'a_proper_edge', habits: CARELESS });
+    expect(first.state).toEqual(second.state);
+    expect(first.state).not.toEqual(runBot({ seed: 5, untilQuest: 'a_proper_edge' }).state);
+  });
+});
+
+describe('the bot after a fail', () => {
+  it('picks itself up: capsized mid-crossing, it wakes ashore, plans again and finishes the quest', () => {
+    const state = createGame(BOT_SEED);
+    const lines: string[] = [];
+    const driver = createBotDriver(state, { untilQuest: 'stop_the_leak', log: (line) => lines.push(line) });
+    let swamped = false;
+    for (let input = driver.next(); input !== null; input = driver.next()) {
+      step(state, input, FIXED_STEP);
+      drainEvents(state);
+      // Out on the water between the islands, with the knife made: fill the hull to the brim, once.
+      if (!swamped && state.quests.stop_the_leak.status === 'active' && !state.canoe.beached
+        && state.players[0].mode === 'canoe' && state.canoe.position.x > 120) {
+        // Over the brim, so the can it is about to pick up cannot save it.
+        state.canoe.waterLevel = TUNING.canoe.capsizeLevel + 5;
+        swamped = true;
+      }
+      if (state.playedSeconds > 3600) break;
+    }
+    expect(swamped).toBe(true);
+    expect(state.statistics.fails).toBe(1);
+    expect(lines.some((line) => line.includes('washed ashore: picking up again'))).toBe(true);
+    expect(driver.stoppedBecause).toBeNull();
+    expect(state.quests.stop_the_leak.status).toBe('completed');
+    expect(state.canoe.hullTier).toBe(1);
   });
 });
