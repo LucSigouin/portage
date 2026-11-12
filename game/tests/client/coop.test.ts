@@ -289,6 +289,40 @@ describe('leaving and coming back', () => {
     expect(guest.signals.filter((signal) => signal.type === 'notice' && signal.text === 'Back with the crew.')).toHaveLength(1);
   });
 
+  it('a guest\'s pause menu says what quitting is for a guest: leave the crew, the seat is kept. The host\'s still saves', () => {
+    const { host, guest, game, tick } = table();
+    tick(1);
+    const menu = (who: Client): { quit: string; confirm: { title: string; message: string; accept: string } } => {
+      who.app.session.handleIntent({ type: 'open_panel', panel: 'pause' });
+      who.app.frame(FIXED_STEP);
+      const panel = who.models.at(-1)!.panel!;
+      if (panel.id !== 'pause') throw new Error('expected the pause menu');
+      const quit = panel.buttons.at(-1)!;
+      who.app.session.handleIntent(quit.intent);
+      who.app.frame(FIXED_STEP);
+      const confirm = who.models.at(-1)!.confirm!;
+      return { quit: quit.label, confirm: { title: confirm.title, message: confirm.message, accept: confirm.accept.label } };
+    };
+    expect(menu(guest)).toEqual({ quit: 'Leave the crew', confirm: { title: 'Leave the crew?', message: 'Your seat is kept.', accept: 'Leave the crew' } });
+    expect(menu(host)).toEqual({ quit: 'Save and quit to the lobby', confirm: { title: 'Quit to the lobby?', message: 'The game is saved first.', accept: 'Save and quit' } });
+    // The words are true. The guest leaves, and the seat is kept: the same key gets the same player back.
+    guest.app.session.handleIntent({ type: 'answer_confirm', accepted: true });
+    tick(0.5);
+    expect(guest.app.session.screen).toBe('lobby');
+    expect(game.players[1]).toMatchObject({ name: 'Sam', connected: false });
+    const pair = createLoopbackPair();
+    host.app.session.host!.accept(pair.host);
+    guest.app.session.joinGame(pair.guest, { name: 'Sam', key: KEY });
+    for (let frame = 0; frame < 60; frame += 1) {
+      pair.advance(FIXED_STEP);
+      host.app.frame(FIXED_STEP);
+      guest.app.frame(FIXED_STEP);
+    }
+    expect(guest.app.session.localPlayerId).toBe(1);
+    expect(game.players).toHaveLength(2);
+    expect(game.players[1]).toMatchObject({ name: 'Sam', connected: true });
+  });
+
   it('a guest who quits is back in the lobby with nothing kept, and shows as away on the host', () => {
     const { host, guest, game, tick } = table();
     tick(1);

@@ -59,6 +59,10 @@ export interface InterfaceModelInput {
   debug: DebugModel | null;
 }
 
+/** True when this screen is a guest's: the game it shows runs in somebody else's browser. */
+const isGuestScreen = (input: InterfaceModelInput): boolean =>
+  input.hostId !== null && input.hostId !== undefined && input.hostId !== (input.playerId ?? 0);
+
 const PANEL_TITLES: Readonly<Record<PanelId, string>> = {
   settings: 'Settings', how_to_play: 'How to Play', credits: 'Credits', pause: 'Paused', save_slots: 'Save slots',
   inventory: 'Inventory', crafting: 'Crafting', canoe_builder: 'Canoe builder', quest_log: 'Quest log', map: 'Map',
@@ -84,7 +88,7 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
     case 'credits':
       return { ...frame, ...buildCreditsPanel(game?.flags.beacon_lit === true) };
     case 'pause':
-      return { ...frame, ...buildPausePanel(input.progressText, input.crew ?? null) };
+      return { ...frame, ...buildPausePanel(input.progressText, input.crew ?? null, isGuestScreen(input)) };
     case 'save_slots':
       return { ...frame, ...buildSaveSlotsPanel(input.slots, input.now, input.currentSlot) };
     case 'inventory':
@@ -125,7 +129,7 @@ export function buildInterfaceModel(input: InterfaceModelInput): InterfaceModel 
     toasts: input.toasts,
     panel: beneath ? buildPanelModel(beneath, input) : null,
     openPanels: [...panels.stack],
-    confirm: top === 'confirm' && panels.confirm ? buildConfirmModel(panels.confirm) : null,
+    confirm: top === 'confirm' && panels.confirm ? buildConfirmModel(panels.confirm, isGuestScreen(input)) : null,
     debug: input.debug,
   };
 }
