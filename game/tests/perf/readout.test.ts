@@ -86,17 +86,19 @@ describe('what the frame-rate cap lets through', () => {
         now = refreshes * refresh;
         (callback as unknown as (timestamp: number) => void)(now);
       }
-      const real = median(gapsBetween(ran));
-      expect(cappedFrameMilliseconds(refresh, 60), `${hertz} Hz`).toBeCloseTo(real, 6);
+      // The loop skips refreshes unevenly to keep its beat, so compare the average gap, not the typical one.
+      const real = (ran[ran.length - 1]! - ran[0]!) / (ran.length - 1);
+      expect(cappedFrameMilliseconds(refresh, 60), `${hertz} Hz`).toBeCloseTo(real, 1);
     }
   });
 
-  it('is 60 a second on a 60 or 120 Hz screen, and fewer on a 75 or 144 Hz one', () => {
+  it('is 60 a second on any screen at 60 Hz or faster, and every refresh on a slower one', () => {
     const allowed = (hertz: number): number => Math.round(1000 / cappedFrameMilliseconds(1000 / hertz, 60) * 10) / 10;
     expect(allowed(60)).toBe(60);
     expect(allowed(120)).toBe(60);
-    expect(allowed(75)).toBe(37.5);
-    expect(allowed(144)).toBe(48);
+    expect(allowed(75)).toBe(60);
+    expect(allowed(144)).toBe(60);
+    expect(allowed(50)).toBe(50);
     expect(cappedFrameMilliseconds(1000 / 144, 0)).toBeCloseTo(1000 / 144, 9);
     expect(cappedFrameMilliseconds(0, 60)).toBe(0);
   });
