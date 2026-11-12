@@ -13,6 +13,7 @@ import type { FloraKind } from '../look/scatter.ts';
 import { NARROWS } from '../look/world/narrows.ts';
 import { REACH } from '../look/world/reach.ts';
 import { SHALLOWS } from '../look/world/shallows.ts';
+import { canonicalBuild } from './canonical.ts';
 import { attachmentAlone, canoeSubject, iconSubject, islandSubject, landmarkSubject, nodeSubject, propSubject, survivorSubject } from './subjects.ts';
 import type { Choice, Control, Entry, Group, Options } from './types.ts';
 
@@ -255,7 +256,14 @@ function icons(): Entry[] {
 /** Every drawn thing, in list order. Made on first use, and the same list after that. */
 let list: Entry[] | null = null;
 export function catalogue(): Entry[] {
-  list ??= [...hulls(), ...attachments(), ...crew(), ...landmarks(), ...nodes(), ...islands(), ...props(), ...icons()];
+  list ??= [...hulls(), ...attachments(), ...crew(), ...landmarks(), ...nodes(), ...islands(), ...props(), ...icons()].map((entry) => ({
+    ...entry,
+    // every build starts from the same place (see canonical.ts), so a link reopens the same picture
+    build: (options) => {
+      if (!entry.flat) canonicalBuild();
+      return entry.build(options);
+    },
+  }));
   return list;
 }
 

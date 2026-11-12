@@ -3,6 +3,7 @@
  * added to the game changes both sides together. Every entry, and every answer to every question it asks, is
  * built: none may throw, and each must have something to show.
  */
+import type * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { ATTACHMENTS, ATTACHMENT_IDS, CREW_MARKS, HULL_TIERS, ISLANDS, ITEMS, ITEM_IDS, NODE_TYPES, NPC_IDS } from '../../src/data/index.ts';
 import { LANDMARK_KINDS } from '../../src/look/landmarks.ts';
@@ -176,5 +177,36 @@ describe('what the numbers say', () => {
     expect(four.drawCalls).toBeGreaterThan(empty.drawCalls);
     empty.dispose();
     four.dispose();
+  });
+});
+
+/** Every attribute of every mesh under a subject, boiled down to one number. */
+function drawingOf(root: THREE.Object3D): string {
+  let hash = 2166136261;
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    for (const name of Object.keys(mesh.geometry.attributes).sort()) {
+      const array = mesh.geometry.getAttribute(name).array as ArrayLike<number>;
+      for (let at = 0; at < array.length; at += 1) hash = Math.imul(hash ^ Math.round(array[at] * 1e5), 16777619) >>> 0;
+    }
+  });
+  return String(hash);
+}
+
+describe('the same picture whatever was opened before', () => {
+  it('builds each kind of thing to the same drawing after other things, ink ids and all', () => {
+    const ids = ['hull/ribbed_canoe', 'attachment/forge', 'crew/odile', 'crew/player-2', 'landmark/steeple', 'node/crate', 'prop/spruce-1', 'island/steeple_rock'];
+    for (const id of ids) {
+      const entry = entryById(id) as Entry;
+      const first = entry.build(defaultsOf(entry));
+      const before = drawingOf(first.object as THREE.Object3D);
+      first.dispose();
+      // other things, in another order, with the game's shared drawings built along the way
+      for (const other of catalogue().filter((candidate) => !candidate.flat && candidate.id !== id).slice(3, 40).reverse()) other.build(defaultsOf(other)).dispose();
+      const again = entry.build(defaultsOf(entry));
+      expect(drawingOf(again.object as THREE.Object3D), id).toBe(before);
+      again.dispose();
+    }
   });
 });
