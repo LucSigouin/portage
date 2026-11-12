@@ -27,6 +27,8 @@ export interface Rig {
   join(name: string, key?: string, conditions?: Partial<LoopbackConditions>, guest?: Partial<GuestOptions>): Seat;
   /** Run this many seconds of frames: wires, then the host's step, then each guest. */
   run(seconds: number): void;
+  /** Run this many seconds of frames with the host's game standing still: it steps nothing, and still sends and listens. */
+  stand(seconds: number): void;
   /**
    * Let the messages settle: the host stops stepping (it still sends) until every
    * guest still playing holds the host's state exactly, fingerprint for fingerprint.
@@ -69,6 +71,9 @@ export function createRig(options: { game?: GameState; conditions?: Partial<Loop
     hostHash: () => hashState({ ...game, events: [] }),
     run(seconds: number): void {
       for (let frame = 0; frame < Math.round(seconds / FIXED_STEP); frame += 1) frameOnce(true);
+    },
+    stand(seconds: number): void {
+      for (let frame = 0; frame < Math.round(seconds / FIXED_STEP); frame += 1) frameOnce(false);
     },
     settle(seconds = 10): boolean {
       const met = (): boolean => rig.seats.every((seat) => seat.link.status !== 'playing'

@@ -241,6 +241,29 @@ describe('true', () => {
     }
   });
 
+  it('writes nothing into the truth it holds: with the host\'s game standing still the figure walks on, and the truth stays the host\'s', () => {
+    const { rig, sam, host, shown } = ashore(CLEAN);
+    expect(rig.settle()).toBe(true);
+    const at = { ...host() };
+    sam.input = { moveX: 1 };
+    for (let count = 0; count < 60; count += 1) {
+      rig.stand(FIXED_STEP);
+      // The view has caught up with the truth here, so the view is the truth's own object: the figure must be a copy on top of it.
+      // (Drawn every frame, as a screen does.)
+      shown();
+      expect(sam.link.truth!.players[1]!.position).toEqual(at);
+      expect(hashState(sam.link.truth!)).toBe(rig.hostHash());
+    }
+    expect(gap(at, shown())).toBeGreaterThan(2);
+    expect(sam.link.mismatches).toBe(0);
+    // The host steps again: it walks the guest the sixty steps it took, to the spot the figure stands on.
+    sam.input = {};
+    rig.run(1.5);
+    expect(gap(host(), shown())).toBeLessThan(1e-9);
+    expect(gap(at, host())).toBeCloseTo(60 * WALK_STEP, 9);
+    expect(sam.link.mismatches).toBe(0);
+  });
+
   it('is a layer: the truth the guest holds and the host\'s game are the same with it and without it', () => {
     const play = (predictWalk: boolean): { host: string; truth: string; shownAhead: number } => {
       const { rig, sam, shown, frame } = ashore(BAD, { predictWalk });
