@@ -1,0 +1,36 @@
+/* ---------- the lobby's canoe preview ----------
+   A sketch in the margin of the title page: your canoe as it was in the save played last, beside the last three
+   lines of the menu, with one line under it. It is laid over the page (absolute), so nothing else on the page
+   moves for it, and its frame has its size before the picture is in: the picture arriving moves nothing.
+   Nothing here moves by itself: no transition, no animation. */
+.pv {
+  position: absolute;
+  /* Clear of the menu's longest plain line on its left, and of the page's torn edge on its right. */
+  left: 12.2rem;
+  /* Its top is level with the top of the menu's third line from the end; it runs on under the menu, well inside the page. */
+  bottom: -5.75rem;
+  width: 16.8rem;
+  margin: 0;
+  pointer-events: none;
+}
+.pv-sketch {
+  position: relative;
+  width: 16.8rem;
+  height: 12.6rem;
+}
+/* The picture: one of its pixels is one screen pixel (its size is set in whole pixels by the host). */
+.pv-pic {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+}
+.pv-caption {
+  margin: 0.15rem 0 0;
+  font-family: var(--iw-hand);
+  font-size: 0.92rem;
+  line-height: 1.3;
+  color: var(--iw-ink-soft);
+  text-align: center;
+  text-wrap: balance;
+}

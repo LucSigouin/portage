@@ -225,6 +225,8 @@ export interface LobbyModel {
   title: string;
   tagline: string;
   buttons: ButtonModel[];
+  /** The canoe of the save played last, pictured beside the menu (`client/preview.ts`). Absent or null: no picture. */
+  preview?: import('../preview.ts').LobbyPreviewModel | null;
 }
 
 export interface SaveSlotModel {
