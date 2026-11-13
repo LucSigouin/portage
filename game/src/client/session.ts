@@ -641,6 +641,9 @@ export class Session {
       case 'escape':
         this.applyPanels({ type: 'escape' });
         break;
+      case 'auto_paddle':
+        this.autoPaddleNotice(outcome.on);
+        break;
       case 'rebind_cancelled':
         this.bindingNotice = '';
         this.sound('close');
@@ -654,6 +657,14 @@ export class Session {
         break;
       }
     }
+  }
+
+  /** The note for the auto-paddle going on or off, with the keys as they are bound. */
+  private autoPaddleNotice(on: boolean): void {
+    const bindings = this.settings.controls.keyBindings;
+    const keys = [bindings.autoPaddle[0], bindings.paddle[0], bindings.backPaddle[0]].filter((keyCode) => keyCode !== undefined).map(keyLabel);
+    const stop = keys.length > 1 ? `${keys.slice(0, -1).join(', ')} or ${keys.at(-1)}` : keys[0] ?? 'a paddle key';
+    this.notice(on ? `Paddling on. ${stop} to stop.` : 'Paddling off.');
   }
 
   // --- Panels -----------------------------------------------------------------
