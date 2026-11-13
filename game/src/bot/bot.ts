@@ -18,13 +18,13 @@ import {
   spotPosition,
 } from '../data/index.ts';
 import {
-  FIXED_STEP, NEUTRAL_INPUT, bearingBetween, bearingDifference, createGame, dispatch, drainEvents,
+  FIXED_STEP, NEUTRAL_INPUT, bearingBetween, bearingDifference, createGame, dispatch, drainEvents, freeSpotNear,
   islandLanding, regionAt, selectActiveQuests, selectCanoeStats, selectDialogue, selectInteractable,
   selectInventory, selectTimeOfDay, step, terrainHeight,
 } from '../sim/index.ts';
 import type { Command, CommandResult, GameState, StepInput } from '../sim/index.ts';
 import { isWildNodeId, wildIndex, wildNodesOn } from '../sim/gathering.ts';
-import { canReachIsland, clearGround, findFootPath, findWaterPath, footReachable, routeLength, walkGoal } from './navigation.ts';
+import { SOLID_CLEARANCE, canReachIsland, clearGround, findFootPath, findWaterPath, footReachable, routeLength, walkGoal } from './navigation.ts';
 import type { Point, Seaworthiness } from './navigation.ts';
 
 /** Bot extras on top of the quest objectives: attachments a sensible player builds early. */
@@ -507,6 +507,25 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
       }
       attempts += 1;
       if (attempts > 4) throw new BotStuck(`walking stuck on ${islandId} at ${player.position.x.toFixed(1)},${player.position.z.toFixed(1)} going to ${target.x.toFixed(1)},${target.z.toFixed(1)}`);
+      // Planning again from the very spot it is wedged in gives the same line and the same push: step clear first.
+      yield* stepClear();
+    }
+  }
+
+  /**
+   * Out of a corner, as a player would: straight to the nearest spot with the bot's usual berth round it. A walker
+   * swings a little wide on a sharp turn (the rules ease it round), and can lodge against a wall's corner where every
+   * slide is shut although the straight line on looks open.
+   */
+  function* stepClear(): Generator<StepInput> {
+    const spot = freeSpotNear(player.position.x, player.position.z, 2, SOLID_CLEARANCE);
+    if (!spot || distance(player.position, spot) < 0.05) return;
+    log(`stepping clear of a corner at ${player.position.x.toFixed(1)},${player.position.z.toFixed(1)}`);
+    for (let tick = 0; tick < 60; tick += 1) {
+      const away = distance(player.position, spot);
+      if (away < 0.05) return;
+      upkeep();
+      yield { ...NEUTRAL_INPUT, moveX: (spot.x - player.position.x) / away, moveY: -(spot.z - player.position.z) / away, cameraYaw: 0 };
     }
   }
 

@@ -13,6 +13,8 @@ import { canWalk } from '../src/sim/foot.ts';
 import { newGame, standOn } from './support.ts';
 import { createRig } from './net/rig.ts';
 import { findFootPath } from '../src/bot/navigation.ts';
+import { createBotDriver } from '../src/bot/bot.ts';
+import { deserialize } from '../src/save/index.ts';
 
 const BODY = TUNING.foot.bodyRadius;
 /** Walking east: the keys straight ahead, the camera a quarter turn round. */
@@ -241,6 +243,35 @@ describe('the bot, with solids in its way', () => {
       }
     }
     expect(Math.hypot(outside.x - game.players[0].position.x, outside.z - game.players[0].position.z)).toBeLessThan(0.2);
+  });
+
+  const wedged = import.meta.glob<string>('./fixtures/wedged-*.json', { eager: true, query: '?raw', import: 'default' });
+
+  it('steps back out of a cottage roof\'s corner an eased turn swung it into, and walks on to its canoe', () => {
+    // Seed 3 at 17.6 minutes on the six fixes merged: the bot searched an attic from its doorstep, turned for the
+    // canoe, swung wide into the roof's edge and lodged where every slide is shut. It used to push there for good.
+    const loaded = deserialize(wedged['./fixtures/wedged-cabin-roofs.json']);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const game = loaded.state;
+    const player = game.players[0];
+    const corner = { x: player.position.x, z: player.position.z };
+    expect(player.islandId).toBe('cabin_roofs');
+    // The corner still holds: a second more of the bot's own push (toward its route's first waypoint) moves it not at all.
+    const probe = structuredClone(game);
+    const trail = walk(probe, { moveX: 0.64, moveY: 0.77, cameraYaw: 0 }, 1);
+    expect(Math.hypot(trail.at(-1)!.x - corner.x, trail.at(-1)!.z - corner.z)).toBeLessThan(0.01);
+    const lines: string[] = [];
+    const driver = createBotDriver(game, { log: (line) => lines.push(line) });
+    for (let count = 0; count < 3 * 60 * 60 && player.mode === 'foot'; count += 1) {
+      const input = driver.next();
+      if (!input) break;
+      step(game, input, FIXED_STEP);
+      drainEvents(game);
+    }
+    expect(driver.stoppedBecause).toBeNull();
+    expect(player.mode).toBe('canoe');
+    expect(lines.filter((line) => line.includes('stepping clear of a corner'))).toHaveLength(1);
   });
 
   it('wades out of the shallows it stands in (an old save left one at wading depth)', () => {
