@@ -16,7 +16,7 @@
     },
     {
       "label": "Stage",
-      "value": "Your whole bugfix list is live: Version 1.0.319"
+      "value": "Your whole bugfix list is live: Version 1.0.320"
     },
     {
       "label": "Tests",
@@ -921,12 +921,13 @@
     "Four sessions tested at once and the Mac froze. Now one test at a time",
     "The Mac slept in the middle of a test, twice",
     "Claude Code's install broke on Nov 12. No new worker until it is repaired",
-    "A builder waited 43 minutes on me: my watcher missed its line. Fixed and tested"
+    "A builder waited 43 minutes on me: my watcher missed its line. Fixed and tested",
+    "My workbench words ran off a phone screen. The deploy's own check stopped it"
   ],
   "numbers": [
     {
       "label": "Commits",
-      "value": "319"
+      "value": "320"
     },
     {
       "label": "Worker runs",
@@ -954,11 +955,11 @@
     },
     {
       "label": "Agent hours",
-      "value": "27 by the morning of Nov 13, not counted since"
+      "value": "27 by Nov 13 morning"
     },
     {
       "label": "Cost at API list prices",
-      "value": "about $637 by the morning of Nov 13"
+      "value": "$637 by Nov 13 morning"
     }
   ],
   "left": [
