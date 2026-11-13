@@ -1,4 +1,4 @@
-import type { Group, Mesh, Vector3 } from 'three';
+import type { Group, Mesh, Object3D, Vector3 } from 'three';
 
 export interface HullDimensions { length: number; beam: number; depth: number; draft: number }
 
@@ -54,8 +54,13 @@ export interface Crew {
   paddler: { L: Limbs; R: Limbs; paddle: Mesh };
   /** Seated stroke. phase 0..1, effort 0..1 (0 rests the paddle across the gunwales), side +1 or -1. */
   paddle(seconds: number, phase: number, effort: number, side: number, more?: SeatedPose | null): { inWater: boolean; blade: Vector3; pull: number };
-  /** Ashore. time: seconds, for the idle breath. stride: radians of the walk cycle. moving 0..1. lying 0..1: stretched out flat. */
-  stand(time: number, stride?: number, moving?: number, lying?: number): void;
+  /**
+   * Ashore, without the paddle: it stays in the canoe. time: kept for callers, unused (standing still is still).
+   * stride: radians of the walk cycle. moving 0..1. lying 0..1: stretched out flat. holding: a tool is in the right hand.
+   */
+  stand(time: number, stride?: number, moving?: number, lying?: number, holding?: boolean): void;
+  /** The paddle left in the canoe: laid across the gunwales in `holder`, a group placed as the seated figure would be. */
+  leave(holder: Object3D, restSide?: number): void;
 }
 /** A crew member's colours. Left out, they are B2's paddler: ochre coat, red toque, blue-grey legs. */
 export interface Outfit { coat?: string; toque?: string; legs?: string }

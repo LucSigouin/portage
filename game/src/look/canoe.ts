@@ -8,12 +8,14 @@
  * - dressed by player id (`outfitOf`), so a person looks the same on every screen;
  * - aboard, at the rules engine's seat for them (`seatTransformForHull`): seats 0 and 1 sit, 2 and 3 kneel;
  * - paddling, bailing, asleep or at rest by their own flags, never by the canoe's speed;
- * - ashore, standing where the state puts them, walking by their own change in position.
+ * - ashore, standing where the state puts them, walking by their own change in position, the tool they picked in
+ *   the right hand and their paddle left in the canoe, across the gunwales at their seat.
  * All of them, and the canoe, are heroes: the world view draws them at the
  * window's full size (see LOOK.md).
  */
 import * as THREE from 'three';
 import { HULL_TIERS } from '../data/index.ts';
+import type { ToolId } from '../data/index.ts';
 import { attachmentTransformForHull, seatTransformForHull } from '../sim/index.ts';
 import { outfitOf } from './crew.ts';
 import type { Crew } from './crew.ts';
@@ -24,6 +26,7 @@ import { STROKE_PULL, buildBilge, buildHull, buildStarterKit, createCrew, makeHu
 import type { Crew as Figure, HullShape, SeatedPose } from './b2/canoe.js';
 import { deckInner, deckSpan, sparsAlong } from './canoe/deck-parts.ts';
 import { buildMends, buildSheets } from './canoe/mends.ts';
+import { TOOL_CARRY, buildHandTool } from './hand-tools.ts';
 
 interface TierMeshes {
   shape: HullShape;
@@ -87,6 +90,14 @@ interface Member {
   afoot: boolean;
   /** True once this figure has sat in the canoe: its first stroke starts on its own side, later ones ease over. */
   seated: boolean;
+  /** The seat this one last sat in, and the side their paddle rested on there: ashore, the paddle is left there. */
+  lastSeat: number | null;
+  restSide: number;
+  /** Placed in the hull as this one sits: holds their paddle while they are ashore. */
+  berth: THREE.Group;
+  /** The tools this one has had in hand, each drawn the first time it is picked. One is shown at a time, ashore. */
+  tools: Map<ToolId, THREE.Mesh>;
+  holding: ToolId | null;
 }
 
 /** What `figures()` says of one crew figure: what is drawn, not what the state asked for. */
@@ -109,6 +120,10 @@ export interface FigureReport {
   /** The colours its coat sleeve and its trouser leg carry. */
   coat: string;
   legs: string;
+  /** The tool drawn in its hand: ashore, the one the player picked. Null aboard, asleep, or with none picked. */
+  holding: ToolId | null;
+  /** Where its paddle is drawn: in its hands aboard, left in the canoe while it is ashore, or nowhere (its seat is taken). */
+  paddle: 'hands' | 'canoe' | null;
 }
 
 const colourOf = (mesh: THREE.Mesh): string => {
@@ -165,7 +180,11 @@ export class CanoeView {
       const { coat, toque, legs } = outfitOf(playerId);
       const figure = createCrew({ coat, toque, legs });
       figure.root.rotation.order = 'YXZ';
-      member = { figure, seat: null, effort: 0, bailing: 0, asleep: 0, moving: 0, bailPhase: 0.6, side: 1, stride: 0, lastX: 0, lastZ: 0, afoot: false, seated: false };
+      member = {
+        figure, seat: null, effort: 0, bailing: 0, asleep: 0, moving: 0, bailPhase: 0.6, side: 1, stride: 0, lastX: 0, lastZ: 0, afoot: false, seated: false,
+        lastSeat: null, restSide: 1, berth: new THREE.Group(), tools: new Map(), holding: null,
+      };
+      member.berth.rotation.order = 'YXZ';
       this.members.set(playerId, member);
     }
     return member;
@@ -378,13 +397,16 @@ export class CanoeView {
         const dip = figure.paddle(member.seated ? seconds : 1, back > 0 ? PULL_SHARE * (1 - back) : stroke, member.effort, member.side, more);
         member.seated = true;
         if (back > 0) figure.paddler.paddle.rotateY(Math.sin(back * Math.PI) * member.effort * (Math.PI / 2));
-        if (anyDeck) this.clearOfDecks(figure, decks, wellEdge, deckRuns);
+        if (anyDeck) this.clearOfDecks(root, figure.paddler.paddle, decks, wellEdge, deckRuns);
         if (member.effort > 0.6 && seconds > 0) {
           if (crossed(DIPS.catch) || crossed(DIPS.exit)) events.push({ x: dip.blade.x, z: dip.blade.z, strength: 0.95, size: 0.9 });
           if (crossed(DIPS.middle)) events.push({ x: dip.blade.x, z: dip.blade.z, strength: 0.7, size: 0.6 });
         }
         member.afoot = false;
         member.moving = 0;
+        member.lastSeat = member.seat;
+        member.restSide = across;
+        this.hold(member, null, player.id);
       } else {
         if (root.parent !== this.ashore) this.ashore.add(root);
         // The model faces +z; the game's forward is -z turned by the heading. A sleeper is laid on their back.
@@ -395,15 +417,41 @@ export class CanoeView {
         if (snap) member.moving = 0;
         else if (seconds > 0) member.moving += ((walked > 0.002 ? 1 : 0) - member.moving) * Math.min(1, seconds * 8);
         if (walked > 0 && walked < 5) member.stride += (walked / STRIDE_METRES) * Math.PI * 2;
-        figure.stand(time, member.stride, member.moving, member.asleep);
+        // The tool they picked is in the right hand; a sleeper has put it down.
+        const tool = member.asleep < 0.5 ? player.selectedTool : null;
+        figure.stand(time, member.stride, member.moving, member.asleep, tool !== null);
+        this.hold(member, tool, player.id);
         member.afoot = true;
       }
       member.lastX = player.position.x;
       member.lastZ = player.position.z;
     }
+    // Each one ashore left their paddle across the gunwales at the seat they last sat in (never seen aboard: the seat
+    // of their number), unless someone sits there now.
+    const taken = new Set(players.map(seatOf).filter((seat): seat is number => seat !== null));
+    for (const player of players) {
+      const member = this.member(player.id);
+      const berth = member.berth;
+      const seat = member.seat === null ? member.lastSeat ?? Math.min(3, player.id) : null;
+      if (seat === null || taken.has(seat)) {
+        berth.visible = false;
+        continue;
+      }
+      taken.add(seat);
+      if (berth.parent !== this.hullSpace) this.hullSpace.add(berth);
+      const place = seatTransformForHull(this.tier, seat);
+      berth.position.set(-place.position[0], place.position[1] + SEAT_LIFT, -place.position[2]);
+      berth.rotation.set(-place.rotation[0], place.rotation[1], -place.rotation[2]);
+      berth.visible = showPlayer;
+      member.figure.leave(berth, member.restSide);
+      if (anyDeck) this.clearOfDecks(berth, member.figure.paddler.paddle, decks, wellEdge, deckRuns);
+    }
     // Anyone who has left the game is no longer drawn.
     for (const [playerId, member] of this.members) {
-      if (!players.some((player) => player.id === playerId)) member.figure.root.visible = false;
+      if (!players.some((player) => player.id === playerId)) {
+        member.figure.root.visible = false;
+        member.berth.visible = false;
+      }
     }
     return events;
   }
@@ -414,18 +462,35 @@ export class CanoeView {
    * them: the hands keep their hold, and it lies between the two decks. Past a deck's ends the pull fades out over
    * a quarter metre, so nothing jumps.
    */
-  private clearOfDecks(figure: Figure, decks: { port: boolean; starboard: boolean }, wellEdge: number, deckRuns: { forward: number; aft: number }): void {
-    const paddle = figure.paddler.paddle;
+  private clearOfDecks(holder: THREE.Object3D, paddle: THREE.Object3D, decks: { port: boolean; starboard: boolean }, wellEdge: number, deckRuns: { forward: number; aft: number }): void {
     const shaft = this.shaft.set(0, -1, 0).applyQuaternion(paddle.quaternion);
-    // The figure sits in the hull's own space: port is +x there, and z runs the other way from canoe space.
-    const tipX = figure.root.position.x + paddle.position.x + shaft.x * PADDLE_LENGTH;
-    const tipZ = -(figure.root.position.z + paddle.position.z + shaft.z * PADDLE_LENGTH);
+    // The figure (or the berth of a paddle left aboard) sits in the hull's own space: port is +x there, and z runs
+    // the other way from canoe space.
+    const tipX = holder.position.x + paddle.position.x + shaft.x * PADDLE_LENGTH;
+    const tipZ = -(holder.position.z + paddle.position.z + shaft.z * PADDLE_LENGTH);
     const over = Math.abs(tipX) - wellEdge;
     if (over <= 0 || !(tipX > 0 ? decks.port : decks.starboard)) return;
     // A blade is 9 cm to each side of its shaft.
     const past = Math.min(1, Math.max(0, (Math.max(deckRuns.forward - tipZ, tipZ - deckRuns.aft) - 0.12) / 0.25));
     const beside = 1 - past * past * (3 - 2 * past);
     paddle.position.addScaledVector(shaft, -beside * Math.min(0.4, over / Math.max(0.3, Math.abs(shaft.x))));
+  }
+
+  /** Puts `tool` in the member's right hand (null: an empty hand). A tool is drawn the first time it is picked. */
+  private hold(member: Member, tool: ToolId | null, playerId: number): void {
+    member.holding = tool;
+    for (const [toolId, mesh] of member.tools) mesh.visible = toolId === tool;
+    if (tool === null) return;
+    let mesh = member.tools.get(tool);
+    if (!mesh) {
+      mesh = buildHandTool(tool, playerId);
+      member.tools.set(tool, mesh);
+      member.figure.root.add(mesh);
+    }
+    mesh.visible = true;
+    // In the fist, its working end carried ahead and up.
+    mesh.position.copy(member.figure.paddler.R.H);
+    mesh.rotation.set(Math.PI / 2 - TOOL_CARRY[tool], 0, 0);
   }
 
   /**
@@ -470,6 +535,8 @@ export class CanoeView {
           stride: member.stride,
           coat: colourOf(member.figure.paddler.L.upper),
           legs: colourOf(member.figure.paddler.L.thigh),
+          holding: member.holding,
+          paddle: member.seat !== null ? 'hands' : member.berth.visible && member.berth.parent !== null ? 'canoe' : null,
         };
       });
   }

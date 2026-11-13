@@ -652,6 +652,9 @@ export function createCrew(outfit) {
     //         restSide: -1 lays the resting paddle with its blade out to the right, so a crew's blades alternate }
     // returns { inWater, blade: world position of the blade, pull } for splashes
     paddle(dt, phase, effort, side, more = null) {
+      // Back aboard, the paddle is in the hands again, wherever it was left.
+      if (paddler.paddle.parent !== paddler.root) paddler.root.add(paddler.paddle);
+      paddler.paddle.visible = true;
       const kneel = more?.kneel ?? 0;
       const bail = more?.bail ?? 0;
       const doze = more?.sleep ?? 0;
@@ -794,24 +797,34 @@ export function createCrew(outfit) {
       paddler.root.localToWorld(bladeWorld);
       return { inWater: pull && effort > 0.5, blade: bladeWorld, pull: effort * (pull ? Math.sin((phase / STROKE_PULL) * Math.PI) : 0) };
     },
-    // ashore: paddle carried like a staff. t: seconds (idle breath), stride: radians of the walk cycle, moving 0..1
-    // lying 0..1: stretched out flat with the paddle alongside, for a sleeper (the caller lays the figure down)
-    stand(t, stride = 0, moving = 0, lying = 0) {
+    // Left in the canoe while its paddler is ashore: laid across the gunwales as it rests aboard, in `holder`, a
+    // group placed where the paddler sits. restSide -1 lays the blade out to the seat's right.
+    leave(holder, restSide = 1) {
+      if (paddler.paddle.parent !== holder) holder.add(paddler.paddle);
+      paddler.paddle.visible = true;
+      Gi.set(-0.5 * restSide, 0.14, 0.4);
+      Ai.set(0.95 * restSide, 0.12, 0.44);
+      paddler.setPaddle(Gi, Ai, 1.5);
+    },
+    // ashore, empty-handed or with a tool in the right hand: the paddle stays in the canoe. Standing still is
+    // still: no breath, no turn of the shoulders. t: kept for callers, unused. stride: radians of the walk cycle,
+    // moving 0..1. lying 0..1: stretched out flat, for a sleeper (the caller lays the figure down). holding: a tool
+    // is in the right hand, carried a little forward and up.
+    stand(t, stride = 0, moving = 0, lying = 0, holding = false) {
       if (tin) tin.visible = false;
+      if (paddler.paddle.parent === paddler.root) paddler.paddle.visible = false;
       const up = 1 - lying;
-      const br = Math.sin(t * 1.3) * 0.006 * (1 - moving);
       const swing = Math.sin(stride) * 0.2 * moving;
       const liftL = Math.max(0, Math.cos(stride)) * 0.07 * moving;
       const liftR = Math.max(0, -Math.cos(stride)) * 0.07 * moving;
-      G.set(-0.44, 0.02 + 0.05 * moving, 0.14 * up - 0.1 * lying - swing * 0.5);
-      A.set(-0.47, 1.5, 0.1 * up - 0.12 * lying - swing * 0.2);
-      paddler.setPaddle(G, A, 0);
-      handR.set(-0.445 + 0.165 * lying, 1.02 - 0.28 * lying + br, 0.13 * up - 0.08 * lying - swing * 0.4);
-      handL.set(0.27, 0.74 + br, 0.06 * up - 0.08 * lying - swing * 0.6);
+      const carry = holding ? up : 0;
+      // The arms swing against the legs; a hand with a tool in it swings less.
+      handR.set(-0.27 + 0.01 * carry, 0.74 + 0.08 * carry, 0.06 * up + 0.12 * carry - 0.08 * lying + swing * (0.6 - 0.3 * carry));
+      handL.set(0.27, 0.74, 0.06 * up - 0.08 * lying - swing * 0.6);
       paddler.pose({
-        hipY: 0.8 + br - 0.012 * moving * Math.abs(Math.cos(stride)),
+        hipY: 0.8 - 0.012 * moving * Math.abs(Math.cos(stride)),
         lean: (0.03 + 0.05 * moving) * up,
-        twist: (0.12 + Math.sin(t * 0.4) * 0.08) * (1 - moving) * up,
+        twist: 0.06 * (1 - moving) * up,
         tilt: 0,
         handL,
         handR,
