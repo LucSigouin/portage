@@ -212,3 +212,12 @@
   justify-content: flex-start;
   margin-top: 0.4rem;
 }
+
+/* --- The footer: the two quick presses, in the hand, beside the way out -------------------- */
+.iw-inv-hint {
+  min-width: 0;
+  font-family: var(--iw-hand);
+  font-size: 0.86rem;
+  line-height: 1.25;
+  color: var(--iw-ink-soft);
+}

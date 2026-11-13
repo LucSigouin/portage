@@ -15,7 +15,7 @@ import { control, h } from './dom.ts';
 import type { ViewChild, ViewNode } from './dom.ts';
 import type { ItemId } from '../data/index.ts';
 import { ICON, SEAL, itemIcon, logotype, toqueIcon, waterGauge } from './icons.ts';
-import { inventoryBodyView } from './inventoryview.ts';
+import { inventoryBodyView, inventoryHintView } from './inventoryview.ts';
 
 const icon = (markup: string, className = ''): ViewNode => h('i.iw-i', { class: className, html: markup, 'aria-hidden': 'true' });
 
@@ -330,7 +330,7 @@ function saveSlotView(slot: SaveSlotModel): ViewNode {
 export { itemDetailKey, itemDetailKeys } from './inventoryview.ts';
 
 const inventoryView = (panel: Extract<PanelModel, { id: 'inventory' }>, open: ReadonlySet<string>): ViewNode[] =>
-  sheet(panel, 'wide', panel.stationsText, inventoryBodyView(panel, open));
+  sheet(panel, 'wide', panel.stationsText, inventoryBodyView(panel, open), inventoryHintView());
 
 /**
  * The red ! before a recipe or a part an open quest still asks for (Luc's bugfix list, line 19). It is a mark, not a

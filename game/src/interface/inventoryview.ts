@@ -166,6 +166,11 @@ function beltTiles(belt: BeltSlotModel[], open: ReadonlySet<string>): ViewNode[]
   });
 }
 
+/** The two quick presses, said in the sheet's footer: they are not written anywhere else. It stands still. */
+export const QUICK_PRESS_HINT = 'Shift+click a tile: to the other side. Q with the pointer on a tile: drop it.';
+
+export const inventoryHintView = (): ViewNode => h('small.iw-inv-hint', { key: 'hint' }, QUICK_PRESS_HINT);
+
 /** The body of the inventory panel. `open`: the tiles the player has opened (`itemDetailKey`). */
 export function inventoryBodyView(panel: InventoryModel, open: ReadonlySet<string>): ViewNode {
   return h('div.iw-body.iw-inv', { key: 'body' },
