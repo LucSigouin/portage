@@ -81,7 +81,7 @@ export const GU = {
   uFlip: { value: 1 }, // -1 while the mirrored reflection pass renders
   uPass: { value: 0 }, // 0 colour, 1 ink buffer (normal, id, line wobble), 2 reflection colour (no fine pen work)
   uFine: { value: 1 }, // fine strokes and hatching; the frame-rate ladder turns them off before it touches resolution
-  uHero: { value: 0 }, // 1 while the hero pass fills its ink buffer: hero texels are marked, so the pen knows what a hero touches
+  uHero: { value: 0 }, // 1 while the hero pass fills its ink buffer: hero texels are marked, so the pen knows what a hero touches; 2 while it marks the crew's (post.js CREW_LAYER)
   uHatch: { value: 1 },
   uPxK: { value: 0.00086 }, // metres per pixel per metre of distance (set on resize)
   uSc: { value: 1 }, // drawing height / 1080: pen widths scale with the sheet

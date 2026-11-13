@@ -46,6 +46,13 @@ export function sparStations(context: AttachmentContext, side: -1 | 1): { forwar
   return { forward, aft: aftSpar(context.hullTier) };
 }
 
+/** Both sides' spars along the hull, in canoe space: the forward pair's two places (port's and starboard's), and the aft one. */
+export function sparsAlong(hullTier: number): number[] {
+  const seat = (number: number): number => seatTransformForHull(hullTier, number).position[2];
+  const forward = (seat(3) + 0.22 + seat(2) - 0.63) / 2 - 0.045;
+  return [forward - 0.055, forward + 0.055, aftSpar(hullTier)];
+}
+
 export function outriggerPart(side: -1 | 1): AttachmentBuilder {
   return (context) => {
     const b = partBuilder(context, side < 0 ? 101 : 117);

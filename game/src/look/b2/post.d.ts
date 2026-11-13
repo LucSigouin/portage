@@ -50,5 +50,7 @@ export function createPost(renderer: WebGLRenderer, camera: Camera): Post;
  * the pen is full. `fall`: how fast it thins past that. `floor`: the share of its width it never goes under.
  */
 export const HERO_PEN: { start: number; fall: number; floor: number };
+/** The crew's render layer: every mesh of a figure is on it, and the hero pass marks their texels so the pen draws a figure's edge as a contour. */
+export const CREW_LAYER: number;
 /** The share of its full width the pen keeps on a hero, where the window's height covers `span` metres of world. */
 export function heroPen(span: number): number;

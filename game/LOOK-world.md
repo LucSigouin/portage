@@ -7,7 +7,7 @@ How the islands, landmarks and scavenge nodes are drawn. Read `LOOK.md` first: t
 | File | What it holds |
 |---|---|
 | `landmarks.ts` | The registry. Every kind is built twice: with every stroke, and as its outline for far off |
-| `world/kit.ts` | Shared colours (`TONE`), a gable roof, a window, a lattice mast, a ladder, smoke, and `siteOf` |
+| `world/kit.ts` | Shared colours (`TONE`), a gable roof, a window, a lattice mast, a ladder, and `siteOf`. No fire draws smoke (Luc's call) |
 | `world/shallows.ts`, `reach.ts`, `narrows.ts` | The landmark drawings, by region. `narrows.ts` also holds the Fog's two |
 | `world/dressing.ts` | What each island gets beyond its landmarks, by rule from the island table |
 | `world/distance.ts` | Detail by distance: the ranges, and how the eye's place is read |

@@ -233,7 +233,6 @@ export const REACH: Partial<Record<LandmarkKind, LandmarkBuilder>> = {
     builder.beam([-0.3, 1.3, -1.52], [-0.3, 0.85, -1.52], 0.014, PAL.wood, PEN, 4);
     builder.box(0.16, 0.1, 0.08, PAL.iron, { pos: [-0.3, 0.83, -1.52], kind: KIND.METAL });
     for (const lean of [0, 0.08, 0.16]) builder.beam([1.5 + lean, 0, -1.2 + lean], [1.72, 2, -1.45], 0.016, PAL.rust, PEN, 4);
-    builder.beam([0, 4.3, 1.15], [-0.5, 5.2, 1.15], 0.05, TONE.smoke, { id: PEN.id, flat: true, kind: KIND.PLAIN, glow: 0.3, r2: 0.09 }, 5);
   },
 
   /** A bed of cattails: tall blades and brown heads, thick enough to hide a heron. */

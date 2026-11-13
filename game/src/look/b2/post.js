@@ -39,6 +39,14 @@ import { PAL, GU, NOISE, wearMaterials } from './palette.js';
 // floor: the share of its width it never goes under.
 export const HERO_PEN = { start: 16.5, fall: 37, floor: 0.3 };
 
+// The crew's own render layer. Every mesh of a figure (its body, its paddle, the tin or tool in its hand) is on it as
+// well as on the default layer. The hero pass draws the crew a second time into its ink buffer, marking their
+// texels (normal.x 4 higher instead of 2), and the pen draws the edge between a figure and anything that is not
+// that figure as a contour, at full ink: against the ground it stands on and the hull it sits in, where the depth
+// barely steps, as against water and sky (Luc's list, item 10: before, those edges were drawn as light interior
+// seams, grey and broken, and fainter still far off).
+export const CREW_LAYER = 1;
+
 // The share of its full width the pen keeps on a hero, where the window's height covers `span` metres of world.
 // The shader's heroPen() is this, with the same numbers.
 export function heroPen(span) {
@@ -80,8 +88,9 @@ float invZ(vec2 uv){
   return (uFar + uNear - z * (uFar - uNear)) / (2. * uNear * uFar);
 }
 bool solid(float id){ return id >= .002 && id <= .998; }
-// A hero's texel in the merged ink buffer: its normal is stored 2 higher (see palette.js).
+// A hero's texel in the merged ink buffer: its normal is stored 2 higher (see palette.js), a crew figure's 4 higher.
 float heroAt(vec4 t){ return step(1.5, t.x); }
+float crewAt(vec4 t){ return step(3.5, t.x); }
 #ifdef HERO
 // The share of its width the pen keeps on a hero at this depth: heroPen() in post.js, with the same numbers.
 float heroPen(float depth){
@@ -135,8 +144,10 @@ vec4 penAt(vec2 uv, vec2 apx, float r, vec4 de, float inner, float weight, float
       } else if (!skyC && !thin) {
         float ne = smoothstep(.2, .45, distance(t.xy, nc));
         float ie = step(.0003, abs(t.a - idc));
-        inkS += de[i];
-        inkI += max(ne, ie) * (1. - de[i]);
+        // a real step in depth, or a crew figure's edge against anything else: a contour
+        float edge = max(de[i], abs(crewAt(t) - crewAt(aux)));
+        inkS += edge;
+        inkI += max(ne, ie) * (1. - edge);
       }
     }
   }
@@ -627,6 +638,12 @@ export function createPost(renderer, camera) {
     renderer.setRenderTarget(heroAux);
     renderer.clear();
     renderer.render(heroes, cam);
+    // the crew again, over themselves (the same depths pass), their texels marked as the crew's: see CREW_LAYER
+    GU.uHero.value = 2;
+    cam.layers.set(CREW_LAYER);
+    renderer.render(heroes, cam);
+    cam.layers.set(0);
+    GU.uHero.value = 1;
     if (behind) behind(renderer, heroAux.depthTexture, win, u.uFill.value);
     GU.uPass.value = 0;
     GU.uHero.value = 0;
