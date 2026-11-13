@@ -11,7 +11,7 @@
   ],
   "name": "Portage",
   "pitch": "A browser survival-crafting game. The valley flooded. You have a leaky canoe, and you bolt what you build onto it.",
-  "updated": "2026-11-12",
+  "updated": "2026-11-12, night",
   "status": {
     "done": [
       "Rules engine. Runs with no screen. 179 tests pass. A bot finishes the whole main quest.",
@@ -37,7 +37,9 @@
       "Loose ends fixed in the valley, the weather and the canoe. A balance pass. A quest that could strand you is fixed for all 21 quests.",
       "Friends join by a link: a relay, Host a crew and Join a crew in the lobby, and a guest whose walking answers at once. Proven on this Mac only. Not deployed.",
       "The asset viewer: every drawn thing alone, on a grid. Live at https://sigouin.net/portage-assets/ .",
-      "A fresh scored review: look 8, speed 8, friends 8, first minutes 7, canoe 7, solid 6. 1098 tests pass, plus 118 browser tests."
+      "A fresh scored review: look 8, speed 8, friends 8, first minutes 7, canoe 7, solid 6. 1098 tests pass, plus 118 browser tests.",
+      "The fix round: ten fixes from the review, each with a test seen red. 1129 tests pass, plus 119 browser tests. Old saves from the live game are tested on every build.",
+      "Live on Nov 12: everything built that day, at https://sigouin.net/portage/ . Friends by a link stays off until the relay is deployed."
     ],
     "running": [],
     "waiting": [
@@ -49,15 +51,15 @@
         "text": "The review: six scores and sixteen fixes, worst first.",
         "href": "docs/report-review.html"
       },
-      "Luc: repair Claude Code (one command). No new worker can start until then, so the fix round waits.",
       "Luc: six calls from the review. Build payoff, the first hull upgrade, trees hiding the player, the relay rate limit, crafts made early, steady 30 on very slow chips.",
-      "Luc: play the local build, then say go. Nothing built on Nov 12 is live except the asset viewer.",
       "Luc: the relay needs your go and a small Cloudflare service before friends can join over the internet.",
       {
         "text": "Luc: the starting canoe is weathered grey, not red. Keep or bring the red back?",
         "href": "game/?shot=play"
       },
-      "Next: the fix round (ten fixes), then the three low points are scored again."
+      "Luc: the game is live with the Nov 12 work. Your old save continues. Play it and say what feels wrong.",
+      "Luc: Claude Code broke twice today (a reinstall without its last step). New workers cannot start while it is broken.",
+      "Next: score the three low points again, then the slow-chip start and one shaky speed test."
     ]
   },
   "addresses": [
@@ -816,6 +818,12 @@
               "href": "docs/report-review.html",
               "see": "Six scores, sixteen fixes worst first, what is good as it is, and what nobody looked at.",
               "from": "../scratch/portage/review-report.md"
+            },
+            {
+              "title": "Report: the fix round",
+              "href": "docs/report-fixes.html",
+              "see": "Ten fixes, the test and the break for each, and the calls made for you.",
+              "from": "../scratch/portage/fixes-report.md"
             }
           ]
         }

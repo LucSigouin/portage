@@ -6,7 +6,7 @@
   ],
   "title": "Portage",
   "subtitle": "The workbench: every step so far",
-  "updated": "2026-11-12, evening",
+  "updated": "2026-11-12, night",
   "ask": "A flooded world and all you have is a canoe. Scavenge islands, craft, and build a crazy impressive canoe.",
   "now": [
     {
@@ -16,23 +16,23 @@
     },
     {
       "label": "Stage",
-      "value": "Version 1 is built. One fix round is left"
+      "value": "Version 1 is live, with ten review fixes"
     },
     {
       "label": "Tests",
-      "value": "1098 unit, 118 in a browser"
+      "value": "1129 unit, 119 in a browser"
     },
     {
       "label": "Running",
-      "value": "Nothing. The fix round waits on a repair of Claude Code"
+      "value": "Nothing"
     },
     {
       "label": "Live now",
-      "value": "The game as of Nov 11. The asset viewer"
+      "value": "Everything built up to Nov 12. The asset viewer"
     },
     {
       "label": "Not live yet",
-      "value": "Everything built on Nov 12. Say go after you test"
+      "value": "Friends by a link: it needs the relay deployed"
     },
     {
       "label": "Waiting on you",
@@ -626,16 +626,28 @@
     {
       "when": "Nov 12",
       "title": "The fix round",
-      "state": "next",
-      "asked": "",
+      "state": "done",
+      "asked": "I want to push it in less than an hour.",
       "built": [
-        "Ten fixes that need no decision from you",
-        "Then the three low points are scored again"
+        "Ten fixes from the review, each with its own test",
+        "One guest can no longer take every seat",
+        "The camp now reaches its bench and its bed",
+        "A guest whose line stalls is told so",
+        "The game also saves when a quest is done or a tool is found",
+        "Settings shows the version number"
       ],
-      "proof": [],
-      "snags": [],
+      "proof": [
+        "1129 unit, 119 in a browser: all pass",
+        "30 checks broken on purpose, 30 caught",
+        "14 saved games from the live site load and finish"
+      ],
+      "snags": [
+        "Claude Code broke twice, so two helpers never started",
+        "The slow-chip start and one shaky speed test are not in",
+        "The three low points are not scored again yet"
+      ],
       "pictures": [],
-      "report": ""
+      "report": "docs/report-fixes.html"
     }
   ],
   "calls": [
@@ -678,19 +690,19 @@
   "numbers": [
     {
       "label": "Commits",
-      "value": "171"
+      "value": "188"
     },
     {
       "label": "Worker runs",
-      "value": "38"
+      "value": "39"
     },
     {
       "label": "Unit tests",
-      "value": "1098"
+      "value": "1129"
     },
     {
       "label": "Browser tests",
-      "value": "118"
+      "value": "119"
     },
     {
       "label": "Lines of game code",
@@ -702,7 +714,7 @@
     },
     {
       "label": "Deploys",
-      "value": "6"
+      "value": "7"
     },
     {
       "label": "Agent hours",
@@ -715,15 +727,19 @@
   ],
   "left": [
     {
-      "what": "Fix round: ten fixes, then a new score",
-      "hours": "2"
+      "what": "Score the three low points again",
+      "hours": "0.5"
+    },
+    {
+      "what": "Slow-chip start, and one shaky speed test",
+      "hours": "0.5"
     },
     {
       "what": "Your six calls from the review",
       "hours": "yours"
     },
     {
-      "what": "Deploy the relay, then the game",
+      "what": "Deploy the relay, so friends join by a link",
       "hours": "1"
     },
     {
@@ -740,9 +756,8 @@
     }
   ],
   "yours": [
-    "Repair Claude Code: one command",
-    "Free your stuck save: one line in the browser console",
-    "Play the local build, then say go to deploy",
+    "Play the live game: your old save continues",
+    "Claude Code keeps breaking: find what reinstalls it",
     "The review page: six calls",
     "Your 5120 wide screen: steady 60, or every pixel?",
     "The relay: go, or not yet",
