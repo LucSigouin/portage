@@ -5,8 +5,6 @@
  *   the canoe. An icon shows that station's own menu: its recipes and nothing else. It works afloat, for anyone aboard.
  * - A crafting list never shows a recipe whose station is out of reach. One that only lacks materials stays.
  */
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   boatOpensOn, buildCanoeBuilderPanel, buildCraftingPanel, buildInterfaceModel,
@@ -27,7 +25,10 @@ import { addPlayer, dispatch, islandAt } from '../../src/sim/index.ts';
 import type { GameState } from '../../src/sim/index.ts';
 import { FakeStorage, build, floatCanoeAt, give, newGame, standOn, teleport, teleportToCamp } from '../support.ts';
 
-const stationsCss = readFileSync(fileURLToPath(new URL('../../src/interface/stations.css', import.meta.url)), 'utf8');
+// The project has no Node types, and Vite hands a test an emptied stylesheet: read the file itself, as icons.test.ts does.
+const fileSystemModule = 'node:fs';
+const { readFileSync } = await import(/* @vite-ignore */ fileSystemModule) as { readFileSync: (path: URL, encoding: 'utf8') => string };
+const stationsCss = readFileSync(new URL('../../src/interface/stations.css', import.meta.url), 'utf8');
 
 const MID_LAKE = { x: -40, z: 1085 };
 const CLOSE = { label: 'Close', intent: { type: 'close_panel' as const }, enabled: true, note: null };
