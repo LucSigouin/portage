@@ -14,16 +14,24 @@
   // The Free plan only runs SQLite-backed Durable Objects. The relay keeps one thing there: a room's idle count,
   // so it outlives the room's sleep. Nothing of the game.
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+  // The dial limit: one address may dial a room 30 times a minute (src/dial.ts says why 30, and a test holds
+  // the two files together). Cloudflare's rate limiting binding keeps the count, per Cloudflare location, and
+  // the Worker asks it before any room is woken. A window is 10 or 60 seconds, nothing else.
+  // namespace_id only names the counters. It must be a whole number no other Worker on the account uses
+  // (the music site has 1001 and 1002). Changing it starts the counts again.
+  "ratelimits": [{ "name": "DIALS", "namespace_id": "2201", "simple": { "limit": 30, "period": 60 } }],
   "vars": {
     // Where a connection may come from. `*` stands for any port.
     "ALLOWED_ORIGINS": "https://sigouin.net,http://localhost:*,http://127.0.0.1:*",
     // A room is looked at this often. Three looks in a row with no message through it and it is closed (about half an hour).
-    "IDLE_SWEEP_SECONDS": "600"
+    "IDLE_SWEEP_SECONDS": "600",
+    // Which build answers at /health. deploy/deploy-relay.sh gives the commit and the upload time instead.
+    "BUILD": "local"
   },
   // Nothing is logged, and nothing is kept by Cloudflare's log store either.
   "observability": { "enabled": false }
 
-  // Not in this file, on purpose: the route (sigouin.net/portage/relay/*) and the live list of allowed pages
-  // (https://sigouin.net alone). deploy/deploy-relay.sh gives both to wrangler, so this file stays the one for
-  // this computer and its tests.
+  // Not in this file, on purpose: the route (sigouin.net/portage/relay/*), the live list of allowed pages
+  // (https://sigouin.net alone) and the live build's name. deploy/deploy-relay.sh gives all three to wrangler,
+  // so this file stays the one for this computer and its tests.
 }

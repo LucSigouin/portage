@@ -8,30 +8,58 @@
  * before `/room/` is free, so the same Worker answers on its own address and
  * on a route such as `sigouin.net/portage/relay/*`.
  *
+ * The door (the Worker) turns away what it can before a room is woken: a page
+ * from somewhere else, a bad code, and an address that dials too often
+ * (`dial.ts`). Those answers are plain HTTP, and cost no room request.
+ *
  * Sockets are taken with the hibernation API: a room nobody is talking in
  * costs no running time, and comes back from its sockets' attachments. Its
  * memory does not come back: about ten seconds of quiet and it is gone. So
  * the idle count lives in the room's storage and is read on waking.
  */
 import { DurableObject } from 'cloudflare:workers';
+import { DIAL_WINDOW_SECONDS, TOO_MANY_DIALS, dialKey } from './dial.ts';
 import { CLOSE, RELAY_PROTOCOL, ROOM_CODE_PATTERN, RoomLogic, originAllowed } from './room.ts';
 import type { IdleCount, SeatRecord, Wire } from './room.ts';
 
 export interface Env {
   ROOMS: DurableObjectNamespace<Room>;
+  /** Counts dials per address (`dial.ts`). Cloudflare's rate limiting binding: its two numbers are in `wrangler.jsonc`. */
+  DIALS?: RateLimit;
   /** Comma-separated origins a connection may come from. `:*` at the end of one allows any port. */
   ALLOWED_ORIGINS: string;
   /** Seconds between looks at a room for the idle cap. */
   IDLE_SWEEP_SECONDS: string;
+  /** Which build this is: the commit and when it was uploaded, given by `deploy/deploy-relay.sh`. `local` on this computer. */
+  BUILD?: string;
 }
 
-const text = (body: string, status: number): Response =>
-  new Response(`${body}\n`, { status, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
+const text = (body: string, status: number, more: Record<string, string> = {}): Response =>
+  new Response(`${body}\n`, { status, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', ...more } });
+
+/** The build's name as plain text, whatever was handed in. */
+const buildName = (env: Env): string => (env.BUILD ?? '').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 64) || 'unknown';
+
+/**
+ * True when this address may dial once more. Asking is a look at a count kept
+ * beside the Worker: it wakes no room and is no request to one. If the count
+ * cannot be asked (the binding is missing, or it fails), the dial is let in:
+ * a relay with no limit is better than no relay.
+ */
+async function mayDial(env: Env, key: string): Promise<boolean> {
+  if (!env.DIALS) return true;
+  try {
+    return (await env.DIALS.limit({ key })).success;
+  } catch {
+    return true;
+  }
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    if (request.method === 'GET' && /(^|\/)health$/.test(url.pathname)) return text('portage relay: ok', 200);
+    // The second line says which build answers, so a deploy can tell the new relay from the old one.
+    if (request.method === 'GET' && /(^|\/)health$/.test(url.pathname)) return text(`portage relay: ok\nbuild ${buildName(env)}`, 200);
     const match = /(?:^|\/)room\/([^/]+)$/.exec(url.pathname);
     if (!match) return text('not found', 404);
     if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') return text('this address takes WebSockets only', 426);
@@ -40,6 +68,10 @@ export default {
     if (!ROOM_CODE_PATTERN.test(code)) return text('not a room code', 400);
     const offered = (request.headers.get('Sec-WebSocket-Protocol') ?? '').split(',').map((entry) => entry.trim());
     if (!offered.includes(RELAY_PROTOCOL)) return text('this relay speaks another protocol', 400);
+    // The dial limit, last at the door: only a dial that would wake a room is counted, and one over the limit
+    // wakes none. Cloudflare sets this header itself: a script cannot choose it.
+    const key = dialKey(request.headers.get('CF-Connecting-IP'));
+    if (key !== null && !(await mayDial(env, key))) return text(TOO_MANY_DIALS, 429, { 'retry-after': String(DIAL_WINDOW_SECONDS) });
     // One object per code: everyone who dials the same code meets in the same room.
     return env.ROOMS.get(env.ROOMS.idFromName(code)).fetch(request);
   },

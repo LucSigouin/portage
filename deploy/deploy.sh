@@ -37,7 +37,8 @@ fail() { printf 'STOPPED: %s\nLast lines of %s:\n' "$1" "$LOG" >&2; tail -n 15 "
 grep -q '^/portage/$' "$SITE/site/_headers" || fail 'sigouin-net/site/_headers has no /portage/ block.'
 grep -q '^/portage/workbench$' "$SITE/site/_headers" || fail 'sigouin-net/site/_headers has no /portage/workbench block.'
 
-[ "$(curl -s -m 10 "https://sigouin.net${RELAY_PATH}/health?fresh=$(date +%s)")" = 'portage relay: ok' ] \
+# The relay's first line is its word that it is up. Its second line names its build, which this script does not need.
+[ "$(curl -s -m 10 "https://sigouin.net${RELAY_PATH}/health?fresh=$(date +%s)" | head -n 1)" = 'portage relay: ok' ] \
   || fail 'The relay does not answer on the site. Run deploy/deploy-relay.sh first.'
 
 npm --prefix "$ROOT/game" run check --cache "$WORK/npmcache" >> "$LOG" 2>&1 || fail 'The tests failed.'

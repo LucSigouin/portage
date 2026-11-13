@@ -9,6 +9,11 @@
 # Cloudflare (deploy/login.sh). Never an API token: wrangler runs from an empty folder with no token in sight.
 # The game only uses the relay when it is built with PORTAGE_RELAY=/portage/relay (deploy/deploy.sh does).
 #
+# Every upload is given a name, the commit and the time (BUILD below), which the relay prints as the second
+# line of /health. The script waits for that name, so its checks run against the relay it just uploaded and
+# never against the one that was there before. The last check dials in a loop until the relay's dial limit
+# stops it (at most 150 dials), then waits up to 90 s for the limit to let this address in again.
+#
 # Undo: from an empty folder, `<portage>/relay/node_modules/.bin/wrangler delete --name portage-relay`.
 # Then take PORTAGE_RELAY out of deploy/deploy.sh and deploy the game: the lobby goes back to five entries.
 set -euo pipefail
@@ -17,6 +22,7 @@ ROOT=/Users/ls/Claude-Workspace/personal/portage
 ENV_FILE=/Users/ls/Claude-Workspace/personal/.env
 ROUTE='sigouin.net/portage/relay/*'
 RELAY=wss://sigouin.net/portage/relay
+HEALTH=https://sigouin.net/portage/relay/health
 ORIGIN=https://sigouin.net
 GAME_LIVE=https://sigouin.net/portage/
 WRANGLER="$ROOT/relay/node_modules/.bin/wrangler"
@@ -54,22 +60,21 @@ export CLOUDFLARE_ACCOUNT_ID
 export WRANGLER_SEND_METRICS=false
 # The route and the live list of allowed pages are given here, not in wrangler.jsonc: the file stays the
 # one for this computer (no route, localhost allowed), and the live relay answers the site alone.
-(cd "$STAGE" && "$WRANGLER" deploy --route "$ROUTE" --var "ALLOWED_ORIGINS:$ORIGIN") >> "$LOG" 2>&1 \
-  || fail 'The upload to Cloudflare failed. If it asks for a token, the browser login has expired: run deploy/login.sh.'
-printf '2/4 uploaded commit %s (%s)\n' "$(git -C "$ROOT" rev-parse --short HEAD)" "$(grep -E 'Current Version ID' "$LOG" | tail -n 1 | sed 's/^ *//')"
+# This upload's name: the commit, and the time, so that a second upload of the same commit is told apart too.
+BUILD="$(git -C "$ROOT" rev-parse --short HEAD)-$(date -u +%Y%m%dT%H%M%SZ)"
+(cd "$STAGE" && "$WRANGLER" deploy --route "$ROUTE" --var "ALLOWED_ORIGINS:$ORIGIN" --var "BUILD:$BUILD") >> "$LOG" 2>&1 \
+  || fail "The upload to Cloudflare failed. If it asks for a token, the browser login has expired: run deploy/login.sh. To see which relay answers now: curl $HEALTH"
+printf '2/4 uploaded build %s (%s)\n' "$BUILD" "$(grep -E 'Current Version ID' "$LOG" | tail -n 1 | sed 's/^ *//')"
 
-# The route sits in front of the site. Until it answers, the site's own "not found" page does.
-got=''
-for attempt in $(seq 1 24); do
-  got="$(curl -s -m 10 "https://sigouin.net/portage/relay/health?fresh=$(date +%s)" || true)"
-  [ "$got" = 'portage relay: ok' ] && break
-  sleep 5
-done
-[ "$got" = 'portage relay: ok' ] || fail "https://sigouin.net/portage/relay/health does not answer as the relay. It said: $(printf '%s' "$got" | head -c 80)"
-printf '3/4 the relay answers on the site (%s)\n' "$got"
+# The route sits in front of the site. Until it answers, the site's own "not found" page does. And on every
+# deploy but the first, the relay from before answers "ok" as well: only the build's name tells the two apart.
+node "$ROOT/deploy/wait-relay.mjs" "$HEALTH" "$BUILD" 120 >> "$LOG" 2>&1 \
+  || fail "$HEALTH never answered as build $BUILD. The upload went through, so look at what it says now: curl $HEALTH"
+printf '3/4 the new relay answers on the site (%s)\n' "$(grep -E '^relay build:' "$LOG" | tail -n 1)"
 
-node "$ROOT/deploy/smoke-relay.mjs" "$RELAY" "$ORIGIN" >> "$LOG" 2>&1 || fail 'The live relay failed its smoke test.'
+node "$ROOT/deploy/smoke-relay.mjs" "$RELAY" "$ORIGIN" --build "$BUILD" --limit >> "$LOG" 2>&1 \
+  || fail 'The live relay failed its smoke test. It is live all the same: the upload was not undone.'
 game_after="$(curl -s "${GAME_LIVE}?fresh=$(date +%s)" | shasum -a 256 | cut -d' ' -f1)"
 [ "$game_before" = "$game_after" ] || fail "The live game page changed (${game_before:0:16} to ${game_after:0:16}). It must not."
-printf '4/4 a host and a guest meet through it (%s). The live game page is unchanged (%s).\n' "$(grep -E '^relay:' "$LOG" | tail -n 1)" "${game_after:0:16}"
+printf '4/4 a host and a guest meet through it, and a script that dials in a loop is stopped (%s). The live game page is unchanged (%s).\n' "$(grep -E '^relay:' "$LOG" | tail -n 1)" "${game_after:0:16}"
 printf 'LIVE: %s\n' "$RELAY"

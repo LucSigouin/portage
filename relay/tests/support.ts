@@ -1,6 +1,8 @@
 /** Runs the real Worker locally (wrangler's local mode, workerd) and dials it with real WebSockets. */
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { request } from 'node:http';
 import { RELAY_PROTOCOL } from '../src/room.ts';
 
 const RELAY_FOLDER = `${import.meta.dirname}/../`;
@@ -68,13 +70,73 @@ export interface DialOptions {
   origin?: string | null;
   path?: string;
   protocols?: string[];
+  /**
+   * The address the dial claims to come from, sent as `CF-Connecting-IP`. The local Worker believes it;
+   * Cloudflare itself sets that header and a script cannot. Left out, the dial comes from this computer.
+   */
+  address?: string;
+}
+
+/** The headers a dial carries beside its protocols. */
+const dialHeaders = (options: DialOptions): Record<string, string> => {
+  const origin = options.origin === undefined ? 'http://localhost:5222' : options.origin;
+  return { ...(origin === null ? {} : { Origin: origin }), ...(options.address ? { 'CF-Connecting-IP': options.address } : {}) };
+};
+
+export interface Knock {
+  /** 101 when the relay took the socket, or the status it refused the handshake with. */
+  status: number;
+  /** The words of a refusal. */
+  words: string;
+  /** The `Retry-After` header of a refusal, or null. */
+  retryAfter: string | null;
+}
+
+/**
+ * One dial written by hand, so the answer can be read: a WebSocket object hides the status and the words of a
+ * refused handshake. A socket the relay takes is dropped at once.
+ */
+export function knock(port: number, code: string, role: string, options: DialOptions = {}): Promise<Knock> {
+  const protocols = options.protocols ?? [RELAY_PROTOCOL, ...(options.key ? [`k.${options.key}`] : [])];
+  return new Promise((resolve, reject) => {
+    const dialing = request({
+      host: '127.0.0.1', port, path: `${options.path ?? ''}/room/${code}?role=${role}`,
+      headers: {
+        Connection: 'Upgrade', Upgrade: 'websocket', 'Sec-WebSocket-Version': '13', 'Sec-WebSocket-Key': randomBytes(16).toString('base64'),
+        'Sec-WebSocket-Protocol': protocols.join(', '), ...dialHeaders(options),
+      },
+    });
+    dialing.on('upgrade', (answer, socket) => {
+      socket.destroy();
+      resolve({ status: answer.statusCode ?? 0, words: '', retryAfter: null });
+    });
+    dialing.on('response', (answer) => {
+      let words = '';
+      answer.on('data', (chunk: Buffer) => { words += chunk.toString(); });
+      answer.on('end', () => {
+        const retryAfter = answer.headers['retry-after'];
+        resolve({ status: answer.statusCode ?? 0, words: words.trim(), retryAfter: typeof retryAfter === 'string' ? retryAfter : null });
+      });
+    });
+    dialing.on('error', reject);
+    dialing.end();
+  });
+}
+
+/**
+ * Wait, if need be, until the clock's minute has at least `seconds` left in it. The local stand-in for
+ * Cloudflare's counter starts a new count when the clock's minute turns, so a test that counts dials must
+ * not straddle that turn. (Cloudflare does not say where its own windows start.)
+ */
+export async function awayFromTheMinuteTurn(seconds: number): Promise<void> {
+  const left = 60_000 - (Date.now() % 60_000);
+  if (left < seconds * 1000) await pause(left + 250);
 }
 
 export function dial(port: number, code: string, role: string, options: DialOptions = {}): Dialed {
   const protocols = options.protocols ?? [RELAY_PROTOCOL, ...(options.key ? [`k.${options.key}`] : [])];
-  const origin = options.origin === undefined ? 'http://localhost:5222' : options.origin;
   // Node's WebSocket takes headers beside the protocols: a browser sets Origin by itself.
-  const init = { protocols, headers: origin === null ? {} : { Origin: origin } };
+  const init = { protocols, headers: dialHeaders(options) };
   const socket = new WebSocket(`ws://localhost:${port}${options.path ?? ''}/room/${code}?role=${role}`, init as unknown as string[]);
   const frames: unknown[] = [];
   const waiting: (() => void)[] = [];
