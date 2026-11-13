@@ -156,6 +156,8 @@ describe('standing where the quests send you', () => {
     const bench = landmarkOf('home_knoll', 'stump_bench');
     const state = standingAt('home_knoll', bench.x, bench.z);
     state.time = 21 * HOUR;
-    expect(selectInteractable(state)).toBeNull();
+    // At the stump, F is for the bench (Luc's list, line 21), never for sleep.
+    expect(selectInteractable(state)?.kind).toBe('bench');
+    expect(dispatch(state, { type: 'sleep' })).toMatchObject({ ok: false, reason: 'no_bed_in_reach' });
   });
 });
