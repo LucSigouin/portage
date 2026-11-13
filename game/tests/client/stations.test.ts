@@ -203,6 +203,8 @@ describe('the boat\'s menu: the row of icons', () => {
     const cards = find(drawn, hasClass('iw-boat-tab'));
     expect(cards.map((card) => card.attributes['data-boat-tab'])).toEqual(['builder', 'firebox', 'forge']);
     expect(cards.map((card) => collectText([card]))).toEqual(['Canoe builder', 'Firebox', 'Forge']);
+    // The name is the card's label by itself (the browser spec reads it there: a card may also carry a red !).
+    expect(cards.map((card) => collectText(find([card], hasClass('iw-label'))))).toEqual(['Canoe builder', 'Firebox', 'Forge']);
     expect(cards.map((card) => card.classes.split(' ').includes('iw-on'))).toEqual([false, false, true]);
     expect(cards.map((card) => card.attributes['aria-current'] ?? null)).toEqual([null, null, 'page']);
     expect(cards.map((card) => card.intent)).toEqual([
