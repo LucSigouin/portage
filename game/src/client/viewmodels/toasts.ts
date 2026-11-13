@@ -130,6 +130,9 @@ export function toastForEvent(event: GameEvent, state: GameState, readerId: Play
       return toast('No room for the reward. Claim it from the inventory.', 'warning');
     case 'game_completed':
       return toast('The Beacon is lit.', 'good');
+    case 'spot_marked':
+      // Your own mark is on your map already: the note is for the rest of the crew.
+      return event.who === readerId ? null : toast(`${crewName(state, event.who)} marked a spot on the map`);
     case 'crew_changed': {
       // Your own coming and going is no news to you.
       if (event.who === readerId) return null;

@@ -954,6 +954,8 @@ export const EVENT_CUES: { [Type in GameEventType]: CueName | CueResolver<Type> 
   autosave_requested: null,
   game_completed: 'beacon_lit',
   crew_changed: null,
+  // A crewmate's mark on the map is told by a note, with no sound (the master review, finding 4).
+  spot_marked: null,
 };
 
 /** Event types that are silent on purpose. */

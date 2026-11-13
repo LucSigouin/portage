@@ -475,6 +475,8 @@ type GameEventBody =
   | { type: 'rewards_pending' }
   | { type: 'autosave_requested'; reason: 'landing' | 'sleeping' }
   | { type: 'game_completed' }
+  /** `who` marked a spot on the map for the crew (`sim/pings.ts`). Crew-wide: it carries no `playerId`. */
+  | { type: 'spot_marked'; who: PlayerId }
   /** The crew changed: `who` joined, went away or came back. Crew-wide: it carries no `playerId`. */
   | { type: 'crew_changed'; who: PlayerId; change: 'joined' | 'away' | 'back' };
 
