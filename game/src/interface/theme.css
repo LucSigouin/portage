@@ -1882,6 +1882,18 @@ html.iw-document {
   font-size: 0.86rem;
   line-height: 1.25;
 }
+/* The red ! before what an open quest asks for: the mark says it, the red repeats it. */
+.iw-entry-text .iw-quest-mark {
+  display: inline-block;
+  width: 0.9rem;
+  margin-right: 0.15rem;
+  font-family: var(--iw-hand);
+  font-weight: 700;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--iw-rust-deep);
+  text-align: center;
+}
 .iw-blocked {
   margin: 0 0 0.6rem;
   padding: 0.4rem 0.8rem 0.25rem;

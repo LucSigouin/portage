@@ -275,6 +275,11 @@ export interface RecipeRowModel {
   /** What is missing that is not an item, as chips. The station is left out: its heading says "not in reach". */
   needs: NeedChipModel[];
   /**
+   * "For Ribs and rails" when an open quest of the crew's still asks for what this makes, drawn as a red ! before
+   * the name (Luc's bugfix list, line 19). Empty otherwise: no quest, a quest not yet given or done, a step done.
+   */
+  questText: string;
+  /**
    * Where a missing ingredient comes from, when it comes from nowhere a player would look: dirty water is scooped,
    * and the button for it is in the inventory. An empty string otherwise.
    */
@@ -294,6 +299,8 @@ export interface BuildRowModel {
   missingText: string;
   /** What is missing that is not an item, as chips. */
   needs: NeedChipModel[];
+  /** "For Steady now" when an open quest of the crew's still asks for this part or hull. Empty otherwise. */
+  questText: string;
   build: ButtonModel | null;
 }
 

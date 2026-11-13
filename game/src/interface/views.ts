@@ -401,9 +401,18 @@ function inventoryView(panel: Extract<PanelModel, { id: 'inventory' }>, open: Re
         ] : null))));
 }
 
+/**
+ * The red ! before a recipe or a part an open quest still asks for (Luc's bugfix list, line 19). It is a mark, not a
+ * colour alone: the ! itself says it, and its title and label name the quest. It stands still.
+ */
+const questMarkView = (questText: string): ViewNode | null => (questText
+  ? h('b.iw-quest-mark', { key: 'quest', title: questText, 'aria-label': questText }, '!')
+  : null);
+
 function recipeView(recipe: RecipeRowModel): ViewNode {
   return h('li.iw-entry', { key: recipe.recipeId, class: recipe.known ? '' : 'iw-unknown' },
     h('div.iw-entry-text', null,
+      questMarkView(recipe.questText),
       recipe.itemId ? itemIconView(recipe.itemId, 'iw-lead') : null,
       h('b', null, recipe.name), ' ', h('span.iw-count', null, recipe.outputText),
       recipe.known ? null : h('small.iw-kind', null, 'not learned'),
@@ -425,6 +434,7 @@ function craftingView(panel: Extract<PanelModel, { id: 'crafting' }>): ViewNode[
 function buildRowView(row: BuildRowModel): ViewNode {
   return h('li.iw-entry', { key: row.id, class: row.built ? 'iw-built' : '' },
     h('div.iw-entry-text', null,
+      questMarkView(row.questText),
       h('b', null, row.name),
       row.built ? h('span.iw-stamp', null, icon(ICON.check, 'iw-ready'), 'built') : null,
       h('small', null, row.description),

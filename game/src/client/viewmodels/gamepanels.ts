@@ -1,10 +1,10 @@
 /** The in-game panels: inventory, crafting, canoe builder, quest log, map and dialogue. */
 import {
-  ATTACHMENTS, HULL_TIERS, ISLANDS, ITEMS, NPCS, QUESTS, RECIPES, REGIONS, STATIONS, TUNING, isStackable,
+  ATTACHMENTS, HULL_TIERS, ISLANDS, ITEMS, NPCS, QUESTS, RECIPE_IDS, RECIPES, REGIONS, STATIONS, STOCK_FOOD_IDS, TUNING, isStackable,
 } from '../../data/index.ts';
-import type { ItemAmount, ItemId, StationId } from '../../data/index.ts';
+import type { AttachmentId, ItemAmount, ItemId, StationId } from '../../data/index.ts';
 import {
-  selectBuildOptions, selectCanoeStats, selectCraftableRecipes, selectDialogue, selectInventory, selectMap,
+  selectActiveQuests, selectBuildOptions, selectCanoeStats, selectCraftableRecipes, selectDialogue, selectInventory, selectMap,
   selectQuestLog,
 } from '../../sim/index.ts';
 import type { Command, Container, GameState, InventoryView, ItemStack, Missing, PlayerId, QuestView } from '../../sim/index.ts';
@@ -54,6 +54,59 @@ export function needChips(missing: Missing | null, withStation: boolean): NeedCh
   for (const attachmentId of missing.attachments) chips.push({ kind: 'attachment', name: ATTACHMENTS[attachmentId].name });
   if (missing.flag) chips.push({ kind: 'person', name: capitalise(FLAG_SOURCES[missing.flag]) });
   return chips;
+}
+
+/** What the crew's open quests still ask to be made, built or fitted, each with "For <quest name>". */
+export interface QuestWants {
+  items: Map<ItemId, string>;
+  attachments: Map<AttachmentId, string>;
+  hullTiers: Map<number, string>;
+}
+
+/**
+ * What the open quests still ask for, for the red ! in the crafting panel and the canoe builder (Luc's bugfix list,
+ * line 19). Only quests the crew has been given and not finished ("active"), and only their steps not yet done. A quest
+ * not yet open, one ready to hand in, one done, and a step already done ask for nothing. Quests are the crew's
+ * (`state.quests` is shared): every crewmate sees the same marks.
+ */
+export function questWants(state: GameState): QuestWants {
+  const wants: QuestWants = { items: new Map(), attachments: new Map(), hullTiers: new Map() };
+  const want = <Key>(into: Map<Key, string>, key: Key, text: string): void => {
+    if (!into.has(key)) into.set(key, text);
+  };
+  for (const quest of selectActiveQuests(state)) {
+    if (quest.status !== 'active') continue;
+    const text = `For ${quest.name}`;
+    QUESTS[quest.questId].objectives.forEach((objective, index) => {
+      if (quest.objectives[index]?.done) return;
+      switch (objective.type) {
+        case 'have_item':
+        case 'deliver':
+          want(wants.items, objective.itemId, text);
+          break;
+        case 'have_tool':
+          want(wants.items, objective.toolId as ItemId, text);
+          break;
+        case 'craft':
+          for (const itemId of objective.itemIds) want(wants.items, itemId, text);
+          break;
+        case 'stock':
+          for (const itemId of [...STOCK_FOOD_IDS, 'clean_water' as ItemId]) want(wants.items, itemId, text);
+          break;
+        case 'smoke':
+          for (const recipeId of RECIPE_IDS) if (RECIPES[recipeId].station === 'smoker') want(wants.items, RECIPES[recipeId].output.itemId, text);
+          break;
+        case 'hull':
+          want(wants.hullTiers, objective.tier, text);
+          break;
+        case 'attachment':
+          want(wants.attachments, objective.attachmentId, text);
+          break;
+        default:
+      }
+    });
+  }
+  return wants;
 }
 
 // --- Inventory -----------------------------------------------------------------
@@ -136,6 +189,7 @@ const scoopText = (bindings: KeyBindings): string => `Scoop it at the water, fro
 export function buildCraftingPanel(state: GameState, playerId: PlayerId = 0, bindings: KeyBindings = DEFAULT_KEY_BINDINGS): PanelBody<'crafting'> {
   const inventory = selectInventory(state, playerId);
   const availability = selectCraftableRecipes(state, playerId);
+  const wants = questWants(state);
   return {
     id: 'crafting',
     stations: STATION_ORDER.map((stationId) => ({
@@ -162,6 +216,7 @@ export function buildCraftingPanel(state: GameState, playerId: PlayerId = 0, bin
             ] : [],
             missingText,
             needs: entry.known ? needChips(entry.missing, false) : [],
+            questText: entry.known ? wants.items.get(recipe.output.itemId) ?? '' : '',
             sourceText: entry.known && entry.missing.items.some((item) => item.itemId === 'dirty_water') ? scoopText(bindings) : '',
             craft: button('Make', command({ type: 'craft', recipeId: recipe.id, count: 1 }), entry.craftable, missingText || null),
             craftAll: entry.maximumCount > 1
@@ -192,6 +247,7 @@ function buildRow(
   blockedText: string,
   state: GameState,
   inventory: InventoryView,
+  questText: string,
 ): BuildRowModel {
   const missingText = built ? '' : needsText(missing);
   return {
@@ -199,6 +255,7 @@ function buildRow(
     costs: built ? [] : costRows(costs, inventory, state),
     missingText,
     needs: built ? [] : needChips(missing, true),
+    questText: built ? '' : questText,
     build: built ? null : button('Build', intent, buildable, missingText || blockedText || null),
   };
 }
@@ -209,6 +266,7 @@ export function buildCanoeBuilderPanel(state: GameState, playerId: PlayerId = 0)
   const stats = selectCanoeStats(state);
   const blockedText = options.blockedReason ? BUILD_BLOCKED_TEXT[options.blockedReason] : '';
   const nextHull = options.hull ? HULL_TIERS[options.hull.tier] : null;
+  const wants = questWants(state);
   return {
     id: 'canoe_builder',
     blockedText,
@@ -223,14 +281,16 @@ export function buildCanoeBuilderPanel(state: GameState, playerId: PlayerId = 0)
     hull: options.hull && nextHull
       ? buildRow('hull', `Hull: ${nextHull.name}`, nextHull.description,
         [...nextHull.cost, ...nextHull.tools.map((toolId) => ({ itemId: toolId as ItemId, count: 1 }))],
-        false, options.hull.buildable, options.hull.missing, command({ type: 'upgrade_hull' }), blockedText, state, inventory)
+        false, options.hull.buildable, options.hull.missing, command({ type: 'upgrade_hull' }), blockedText, state, inventory,
+        wants.hullTiers.get(options.hull.tier) ?? '')
       : null,
     attachments: options.attachments.map((entry) => {
       const definition = ATTACHMENTS[entry.attachmentId];
       return buildRow(entry.attachmentId, definition.name, definition.description,
         [...definition.cost, ...definition.tools.map((toolId) => ({ itemId: toolId as ItemId, count: 1 }))],
         entry.built, entry.buildable, entry.missing,
-        command({ type: 'build_attachment', attachmentId: entry.attachmentId }), blockedText, state, inventory);
+        command({ type: 'build_attachment', attachmentId: entry.attachmentId }), blockedText, state, inventory,
+        wants.attachments.get(entry.attachmentId) ?? '');
     }),
   };
 }
