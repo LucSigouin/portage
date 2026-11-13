@@ -1,7 +1,7 @@
 import { TUNING } from '../data/tuning.ts';
 import type { GameState, PlayerState, StepInput } from './types.ts';
 import { bodyBlocked } from './solids.ts';
-import { groundHeight } from './world.ts';
+import { bearingDifference, groundHeight } from './world.ts';
 
 /**
  * True when a step from one ground point to another is allowed: not deeper
@@ -38,8 +38,28 @@ function slideAlong(stepX: number, stepZ: number, free: (toX: number, toZ: numbe
   return null;
 }
 
-/** One fixed step of one player on foot. Movement is relative to their camera bearing. */
+/**
+ * The share of full speed a walker keeps while turning: all of it up to 60 degrees off the way the keys point (a
+ * diagonal, a camera being turned), half at a right angle, none past 120 degrees, where the figure turns on the
+ * spot before it sets off. So an about-face is a pivot, not a wide loop.
+ */
+function turningShare(offBy: number): number {
+  return Math.max(0, Math.min(1, Math.cos(offBy) + 0.5));
+}
+
+/**
+ * One fixed step of one player on foot. The keys are relative to their camera bearing: W goes the way the camera
+ * looks. The figure turns toward the way the keys point at `TUNING.foot.turnRate` and always walks the way it faces;
+ * its speed eases toward the walk or the run (`acceleration`, `braking`), and eases out when the keys come up.
+ */
 export function stepOnFoot(state: GameState, player: PlayerState, input: StepInput, deltaSeconds: number): void {
+  const foot = TUNING.foot;
+  // Nothing heard from this player for this step: they stay exactly as they are.
+  if (input.hold) {
+    player.running = false;
+    player.exerting = false;
+    return;
+  }
   let moveX = input.moveX;
   let moveY = input.moveY;
   const length = Math.hypot(moveX, moveY);
@@ -47,20 +67,37 @@ export function stepOnFoot(state: GameState, player: PlayerState, input: StepInp
     moveX /= length;
     moveY /= length;
   }
-  const moving = length > 0.01;
-  player.running = moving && input.run && player.energy >= TUNING.survival.minimumEnergyToExert;
+  const pressing = length > 0.01;
+  player.running = pressing && input.run && player.energy >= TUNING.survival.minimumEnergyToExert;
   player.exerting = player.running;
-  if (!moving) return;
 
-  // Camera-relative to world: forward is the camera bearing, right is 90 degrees clockwise of it.
-  const sine = Math.sin(input.cameraYaw);
-  const cosine = Math.cos(input.cameraYaw);
-  const worldX = moveY * sine + moveX * cosine;
-  const worldZ = -moveY * cosine + moveX * sine;
-  const speed = (player.running ? TUNING.foot.runSpeed : TUNING.foot.walkSpeed) * Math.min(1, length);
-  const stepX = worldX * speed * deltaSeconds;
-  const stepZ = worldZ * speed * deltaSeconds;
   const { x, z } = player.position;
+  // A walk carries on only from where the last step left the player. Anyone put somewhere else (a landing, a fail,
+  // a load, a teleport in a test) starts from a stand: no lurch from a speed they had before.
+  const gait = player.gait;
+  let speed = gait !== undefined && gait.x === x && gait.z === z ? Math.max(0, Math.min(gait.speed, foot.runSpeed)) : 0;
+  if (!pressing && speed === 0) return;
+
+  // Turn toward the keys, at most the turn rate, then ease the speed toward what the keys ask at this heading.
+  let heading = player.heading;
+  let target = 0;
+  if (pressing) {
+    // Camera-relative to world: forward is the camera bearing, right is 90 degrees clockwise of it.
+    const sine = Math.sin(input.cameraYaw);
+    const cosine = Math.cos(input.cameraYaw);
+    const wanted = Math.atan2(moveY * sine + moveX * cosine, moveY * cosine - moveX * sine);
+    const offBy = bearingDifference(wanted, heading);
+    const turn = foot.turnRate * deltaSeconds;
+    heading = Math.abs(offBy) <= turn ? wanted : bearingDifference(heading + Math.sign(offBy) * turn, 0);
+    target = (player.running ? foot.runSpeed : foot.walkSpeed) * Math.min(1, length) * turningShare(bearingDifference(wanted, heading));
+  }
+  speed = speed < target ? Math.min(target, speed + foot.acceleration * deltaSeconds) : Math.max(target, speed - foot.braking * deltaSeconds);
+  player.heading = heading;
+  player.gait = { speed, x, z };
+  if (speed === 0) return;
+
+  const stepX = Math.sin(heading) * speed * deltaSeconds;
+  const stepZ = -Math.cos(heading) * speed * deltaSeconds;
 
   // Trees, rocks and landmarks hold a walker (Luc's list, line 1). One already in one (put there by a landing, a
   // fail or an old save) is not held by it: they walk out, and from then on it holds them.
@@ -84,9 +121,10 @@ export function stepOnFoot(state: GameState, player: PlayerState, input: StepInp
       nextZ = z + stepZ;
     }
   }
+  if (nextX === x && nextZ === z) return;
   state.statistics.distanceWalked += Math.hypot(nextX - x, nextZ - z);
   player.position.x = nextX;
   player.position.z = nextZ;
   player.position.y = groundHeight(nextX, nextZ);
-  player.heading = Math.atan2(worldX, -worldZ);
+  player.gait = { speed, x: nextX, z: nextZ };
 }
