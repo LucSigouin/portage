@@ -23,6 +23,7 @@ import type { DebugModel, InterfaceModel, PanelModel, ToastModel } from './types
 export * from './types.ts';
 export * from './format.ts';
 export * from './hud.ts';
+export * from './shore.ts';
 export * from './toasts.ts';
 export * from './gamepanels.ts';
 export * from './menus.ts';

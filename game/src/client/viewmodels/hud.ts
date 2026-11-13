@@ -8,6 +8,7 @@ import {
 } from '../../sim/index.ts';
 import type { GameState, PlayerId, PlayerState, QuestView, TimeOfDay } from '../../sim/index.ts';
 import { HOST_QUIET_TEXT } from './crew.ts';
+import { atTheShore } from './shore.ts';
 import { SLEEP_FROM_TEXT, bearingDegrees, cardinalName, distanceText, durationText, primaryKey } from './format.ts';
 import type {
   CompassMarkModel, CompassModel, CrewRowModel, HotbarSlotModel, HudModel, MeterModel, ObjectiveRowModel, PromptModel,
@@ -278,6 +279,7 @@ export function buildHudModel(
       : `${weather.name}, ${nextName} in ${durationText(weather.secondsUntilChange)}`,
     stormWarning: weather.nextKind === 'storm' && weather.kind !== 'storm' && weather.secondsUntilChange <= 90,
     placeText: island ?? REGIONS_BY_ID[player.regionId].name,
+    islandNames: atTheShore(player),
     canoeLines: buildCanoeLines(state, playerId),
     hint: buildHint(state, settings, playerId),
     lineNote: hostQuiet ? HOST_QUIET_TEXT : null,

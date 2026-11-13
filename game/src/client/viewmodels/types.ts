@@ -145,6 +145,11 @@ export interface HudModel {
   stormWarning: boolean;
   /** "The Shallows", or the island name when standing on one. */
   placeText: string;
+  /**
+   * True while the world names the islands: aboard, or on foot within `SHORE_METRES` (12 m) of open water.
+   * Inland, at a camp or among the trees, false. (`shore.ts`; the look draws the names.)
+   */
+  islandNames: boolean;
   /** Canoe status lines: speed, sail, lantern, rough water. Empty on foot. */
   canoeLines: { text: string; tone: Tone }[];
   /** A one-line tip, when the hints setting is on and one applies. */
