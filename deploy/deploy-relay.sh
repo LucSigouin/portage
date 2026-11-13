@@ -17,7 +17,8 @@
 # Feedback (relay/src/feedback.ts): play testers' notes are kept in the D1 database `portage-feedback` on
 # Luc's account. This script looks the database up by its name and gives its id to the upload. When the account
 # has no such database the relay is uploaded without a store, and answers every note with "feedback is off".
-# FEEDBACK=off below does the same and keeps what is stored. Read the notes: deploy/read-feedback.sh.
+# FEEDBACK=off below does the same and keeps what is stored: it does not even look the database up, so the
+# relay can go out on a day the list of databases cannot be had. Read the notes: deploy/read-feedback.sh.
 #
 # Undo: from an empty folder, `<portage>/relay/node_modules/.bin/wrangler delete --name portage-relay`.
 # Then take PORTAGE_RELAY out of deploy/deploy.sh and deploy the game: the lobby goes back to five entries.
@@ -73,8 +74,15 @@ BUILD="$(git -C "$ROOT" rev-parse --short HEAD)-$(date -u +%Y%m%dT%H%M%SZ)"
 
 # The feedback store. Its id is not in wrangler.jsonc either: the file holds a stand-in for this computer.
 # FEEDBACK_DATABASE_ID=<id> in front of this script gives the id by hand and skips the look-up.
+# With FEEDBACK=off there is no look-up either: a relay that refuses every note needs no store, so a list of
+# databases that cannot be had (a login that ran out, Cloudflare's own trouble) does not stop the relay going out.
+# The relay is then uploaded without the store. The database is not touched: what is stored stays.
+# (The lines between the two marks are run by relay/tests/deploy-store.test.ts with a stand-in for wrangler.)
+# feedback-store-choice:begin
+feedback_off=0
+[ "$(printf '%s' "$FEEDBACK" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')" = off ] && feedback_off=1
 store_id="${FEEDBACK_DATABASE_ID:-}"
-if [ -z "$store_id" ]; then
+if [ -z "$store_id" ] && [ "$feedback_off" = 0 ]; then
   (cd "$STAGE" && "$WRANGLER" d1 list --json) > "$WORK/d1-list.json" 2>> "$LOG" \
     || fail "Could not list the account's databases. If it asks for a token, the browser login has expired: run deploy/login.sh."
   look=0
@@ -85,12 +93,18 @@ fi
 if [ -n "$store_id" ]; then
   node "$ROOT/deploy/feedback-store.mjs" bind "$STAGE/wrangler.jsonc" "$store_id" >> "$LOG" 2>&1 || fail 'The feedback store could not be put into the upload.'
   feedback_check="$FEEDBACK"
-  feedback_words="feedback store $FEEDBACK_STORE ${store_id:0:8}, feedback $FEEDBACK"
+  [ "$feedback_off" = 1 ] && feedback_check=off
+  feedback_words="feedback store $FEEDBACK_STORE ${store_id:0:8}, feedback $feedback_check"
+elif [ "$feedback_off" = 1 ]; then
+  node "$ROOT/deploy/feedback-store.mjs" cut "$STAGE/wrangler.jsonc" >> "$LOG" 2>&1 || fail 'The feedback store could not be taken out of the upload.'
+  feedback_check=off
+  feedback_words="feedback off: the databases were not looked up, the relay goes out without the store, and what is stored stays"
 else
   node "$ROOT/deploy/feedback-store.mjs" cut "$STAGE/wrangler.jsonc" >> "$LOG" 2>&1 || fail 'The feedback store could not be taken out of the upload.'
   feedback_check=off
   feedback_words="no database called $FEEDBACK_STORE on the account, so feedback is off (relay/README.md says how to make it)"
 fi
+# feedback-store-choice:end
 
 (cd "$STAGE" && "$WRANGLER" deploy --route "$ROUTE" --var "ALLOWED_ORIGINS:$ORIGIN" --var "BUILD:$BUILD" --var "FEEDBACK:$FEEDBACK") >> "$LOG" 2>&1 \
   || fail "The upload to Cloudflare failed. If it asks for a token, the browser login has expired: run deploy/login.sh. To see which relay answers now: curl $HEALTH"
