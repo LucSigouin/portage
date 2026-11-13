@@ -6,7 +6,7 @@
   ],
   "title": "Portage",
   "subtitle": "The workbench: every step so far",
-  "updated": "2026-11-13, morning",
+  "updated": "2026-11-13, 18:03",
   "ask": "A flooded world and all you have is a canoe. Scavenge islands, craft, and build a crazy impressive canoe.",
   "now": [
     {
@@ -16,27 +16,27 @@
     },
     {
       "label": "Stage",
-      "value": "Version 1 is live, with the night's fixes"
+      "value": "Your whole bugfix list is live: Version 1.0.319"
     },
     {
       "label": "Tests",
-      "value": "1159 unit, 119 in a browser"
+      "value": "1864 unit, 87 relay, 163 in a browser: all pass in one run"
     },
     {
       "label": "Running",
-      "value": "Build payoff, a hull upgrade you can see, a dial limit"
+      "value": "Nothing. The round is done"
     },
     {
       "label": "Live now",
-      "value": "Everything built, with the seat fix and the autosave note"
+      "value": "All 34 items of your list, the relay with its dial limit, feedback"
     },
     {
       "label": "Not live yet",
-      "value": "Nothing is waiting to go live"
+      "value": "Two small fixes from the second review: the Z, the capsize"
     },
     {
       "label": "Waiting on you",
-      "value": "Play with a friend on two computers"
+      "value": "Play it, and rule on the calls in the review"
     }
   ],
   "steps": [
@@ -726,6 +726,157 @@
         }
       ],
       "report": "docs/report-rescore.html"
+    },
+    {
+      "when": "Nov 13",
+      "title": "Your bugfix list, round 1",
+      "state": "done",
+      "asked": "Please read the bugfix.md and make a plan to spin up agents and fix all of these.",
+      "built": [
+        "Trees, rocks and landmarks are solid: you slide along them",
+        "Sleep is at a bed, not at the campfire",
+        "Health bottom left, quest top left, top right kept for the minimap",
+        "Island names show only at the shore or in the canoe",
+        "Q paddles for you until you press it again",
+        "Crafting shows a tick or a cross, no \"Needs\" lines",
+        "A red ! marks what a quest of yours needs crafted",
+        "Stow and craft from anywhere on the island the canoe is at",
+        "Lost one-time items can be made again",
+        "Walking reworked: eased starts and stops, the paddle stays in the canoe",
+        "The tool you hold is in the hand. Sharp outline. No campfire smoke",
+        "The rowing arms no longer go backwards or into the hull",
+        "F at the stump: \"Use the bench\"",
+        "The asset viewer is a guide: where to find each item, what it is for",
+        "A still view of the canoe each time you build, 2 seconds, any key ends it"
+      ],
+      "proof": [
+        "1409 unit tests pass with all eight branches merged",
+        "Six bot runs reach the Beacon with 0 fails",
+        "Old live saves still load and finish"
+      ],
+      "snags": [
+        "Not live, not in main: it waits for your yes",
+        "Browser tests have not run on it yet",
+        "Merged, the bot got stuck on Cabin Roofs. A fixer taught it to step clear",
+        "A player can still catch on one roof corner there. Any other direction frees them",
+        "The first hull patch shows less than aimed for",
+        "Canoe storage does not grow with the crew. My advice: leave it"
+      ],
+      "pictures": [],
+      "report": ""
+    },
+    {
+      "when": "Nov 13",
+      "title": "Round 2: every tree, a real map, three quests",
+      "state": "done",
+      "asked": "Any tree or collectable on an island should be usable. Track multiple quests at once.",
+      "built": [
+        "Every tree and boulder can be used: 977 of them",
+        "Everything that refills comes back in 10 minutes",
+        "A round map of the real valley, north up",
+        "Fog of war: it clears as the crew travels, shared by everyone",
+        "A minimap, top right",
+        "Up to three quests on your card, each player their own"
+      ],
+      "proof": [
+        "1449 unit tests pass with the map merged",
+        "17 old saves load as version 4 and reach the Beacon",
+        "Six bot runs, 0 fails. The map costs under a kilobyte per save"
+      ],
+      "snags": [
+        "With every tree usable the bot finishes 13 minutes sooner: 83, was 96",
+        "The map builder sat idle 43 minutes: my watcher missed its line. Fixed",
+        "Island names crowd each other in the Narrows on the full chart"
+      ],
+      "pictures": [
+        {
+          "src": "../scratch/portage/fix-map/pics-2/map-mid-1920.png",
+          "alt": "The round map with fog of war, and the minimap top right"
+        }
+      ],
+      "report": ""
+    },
+    {
+      "when": "Nov 13",
+      "title": "Round 3: eight builders at once",
+      "state": "done",
+      "asked": "Spin up as many agents as we can. I want this entire list in order asap. I also want to do round 3.",
+      "built": [
+        "Done: B opens on the water, with a menu for each station aboard",
+        "Done: recipes you cannot make here are hidden, not greyed",
+        "Done: a card in the middle of the screen at a new place",
+        "Done: three chests after the cargo rack, up to 40 stacks",
+        "Done: inventory as an icon grid, tool belt order, shift+click, hover+Q",
+        "Done: jump on Space, 0.9 m high. The camera does not hop",
+        "Done: the lobby shows your canoe from your last save, as a still sketch",
+        "Done: a feedback menu, and a store for the notes. Built here, not live",
+        "Done: ping the map, a still beam of light in your colour"
+      ],
+      "proof": [
+        "Each finished branch passed its own unit tests, 1433 to 1468",
+        "All nine branches merged: 1802 unit tests and 80 relay tests pass",
+        "The bot plays the identical game with each of them"
+      ],
+      "snags": [
+        "Two merged tests assumed the old save and wire versions. Fixed, seen red",
+        "A jump does not free the Cabin Roofs corner snag",
+        "First browser run, on eight branches: 137 pass, 19 red",
+        "Look, weather, speed, bot and viewer tests all pass",
+        "Red: co-op join, settings, clipping, the inventory, feedback, the lobby sketch",
+        "The lobby sketch and the new Feedback line overlap: a test caught it",
+        "Player 3 has a pale toque: their beam is a warm grey by day",
+        "Feedback has never touched Cloudflare: going live is four steps, yours to start",
+        "Eight builders queue for one test lock on this Mac",
+        "Nobody has watched the arrival card move: yours to judge",
+        "From straight behind, the deck chests hide behind the smoker and forge",
+        "A dropped stack is gone, with no \"are you sure\""
+      ],
+      "pictures": [
+        {
+          "src": "../scratch/portage/r3-stations/pictures/after/b-four-afloat-workbench-1920.png",
+          "alt": "B on the water: an icon for each station, the workbench menu open"
+        },
+        {
+          "src": "../scratch/portage/r3-arrival/shots/strip-1920-5-hold.png",
+          "alt": "The arrival card at Steeple Rock"
+        }
+      ],
+      "report": ""
+    },
+    {
+      "when": "Nov 13",
+      "title": "One test run, one fixer, one reviewer, one ask",
+      "state": "done",
+      "asked": "Wait for everything to be done to push anything, or ask me to push.",
+      "built": [
+        "Done: first run 137 pass, 19 red. The fixer made all 19 green",
+        "Done: final tree, all nine branches: 1804 unit, 80 relay, 155 of 156 browser",
+        "The 156th, the bot run, passed twice when run alone",
+        "Done: the review. List 8, look 9, together 8, plays 8, solid 7, friends 7",
+        "Done: the fix round. Take a drop back with Z, the map says how to mark, words fixed",
+        "Done: every test again on the fixed tree: 1864 unit, 87 relay, 163 browser, 0 red",
+        "Done: the second score. List 8, look 9, together 9, plays 8, solid 8, friends 8",
+        "The reviewer says: put it live",
+        "You said yes. It went live the same evening",
+        "Then one ask: merge into main, push, deploy"
+      ],
+      "proof": [
+        "Three of the 19 were game bugs. Each is fixed, with a unit test",
+        "One was live already: writes to a closing connection in co-op",
+        "The bot reaches the Beacon in 89 minutes, 0 fails, 60 frames a second"
+      ],
+      "snags": [
+        "The bot run read 44 frames a second once, with the reviewer busy on this Mac",
+        "Its own work stayed at 2 to 3 ms a frame, so the chip was busy, not the game",
+        "The lobby Feedback line lost its side words, to clear the canoe sketch",
+        "Review: a stack dropped with Q is gone for good. It gets a way back",
+        "Review: nothing on the map says a click marks a spot",
+        "Review: quest 3 names the wrong island, How to Play is behind",
+        "Second review: the Z on the take-back note reads as a 2. Not fixed yet",
+        "Second review: a drop just before a capsize dodges the capsize. Not fixed yet"
+      ],
+      "pictures": [],
+      "report": ""
     }
   ],
   "calls": [
@@ -746,7 +897,13 @@
     "Keep it local until I test",
     "Headless tests, one at a time",
     "Sonnet for the asset viewer",
-    "The viewer is public at /portage-assets"
+    "The viewer is public at /portage-assets",
+    "Nothing into main without my yes",
+    "Test once, at the end",
+    "As many builders as have separate files",
+    "Workers compact at 40% context",
+    "Fable 5.2 on high for builders",
+    "Push it live, the Z can wait"
   ],
   "snags": [
     "Wrong model alias at the start. Caught and switched to Fable 5.2",
@@ -763,28 +920,29 @@
     "The work account ran out overnight. The morning target was missed",
     "Four sessions tested at once and the Mac froze. Now one test at a time",
     "The Mac slept in the middle of a test, twice",
-    "Claude Code's install broke on Nov 12. No new worker until it is repaired"
+    "Claude Code's install broke on Nov 12. No new worker until it is repaired",
+    "A builder waited 43 minutes on me: my watcher missed its line. Fixed and tested"
   ],
   "numbers": [
     {
       "label": "Commits",
-      "value": "207"
+      "value": "319"
     },
     {
       "label": "Worker runs",
-      "value": "44"
+      "value": "69"
     },
     {
       "label": "Unit tests",
-      "value": "1159"
+      "value": "1864"
     },
     {
       "label": "Browser tests",
-      "value": "119"
+      "value": "163"
     },
     {
       "label": "Lines of game code",
-      "value": "42,000"
+      "value": "53,000"
     },
     {
       "label": "Issues",
@@ -792,20 +950,28 @@
     },
     {
       "label": "Deploys",
-      "value": "11"
+      "value": "12"
     },
     {
       "label": "Agent hours",
-      "value": "27, over 31 on the clock"
+      "value": "27 by the morning of Nov 13, not counted since"
     },
     {
       "label": "Cost at API list prices",
-      "value": "about $637"
+      "value": "about $637 by the morning of Nov 13"
     }
   ],
   "left": [
     {
-      "what": "Your calls from the review and the re-score",
+      "what": "Two small fixes from the second review: the Z, the capsize",
+      "hours": "0.5"
+    },
+    {
+      "what": "The Cloudflare rate rule in front of the relay",
+      "hours": "yours"
+    },
+    {
+      "what": "Your calls from the review: sleep, the beam by day, the spruce, the birches",
       "hours": "yours"
     },
     {
@@ -813,33 +979,23 @@
       "hours": "yours"
     },
     {
-      "what": "A payoff when you build, and a first hull upgrade you can see",
-      "hours": "3"
-    },
-    {
-      "what": "A dial limit on the relay (a Cloudflare rate rule)",
-      "hours": "0.5"
-    },
-    {
-      "what": "The relay deploy should tell the new relay from the old",
-      "hours": "0.5"
-    },
-    {
-      "what": "Ribbed hull, cargo rack, hull floor",
-      "hours": "3"
-    },
-    {
       "what": "Phone controls",
       "hours": "not in version 1"
     }
   ],
   "yours": [
-    "Play the live game: your old save continues",
+    "The arrival card: watch it once, Animated and Still",
+    "How walking and the jump feel in your hands",
+    "Chests: the names, the costs, and how they sit on the deck",
+    "The lobby canoe sketch: is it big enough?",
+    "The ping beam: bold enough by day, far away?",
+    "Your line \"sleep is at the campfire not the tent\": built as sleep only at a bed",
+    "A spruce hides you while you gather from it",
+    "Home Knoll birches give bark now, so the first voyage is optional",
+    "Where feedback notes are kept: a small database on your Cloudflare",
     "Host a crew and send the link to a friend on another computer",
     "The faster canoe: is it quick enough, and calm to watch?",
-    "Your 5120 wide screen: steady 60, or every pixel?",
-    "Storm, sound and motion: still yours to judge",
-    "Starting canoe: weathered grey, or red?"
+    "Storm, sound and motion: still yours to judge"
   ],
   "links": [
     {

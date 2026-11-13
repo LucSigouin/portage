@@ -24,7 +24,7 @@ Done:
 - F is the action key, the lantern is on L, and scavenging takes one press.
 - A drawn icon beside every item name, 54 in all.
 - Each crew member sits in their own seat, wears their own colours, and paddles, bails, sleeps and walks for themselves.
-- The canoe: four hull tiers you can tell apart, all 19 attachments, the three survivors.
+- The canoe: four hull tiers you can tell apart, all 22 attachments, the three survivors.
 - The valley: every landmark and scavenge node drawn, all 15 islands told apart by their outline.
 - A crew list in the HUD, crewmates on the compass and the map, and notes for the whole crew.
 - Weather and night: rain, storm, fog, stars, and light from the lantern, the campfire and the Beacon. Nothing flashes.
