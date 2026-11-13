@@ -88,13 +88,14 @@ function boot(): void {
   // `?perf=1`: the performance readout. It plays in a storage that forgets, so saves and settings are never touched.
   const perf = new URLSearchParams(window.location.search).get('perf') === '1';
   const worldView = createWorldView();
-  // The storage the game plays in. The debug switches play in one that forgets, so real saves are never touched.
-  const storage = parameters.sandbox || perf ? createMemoryStorage() : browserStorage();
+  // The storage the game plays in, made once: the app saves in it and the lobby's preview reads the last save from it.
+  // (Worded as it always was: `tests/perf/readout.test.ts` reads this line to see that the readout plays in a storage that forgets.)
+  const played = { storage: parameters.sandbox || perf ? createMemoryStorage() : browserStorage() };
   // The lobby shows the canoe of the save played last (`interface/preview-host.ts`): the interface, with that added.
   const gameInterface = withCanoePreview(createGameInterface(), {
     slotSummaries: () => app.session.slotSummaries(),
     latestSlot: () => app.session.latestSlot(),
-    load: (slot) => createSaveStore(storage).load(slot),
+    load: (slot) => createSaveStore(played.storage).load(slot),
     draw: drawCanoeSketch,
   });
   const audio = createAudio();
@@ -104,7 +105,7 @@ function boot(): void {
     worldView,
     gameInterface,
     audio,
-    storage,
+    storage: played.storage,
     stats: () => loop?.stats ?? { framesPerSecond: 0, frameMilliseconds: 0, workMilliseconds: 0 },
     forceFrameRate: parameters.showFrameRate,
   });

@@ -4,8 +4,9 @@
  * It is the game's own canoe (`CanoeView`, so every hull, mend and attachment is the one the game draws, and
  * anything added to the canoe later is in the picture with no change here) put through the game's own frame
  * pipeline (`createPost`: washes, ink buffer, pen), alone on nothing: no water, no sky, no paper. The frame is
- * drawn on black and on white and the two make one see-through picture (`viewer/matte.ts`), which the lobby
- * lays on its own paper.
+ * drawn on black and on white and the two make one see-through picture (`seeThrough`), which the lobby
+ * lays on its own paper. (The asset viewer does the same on its own page. Nothing is shared with it: the game
+ * never imports the viewer.)
  *
  * Cheap, and nothing left behind:
  * - It has its own 3D context for the length of one call. Before it returns, everything it made is disposed of
@@ -21,14 +22,15 @@
  * So the pen's scale is held at the window's for the draw, and thinned as the game thins it on a small hero.
  */
 import * as THREE from 'three';
+import { WEATHER } from '../data/index.ts';
 import type { GameState } from '../sim/index.ts';
-import { applyLight } from '../viewer/light.ts';
-import { matte } from '../viewer/matte.ts';
 import { GU } from './b2/palette.js';
 import { createPost, heroPen } from './b2/post.js';
 import type { Post } from './b2/post.js';
 import { CanoeView } from './canoe.ts';
 import { crewOf } from './crew.ts';
+import { mistDensity, paletteAt } from './daylight.ts';
+import type { Rgb } from './daylight.ts';
 
 export interface SketchRequest {
   /** A state holding the canoe to draw, level at the origin (`client/preview.ts` makes it). */
@@ -194,6 +196,57 @@ export function frameSubject(
   return distance;
 }
 
+/** The hour of the picture: noon. */
+export const SKETCH_HOUR = 12;
+
+/**
+ * The picture's light, put into the look's shared uniforms: the game's own palette for noon (`syncLight` in
+ * world-view.ts does this for the hour being played) under a clear, dry, windless sky, full hatching, no lamps,
+ * the clock at nought, and the sun on the picture's side. Whoever calls this puts the uniforms back (`keepUniforms`).
+ */
+export function sketchDaylight(): void {
+  const palette = paletteAt(SKETCH_HOUR, 0, 0);
+  const set = (target: THREE.Color, value: Rgb): void => void target.setRGB(value[0], value[1], value[2]);
+  set(GU.uLight.value, palette.light);
+  set(GU.uShadowTint.value, palette.shadowTint);
+  set(GU.uPaper.value, palette.paper);
+  set(GU.uFogColor.value, palette.fog);
+  set(GU.uSkyTop.value, palette.skyTop);
+  set(GU.uSkyLow.value, palette.skyLow);
+  set(GU.uFarTint.value, palette.farTint);
+  set(GU.uFoam.value, palette.foam);
+  GU.uLightDir.value.copy(sketchLight(new THREE.Vector3(...palette.lightDirection)));
+  GU.uFogDensity.value = mistDensity(WEATHER.clear.visibility);
+  GU.uHatch.value = 1;
+  GU.uOvercast.value = 0;
+  GU.uStars.value = 0;
+  GU.uDark.value = 0;
+  GU.uWet.value = 0;
+  GU.uRain.value = 0;
+  GU.uVeil.value = 0;
+  GU.uTime.value = 0;
+}
+
+/**
+ * One see-through picture from the same frame drawn on black and on white (RGBA, straight alpha, all three the
+ * same length). A pixel the canoe covers is the same in both, a pixel it does not cover follows the background,
+ * a soft edge lies between: so how far a pixel moves between the two says how much of it is background.
+ */
+export function seeThrough(onBlack: Uint8ClampedArray, onWhite: Uint8ClampedArray, out: Uint8ClampedArray): void {
+  for (let at = 0; at < onBlack.length; at += 4) {
+    const spread = (onWhite[at] - onBlack[at] + (onWhite[at + 1] - onBlack[at + 1]) + (onWhite[at + 2] - onBlack[at + 2])) / (3 * 255);
+    const alpha = Math.min(1, Math.max(0, 1 - spread));
+    if (alpha < 0.004) {
+      out[at] = out[at + 1] = out[at + 2] = out[at + 3] = 0;
+      continue;
+    }
+    out[at] = onBlack[at] / alpha;
+    out[at + 1] = onBlack[at + 1] / alpha;
+    out[at + 2] = onBlack[at + 2] / alpha;
+    out[at + 3] = Math.round(alpha * 255);
+  }
+}
+
 /**
  * The pen's width against the game's full pen, for a drawing `pixelHeight` high that takes in `metres` of world
  * top to bottom, shown in a window `sheetHeight` high: what the game's own pen does to a hero that small
@@ -247,11 +300,7 @@ export function drawCanoeSketch(request: SketchRequest): HTMLCanvasElement | nul
     const distance = frameSubject(camera, view.group);
 
     // Noon on a clear, dry, windless day, whatever the game behind the lobby is doing, with the sun on the picture's side.
-    applyLight('day');
-    GU.uLightDir.value.copy(sketchLight(GU.uLightDir.value));
-    GU.uHatch.value = 1;
-    GU.uOvercast.value = 0;
-    GU.uStars.value = 0;
+    sketchDaylight();
     const metres = 2 * distance * Math.tan((SKETCH_VIEW.lens * Math.PI) / 360);
     post.pen.uLineW.value *= sketchPen(metres, height, request.sheetHeight);
     unpin = pinUniform(GU.uSc, request.sheetHeight / 1080);
@@ -271,7 +320,7 @@ export function drawCanoeSketch(request: SketchRequest): HTMLCanvasElement | nul
     const onBlack = frameOn(0x000000);
     const onWhite = frameOn(0xffffff);
     const picture = new ImageData(width, height);
-    matte(onBlack.data, onWhite.data, picture.data);
+    seeThrough(onBlack.data, onWhite.data, picture.data);
     let inked = 0;
     for (let at = 3; at < picture.data.length; at += 4) if (picture.data[at] > 0) inked += 1;
     // A frame with nothing on it is not a picture of a canoe.

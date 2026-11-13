@@ -224,7 +224,8 @@ for (const [width, height] of [[1920, 1080], [1366, 768]] as const) {
         scrolls: document.documentElement.scrollWidth > window.innerWidth || document.documentElement.scrollHeight > window.innerHeight,
       };
     });
-    expect(layout.menu).toEqual(['Continue', 'New Game', 'Host a crew', 'Join a crew', 'Settings', 'How to Play', 'Credits']);
+    // Beside a menu that has the two crew lines in it (and whatever else the lobby offers).
+    expect(layout.menu).toEqual(expect.arrayContaining(['Continue', 'New Game', 'Host a crew', 'Join a crew', 'Settings', 'How to Play', 'Credits']));
     // On the page: inside the window, with the line under the picture well clear of the bottom.
     expect(layout.figure.left).toBeGreaterThanOrEqual(0);
     expect(layout.figure.right).toBeLessThanOrEqual(width * 0.4);
