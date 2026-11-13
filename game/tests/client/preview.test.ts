@@ -343,8 +343,11 @@ describe('when the one picture is drawn', () => {
 describe('sharp at the size shown', () => {
   it('the picture has as many pixels as its frame has on the screen, never more', () => {
     expect(sketchPixels(353.74, 256.2, 1)).toEqual({ width: 353, height: 256 });
-    expect(sketchPixels(251.6, 182.2, 2)).toEqual({ width: 503, height: 364 });
-    expect(sketchPixels(282.4, 204.8, 1.25)).toEqual({ width: 353, height: 256 });
+    // On a 2x screen: a whole number of CSS pixels (251 by 182), so every browser lays it on whole screen pixels.
+    expect(sketchPixels(251.6, 182.2, 2)).toEqual({ width: 502, height: 364 });
+    expect(sketchPixels(267.93, 200.9, 2)).toEqual({ width: 534, height: 400 });
+    expect(sketchPixels(282.4, 204.8, 1.25)).toEqual({ width: 352, height: 255 });
+    expect(sketchPixels(341, 256, 1.5)).toEqual({ width: 511, height: 384 });
     expect(sketchPixels(200, 100, Number.NaN)).toEqual({ width: 200, height: 100 });
     expect(sketchPixels(0, 0, 1)).toBeNull();
     expect(sketchPixels(10, 300, 1)).toBeNull();

@@ -40,8 +40,23 @@ export interface SketchRequest {
   sheetHeight: number;
 }
 
-/** Where the picture is taken from: degrees round from astern (90 is abeam), degrees up, and a long lens. */
-export const SKETCH_VIEW = { yaw: 62, pitch: 17, lens: 26, margin: 0.06 } as const;
+/**
+ * Where the picture is taken from: degrees round from astern (90 is abeam), degrees up, and a long lens.
+ * `light`: the sun stands this many degrees further round than the camera, so the side of the hull the picture
+ * shows is the lit one. (With noon's own bearing the camera looked at the shadowed side: a grey hull where the
+ * game, seen from the sunny side, shows warm wood.)
+ */
+export const SKETCH_VIEW = { yaw: 62, pitch: 17, lens: 26, margin: 0.06, light: 30 } as const;
+
+/**
+ * The light of the picture: as high as `sun` stands (the hour's own light, pointing at the sun), turned round to
+ * the side the picture is taken from. A still picture on paper has no north: only the sun's height is the hour's.
+ */
+export function sketchLight(sun: THREE.Vector3, view: { yaw: number; light: number } = SKETCH_VIEW): THREE.Vector3 {
+  const height = Math.asin(Math.max(-1, Math.min(1, sun.clone().normalize().y)));
+  const round = ((view.yaw + view.light) * Math.PI) / 180;
+  return new THREE.Vector3(Math.sin(round) * Math.cos(height), Math.sin(height), Math.cos(round) * Math.cos(height));
+}
 
 type Uniform = { value: unknown };
 type Copyable = { clone(): Copyable; copy(from: Copyable): unknown; isTexture?: boolean };
@@ -231,8 +246,9 @@ export function drawCanoeSketch(request: SketchRequest): HTMLCanvasElement | nul
     scene.add(camera, view.group);
     const distance = frameSubject(camera, view.group);
 
-    // Noon on a clear, dry, windless day, whatever the game behind the lobby is doing.
+    // Noon on a clear, dry, windless day, whatever the game behind the lobby is doing, with the sun on the picture's side.
     applyLight('day');
+    GU.uLightDir.value.copy(sketchLight(GU.uLightDir.value));
     GU.uHatch.value = 1;
     GU.uOvercast.value = 0;
     GU.uStars.value = 0;

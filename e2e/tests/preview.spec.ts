@@ -88,8 +88,8 @@ test('with a save the lobby shows that canoe, with its line; drawn once, after t
   const picture = await pictureOnPage(page);
   await expect(page.locator('.pv-caption')).toHaveText(SAVE_LINE);
   // As many pixels as the frame has on this screen, shown one to one, and a canoe drawn on them.
-  expect(picture.width).toBe(Math.floor(picture.frameWidth * picture.ratio));
-  expect(picture.height).toBe(Math.floor(picture.frameHeight * picture.ratio));
+  expect(picture.width).toBe(Math.floor(Math.floor(picture.frameWidth) * picture.ratio));
+  expect(picture.height).toBe(Math.floor(Math.floor(picture.frameHeight) * picture.ratio));
   expect(picture.cssWidth).toBeCloseTo(picture.width / picture.ratio, 1);
   expect(picture.inked).toBeGreaterThan(5_000);
   expect(picture.inked).toBeLessThan(picture.width * picture.height * 0.6);

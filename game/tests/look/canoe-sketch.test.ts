@@ -9,7 +9,7 @@ import { previewSubject, starterSubject } from '../../src/client/preview.ts';
 import { ATTACHMENT_IDS } from '../../src/data/index.ts';
 import { GU } from '../../src/look/b2/palette.js';
 import { heroPen } from '../../src/look/b2/post.js';
-import { SKETCH_VIEW, frameSubject, keepUniforms, pinUniform, sketchCanoe, sketchPen } from '../../src/look/canoe-sketch.ts';
+import { SKETCH_VIEW, frameSubject, keepUniforms, pinUniform, sketchCanoe, sketchLight, sketchPen } from '../../src/look/canoe-sketch.ts';
 import { CanoeView } from '../../src/look/canoe.ts';
 import { crewOf } from '../../src/look/crew.ts';
 import { SAVE_KEY_PREFIX, createSaveStore } from '../../src/save/index.ts';
@@ -154,6 +154,28 @@ describe('the camera holds the whole canoe', () => {
     expect(frameSubject(camera, new THREE.Group())).toBe(6);
     expect(Number.isFinite(camera.position.length())).toBe(true);
     expect(camera.near).toBeLessThan(camera.far);
+  });
+});
+
+describe('the sun is on the side the picture shows', () => {
+  it('as high as the hour has it, and round on the camera\'s side of the canoe, a little toward the bow', () => {
+    applyLight('day');
+    const noon = GU.uLightDir.value.clone();
+    const light = sketchLight(noon);
+    expect(light.length()).toBeCloseTo(1, 10);
+    // The hour's own height.
+    expect(light.y).toBeCloseTo(noon.clone().normalize().y, 10);
+    expect(light.y).toBeGreaterThan(0.3);
+    // The camera stands 62 degrees round from astern; the sun is within 45 degrees of it, on the same side of the keel.
+    const radians = Math.PI / 180;
+    const camera = new THREE.Vector3(Math.sin(SKETCH_VIEW.yaw * radians), 0, Math.cos(SKETCH_VIEW.yaw * radians));
+    const flat = new THREE.Vector3(light.x, 0, light.z).normalize();
+    expect(flat.dot(camera)).toBeGreaterThan(Math.cos(45 * radians));
+    expect(flat.x).toBeGreaterThan(0.7);
+    // The side of the hull the camera sees faces +x: the sun is in front of it, not behind.
+    expect(light.dot(new THREE.Vector3(1, 0, 0))).toBeGreaterThan(0.5);
+    // A low sun stays low.
+    expect(sketchLight(new THREE.Vector3(0, 0.2, -1)).y).toBeCloseTo(new THREE.Vector3(0, 0.2, -1).normalize().y, 10);
   });
 });
 

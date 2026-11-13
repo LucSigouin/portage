@@ -146,12 +146,15 @@ export function previewModel(subject: PreviewSubject): LobbyPreviewModel {
 /**
  * The picture's size in real pixels, for a frame of `cssWidth` by `cssHeight` CSS pixels on a screen of
  * `devicePixelRatio`: whole pixels, never wider or taller than the frame, so one picture pixel is one screen pixel.
+ * The frame's size is cut to whole CSS pixels first, then to whole screen pixels.
  * Null when the frame is too small to draw in.
  */
 export function sketchPixels(cssWidth: number, cssHeight: number, devicePixelRatio: number): { width: number; height: number } | null {
   const ratio = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
-  const width = Math.floor(cssWidth * ratio + 1e-6);
-  const height = Math.floor(cssHeight * ratio + 1e-6);
+  // Whole CSS pixels first: on a 2x or 3x screen the picture is then a whole number of them wide, which every
+  // browser places on whole screen pixels however it rounds.
+  const width = Math.floor(Math.floor(cssWidth + 1e-6) * ratio + 1e-6);
+  const height = Math.floor(Math.floor(cssHeight + 1e-6) * ratio + 1e-6);
   if (!(width >= MINIMUM_SKETCH_PIXELS && height >= MINIMUM_SKETCH_PIXELS)) return null;
   return { width: Math.min(width, MAXIMUM_SKETCH_PIXELS), height: Math.min(height, MAXIMUM_SKETCH_PIXELS) };
 }
