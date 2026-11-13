@@ -11,7 +11,7 @@
   ],
   "name": "Portage",
   "pitch": "A browser survival-crafting game. The valley flooded. You have a leaky canoe, and you bolt what you build onto it.",
-  "updated": "2026-11-13, early morning",
+  "updated": "2026-11-13, morning",
   "status": {
     "done": [
       "Rules engine. Runs with no screen. 179 tests pass. A bot finishes the whole main quest.",
@@ -44,7 +44,9 @@
       "Friends by a link, live: the relay runs on Cloudflare at sigouin.net/portage/relay, and the live lobby has Host a crew and Join a crew. A host and a guest met through it (52 ms there and back). Every deploy ends with two browsers in one canoe on the live site. Not yet tried on two real computers.",
       "Overnight on Nov 13: a fresh reviewer scored the three low points again (first minutes 7 to 8, solid 6 to 7, canoe stays 7). Three small fixes are on main: an honest chip timing at load, a steadier speed test, a refused autosave that says so. 1146 tests pass, plus 119 browser tests. The two that change the game are not live: they wait for a push."
     ],
-    "running": [],
+    "running": [
+      "Build payoff and a first hull upgrade you can see. A dial limit on the relay. Then one master review."
+    ],
     "waiting": [
       {
         "text": "The workbench: every step so far, in point form. Made for your phone.",
@@ -58,11 +60,6 @@
         "text": "The re-score: 8, 7 and 7 on the three low points, and nine findings.",
         "href": "docs/report-rescore.html"
       },
-      {
-        "text": "Luc: the seat fix. A full canoe gives the longest-away seat to a new friend. Built and tested on a branch. Yes or no?",
-        "href": "docs/report-seats.html"
-      },
-      "Luc: say push. Two small fixes are on main and not live: the chip timing at load and the autosave note.",
       "Luc: your calls. Build payoff, the first hull upgrade, trees hiding the player, a dial limit on the relay (it is live without one), crafts made early.",
       {
         "text": "Luc: the starting canoe is weathered grey, not red. Keep or bring the red back?",

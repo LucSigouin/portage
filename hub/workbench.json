@@ -6,7 +6,7 @@
   ],
   "title": "Portage",
   "subtitle": "The workbench: every step so far",
-  "updated": "2026-11-13, early morning",
+  "updated": "2026-11-13, morning",
   "ask": "A flooded world and all you have is a canoe. Scavenge islands, craft, and build a crazy impressive canoe.",
   "now": [
     {
@@ -16,27 +16,27 @@
     },
     {
       "label": "Stage",
-      "value": "Version 1 is live. Two small fixes wait for your push"
+      "value": "Version 1 is live, with the night's fixes"
     },
     {
       "label": "Tests",
-      "value": "1146 unit, 119 in a browser"
+      "value": "1159 unit, 119 in a browser"
     },
     {
       "label": "Running",
-      "value": "Nothing"
+      "value": "Build payoff, a hull upgrade you can see, a dial limit"
     },
     {
       "label": "Live now",
-      "value": "Version 1.0.198, with Host a crew and Join a crew"
+      "value": "Everything built, with the seat fix and the autosave note"
     },
     {
       "label": "Not live yet",
-      "value": "Honest chip timing, the autosave note. Say push"
+      "value": "Nothing is waiting to go live"
     },
     {
       "label": "Waiting on you",
-      "value": "The seat fix: yes or no. Play with a friend"
+      "value": "Play with a friend on two computers"
     }
   ],
   "steps": [
@@ -704,7 +704,7 @@
         "The chip test at load now gives an honest first timing",
         "The shaky speed test reads four runs and judges the middle",
         "A refused autosave says so once, and stops retrying every frame",
-        "A full canoe gives a seat back: built, waits on your yes",
+        "A full canoe gives the longest-away seat to a new friend",
         "A fresh reviewer played 19 minutes and scored the low points again"
       ],
       "proof": [
@@ -717,7 +717,7 @@
         "The canoe stays 7: building has no payoff, the first hull upgrade does not show",
         "Solid stays 7 until the seat fix is in and you rule on a dial limit",
         "Slow chips were not the test: this Mac draws slower while its screen is on",
-        "None of it is live. It waits for your push"
+        "Luc said yes in the morning: it went live on Nov 13"
       ],
       "pictures": [
         {
@@ -768,7 +768,7 @@
   "numbers": [
     {
       "label": "Commits",
-      "value": "205"
+      "value": "207"
     },
     {
       "label": "Worker runs",
@@ -776,7 +776,7 @@
     },
     {
       "label": "Unit tests",
-      "value": "1146"
+      "value": "1159"
     },
     {
       "label": "Browser tests",
@@ -792,7 +792,7 @@
     },
     {
       "label": "Deploys",
-      "value": "10"
+      "value": "11"
     },
     {
       "label": "Agent hours",
@@ -804,10 +804,6 @@
     }
   ],
   "left": [
-    {
-      "what": "The seat fix: built and tested, needs your yes",
-      "hours": "yours"
-    },
     {
       "what": "Your calls from the review and the re-score",
       "hours": "yours"
@@ -839,12 +835,8 @@
   ],
   "yours": [
     "Play the live game: your old save continues",
-    "The seat fix: a full canoe gives the longest-away seat to a new friend. Yes or no?",
-    "Say push: two small fixes are on main, not live",
     "Host a crew and send the link to a friend on another computer",
-    "A dial limit on the relay: build it, or accept the risk",
     "The faster canoe: is it quick enough, and calm to watch?",
-    "Build payoff and the first hull upgrade: they hold the canoe at 7",
     "Your 5120 wide screen: steady 60, or every pixel?",
     "Storm, sound and motion: still yours to judge",
     "Starting canoe: weathered grey, or red?"
