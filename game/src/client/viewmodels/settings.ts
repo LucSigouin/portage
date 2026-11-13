@@ -7,6 +7,7 @@ import type { InputAction, QualityPreset, Settings } from '../../settings/index.
 import type { SettingId, SettingValue } from '../intents.ts';
 import { SETTINGS_TABS } from '../panels.ts';
 import type { SettingsTabId } from '../panels.ts';
+import { versionLine } from '../version.ts';
 import { capitalise, keyLabel } from './format.ts';
 import type { BindingRowModel, ButtonModel, PanelModel, SettingRowModel } from './types.ts';
 
@@ -112,6 +113,7 @@ export function buildSettingsPanel(
   tab: SettingsTabId,
   capture: { action: InputAction; slot: number } | null,
   bindingNotice: string,
+  version: string = versionLine(),
 ): SettingsBody {
   const onControls = tab === 'controls';
   const resetBindings: ButtonModel = {
@@ -129,6 +131,7 @@ export function buildSettingsPanel(
       ? `Press a key for ${ACTION_LABELS[capture.action]}. Esc cancels.`
       : bindingNotice,
     resetBindings: onControls ? resetBindings : null,
+    version,
   };
 }
 

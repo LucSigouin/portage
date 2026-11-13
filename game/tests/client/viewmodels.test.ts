@@ -11,6 +11,8 @@ import type { InterfaceModelInput } from '../../src/client/viewmodels/index.ts';
 import { ISLANDS, NODES_BY_ISLAND, TUNING } from '../../src/data/index.ts';
 import type { SlotSummary } from '../../src/save/index.ts';
 import { INPUT_ACTIONS, createDefaultSettings } from '../../src/settings/index.ts';
+import { buildSettingsPanel } from '../../src/client/viewmodels/settings.ts';
+import { GAME_VERSION, versionLine } from '../../src/client/version.ts';
 import { dispatch, selectInteractable } from '../../src/sim/index.ts';
 import type { GameEvent, GameState, Missing } from '../../src/sim/index.ts';
 import { SETTINGS_TABS } from '../../src/client/panels.ts';
@@ -624,5 +626,19 @@ describe('the whole interface model', () => {
     expect(buildInterfaceModel(input(newGame(), { settings: big, paused: true }))).toMatchObject({
       uiScale: 1.25, patternedMeters: true, paused: true,
     });
+  });
+});
+
+describe('the version in Settings', () => {
+  it('stands on every tab, as it was handed in', () => {
+    for (const tab of SETTINGS_TABS) {
+      expect(buildSettingsPanel(settings, tab, null, '', versionLine('1.0.7 · abc1234')).version).toBe('Version 1.0.7 · abc1234');
+    }
+  });
+
+  it("is the build's own when none is handed in", () => {
+    // The build writes "1.0.<commits> · <commit>". A game made without git says so instead of showing nothing.
+    expect(GAME_VERSION).toMatch(/^(1\.0\.\d+ · [0-9a-f]{7,12}|unknown)$/);
+    expect(buildSettingsPanel(settings, 'audio', null, '').version).toBe(`Version ${GAME_VERSION}`);
   });
 });

@@ -281,3 +281,18 @@ describe('the view description helper', () => {
     expect(collectText([node])).toBe('one 2');
   });
 });
+
+describe('the version in Settings', () => {
+  it('stands beside the title on every tab', () => {
+    for (const tab of ['audio', 'graphics', 'controls', 'gameplay', 'accessibility'] satisfies SettingsTabId[]) {
+      const app = newApp();
+      app.session.handleIntent({ type: 'open_panel', panel: 'settings' });
+      app.session.handleIntent({ type: 'select_settings_tab', tab });
+      const panel = modelOf(app).panel;
+      if (panel?.id !== 'settings') throw new Error('expected the settings panel');
+      expect(panel.version).toMatch(/^Version \S/);
+      const header = panelView(panel)[0].children.find((child) => child.tag === 'header')!;
+      expect(collectText([header])).toBe(`${panel.title} ${panel.version}`);
+    }
+  });
+});
