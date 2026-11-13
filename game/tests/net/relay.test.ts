@@ -9,7 +9,7 @@ import {
   FIRST_TRIES, HOST_GRACE_SECONDS, RECONNECT_SECONDS, RELAY_PROTOCOL, ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH, ROOM_CODE_PATTERN,
   RelayGuestWire, RelayHostRoom, makeRoomCode, readRoomCode, resolveRelayAddress, showRoomCode,
 } from '../../src/net/relay.ts';
-import type { RelayFailure } from '../../src/net/relay.ts';
+import type { OpenSocket, RelayFailure } from '../../src/net/relay.ts';
 import { PROTOCOL_VERSION } from '../../src/net/index.ts';
 import type { Transport } from '../../src/net/index.ts';
 import { hashState } from '../../src/sim/index.ts';
@@ -218,6 +218,40 @@ describe('the wire itself', () => {
     await seconds(0.1);
     expect(heardByGuest).toEqual([{ step: 1, players: [{ x: 1 }] }, { step: 2, players: [{ x: 50 }] }, { last: true }]);
     expect(relay.frames.host - hostFramesBefore).toBe(1);
+  });
+
+  it('sends nothing on a socket that has begun to close: a browser does not throw there, it writes an error on the console', async () => {
+    // A stand-in that does as a browser's socket does between the start of its close and the page hearing of it.
+    const complaints: string[] = [];
+    const relay = new FakeRelay();
+    const made: (FakeSocket & { readyState: number })[] = [];
+    const open: OpenSocket = (address, protocols) => {
+      const socket = Object.assign(relay.open(address, protocols) as FakeSocket, { readyState: 1 });
+      const send = socket.send;
+      socket.send = (text): void => {
+        if (socket.readyState === 1) send(text);
+        else complaints.push('WebSocket is already in CLOSING or CLOSED state.');
+      };
+      made.push(socket);
+      return socket;
+    };
+    const room = new RelayHostRoom({ address: ADDRESS, code: CODE, key: HOST_KEY, open: relay.open });
+    const heardByHost: unknown[] = [];
+    room.setAccept((transport) => transport.receive((message) => void heardByHost.push(message)));
+    const wire = new RelayGuestWire({ address: ADDRESS, code: CODE, open });
+    await seconds(0.1);
+    wire.send({ n: 1 });
+    await seconds(0.1);
+    expect(heardByHost).toEqual([{ n: 1 }]);
+
+    // The close has begun (the wifi blinked, or the relay is letting go) and the page has not been told yet.
+    made[0]!.readyState = 2;
+    const framesBefore = relay.frames.guest;
+    wire.send({ n: 2 });
+    await seconds(0.1);
+    expect(complaints).toEqual([]);
+    expect(relay.frames.guest).toBe(framesBefore);
+    expect(heardByHost).toEqual([{ n: 1 }]);
   });
 
   it('closes the socket of a window that does not leave by itself when the host lets it go', async () => {
