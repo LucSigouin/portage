@@ -91,7 +91,8 @@ host.socket.send(JSON.stringify([['*', [`${word}-back`]]]));
 await guest.hear((frame) => Array.isArray(frame) && frame[0] === `${word}-back`, 'the host\'s answer');
 const roundTrip = Date.now() - sent;
 
-// 3. A second guest is never told what the first one says, and a stranger cannot take the host's place.
+// 3. A stranger cannot take the host's place: a second host with another key is turned away.
+// (That one guest never hears another is proven in relay/tests/room.test.ts, not here.)
 const thief = dial(code, 'host', { key: pick('abcdefghijklmnopqrstuvwxyz0123456789', 24) });
 const thiefEnd = await within(thief.ended, 'the second host being turned away');
 if (thiefEnd === 1000 || thief.frames.some((text) => text.includes('"hello"'))) fail(`a second host with another key was let in (close ${thiefEnd})`);
