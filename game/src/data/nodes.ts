@@ -1,6 +1,6 @@
 import type {
   AttachmentId, BottleId, IslandId, ItemId, LootEntry, LootTable, LootTableId, NodeActionDefinition,
-  NodeDefinition, NodeTypeDefinition, NodeTypeId, QuestId, ToolId,
+  NodeDefinition, NodeId, NodeTypeDefinition, NodeTypeId, QuestId, ToolId,
 } from './types.ts';
 import { TUNING } from './tuning.ts';
 import { ISLANDS_BY_ID, spotPosition } from './world.ts';
@@ -488,9 +488,72 @@ place('the_beacon', 'rain_barrel', 0.12, 0.45);
 /** Every placed scavenge node in the valley. */
 export const NODES: NodeDefinition[] = placed;
 
-export const NODES_BY_ID: Record<string, NodeDefinition> = Object.fromEntries(
+/**
+ * The wild trees and stones (Luc's bugfix list, round 2: "Any tree/collectable on island should be able to
+ * count/usable"): each kind and what F does at one. A kind gives what its scavenge spot gives, with the same words,
+ * tools and refill. Where they stand is the scatter's (`sim/scatter.ts`) and the crags of the look's dressing
+ * (`sim/solids.ts`); `sim/gathering.ts` turns each into a spot with its own id, kept in the state only once used.
+ *
+ * Left as scenery, on purpose: scrub (no berries drawn on it; free food everywhere would end hunger), reeds and
+ * sedge (they stand at or in the water, hundreds a shore, and would take F from the canoe; the cattail stands give
+ * fibre), skerries and drowned snags (in the water, out of reach on foot), and the great pine over Home Knoll's camp
+ * (the knoll's landmark).
+ */
+export type WildKind = 'spruce' | 'pine' | 'birch' | 'boulder' | 'crag';
+
+export interface WildKindDefinition {
+  /** The spot kind it works like: its sound and icon. */
+  typeId: NodeTypeId;
+  name: string;
+  description: string;
+  actions: NodeActionDefinition[];
+}
+
+export const WILD_KINDS: Record<WildKind, WildKindDefinition> = {
+  spruce: { typeId: 'spruce', name: 'Spruce', description: NODE_TYPES.spruce.description, actions: NODE_TYPES.spruce.actions },
+  // The game's gum is spruce gum: a pine gives its logs alone.
+  pine: {
+    typeId: 'spruce', name: 'Pine', description: 'Straight grain, no gum worth scraping. Logs if you have the hatchet out.',
+    actions: NODE_TYPES.spruce.actions.filter((definition) => definition.tool === 'hatchet'),
+  },
+  birch: { typeId: 'birch', name: 'Birch', description: NODE_TYPES.birch.description, actions: NODE_TYPES.birch.actions },
+  boulder: {
+    typeId: 'stone_outcrop', name: 'Boulder', description: 'A frost-split boulder at the water. Loose pieces come away by hand.',
+    actions: NODE_TYPES.stone_outcrop.actions,
+  },
+  crag: {
+    typeId: 'stone_outcrop', name: 'Crag', description: 'Broken granite on the high ground. Loose pieces come away by hand.',
+    actions: NODE_TYPES.stone_outcrop.actions,
+  },
+};
+
+const PLACED_BY_ID: Record<string, NodeDefinition> = Object.fromEntries(
   placed.map((definition) => [definition.id, definition]),
 );
+
+/** Finds a wild tree or stone by id. The rules hand it over (`sim/gathering.ts`): the data never imports the rules. */
+let findWild: ((nodeId: NodeId) => NodeDefinition | undefined) | null = null;
+
+export function resolveWildNodesWith(finder: (nodeId: NodeId) => NodeDefinition | undefined): void {
+  findWild = finder;
+}
+
+/**
+ * Every spot by id: the placed ones, and the wild trees and stones too, found when asked, so the screen, the sound
+ * and the toasts name a used tree like any spot. Listing it (`Object.keys`, `Object.values`) gives the placed ones.
+ */
+export const NODES_BY_ID: Record<string, NodeDefinition> = new Proxy(PLACED_BY_ID, {
+  get(target, key, receiver) {
+    if (typeof key === 'string' && !Object.hasOwn(target, key) && findWild) {
+      const wild = findWild(key);
+      if (wild) return wild;
+    }
+    return Reflect.get(target, key, receiver);
+  },
+  has(target, key) {
+    return Reflect.has(target, key) || (typeof key === 'string' && findWild !== null && findWild(key) !== undefined);
+  },
+});
 
 export const NODES_BY_ISLAND: Record<IslandId, NodeDefinition[]> = Object.fromEntries(
   Object.keys(ISLANDS_BY_ID).map((islandId) => [islandId, placed.filter((definition) => definition.islandId === islandId)]),

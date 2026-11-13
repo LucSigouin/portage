@@ -8,6 +8,7 @@ import { CAMP_LAYOUTS, ISLANDS_BY_ID, spotPosition } from '../data/world.ts';
 import {
   distanceToBed, emit, emptyMissing, grantItems, hasAttachment, hasMissing, hasTool,
 } from './inventory.ts';
+import { distanceToWild, forgetRefilledWild, wildNodesNear } from './gathering.ts';
 import { questGateOpen, updateQuests } from './quests.ts';
 import { nextRandom, randomInteger } from './random.ts';
 import { approachTo, bodyBlocked, freeSpotNear } from './solids.ts';
@@ -215,6 +216,12 @@ export function findInteractable(state: GameState, player: PlayerState): Interac
       const depth = approachTo(definition.position.x, definition.position.z).depth;
       if (distance <= TUNING.foot.nodeRange + depth) consider(nodeInteractable(state, player, definition, distance - depth));
     }
+    // Every tree and stone too (sim/gathering.ts), by how far its bark or stone is: a spot is stood on, a tree is not.
+    for (const wild of wildNodesNear(player.position.x, player.position.z)) {
+      if (wild.definition.islandId !== player.islandId) continue;
+      const distance = distanceToWild(wild, player.position.x, player.position.z);
+      if (distance <= TUNING.nodes.wildReach) consider(nodeInteractable(state, player, wild.definition, distance));
+    }
     for (const npcId of NPC_IDS) {
       const npc = NPCS[npcId];
       if (npc.islandId !== player.islandId) continue;
@@ -292,6 +299,8 @@ function taken(items: ItemAmount[], leftover: ItemAmount[]): ItemAmount[] {
  * The caller has checked the tool, the quest gate and the energy.
  */
 export function completeHarvest(state: GameState, player: PlayerState, definition: NodeDefinition, actionIndex: number): ItemAmount[] {
+  // The state keeps only the trees in use: those that have refilled are let go first.
+  forgetRefilledWild(state);
   const nodeState = nodeStateFor(state, definition);
   if (actionIndex === PICK_UP_ACTION) {
     const waiting = nodeState.leftover;

@@ -436,6 +436,63 @@ function landGrid(islandId: IslandId, clearance: number, cell: number): LandGrid
   return grid;
 }
 
+/** Each island's ground a walker reaches from its landing, with room round every solid: one flood, kept. */
+const reachedFromLanding = new Map<IslandId, Uint8Array>();
+
+/**
+ * True when a walker who stepped ashore at the island's landing can get to `to` (or right beside it, as the last
+ * step of a route may slide along a solid): the same steps a route takes, with room to spare round every solid.
+ * For the wild trees and stones the bot may gather from: hundreds an island, so one flood per island, not a search each.
+ */
+export function footReachable(islandId: IslandId, to: Point): boolean {
+  const { originX, originZ, size, cell, heightAt, solidAt } = landGrid(islandId, SOLID_CLEARANCE, LAND_CELL);
+  const cellAt = (point: Point): number => {
+    const column = Math.max(0, Math.min(size - 1, Math.floor((point.x - originX) / cell)));
+    const row = Math.max(0, Math.min(size - 1, Math.floor((point.z - originZ) / cell)));
+    return row * size + column;
+  };
+  let reached = reachedFromLanding.get(islandId);
+  if (!reached) {
+    reached = new Uint8Array(size * size);
+    const start = cellAt(islandLanding(islandId).shore);
+    const stack = [start];
+    reached[start] = 1;
+    const canStep = (current: number, next: number): boolean => {
+      const height = heightAt(next);
+      if (height < LAND_STANDING_DEPTH && !wadingOut(heightAt(current), height)) return false;
+      if (solidAt(next)) return false;
+      const diagonal = current % size !== next % size && Math.floor(current / size) !== Math.floor(next / size);
+      return (height - heightAt(current)) / (diagonal ? cell * Math.SQRT2 : cell) <= slopeLimit;
+    };
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      const column = current % size;
+      const row = Math.floor(current / size);
+      for (const [stepColumn, stepRow] of NEIGHBOURS) {
+        const nextColumn = column + stepColumn;
+        const nextRow = row + stepRow;
+        if (nextColumn < 0 || nextRow < 0 || nextColumn >= size || nextRow >= size) continue;
+        const next = nextRow * size + nextColumn;
+        if (reached[next] === 1 || !canStep(current, next)) continue;
+        if (stepColumn !== 0 && stepRow !== 0
+          && (!canStep(current, row * size + nextColumn) || !canStep(current, nextRow * size + column))) continue;
+        reached[next] = 1;
+        stack.push(next);
+      }
+    }
+    reachedFromLanding.set(islandId, reached);
+  }
+  const goal = cellAt(to);
+  if (reached[goal] === 1) return true;
+  const column = goal % size;
+  const row = Math.floor(goal / size);
+  return NEIGHBOURS.some(([stepColumn, stepRow]) => {
+    const nextColumn = column + stepColumn;
+    const nextRow = row + stepRow;
+    return nextColumn >= 0 && nextRow >= 0 && nextColumn < size && nextRow < size && reached[nextRow * size + nextColumn] === 1;
+  });
+}
+
 export function findFootPath(islandId: IslandId, from: Point, to: Point): Point[] | null {
   // With room to spare round every solid; failing that, through any gap a body fits (a cottage's door).
   return footPathWith(islandId, from, to, SOLID_CLEARANCE, LAND_CELL) ?? footPathWith(islandId, from, to, SQUEEZE_CLEARANCE, SQUEEZE_CELL);

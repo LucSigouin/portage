@@ -157,6 +157,11 @@ export const TUNING = {
      * caches, the sunken lockers, the Beacon lamp) are marked in `data/nodes.ts` and never come back.
      */
     refillSeconds: 10 * 60,
+    /**
+     * A wild tree, boulder or crag answers F this close, metres from its bark or stone (`sim/gathering.ts`): a step
+     * from it. A spot's reach (`foot.nodeRange`) is from its middle, which a walker can stand on; a tree's is solid.
+     */
+    wildReach: 1.2,
   },
 
   inventory: {

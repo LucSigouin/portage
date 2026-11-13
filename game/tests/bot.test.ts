@@ -127,14 +127,15 @@ describe('the bot after a fail', () => {
   it('picks itself up: capsized mid-crossing, it wakes ashore, plans again and finishes the quest', () => {
     const state = createGame(BOT_SEED);
     const lines: string[] = [];
-    const driver = createBotDriver(state, { untilQuest: 'stop_the_leak', log: (line) => lines.push(line) });
+    // The first crossing: to Cabin Roofs for the hatchet head (bark no longer needs one: Home Knoll's birches give it).
+    const driver = createBotDriver(state, { untilQuest: 'a_proper_edge', log: (line) => lines.push(line) });
     let swamped = false;
     for (let input = driver.next(); input !== null; input = driver.next()) {
       step(state, input, FIXED_STEP);
       drainEvents(state);
-      // Out on the water between the islands, with the knife made: fill the hull to the brim, once.
-      if (!swamped && state.quests.stop_the_leak.status === 'active' && !state.canoe.beached
-        && state.players[0].mode === 'canoe' && state.canoe.position.x > 120) {
+      // Out on the water between the islands, with the hull patched: fill it to the brim, once.
+      if (!swamped && state.quests.a_proper_edge.status === 'active' && !state.canoe.beached
+        && state.players[0].mode === 'canoe' && state.canoe.position.x < -120) {
         // Over the brim, so the can it is about to pick up cannot save it.
         state.canoe.waterLevel = TUNING.canoe.capsizeLevel + 5;
         swamped = true;
@@ -145,7 +146,30 @@ describe('the bot after a fail', () => {
     expect(state.statistics.fails).toBe(1);
     expect(lines.some((line) => line.includes('washed ashore: picking up again'))).toBe(true);
     expect(driver.stoppedBecause).toBeNull();
+    expect(state.quests.a_proper_edge.status).toBe('completed');
+    expect(state.tools).toContain('hatchet');
+  });
+});
+
+describe('the bot and the wild trees', () => {
+  // Every tree and stone is a spot now (Luc's bugfix list, round 2), and the bot gathers from them as a player
+  // would: Home Knoll's own birches give the bark, so the first crossing is for the hatchet head, not the bark.
+  it('peels and scrapes the trees by its own camp for the leak, and never goes to Birch Islet for it', () => {
+    const state = createGame(BOT_SEED);
+    const driver = createBotDriver(state, { untilQuest: 'stop_the_leak' });
+    const wild: string[] = [];
+    const landedOn = new Set<string>();
+    for (let input = driver.next(); input !== null; input = driver.next()) {
+      step(state, input, FIXED_STEP);
+      for (const event of drainEvents(state)) {
+        if (event.type === 'node_depleted' && /\.(scatter|dressing)\./.test(event.nodeId)) wild.push(event.nodeId);
+        if (event.type === 'landed' && event.islandId) landedOn.add(event.islandId);
+      }
+    }
+    expect(driver.stoppedBecause).toBeNull();
     expect(state.quests.stop_the_leak.status).toBe('completed');
-    expect(state.canoe.hullTier).toBe(1);
+    expect(wild.length).toBeGreaterThan(0);
+    expect(wild.every((nodeId) => nodeId.startsWith('home_knoll.'))).toBe(true);
+    expect([...landedOn]).toEqual(['home_knoll']);
   });
 });

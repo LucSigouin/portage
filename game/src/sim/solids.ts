@@ -80,23 +80,26 @@ function placed(originX: number, originZ: number, yaw: number, scale: number, x:
   return { x: originX + (x * cosine + z * sine) * scale, z: originZ + (-x * sine + z * cosine) * scale };
 }
 
-/** The trees and boulders of one island's scatter, as solid circles. Scrub, reeds and sedge are walked through. */
-function scatterSolids(island: IslandDefinition, placements: readonly Placement[]): SolidCircle[] {
-  const circles: SolidCircle[] = [];
-  for (const placement of placements) {
-    const { kind, x, z, scale } = placement;
-    if (kind === 'spruce' || kind === 'pine' || kind === 'birch') {
-      circles.push({ x, z, radius: TRUNK_RADIUS[kind] * scale, kind, islandId: island.id });
-    } else if (kind === 'boulder') {
-      const radius = (0.34 + placement.variant * 0.16) * scale;
-      circles.push({ x, z, radius: radius * BOULDER_MAIN, kind, islandId: island.id });
-      if (placement.variant > 0) {
-        const lump = placed(x, z, placement.yaw, scale, (0.34 + placement.variant * 0.16) * 1.1, (0.34 + placement.variant * 0.16) * 0.5);
-        circles.push({ ...lump, radius: radius * BOULDER_LUMP, kind, islandId: island.id });
-      }
-    }
+/**
+ * One placement of the scatter as solid circles: a tree by its trunk, a boulder by its stone and lump. Scrub, reeds
+ * and sedge are walked through: none. Also where a gathered tree or stone is reached from (`sim/gathering.ts`).
+ */
+export function placementSolids(islandId: IslandId, placement: Placement): SolidCircle[] {
+  const { kind, x, z, scale } = placement;
+  if (kind === 'spruce' || kind === 'pine' || kind === 'birch') return [{ x, z, radius: TRUNK_RADIUS[kind] * scale, kind, islandId }];
+  if (kind !== 'boulder') return [];
+  const radius = (0.34 + placement.variant * 0.16) * scale;
+  const circles: SolidCircle[] = [{ x, z, radius: radius * BOULDER_MAIN, kind, islandId }];
+  if (placement.variant > 0) {
+    const lump = placed(x, z, placement.yaw, scale, (0.34 + placement.variant * 0.16) * 1.1, (0.34 + placement.variant * 0.16) * 0.5);
+    circles.push({ ...lump, radius: radius * BOULDER_LUMP, kind, islandId });
   }
   return circles;
+}
+
+/** The trees and boulders of one island's scatter, as solid circles. */
+function scatterSolids(island: IslandDefinition, placements: readonly Placement[]): SolidCircle[] {
+  return placements.flatMap((placement) => placementSolids(island.id, placement));
 }
 
 /** One solid piece of the look's dressing where it stands: as the look places its instance. */
