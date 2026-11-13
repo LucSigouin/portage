@@ -3,7 +3,7 @@
  *
  * - the four hull tiers tell apart from the paddling camera;
  * - the patched hull is told from the leaky one at a glance: pale bark and black pitch, from 9.5 m and from astern;
- * - each of the 19 attachments draws on the long hull, alone and all together;
+ * - each of the 22 attachments draws on the long hull, alone and all together;
  * - the pieces with a state follow it: sail, lantern, canopy;
  * - the fully fitted canoe with a crew of four is still: held, not one pixel changes;
  * - it holds 55 frames a second with everything bolted on and four aboard;
@@ -22,6 +22,7 @@ const BREAK = process.env.PORTAGE_CANOE_BREAK ?? '';
 const ATTACHMENTS = [
   'cargo_rack', 'rain_catcher', 'firebox', 'fishing_rig', 'outrigger_port', 'outrigger_starboard', 'workbench', 'smoker', 'planter', 'forge',
   'mast_sail', 'rudder', 'lantern_mast', 'canopy', 'map_table', 'winch', 'radio', 'flag', 'figurehead',
+  'plank_chest', 'tin_trunk', 'sea_chest',
 ];
 
 test.use({
@@ -197,7 +198,7 @@ test('the leaky canoe shows its water at the level the rules give', async ({ pag
   expect(risen.different).toBeGreaterThan(400);
 });
 
-test('each of the 19 attachments draws on the long hull, alone and all together', async ({ page }) => {
+test('each of the 22 attachments draws on the long hull, alone and all together', async ({ page }) => {
   const problems = watchConsole(page);
   await open(page);
   await fit(page, { hullTier: 3, attachments: [], sailRaised: true, lanternLit: true, beached: false });
@@ -211,7 +212,7 @@ test('each of the 19 attachments draws on the long hull, alone and all together'
   }
   await fit(page, { attachments: ATTACHMENTS });
   const all = await compare(page, bare, await page.screenshot({ clip: QUARTER }));
-  console.log(`pixels each attachment adds to the bare long hull: ${drawn.join(', ')}; all 19: ${all.different}`);
+  console.log(`pixels each attachment adds to the bare long hull: ${drawn.join(', ')}; all 22: ${all.different}`);
   expect(all.different).toBeGreaterThan(40_000);
   expect(problems).toEqual([]);
 });

@@ -24,10 +24,10 @@ describe('the list matches the game', () => {
     expect(HULL_TIERS.length).toBe(4);
   });
 
-  it('has every attachment, 19 today', () => {
+  it('has every attachment, 22 today', () => {
     expect(countOf('attachment')).toBe(ATTACHMENT_IDS.length);
     expect(countOf('attachment')).toBe(Object.keys(ATTACHMENTS).length);
-    expect(ATTACHMENT_IDS.length).toBe(19);
+    expect(ATTACHMENT_IDS.length).toBe(22);
   });
 
   it('has the four crew colours and the three survivors', () => {

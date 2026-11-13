@@ -27,7 +27,7 @@ describe('solvability', () => {
     const reach = analyseReach(data);
     expect([...reach.items].sort()).toEqual([...ITEM_IDS].sort());
     expect([...reach.recipes].sort()).toEqual([...RECIPE_IDS].sort());
-    expect(reach.attachments.size).toBe(19);
+    expect(reach.attachments.size).toBe(22);
     expect(reach.hullTier).toBe(3);
     expect(reach.islands.size).toBe(15);
     expect(reach.stations).toEqual(new Set(['hands', 'fire', 'bench', 'forge', 'smoker']));

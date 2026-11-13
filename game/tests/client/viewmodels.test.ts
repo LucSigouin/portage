@@ -379,7 +379,7 @@ describe('the panels', () => {
     expect(panel.hull).toMatchObject({ id: 'hull', name: 'Hull: Patched canoe', built: false });
     expect(panel.hull!.missingText).toBe('Needs 2 more pitch, 3 more birch bark');
     expect(panel.hull!.build).toMatchObject({ enabled: false, intent: { type: 'command', command: { type: 'upgrade_hull' } } });
-    expect(panel.attachments).toHaveLength(19);
+    expect(panel.attachments).toHaveLength(22);
     const outrigger = panel.attachments.find((row) => row.id === 'outrigger_port')!;
     expect(outrigger.missingText).toContain('the ribbed canoe');
     expect(outrigger.missingText).toContain('2 more spruce log');
