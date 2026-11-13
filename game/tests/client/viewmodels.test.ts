@@ -422,8 +422,9 @@ describe('the panels', () => {
     expect(panel.stow.enabled).toBe(true);
     expect(panel.tools.map((tool) => tool.name)).toEqual(['Bailing can']);
 
-    // Out of reach of the canoe: the cargo is shown but nothing moves.
+    // Out of reach of the canoe (paddled off, so not landed here): the cargo is shown but nothing moves.
     teleport(state, 'home_knoll', 0, 1150);
+    state.canoe.beached = false;
     const away = buildInventoryPanel(state);
     expect(away.cargo.accessible).toBe(false);
     expect(away.cargo.label).toContain('out of reach');

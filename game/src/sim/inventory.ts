@@ -162,13 +162,22 @@ export function atCanoe(state: GameState, player: PlayerState): boolean {
 }
 
 /**
- * True when cargo can be reached: aboard, beside the canoe, or at a camp on
- * the island where the canoe is beached.
+ * True when the canoe is landed at the island this player stands on: it rests on the ground (it touched the shore,
+ * or was pulled up when someone stepped out) and the island it rests at is the player's. Paddling it off ends it.
+ * Luc's list, line 17: then its cargo is in reach from anywhere on that island.
+ */
+export function canoeLandedHere(state: GameState, player: PlayerState): boolean {
+  return player.mode === 'foot' && player.islandId !== null && state.canoe.beached
+    && state.canoe.lastBeached.islandId === player.islandId;
+}
+
+/**
+ * True when cargo can be reached: aboard, beside the canoe, or anywhere on the island where the canoe is landed.
+ * Stowing, taking, crafting, eating and what does not fit in the backpack all follow it. Stations do not: a bench
+ * recipe still needs a bench, cooking a fire, and the canoe's own stations still need the canoe close by.
  */
 export function cargoAccessible(state: GameState, player: PlayerState): boolean {
-  if (atCanoe(state, player)) return true;
-  const camp = campInReach(player);
-  return camp !== null && state.canoe.beached && state.canoe.lastBeached.islandId === camp.id;
+  return atCanoe(state, player) || canoeLandedHere(state, player);
 }
 
 /**

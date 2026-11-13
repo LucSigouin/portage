@@ -93,17 +93,17 @@ describe('moving things', () => {
 });
 
 describe('reaching the cargo', () => {
-  it('is in reach aboard, beside the canoe, and at a camp on the island where the canoe is beached', () => {
+  it('is in reach aboard, beside the canoe, and anywhere on the island where the canoe is landed', () => {
     const state = newGame();
     expect(selectInventory(state).cargoAccessible).toBe(true); // aboard
     standOn(state, 'home_knoll');
     expect(selectInventory(state).cargoAccessible).toBe(true); // beside it
     teleport(state, 'home_knoll', 30, 1170);
-    expect(selectInventory(state).cargoAccessible).toBe(false); // across the island
-    expect(dispatch(state, { type: 'stow_backpack' })).toMatchObject({ ok: false, reason: 'not_at_canoe' });
+    expect(selectInventory(state).cargoAccessible).toBe(true); // across the island (Luc's list, line 17)
     teleportToCamp(state, 'home_knoll');
     expect(selectInventory(state).cargoAccessible).toBe(true); // at the camp
     state.canoe.lastBeached.islandId = 'birch_islet';
     expect(selectInventory(state).cargoAccessible).toBe(false); // canoe is elsewhere
+    expect(dispatch(state, { type: 'stow_backpack' })).toMatchObject({ ok: false, reason: 'not_at_canoe' });
   });
 });

@@ -129,7 +129,9 @@ describe('scavenging', () => {
     const state = newGame();
     standOn(state, 'home_knoll');
     teleport(state, 'home_knoll', NODES_BY_ID['home_knoll.driftwood_pile.3'].position.x + 0.5, NODES_BY_ID['home_knoll.driftwood_pile.3'].position.z);
+    // Backpack and cargo both full: the canoe is landed here, so what does not fit in one would go in the other.
     for (let slot = 0; slot < 8; slot += 1) give(state, 'stone', 20);
+    for (let slot = 0; slot < 8; slot += 1) give(state, 'stone', 20, 'cargo');
     const first = dispatch(state, { type: 'scavenge' });
     const events = drainEvents(state);
     const left = events.find((event) => event.type === 'item_left_behind');
