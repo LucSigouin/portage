@@ -3,6 +3,15 @@
  * stations that are not here. Nothing in this file moves: no transition, no animation, and a card pressed does not
  * shift (the selected card is drawn in the same box as the others).
  */
+/*
+ * The boat's panel hangs from its top edge, as the settings panel does. A station with two recipes makes a shorter
+ * sheet than the builder with its nineteen parts: the sheet ends higher, and the row of icons stays where it was,
+ * under the pointer that pressed it. (5vh is where the full sheet's top already sat: 90vh tall, centred.)
+ */
+.iw-panel-canoe_builder {
+  align-self: start;
+  margin-top: 5vh;
+}
 .iw-boat-tabs {
   display: flex;
   flex: none;
@@ -30,8 +39,8 @@
   border-radius: 0.6rem 0.4rem 0.7rem 0.36rem;
 }
 .iw-boat-tab .iw-boat-ico .iw-ico {
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 3rem;
+  height: 3rem;
 }
 .iw .iw-boat-tab.iw-on {
   color: var(--iw-ink);
