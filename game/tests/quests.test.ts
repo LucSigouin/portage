@@ -52,19 +52,20 @@ describe('the main line', () => {
     expect(selectCurrentMainQuest(state)).toBe('stop_the_leak');
   });
 
-  it('counts crafting only while the quest that asks for it is active', () => {
+  it('counts crafting done before the quest that asks for it is given, up to what it asks (Luc\'s list, line 6)', () => {
     const state = newGame();
     standOn(state, 'home_knoll');
     teleportToCamp(state, 'home_knoll');
     give(state, 'spruce_gum', 8);
     give(state, 'driftwood', 6);
-    expect(dispatch(state, { type: 'craft', recipeId: 'pitch', count: 2 }).ok).toBe(true); // too early to count
+    expect(dispatch(state, { type: 'craft', recipeId: 'pitch' }).ok).toBe(true); // before the quest: it counts
+    expect(state.quests.stop_the_leak.status).toBe('locked');
+    expect(state.quests.stop_the_leak.progress[2]).toBe(1);
     state.quests.bail_out.status = 'completed';
     state.quests.first_haul.status = 'completed';
     state.quests.stop_the_leak.status = 'active';
-    expect(state.quests.stop_the_leak.progress[2]).toBe(0);
     expect(dispatch(state, { type: 'craft', recipeId: 'pitch' }).ok).toBe(true);
-    expect(state.quests.stop_the_leak.progress[2]).toBe(1);
+    expect(state.quests.stop_the_leak.progress[2]).toBe(2);
     expect(dispatch(state, { type: 'craft', recipeId: 'pitch' }).ok).toBe(true);
     expect(state.quests.stop_the_leak.progress[2]).toBe(2);
   });

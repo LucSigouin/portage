@@ -336,9 +336,9 @@ describe('every step of every quest, done before the quest is given', () => {
       useUp(state, objective, events);
       giveQuest(state, quest, events);
 
-      // 1. The quest remembers the step. Only a hand-over, cooking and sleeping wait for the quest to be open.
+      // 1. The quest remembers the step. Only a hand-over and sleeping wait for the quest to be open.
       const required = objectiveRequired(objective);
-      if (!['deliver', 'craft', 'sleep'].includes(objective.type)) {
+      if (!['deliver', 'sleep'].includes(objective.type)) {
         expect(state.quests[quest.id].progress[index], 'the quest remembers the step').toBeGreaterThanOrEqual(required);
         const entry = selectQuestLog(state).find((view) => view.questId === quest.id)!;
         expect(entry.objectives[index].done, 'the quest log shows it done').toBe(true);
@@ -346,7 +346,7 @@ describe('every step of every quest, done before the quest is given', () => {
 
       // 2. And the quest can still be finished: do whatever is left, the way a player would.
       for (const [otherIndex, other] of quest.objectives.entries()) {
-        const credited = !['deliver', 'craft', 'sleep'].includes(other.type) && state.quests[quest.id].progress[otherIndex] >= objectiveRequired(other);
+        const credited = !['deliver', 'sleep'].includes(other.type) && state.quests[quest.id].progress[otherIndex] >= objectiveRequired(other);
         if (credited) continue;
         // A step the quest did not remember has to be done again, so it must be something that can be done again.
         if (otherIndex === index) expect(canBeDoneAgain(other), `"${other.text}" cannot be done again`).toBe(true);
