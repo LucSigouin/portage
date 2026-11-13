@@ -39,6 +39,8 @@ const markedParts = (state: GameState, playerId = 0): string[] => {
   return [panel.hull, ...panel.attachments].filter((row) => row !== null && row.questText !== '').map((row) => String(row!.id)).sort();
 };
 
+const CLOSE = { label: 'Close', intent: { type: 'close_panel' as const }, enabled: true, note: null };
+
 const marks = (nodes: ViewNode[]): ViewNode[] =>
   nodes.flatMap((node) => [...(node.classes.split(' ').includes('iw-quest-mark') ? [node] : []), ...marks(node.children)]);
 
@@ -92,14 +94,14 @@ describe('the red ! on what an open quest asks for', () => {
 
   it('is drawn as a red ! before the name, naming the quest, in both menus', () => {
     const state = atQuest('ribs_and_rails');
-    const crafting = panelView({ id: 'crafting', title: 'Crafting', close: { label: 'Close', intent: { type: 'close_panel' }, enabled: true, note: null }, ...buildCraftingPanel(state) });
+    const crafting = panelView({ ...buildCraftingPanel(state), title: 'Crafting', close: CLOSE });
     const drawn = marks(crafting);
     expect(drawn.length).toBe(2);
     for (const mark of drawn) {
       expect(collectText([mark])).toBe('!');
       expect(mark.attributes.title).toBe('For Ribs and rails');
     }
-    const builder = panelView({ id: 'canoe_builder', title: 'Canoe builder', close: { label: 'Close', intent: { type: 'close_panel' }, enabled: true, note: null }, ...buildCanoeBuilderPanel(state) });
+    const builder = panelView({ ...buildCanoeBuilderPanel(state), title: 'Canoe builder', close: CLOSE });
     expect(marks(builder).length).toBe(1);
   });
 });
