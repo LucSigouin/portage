@@ -4,18 +4,22 @@
  * (`src/data/`) when the viewer starts, so a change to a table changes the guide with it. Nothing here is written
  * per item.
  *
+ * The wild trees and stones (every spruce, pine, birch, boulder and crag a player can use) are read from `WILD_KINDS`
+ * in the same tables, and where each kind stands from the game's own placing of them (`src/sim/gathering.ts`).
+ *
  * Three facts live in the game's code rather than its tables: the gear a new game starts with, the water the
  * bailing can scoops from the lake, and what the rain catcher, fishing rig and planter add by themselves. They are
  * named once below, and `tests/viewer/guide.test.ts` holds each one against the running simulation.
  */
 import {
   ATTACHMENTS, ATTACHMENT_IDS, HULL_TIERS, ISLANDS, ISLANDS_BY_ID, ITEMS, LOOT_TABLES, NODES, NODE_TYPES,
-  NPCS, NPC_IDS, QUEST_LIST, RECIPES, RECIPE_IDS, REGIONS_BY_ID, STATIONS, STOCK_FOOD_IDS, TUNING,
+  NPCS, NPC_IDS, QUEST_LIST, RECIPES, RECIPE_IDS, REGIONS_BY_ID, STATIONS, STOCK_FOOD_IDS, TUNING, WILD_KINDS,
 } from '../data/index.ts';
 import type {
   AttachmentDefinition, AttachmentId, FlagId, HullTierDefinition, IslandId, ItemAmount, ItemId, NodeActionDefinition,
-  NodeDefinition, NodeTypeId, ObjectiveDefinition, QuestDefinition, RecipeDefinition, StationId, ToolId,
+  NodeDefinition, NodeTypeId, ObjectiveDefinition, QuestDefinition, RecipeDefinition, StationId, ToolId, WildKind,
 } from '../data/index.ts';
+import { wildIndex } from '../sim/gathering.ts';
 
 // --- The three facts from the game's code -------------------------------------------------------------------------------
 
@@ -37,6 +41,7 @@ export const ABOARD: readonly { attachmentId: AttachmentId; itemId: ItemId; coun
 export type GuideRef =
   | { kind: 'node'; id: NodeTypeId }
   | { kind: 'placed'; id: string }
+  | { kind: 'wild'; id: WildKind }
   | { kind: 'island'; id: IslandId }
   | { kind: 'recipe'; id: string }
   | { kind: 'hull'; id: string }
@@ -175,7 +180,7 @@ export function spots(): SpotGroup[] {
 }
 
 /** What one action needs, in words: "with the hatchet", "from the canoe, with the winch". */
-function needsWords(group: SpotGroup): string {
+function needsWords(group: Pick<SpotGroup, 'typeId' | 'action'>): string {
   const { action } = group;
   const parts: string[] = [];
   if (NODE_TYPES[group.typeId].reach === 'canoe') parts.push('from the canoe');
@@ -184,7 +189,7 @@ function needsWords(group: SpotGroup): string {
   return parts.join(', ');
 }
 
-const gateWords = (group: SpotGroup): string => {
+const gateWords = (group: Pick<SpotGroup, 'action'>): string => {
   const gate = group.action.questGate;
   if (!gate) return '';
   const quest = QUEST_LIST.find((candidate) => candidate.id === gate);
@@ -208,6 +213,59 @@ function lootWords(lootTableId: string): string {
   const parts = [...(always.length > 0 ? [listOf(always)] : [])];
   if (sometimes.length > 0) parts.push(`${table.rolls === 1 ? 'one' : table.rolls} more from ${listOf(unique(sometimes))}`);
   return parts.length > 0 ? parts.join(', plus ') : 'nothing to carry';
+}
+
+// --- Wild trees and stones ------------------------------------------------------------------------------------------------
+
+/** One kind of wild tree or stone, one of its actions, and where that kind stands: every one of them is a spot. */
+export interface WildGroup {
+  kind: WildKind;
+  typeId: NodeTypeId;
+  name: string;
+  action: NodeActionDefinition;
+  /** How many stand on each island, islands in table order. */
+  islands: { islandId: IslandId; count: number }[];
+  total: number;
+}
+
+let wildGroups: WildGroup[] | null = null;
+export function wildSpots(): WildGroup[] {
+  if (wildGroups) return wildGroups;
+  const counts = new Map<WildKind, Map<IslandId, number>>();
+  for (const wild of wildIndex().nodes) {
+    const onIslands = counts.get(wild.kind) ?? new Map<IslandId, number>();
+    onIslands.set(wild.definition.islandId, (onIslands.get(wild.definition.islandId) ?? 0) + 1);
+    counts.set(wild.kind, onIslands);
+  }
+  wildGroups = [];
+  for (const kind of Object.keys(WILD_KINDS) as WildKind[]) {
+    const onIslands = counts.get(kind);
+    if (!onIslands) continue;
+    const islands = ISLANDS.filter((island) => onIslands.has(island.id)).map((island) => ({ islandId: island.id, count: onIslands.get(island.id)! }));
+    const total = islands.reduce((sum, entry) => sum + entry.count, 0);
+    const { typeId, name, actions } = WILD_KINDS[kind];
+    for (const action of actions) wildGroups.push({ kind, typeId, name, action, islands, total });
+  }
+  return wildGroups;
+}
+
+/** "Any pine": every one of that kind on every island is a spot. */
+const wildLead = (group: WildGroup): string => `Any ${lower(group.name)}`;
+
+/** "37 in all on Home Knoll (Shallows); The Beacon (Narrows), most on Fire Tower Ridge (37)." */
+function wildPlaceWords(group: WildGroup): string {
+  const most = group.islands.reduce((best, entry) => (entry.count > best.count ? entry : best));
+  const mostWords = group.islands.length > 1 ? `, most on ${ISLANDS_BY_ID[most.islandId].name} (${most.count})` : '';
+  return `${group.total} in all on ${islandWords(group.islands.map((entry) => entry.islandId))}${mostWords}.`;
+}
+
+function wildRefs(group: WildGroup): GuideRef[] {
+  return [
+    { kind: 'wild', id: group.kind },
+    { kind: 'node', id: group.typeId },
+    ...group.islands.map((entry): GuideRef => ({ kind: 'island', id: entry.islandId })),
+    ...(group.action.tool ? [{ kind: 'item', id: group.action.tool } as GuideRef] : []),
+  ];
 }
 
 // --- Items ------------------------------------------------------------------------------------------------------------------
@@ -269,6 +327,23 @@ function whereLines(itemId: ItemId): GuideLine[] {
       lead: spotName(group),
       text: `${group.action.verb}${needs ? ` ${needs}` : ''}. ${gives}. ${placeWords(group)} ${refillWords(group.action)}${gateWords(group)}`,
       refs,
+      again,
+    });
+  }
+  // The wild trees and stones, after the placed spots: the same kinds of spot, everywhere they stand.
+  for (const group of wildSpots()) {
+    const table = LOOT_TABLES[group.action.lootTableId];
+    if (!table) continue;
+    const sure = table.guaranteed.find((entry) => entry.itemId === itemId);
+    const maybe = table.pool.find((entry) => entry.itemId === itemId);
+    if (!sure && !maybe) continue;
+    const gives = sure ? `Always ${range(sure.minimum, sure.maximum)}` : `Sometimes ${range(maybe!.minimum, maybe!.maximum)}`;
+    const needs = needsWords(group);
+    const again = group.action.respawnDays !== null;
+    (again ? (sure ? always : sometimes) : once).push({
+      lead: wildLead(group),
+      text: `${group.action.verb}${needs ? ` ${needs}` : ''}. ${gives}. ${wildPlaceWords(group)} ${refillWords(group.action)}${gateWords(group)}`,
+      refs: wildRefs(group),
       again,
     });
   }
@@ -354,6 +429,13 @@ function usedForLines(itemId: ItemId): GuideLine[] {
     const known = lines.find((line) => line.lead === lead && line.text === text);
     if (!known) lines.push({ lead, text, refs: [{ kind: 'node', id: group.typeId }], again: true });
   }
+  for (const group of wildSpots()) {
+    if (group.action.tool !== itemId) continue;
+    const text = `Lets you ${lower(group.action.verb)} it.`;
+    // a wild spruce is a spruce: said once already by the placed one
+    if (lines.some((line) => line.lead === group.name && line.text === text)) continue;
+    lines.push({ lead: group.name, text, refs: [{ kind: 'wild', id: group.kind }, { kind: 'node', id: group.typeId }], again: true });
+  }
   for (const recipeId of RECIPE_IDS) {
     const recipe: RecipeDefinition = RECIPES[recipeId];
     const taken = recipe.inputs.find((entry) => entry.itemId === itemId);
@@ -399,6 +481,7 @@ export function itemGuide(itemId: ItemId): ItemGuide {
 export function resetGuide(): void {
   itemGuides.clear();
   spotGroups = null;
+  wildGroups = null;
 }
 
 export function itemSections(itemId: ItemId): GuideSection[] {
@@ -440,8 +523,19 @@ export function nodeSections(typeId: NodeTypeId): GuideSection[] {
   const asked = askedBy((objective) => (objective.type === 'node' && ids.has(objective.nodeId))
     || (objective.type === 'bottles' && placed.some((node) => node.bottleId !== null))
     || (objective.type === 'caches' && typeId === 'wreck_buoy'));
+  // The wild trees and stones that are this kind of spot (a pine is a spruce that gives logs alone).
+  const wild = wildSpots().filter((group) => group.typeId === typeId).map((group): GuideLine => {
+    const needs = needsWords(group);
+    return {
+      lead: wildLead(group),
+      text: `${group.action.verb}${needs ? ` ${needs}` : ''}. Gives ${lootWords(group.action.lootTableId)}. ${wildPlaceWords(group)} ${refillWords(group.action)}${gateWords(group)}`,
+      refs: wildRefs(group),
+      again: group.action.respawnDays !== null,
+    };
+  });
   return [
     { title: placed.length === 1 ? 'The one spot' : `Gives, in ${placed.length} spots`, lines: gives, empty: 'Placed on no island yet.' },
+    ...(wild.length > 0 ? [{ title: 'And in the wild', lines: wild }] : []),
     ...(asked.length > 0 ? [{ title: 'Quests that count it', lines: asked }] : []),
   ];
 }

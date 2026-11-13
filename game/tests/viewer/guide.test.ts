@@ -7,9 +7,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   ATTACHMENTS, ATTACHMENT_IDS, HULL_TIERS, ISLANDS_BY_ID, ITEMS, ITEM_IDS, LOOT_TABLES, NODES, NODES_BY_ID, NODE_TYPES,
-  NPCS, NPC_IDS, QUESTS, QUEST_LIST, RECIPES, RECIPE_IDS, STATIONS, TUNING,
+  NPCS, NPC_IDS, QUESTS, QUEST_LIST, RECIPES, RECIPE_IDS, STATIONS, TUNING, WILD_KINDS,
 } from '../../src/data/index.ts';
-import type { ItemId } from '../../src/data/index.ts';
+import type { IslandId, ItemId, WildKind } from '../../src/data/index.ts';
+import { wildIndex } from '../../src/sim/gathering.ts';
 import { loadGameData } from '../../src/analysis/solvability.ts';
 import { createGame } from '../../src/sim/step.ts';
 import { dispatch } from '../../src/sim/commands.ts';
@@ -30,6 +31,7 @@ function real(ref: GuideRef): boolean {
   switch (ref.kind) {
     case 'node': return ref.id in NODE_TYPES;
     case 'placed': return ref.id in NODES_BY_ID;
+    case 'wild': return ref.id in WILD_KINDS;
     case 'island': return ref.id in ISLANDS_BY_ID;
     case 'recipe': return ref.id in RECIPES;
     case 'hull': return HULL_TIERS.some((hull) => hull.id === ref.id);
@@ -92,6 +94,68 @@ describe('every way the tables give or take an item is on its page', () => {
         for (const entry of [...table.guaranteed, ...table.pool]) {
           expect(names(itemGuide(entry.itemId).where, 'placed', node.id), `${node.id} gives ${entry.itemId}`).toBe(true);
         }
+      }
+    }
+  });
+
+  it('every wild tree and stone that gives an item is in that item\'s "where", on exactly the islands it stands on', () => {
+    const standsOn = new Map<WildKind, Set<IslandId>>();
+    for (const wild of wildIndex().nodes) standsOn.set(wild.kind, (standsOn.get(wild.kind) ?? new Set<IslandId>()).add(wild.definition.islandId));
+    const named = new Set<ItemId>();
+    for (const kind of Object.keys(WILD_KINDS) as WildKind[]) {
+      for (const action of WILD_KINDS[kind].actions) {
+        const table = LOOT_TABLES[action.lootTableId];
+        for (const entry of [...table.guaranteed, ...table.pool]) {
+          const line = itemGuide(entry.itemId).where.find((candidate) => candidate.text.startsWith(action.verb)
+            && candidate.refs.some((ref) => ref.kind === 'wild' && ref.id === kind));
+          expect(line, `${kind} gives ${entry.itemId}`).toBeDefined();
+          const islands = line!.refs.flatMap((ref) => (ref.kind === 'island' ? [ref.id] : []));
+          expect(new Set(islands), `${kind}: ${line!.text}`).toEqual(standsOn.get(kind));
+          for (const islandId of islands) expect(line!.text).toContain(ISLANDS_BY_ID[islandId].name);
+          expect(line!.again).toBe(action.respawnDays !== null);
+          named.add(entry.itemId);
+        }
+      }
+    }
+    // and no item names a wild thing that does not give it
+    for (const itemId of ITEM_IDS) {
+      for (const line of itemGuide(itemId).where) {
+        for (const ref of line.refs) {
+          if (ref.kind !== 'wild') continue;
+          const gives = WILD_KINDS[ref.id].actions.some((action) => [...LOOT_TABLES[action.lootTableId].guaranteed, ...LOOT_TABLES[action.lootTableId].pool]
+            .some((entry) => entry.itemId === itemId));
+          expect(gives, `${itemId} names ${ref.id}`).toBe(true);
+        }
+      }
+    }
+    console.log(`items whose guide names a wild source: ${named.size} (${[...named].join(', ')})`);
+    expect(named.size).toBeGreaterThan(0);
+  });
+
+  it('names the wild sources a player would find by looking: three checked by hand', () => {
+    const line = (itemId: ItemId, lead: string): GuideLine | undefined => itemGuide(itemId).where.find((candidate) => candidate.lead === lead);
+    // Home Knoll's own birches peel, so bark is no longer Birch Islet's alone.
+    const bark = line('birch_bark', 'Any birch');
+    expect(bark?.text).toMatch(/^Peel with the stone knife\. Always 2 to 3\./);
+    expect(bark?.text).toContain('Home Knoll');
+    expect(bark?.text).toContain('most on Birch Islet');
+    // A pine gives logs with the hatchet, and no gum; none grow on Birch Islet.
+    const pine = line('log', 'Any pine');
+    expect(pine?.text).toMatch(/^Chop with the hatchet\. Always 3\./);
+    expect(pine?.text).not.toContain('Birch Islet');
+    expect(line('spruce_gum', 'Any pine')).toBeUndefined();
+    // Crags stand on the high ground only.
+    const crag = line('stone', 'Any crag');
+    expect(crag?.refs.flatMap((ref) => (ref.kind === 'island' ? [ref.id] : []))).toEqual(['quarry_face', 'fire_tower_ridge', 'the_beacon']);
+  });
+
+  it('a spot\'s own page names the wild ones of its kind, and a tool\'s page every wild kind it works', () => {
+    for (const kind of Object.keys(WILD_KINDS) as WildKind[]) {
+      const { typeId, name, actions } = WILD_KINDS[kind];
+      const wild = nodeSections(typeId).find((section) => section.title === 'And in the wild');
+      expect(wild && names(wild.lines, 'wild', kind), `${typeId} page names ${kind}`).toBe(true);
+      for (const action of actions) {
+        if (action.tool) expect(itemGuide(action.tool).usedFor.some((candidate) => candidate.lead === name), `${action.tool} works ${kind}`).toBe(true);
       }
     }
   });
