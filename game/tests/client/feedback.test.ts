@@ -365,7 +365,8 @@ describe('Feedback in the menus', () => {
   it('is in the lobby above Credits and on the pause card above quitting, and opens from those two places only', () => {
     const each = client(relayDoor().fetch);
     expect(labels(each.model().lobby!.buttons)).toEqual(['Continue', 'New Game', 'Settings', 'How to Play', 'Feedback', 'Credits']);
-    expect(named(each.model().lobby!.buttons, 'Feedback').note).toBe('A bug, an idea, anything');
+    // The canoe sketch stands beside the lobby's last three lines (preview.css), where a line's side words would run: none of the three has any.
+    expect(each.model().lobby!.buttons.slice(-3).map((button) => [button.label, button.note])).toEqual([['How to Play', null], ['Feedback', null], ['Credits', null]]);
     each.press(named(each.model().lobby!.buttons, 'Feedback'));
     expect(each.panel('feedback').title).toBe('Feedback');
     each.press(each.panel('feedback').close);

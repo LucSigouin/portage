@@ -100,7 +100,11 @@ async function hold(page: Page, key: string, milliseconds: number): Promise<void
   await page.keyboard.up(key);
 }
 
-/** Both players ashore on Home Knoll by the fire, the canoe pulled up at the landing. Run on the host: it owns the game. */
+/**
+ * Both players ashore on Home Knoll, the canoe pulled up at the landing. Run on the host: it owns the game.
+ * They stand a few steps south-east of the fire, on open ground. The fire ring is solid, like the trees: a spot
+ * beside it would have a walk stop short against it, whichever way the camera happened to look.
+ */
 const PUT_CREW_ASHORE = `
   const game = portage.session.game;
   const island = data.ISLANDS_BY_ID.home_knoll;
@@ -109,8 +113,9 @@ const PUT_CREW_ASHORE = `
   game.canoe.lastBeached = { ...berth, islandId: 'home_knoll' };
   const camp = data.spotPosition(island, island.camp.spot);
   game.players.forEach((player, index) => {
-    const x = camp.x + 1.5 + index * 1.2;
-    Object.assign(player, { mode: 'foot', seat: null, islandId: 'home_knoll', position: { x, y: sim.terrainHeight(x, camp.z), z: camp.z } });
+    const x = camp.x + 3 + index * 1.2;
+    const z = camp.z + 3;
+    Object.assign(player, { mode: 'foot', seat: null, islandId: 'home_knoll', position: { x, y: sim.terrainHeight(x, z), z } });
   });
 `;
 

@@ -15,7 +15,12 @@ import type { Page } from '@playwright/test';
 
 const BASE = process.env.PORTAGE_URL ?? 'http://localhost:5220';
 
-test.use({ viewport: { width: 1920, height: 1080 } });
+// On the real graphics card, as every other spec that opens a game: the software fallback takes two seconds a
+// frame at the top quality on this Mac.
+test.use({
+  viewport: { width: 1920, height: 1080 },
+  launchOptions: { args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] },
+});
 test.setTimeout(300_000);
 
 function watch(page: Page): string[] {
@@ -69,7 +74,14 @@ async function showInventory(page: Page, boatStacks: number): Promise<void> {
     player.backpack = stacks(4, 0);
     state.canoe.cargo = stacks(wanted, 4);
   }, boatStacks);
-  await frames(page, 4);
+  // The game does not draw on every display frame (it keeps a beat, and watches the screen as the page opens):
+  // wait until the sheet shows the boat as it was just filled, not for a count of frames.
+  await page.waitForFunction((wanted) => {
+    const panel = (window as any).portage.app.lastModel?.panel;
+    return panel?.id === 'inventory' && panel.cargo.slots.filter((slot: { itemId: string | null }) => slot.itemId !== null).length === wanted
+      && document.querySelectorAll('.iw-inv-boat .iw-item-pick').length === wanted;
+  }, boatStacks);
+  await frames(page, 2);
 }
 
 test('the bag and a boat of 40 stacks fit the sheet at 1920x1080 and 1366x768, and nothing on it moves', async ({ page }) => {

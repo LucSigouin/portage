@@ -268,7 +268,9 @@ function layoutProblems(): string[] {
     }
     const scroller = parent.closest('.iw-body');
     const scrollerBox = scroller?.getBoundingClientRect();
-    const card = parent.closest('.iw-panel, .iw-crew, .iw-vitals, .iw-notes, .iw-prompt, .iw-toast, .iw-hint, .iw-debug, .iw-chart, .iw-mark-chip');
+    // The four letters round the map's chart sit on its rim on purpose, half in and half out: the card they stay inside is the panel.
+    const cards = '.iw-panel, .iw-crew, .iw-vitals, .iw-notes, .iw-prompt, .iw-toast, .iw-hint, .iw-debug, .iw-chart, .iw-mark-chip';
+    const card = parent.closest('.iw-rim-letter') ? parent.closest('.iw-panel') : parent.closest(cards);
     // A line of handwriting is boxed taller than it is drawn (the face has long ascenders), so allow that much above and below.
     const slack = Number.parseFloat(getComputedStyle(parent).fontSize) * 0.45;
     const cardBox = card?.getBoundingClientRect();
@@ -777,12 +779,14 @@ test('with the inventory open, the interface adds under half a millisecond and t
     rates.push(debug.framesPerSecond);
   }
   // The interface's own share, timed directly: `update` with a fresh model object, as every frame gives it.
+  // Fresh but for the chart: the game hands the same valley and the same record of the fog every frame until the
+  // crew sees more (`ChartModel` in viewmodels/types.ts), and the minimap tells by that whether to paint.
   // Batches of 100, because the browser's clock is too coarse to time one call.
   const interfaceOnly = await page.evaluate(() => {
     const { app } = (window as any).portage;
     const batches: number[] = [];
     for (let batch = 0; batch < 20; batch += 1) {
-      const models = Array.from({ length: 100 }, () => structuredClone(app.lastModel));
+      const models = Array.from({ length: 100 }, () => ({ ...structuredClone({ ...app.lastModel, chart: null }), chart: app.lastModel.chart }));
       const start = performance.now();
       for (const model of models) app.gameInterface.update(model);
       batches.push((performance.now() - start) / 100);
@@ -813,7 +817,8 @@ function itemIconProblems(): { problems: string[]; named: number; smallest: numb
     else if (value !== null && typeof value === 'object') {
       for (const [key, entry] of Object.entries(value)) {
         // An intent may carry an item id too: that is what a button does, not a row that names an item.
-        if (key === 'itemId') { if (entry !== null) named.push(entry as string); } else if (key !== 'intent') walk(entry);
+        // So may a tile's two quick presses (`shift` for Shift+click, `drop` for the drop key): they are intents as well.
+        if (key === 'itemId') { if (entry !== null) named.push(entry as string); } else if (key !== 'intent' && key !== 'shift' && key !== 'drop') walk(entry);
       }
     }
   };

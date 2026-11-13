@@ -133,8 +133,11 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
   }
 }
 
-/** The lobby with its Feedback entry (`feedback.ts`). */
-const withLobbyFeedback = (lobby: InterfaceModel['lobby'] & object): InterfaceModel['lobby'] => ({ ...lobby, buttons: withFeedbackEntry(lobby.buttons, 'A bug, an idea, anything') });
+/**
+ * The lobby with its Feedback entry (`feedback.ts`). The line has no side words: the canoe sketch stands beside
+ * the menu's last three lines (`interface/preview.css`), and a mast was drawn through them.
+ */
+const withLobbyFeedback = (lobby: InterfaceModel['lobby'] & object): InterfaceModel['lobby'] => ({ ...lobby, buttons: withFeedbackEntry(lobby.buttons) });
 
 /** One frame of UI. Only the panel on top (under any confirm dialog) is built. */
 export function buildInterfaceModel(input: InterfaceModelInput): InterfaceModel {

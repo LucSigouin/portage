@@ -29,6 +29,8 @@ import type { Transport } from './transport.ts';
 
 /** The part of `WebSocket` this uses. */
 export interface SocketLike {
+  /** `WebSocket.readyState`: `SOCKET_OPEN` while frames can go out. A stand-in may leave it out. */
+  readonly readyState?: number;
   send(text: string): void;
   close(code?: number, reason?: string): void;
   onopen: (() => void) | null;
@@ -38,6 +40,9 @@ export interface SocketLike {
 }
 
 export type OpenSocket = (address: string, protocols: string[]) => SocketLike;
+
+/** `WebSocket.OPEN`. */
+const SOCKET_OPEN = 1;
 
 /** The same words as `relay/src/room.ts`. A test holds the two together. */
 export const RELAY_PROTOCOL = 'portage-relay.1';
@@ -133,6 +138,10 @@ abstract class RelayLine {
 
   protected write(text: string): void {
     if (!this.ready) return;
+    // A socket whose close has begun is not written to. A browser does not throw there: it drops the frame and
+    // writes an error on the console, once for every frame, until the close arrives.
+    const state = this.socket!.readyState;
+    if (state !== undefined && state !== SOCKET_OPEN) return;
     try {
       this.socket!.send(text);
     } catch {

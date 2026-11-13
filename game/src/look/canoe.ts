@@ -506,7 +506,8 @@ export class CanoeView {
   }
 
   /**
-   * How big the canoe is as drawn at the last `sync`: the hull that is shown and everything bolted onto it, as a
+   * How big the canoe is as drawn at the last `sync`: the hull that is shown, everything bolted onto it and each
+   * paddle left across its gunwales by someone ashore (it stands out half a metre past the hull's side), as a
    * box in canoe space. The crew are left out. The built view frames the canoe with it.
    */
   bounds(target = new THREE.Box3()): THREE.Box3 {
@@ -515,7 +516,8 @@ export class CanoeView {
     if (!shown) return target;
     this.group.updateMatrixWorld(true);
     this.toCanoe.copy(this.group.matrixWorld).invert();
-    for (const root of [shown.group, this.attachments]) {
+    const paddlesLeft = [...this.members.values()].map((member) => member.berth).filter((berth) => berth.visible && berth.parent === this.hullSpace);
+    for (const root of [shown.group, this.attachments, ...paddlesLeft]) {
       root.traverseVisible((object) => {
         if (!(object instanceof THREE.Mesh)) return;
         // A sail's cloth is redrawn every frame: measure it as it is now.

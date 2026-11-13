@@ -165,6 +165,7 @@ test('a build cuts to a still, framed view of the canoe with the new piece, then
   // width (the player standing at the bow is in the picture too, head to foot).
   expect(during.canoe, 'the canoe is on the screen').not.toBeNull();
   const canoe = during.canoe!;
+  console.log(`built ${made}: canoe from ${(canoe.left * 100).toFixed(1)}% to ${(canoe.right * 100).toFixed(1)}% across and ${(canoe.top * 100).toFixed(1)}% to ${(canoe.bottom * 100).toFixed(1)}% down`);
   expect(canoe.left).toBeGreaterThan(0.03);
   expect(canoe.right).toBeLessThan(0.97);
   expect(canoe.top).toBeGreaterThan(0.04);
@@ -176,7 +177,7 @@ test('a build cuts to a still, framed view of the canoe with the new piece, then
   await page.waitForTimeout(300);
   const second = await page.screenshot();
   const still = await see(page);
-  expect(still.built, 'still held 0.3 s on').not.toBeNull();
+  expect(still.built, `still held 0.3 s on (${Date.now() - began} ms after the press, two pictures taken)`).not.toBeNull();
   expect(still.pose).toEqual(during.pose);
   const moved = await differingPixels(page, first, second);
   expect(moved, 'pixels that changed in 0.3 s of the held view').toBe(0);

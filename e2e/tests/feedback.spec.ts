@@ -14,6 +14,14 @@ import type { Page, Route } from '@playwright/test';
 const BASE = process.env.PORTAGE_URL ?? 'http://localhost:5220';
 const CARD = '.iw-panel-feedback';
 
+// As every other spec that opens a game: on the real graphics card (the software fallback draws a frame every
+// few seconds on this Mac), and with time for a new game to open.
+test.use({
+  viewport: { width: 1280, height: 720 },
+  launchOptions: { args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] },
+});
+test.setTimeout(120_000);
+
 type Portage = { session: { panels: { stack: string[] }; game: { tick: number; canoe: { position: unknown }; players: { position: unknown }[] } | null } };
 const stack = (page: Page): Promise<string> => page.evaluate(() => [...(window as unknown as { portage: Portage }).portage.session.panels.stack].join(','));
 
@@ -77,8 +85,8 @@ test('Feedback is a line of the lobby and of the pause card, and Esc closes the 
   expect(await stack(page)).toBe('pause,feedback');
   await page.keyboard.press('Escape');
   expect(await stack(page)).toBe('pause');
-  const paused = await page.locator('.iw-panel-pause .iw-mi .iw-label').allInnerTexts();
-  expect(paused.slice(-2)).toEqual(['Feedback', 'Save and quit to the lobby']);
+  // (The card under it is drawn on the frame after the key: look until it is there.)
+  await expect.poll(async () => (await page.locator('.iw-panel-pause .iw-mi .iw-label').allInnerTexts()).slice(-2)).toEqual(['Feedback', 'Save and quit to the lobby']);
 });
 
 test('typing a note never triggers a game key: every key is a letter in the box and nothing else', async ({ page }) => {
