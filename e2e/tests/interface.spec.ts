@@ -268,7 +268,9 @@ function layoutProblems(): string[] {
     }
     const scroller = parent.closest('.iw-body');
     const scrollerBox = scroller?.getBoundingClientRect();
-    const card = parent.closest('.iw-panel, .iw-crew, .iw-vitals, .iw-notes, .iw-prompt, .iw-toast, .iw-hint, .iw-debug, .iw-chart, .iw-mark-chip');
+    // The four letters round the map's chart sit on its rim on purpose, half in and half out: the card they stay inside is the panel.
+    const cards = '.iw-panel, .iw-crew, .iw-vitals, .iw-notes, .iw-prompt, .iw-toast, .iw-hint, .iw-debug, .iw-chart, .iw-mark-chip';
+    const card = parent.closest('.iw-rim-letter') ? parent.closest('.iw-panel') : parent.closest(cards);
     // A line of handwriting is boxed taller than it is drawn (the face has long ascenders), so allow that much above and below.
     const slack = Number.parseFloat(getComputedStyle(parent).fontSize) * 0.45;
     const cardBox = card?.getBoundingClientRect();
