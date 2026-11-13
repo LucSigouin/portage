@@ -14,6 +14,7 @@ import { NARROWS } from '../look/world/narrows.ts';
 import { REACH } from '../look/world/reach.ts';
 import { SHALLOWS } from '../look/world/shallows.ts';
 import { canonicalBuild } from './canonical.ts';
+import { attachmentSections, hullSections, itemSections, nodeSections } from './guide.ts';
 import { attachmentAlone, canoeSubject, iconSubject, islandSubject, landmarkSubject, nodeSubject, propSubject, survivorSubject } from './subjects.ts';
 import type { Choice, Control, Entry, Group, Options } from './types.ts';
 
@@ -83,6 +84,7 @@ function hulls(): Entry[] {
     name: hull.name,
     description: hull.description,
     source: [...CANOE_FILES, ...(hull.tier === 1 ? ['src/look/canoe/mends.ts (the bark on the patched hull)'] : [])],
+    guide: () => hullSections(hull),
     controls,
     flat: false,
     build: (options) => {
@@ -116,6 +118,7 @@ function attachments(): Entry[] {
       name: definition.name,
       description: definition.description,
       source: [folder ? `src/look/canoe/${folder}.ts` : 'src/look/canoe/ (see src/look/attachments.ts)', 'src/look/attachments.ts (BUILDERS)', 'src/look/canoe/kit.ts'],
+      guide: () => attachmentSections(definition),
       controls,
       flat: false,
       build: (options) => {
@@ -199,6 +202,7 @@ function nodes(): Entry[] {
     name: NODE_TYPES[typeId]?.name ?? sentence(typeId),
     description: NODE_TYPES[typeId]?.description ?? '',
     source: ['src/look/nodes.ts (BUILDERS)', 'src/look/world/spent.ts (the used-up switch)', 'src/look/props.ts (instancedMesh)'],
+    guide: () => nodeSections(typeId),
     controls,
     flat: false,
     build: (options) => nodeSubject(typeId, answer(options, controls, 'state') === 'used'),
@@ -247,6 +251,7 @@ function icons(): Entry[] {
     name: ITEMS[itemId].name,
     description: ITEMS[itemId].description,
     source: ['src/interface/icons.ts (ITEM_ICONS)', 'src/interface/theme.css (.iw-ico)'],
+    guide: () => itemSections(itemId),
     controls: [],
     flat: true,
     build: () => iconSubject(itemId),

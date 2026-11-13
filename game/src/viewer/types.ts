@@ -3,6 +3,7 @@
  * `Subject` is that thing built, with the numbers the facts panel shows. Nothing here touches the graphics card.
  */
 import type * as THREE from 'three';
+import type { GuideSection } from './guide.ts';
 
 export type GroupId = 'hull' | 'attachment' | 'crew' | 'landmark' | 'node' | 'island' | 'prop' | 'icon';
 
@@ -34,6 +35,8 @@ export interface Entry {
   description: string;
   /** The file that draws it, then the ones it leans on. */
   source: string[];
+  /** Where to find it and what it is for, read from the game's tables (see guide.ts). Absent: no guide. */
+  guide?: () => GuideSection[];
   controls: Control[];
   /** A flat picture (an item icon): it has no turning, no ground and no triangles. */
   flat: boolean;
