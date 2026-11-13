@@ -1,6 +1,6 @@
 # The canoe
 
-How the canoe, its nineteen bolted-on pieces and the three survivors are drawn. Read `LOOK.md` first: this builds on its "Heroes", "The crew" and "Building a mesh".
+How the canoe, its twenty-two bolted-on pieces and the three survivors are drawn. Read `LOOK.md` first: this builds on its "Heroes", "The crew" and "Building a mesh".
 
 The rule that outranks the rest still holds: nothing shimmers. Cloth moves slowly on the paint clock. A lamp is lit or it is not. Nothing pulses.
 
@@ -15,6 +15,7 @@ The rule that outranks the rest still holds: nothing shimmers. Cloth moves slowl
 | `src/look/canoe/deck-parts.ts` | Both outriggers, workbench, smoker, planter, forge |
 | `src/look/canoe/hull-parts.ts` | Cargo rack, firebox, map table, fishing rig, canopy |
 | `src/look/canoe/rig-parts.ts` | Mast and sail, rudder, lantern mast, winch, radio, rain catcher, flag, figurehead |
+| `src/look/canoe/chest-parts.ts` | The three chests: plank chest, tin trunk, sea chest |
 | `src/look/characters.ts` | Odile, Wren, Tink |
 
 ## The four hulls
@@ -73,6 +74,22 @@ A piece reads the canoe's state in `update(canoe, time)`. It never invents one.
 - **The canopy has two hoops**, one each side of the stern paddler's stroke. Rolled forward under way, so whoever steers is seen from the paddling camera.
 - **The rudder is worked by a yoke and two lines** along the rails. A tiller would run through the radio shack.
 - **The cargo rack is two low side shelves and a stack behind the thwart.** The middle stays clear to kneel in.
+- **The chests stand where nobody sits.** Inside the hull the crew, the rack, the mast and the map table have all the room. So the plank chest and the tin trunk each stand on an outrigger deck, in the half metre between its two stations, and the sea chest lies across the thwart.
+
+## The three chests
+
+More cargo, six stacks each, built in this order after the cargo rack. They are told apart by what they are made of, which is what shows from astern.
+
+| Chest | Where | What you see |
+|---|---|---|
+| Plank chest | Port deck, between the workbench and the smoker, lying athwart | Bare boards in three courses, no two the same tone, on two skids. Rope handles. A sage tarp folded on the lid. One rope over the lot, down to a ring in the deck fore and aft. `STORES` on the aft face |
+| Tin trunk | Starboard deck, between the planter and the forge, lying fore and aft | Grey tin with a rounded lid. Two bands of red paint round it. Brass clasps on the inboard side, a leather strap over the lid, a drop handle and `No 2` on the aft end |
+| Sea chest | Across the thwart, long hull only | Blue paint, a cream line under the lid, two iron straps, a brass lock on the aft face, rope handles in wooden cleats. `OTTER` on the lid, read from astern, and a coiled line beside it |
+
+- **The plank chest keeps to the middle of its gap.** Its rope handles reach 34 cm each side of the mount and stop 2 cm short of the deck's inner edge. A kneeler's paddle stays 5 cm inside that edge.
+- **The tin trunk is low and outboard.** The fishing rods cross over that deck, rising outboard, and the planter's watering can stands at the deck's inner edge. The trunk is 34 cm tall, under the rods, and starts 4 cm outboard of the can's spout.
+- **The sea chest stands on the hull's thwart and on a bearer of its own**, a second thwart let in between the rails 21 cm aft of the first, with a chock at each corner. Nothing of it stands on the floor: the cargo rack's stack is under it. It starts 1 cm aft of the outriggers' forward spars and ends where the aft kneeler's reach begins.
+- **Why the long hull.** It has 77 cm between its two kneelers amidships. The ribbed hull has 39 cm, and with three or four aboard the aft kneeler's paddle lies where the chest would be.
 
 Known and unsolved, because the rules decide them:
 
@@ -103,6 +120,8 @@ PORTAGE_URL=http://localhost:5221 npm --prefix e2e test -- canoe.spec.ts   # bro
 - the seated paddlers' paddles touch nothing outboard; the kneelers' touch only the decks and what stands on them.
 
 `tests/look/attachments.test.ts`, "the patched hull": only tier 1 wears the mends; the sheets show over a third of a square metre of bark a side above the water and line the inside; they lie on the planking; each has pitch along its four edges; two seams are payed from end to end; her name still shows. "The canoe says how big it is as drawn": the box the built view frames.
+
+`tests/look/chests.test.ts`: no triangle of a chest touches a triangle of another piece, on each hull that may carry it, under way and beached, and nothing of another piece is in a chest's heart; the deck chests stand on their deck's planks between its stations; the trunk stays under the rods; the sea chest is inside the rails and over the rack's stack; planks, tin and blue paint by area; on the ribbed hull the aft kneeler's paddle lies in the sea chest.
 
 `tests/look/characters.test.ts`: own drawing, feet down, facing -z, told apart by shape and by what they carry.
 

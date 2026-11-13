@@ -10,7 +10,7 @@
 |---|---|
 | `b2/*.js` (+ `.d.ts`) | B2's code, moved: `post` (pen, paper), `palette` (washes, shared uniforms `GU`), `detail` (pen marks by material), `geo` (`Builder`), `water`, `sky`, `waves`, `canoe`, `flora` |
 | `world-view.ts` | The `WorldView`. Builds the scene, syncs it each frame, culls, renders |
-| `canoe/*.ts` | The 19 attachments and what they are drawn with. Guide: `LOOK-canoe.md` |
+| `canoe/*.ts` | The 22 attachments and what they are drawn with. Guide: `LOOK-canoe.md` |
 | `world/*.ts` | Landmark drawings by region, island dressing, detail by distance, the node material. Guide: `LOOK-world.md` |
 | `presets.ts`, `scatter.ts`, `props.ts`, `terrain.ts` | Region presets, seeded placement, instanced props, the ground |
 | `nodes.ts`, `landmarks.ts`, `characters.ts`, `attachments.ts` | One registry each. Step 2 adds meshes here |
