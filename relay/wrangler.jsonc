@@ -5,7 +5,7 @@
   "name": "portage-relay",
   "main": "src/worker.ts",
   "compatibility_date": "2026-09-01",
-  // No address of its own: it answers only on the route below, once Luc turns it on.
+  // No address of its own: it answers only on the route deploy/deploy-relay.sh gives it.
   "workers_dev": false,
   "preview_urls": false,
   "durable_objects": {
@@ -23,6 +23,7 @@
   // Nothing is logged, and nothing is kept by Cloudflare's log store either.
   "observability": { "enabled": false }
 
-  // The deploy step (README.md, "What a deploy needs") adds this, on Luc's go:
-  // "routes": [{ "pattern": "sigouin.net/portage/relay/*", "zone_name": "sigouin.net" }]
+  // Not in this file, on purpose: the route (sigouin.net/portage/relay/*) and the live list of allowed pages
+  // (https://sigouin.net alone). deploy/deploy-relay.sh gives both to wrangler, so this file stays the one for
+  // this computer and its tests.
 }
