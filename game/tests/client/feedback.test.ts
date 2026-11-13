@@ -211,7 +211,7 @@ describe('the Feedback panel in words', () => {
 
   it('has a plain sentence for every way a send can end, and Send only when there is something to send', () => {
     const empty = buildFeedbackPanel(view());
-    expect([empty.status, empty.send.label, empty.send.enabled, empty.send.note]).toEqual(['', 'Send', false, 'Write a note first']);
+    expect([empty.status, empty.send.label, empty.send.enabled, empty.send.note]).toEqual(['', 'Send', false, null]);
     expect(empty.note.countText).toBe('0 / 2,000');
     expect(empty.kinds.map((kind) => [kind.button.label, kind.picked])).toEqual([['Bug', true], ['Idea', false], ['Other', false]]);
 
@@ -365,6 +365,7 @@ describe('Feedback in the menus', () => {
   it('is in the lobby above Credits and on the pause card above quitting, and opens from those two places only', () => {
     const each = client(relayDoor().fetch);
     expect(labels(each.model().lobby!.buttons)).toEqual(['Continue', 'New Game', 'Settings', 'How to Play', 'Feedback', 'Credits']);
+    expect(named(each.model().lobby!.buttons, 'Feedback').note).toBe('A bug, an idea, anything');
     each.press(named(each.model().lobby!.buttons, 'Feedback'));
     expect(each.panel('feedback').title).toBe('Feedback');
     each.press(each.panel('feedback').close);
@@ -376,6 +377,7 @@ describe('Feedback in the menus', () => {
     expect(each.model().openPanels).not.toContain('feedback');
     each.send({ type: 'open_panel', panel: 'pause' });
     expect(labels(each.panel('pause').buttons)).toEqual(['Resume', 'Settings', 'How to Play', 'Feedback', 'Save and quit to the lobby']);
+    expect(named(each.panel('pause').buttons, 'Feedback').note).toBeNull();
     each.press(named(each.panel('pause').buttons, 'Feedback'));
     expect(each.model().openPanels).toEqual(['pause', 'feedback']);
     // Esc goes back to the pause card, as from Settings.

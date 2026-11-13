@@ -58,12 +58,16 @@ export const FEEDBACK_TEXT = {
 } as const;
 
 /** The entry of the lobby and of the pause menu. It is there in every build: a build with no relay says so in the panel. */
-export const buildFeedbackButton = (): ButtonModel => ({
-  label: 'Feedback', intent: { type: 'open_panel', panel: 'feedback' }, enabled: true, note: 'A bug, an idea, anything',
+export const buildFeedbackButton = (note: string | null = null): ButtonModel => ({
+  label: 'Feedback', intent: { type: 'open_panel', panel: 'feedback' }, enabled: true, note,
 });
 
-/** A menu with the Feedback entry in it, just above its last line (Credits in the lobby, quitting on the pause card). */
-export const withFeedbackEntry = (buttons: ButtonModel[]): ButtonModel[] => [...buttons.slice(0, -1), buildFeedbackButton(), ...buttons.slice(-1)];
+/**
+ * A menu with the Feedback entry in it, just above its last line (Credits in the lobby, quitting on the pause
+ * card). The lobby says what it is for beside it; the pause card's lines are centred and carry no such words.
+ */
+export const withFeedbackEntry = (buttons: ButtonModel[], note: string | null = null): ButtonModel[] =>
+  [...buttons.slice(0, -1), buildFeedbackButton(note), ...buttons.slice(-1)];
 
 const row = (key: FeedbackContextRow['key'], label: string, value: string): FeedbackContextRow => ({
   key, label, value: value.slice(0, FEEDBACK_LINE_LENGTH),
@@ -125,7 +129,8 @@ export function buildFeedbackPanel(view: FeedbackView): FeedbackPanelBody {
     notSent: FEEDBACK_TEXT.notSent,
     send: {
       label: view.phase === 'failed' ? 'Send again' : 'Send', intent: { type: 'feedback_send' },
-      enabled: editable && hasNote, note: editable && !hasNote && view.phase !== 'sent' ? 'Write a note first' : null,
+      // No words under it: the box above says what to write, and a button that grew a second line would move the card.
+      enabled: editable && hasNote, note: null,
     },
   };
 }

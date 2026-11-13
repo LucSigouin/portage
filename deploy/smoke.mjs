@@ -1,6 +1,10 @@
 // Smoke test of the built game. Mode "local": serves the build from disk under a made-up origin with sigouin.net's
 // security headers, so the policy is tested before anything is deployed. Mode "live": the real address.
 // node live-smoke.mjs local <dist folder> <_headers file>   |   node live-smoke.mjs live https://sigouin.net/portage/
+// Local mode also writes a note on the Feedback card and sends it, to prove the site's policy lets the send out.
+// The relay is not there in local mode, so this script answers in its place, the way the relay answers a note
+// it kept. Nothing leaves this computer. Live mode sends no note: a deploy of the game leaves none in the store.
+// A fourth word breaks the policy on purpose, to see this test fail: `break` (no scripts), `break-send` (no sends).
 import { readFileSync, existsSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { chromium } from '/Users/ls/Claude-Workspace/personal/portage/e2e/node_modules/@playwright/test/index.mjs';
@@ -10,6 +14,8 @@ const browser = await chromium.launch({ headless: true, args: ['--use-angle=meta
 const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
 const problems = [];
 const offOrigin = [];
+/** Notes the page sent to the stand-in for the relay (local mode). */
+const notes = [];
 page.on('console', (message) => { if (message.type() === 'error' || message.type() === 'warning') problems.push(`${message.type()}: ${message.text()}`); });
 page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
 let base = target;
@@ -17,9 +23,14 @@ if (mode === 'local') {
   base = 'https://portage.test/portage/';
   let policy = readFileSync(headersFile, 'utf8').split('\n').find((line) => line.trim().startsWith('Content-Security-Policy:')).trim().slice('Content-Security-Policy:'.length).trim();
   if (breakIt === 'break') policy = policy.replace("script-src 'self'", "script-src 'none'");
+  if (breakIt === 'break-send') policy = policy.replace(/connect-src [^;]*/, "connect-src blob:");
   await page.route('**/*', (route) => {
     const url = new URL(route.request().url());
     if (url.origin !== 'https://portage.test' || !url.pathname.startsWith('/portage/')) return route.abort();
+    if (url.pathname === '/portage/relay/feedback' && route.request().method() === 'POST') {
+      notes.push(route.request().postData() ?? '');
+      return route.fulfill({ status: 201, body: 'kept\n', headers: { 'content-type': 'text/plain; charset=utf-8' } });
+    }
     const relative = url.pathname.slice('/portage/'.length) || 'index.html';
     const file = join(target, relative);
     if (!existsSync(file)) return route.fulfill({ status: 404, body: 'not found' });
@@ -47,10 +58,28 @@ const after = await canoe();
 const moved = Math.hypot(after[0] - before[0], after[1] - before[1]);
 const drawing = await page.evaluate(() => { const p = window.portage.worldView.probe(); return `${p.drawingWidth}x${p.drawingHeight}`; });
 const fonts = await page.evaluate(() => [...document.fonts].filter((font) => font.status === 'loaded').length);
+// 3. Local only: a note written on the Feedback card gets out under the site's policy, and the card says so.
+// `off` is a build made without a relay, which has nowhere to send.
+let feedback = 'not tried';
+if (mode === 'local') {
+  await page.goto(base);
+  await page.waitForFunction(() => window.portage?.worldView?.probe?.().drawingWidth > 0, null, { timeout: 30000 });
+  await page.evaluate(() => document.fonts.ready);
+  await page.locator('.iw-lobby-col .iw-mi', { hasText: 'Feedback' }).click();
+  await page.locator('.iw-panel-feedback').waitFor({ timeout: 10000 });
+  const box = page.locator('.iw-panel-feedback textarea');
+  if (await box.count() === 0) feedback = 'off';
+  else {
+    await box.fill('The deploy\'s check of the site\'s policy. It goes to a stand-in on this computer.');
+    await page.locator('.iw-panel-feedback button[data-primary]').click();
+    feedback = await page.locator('.iw-panel-feedback [data-feedback-status]').filter({ hasText: /Sent|Could not/ }).innerText({ timeout: 25000 }).catch(() => 'no answer');
+  }
+}
+const feedbackOk = mode !== 'local' || feedback === 'off' || (feedback === 'Sent. Thank you.' && notes.length === 1);
 if (process.argv.includes('--shot')) await page.screenshot({ path: process.argv[process.argv.indexOf('--shot') + 1] });
 await browser.close();
-console.log(`${mode}: New Game opened ${opened}, canoe moved ${moved.toFixed(1)} m in 3 s, drawing ${drawing}, fonts loaded ${fonts}, off-origin requests ${offOrigin.length}, console problems ${problems.length}`);
+console.log(`${mode}: New Game opened ${opened}, canoe moved ${moved.toFixed(1)} m in 3 s, drawing ${drawing}, fonts loaded ${fonts}, off-origin requests ${offOrigin.length}, console problems ${problems.length}${mode === 'local' ? `, a note sent under the policy: ${feedback} (${notes.length} reached the stand-in)` : ''}`);
 for (const problem of problems.slice(0, 5)) console.log(`  ${problem.slice(0, 220)}`);
-const ok = slots === 1 && opened === 'save_slots' && moved > 2 && fonts >= 2 && offOrigin.length === 0 && problems.length === 0;
+const ok = slots === 1 && opened === 'save_slots' && moved > 2 && fonts >= 2 && offOrigin.length === 0 && problems.length === 0 && feedbackOk;
 console.log(ok ? 'SMOKE PASS' : 'SMOKE FAIL');
 process.exit(ok ? 0 : 1);

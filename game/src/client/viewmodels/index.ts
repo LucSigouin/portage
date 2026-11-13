@@ -127,7 +127,7 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
 }
 
 /** The lobby with its Feedback entry (`feedback.ts`). */
-const withLobbyFeedback = (lobby: InterfaceModel['lobby'] & object): InterfaceModel['lobby'] => ({ ...lobby, buttons: withFeedbackEntry(lobby.buttons) });
+const withLobbyFeedback = (lobby: InterfaceModel['lobby'] & object): InterfaceModel['lobby'] => ({ ...lobby, buttons: withFeedbackEntry(lobby.buttons, 'A bug, an idea, anything') });
 
 /** One frame of UI. Only the panel on top (under any confirm dialog) is built. */
 export function buildInterfaceModel(input: InterfaceModelInput): InterfaceModel {

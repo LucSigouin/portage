@@ -42,7 +42,8 @@
   margin-top: 0.3rem;
   padding: 0.4rem 0.75rem 0.3rem;
   line-height: 1.45;
-  resize: vertical;
+  /* A long note scrolls inside the box: the card never changes size under the pointer. */
+  resize: none;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
@@ -51,8 +52,6 @@
 }
 .iw-panel-feedback .iw-fb-sent {
   margin-top: 0.9rem;
-  padding-top: 0.6rem;
-  border-top: 0.09rem dashed var(--iw-ink-faint);
 }
 .iw-panel-feedback .iw-fb-heading {
   margin: 0;
@@ -87,14 +86,20 @@
   line-height: 1.4;
   color: var(--iw-ink-soft);
 }
-/* The status line stands beside the buttons, so the card is the same height whatever it says. */
+/* The status line stands beside the buttons, in a foot tall enough for its two lines: the card is the same
+   height whatever it says, so nothing shifts when a send ends. */
 .iw-panel-feedback .iw-fb-foot {
   align-items: center;
   gap: 1rem;
+  min-height: 3.2rem;
 }
 .iw-panel-feedback .iw-fb-status {
   flex: 1;
   min-height: 0;
   margin: 0;
   text-align: left;
+}
+/* The caret stands still where the browser allows it: nothing on the card blinks while a note is written. */
+.iw-panel-feedback .iw-text {
+  caret-animation: manual;
 }
