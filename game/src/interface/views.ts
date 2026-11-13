@@ -15,6 +15,7 @@ import { control, h } from './dom.ts';
 import type { ViewChild, ViewNode } from './dom.ts';
 import type { ItemId } from '../data/index.ts';
 import { ICON, SEAL, itemIcon, logotype, toqueIcon, waterGauge } from './icons.ts';
+import { previewView } from './preview.ts';
 
 const icon = (markup: string, className = ''): ViewNode => h('i.iw-i', { class: className, html: markup, 'aria-hidden': 'true' });
 
@@ -83,7 +84,8 @@ export function lobbyView(lobby: LobbyModel): ViewNode[] {
   return [h('div.iw-lobby-col', { key: 'lobby' },
     h('div.iw-logo-row', null, h('h1.iw-logo-holder', { html: logotype(lobby.title) }), icon(SEAL, 'iw-seal-holder')),
     h('p.iw-tagline', null, lobby.tagline),
-    h('nav.iw-menu', null, lobby.buttons.map(menuItemView)))];
+    h('nav.iw-menu', null, lobby.buttons.map(menuItemView)),
+    lobby.preview ? previewView(lobby.preview) : null)];
 }
 
 // --- HUD ---------------------------------------------------------------------------

@@ -13,6 +13,9 @@ import { createSilentAudio } from './client/contracts.ts';
 import type { AudioEngine } from './client/contracts.ts';
 import { parseDebugParameters } from './client/debug/parameters.ts';
 import { createGameInterface } from './interface/index.ts';
+import { withCanoePreview } from './interface/preview-host.ts';
+import { drawCanoeSketch } from './look/canoe-sketch.ts';
+import { createSaveStore } from './save/index.ts';
 import { createWorldView } from './look/index.ts';
 import { setLocalPlayerId } from './look/crew.ts';
 import { CrewLobby } from './client/crewlobby.ts';
@@ -85,7 +88,15 @@ function boot(): void {
   // `?perf=1`: the performance readout. It plays in a storage that forgets, so saves and settings are never touched.
   const perf = new URLSearchParams(window.location.search).get('perf') === '1';
   const worldView = createWorldView();
-  const gameInterface = createGameInterface();
+  // The storage the game plays in. The debug switches play in one that forgets, so real saves are never touched.
+  const storage = parameters.sandbox || perf ? createMemoryStorage() : browserStorage();
+  // The lobby shows the canoe of the save played last (`interface/preview-host.ts`): the interface, with that added.
+  const gameInterface = withCanoePreview(createGameInterface(), {
+    slotSummaries: () => app.session.slotSummaries(),
+    latestSlot: () => app.session.latestSlot(),
+    load: (slot) => createSaveStore(storage).load(slot),
+    draw: drawCanoeSketch,
+  });
   const audio = createAudio();
   let loop: FrameLoop | null = null;
 
@@ -93,7 +104,7 @@ function boot(): void {
     worldView,
     gameInterface,
     audio,
-    storage: parameters.sandbox || perf ? createMemoryStorage() : browserStorage(),
+    storage,
     stats: () => loop?.stats ?? { framesPerSecond: 0, frameMilliseconds: 0, workMilliseconds: 0 },
     forceFrameRate: parameters.showFrameRate,
   });
@@ -223,7 +234,7 @@ function boot(): void {
 
   const start = (): void => {
     // A handle for the console and for browser tests.
-    (window as unknown as { portage: unknown }).portage = { app, session, worldView, loop, followVisibility };
+    (window as unknown as { portage: unknown }).portage = { app, session, worldView, loop, followVisibility, preview: gameInterface.preview };
     loop?.start();
     if (perf) void import('./client/debug/index.ts').then((debug) => debug.runPerfReadout(app, worldView, loop));
     // `?join=ROOM&name=...`: ask the host tab for a seat. The lobby shows until it answers.
