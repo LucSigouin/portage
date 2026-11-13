@@ -193,6 +193,8 @@ for (const [width, height] of [[1920, 1080], [1366, 768]] as const) {
     await page.setViewportSize({ width, height });
     await openLobby(page, SAVE);
     await pictureOnPage(page);
+    // Not a gate: with RELAY_SHOTS set, a picture of the lobby as it is measured here.
+    if (process.env.RELAY_SHOTS) await page.screenshot({ path: `${process.env.RELAY_SHOTS}/lobby-fits-${width}.png` });
     const layout = await page.evaluate(() => {
       const box = (element: Element): { left: number; top: number; right: number; bottom: number } => {
         const rect = element.getBoundingClientRect();
