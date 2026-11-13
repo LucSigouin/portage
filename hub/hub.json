@@ -39,7 +39,8 @@
       "The asset viewer: every drawn thing alone, on a grid. Live at https://sigouin.net/portage-assets/ .",
       "A fresh scored review: look 8, speed 8, friends 8, first minutes 7, canoe 7, solid 6. 1098 tests pass, plus 118 browser tests.",
       "The fix round: ten fixes from the review, each with a test seen red. 1129 tests pass, plus 119 browser tests. Old saves from the live game are tested on every build.",
-      "Live on Nov 12: everything built that day, at https://sigouin.net/portage/ . Friends by a link stays off until the relay is deployed."
+      "Live on Nov 12: everything built that day, at https://sigouin.net/portage/ . Friends by a link stays off until the relay is deployed.",
+      "The canoe paddles twice as fast (Luc's call). 1131 unit tests pass and six bot runs finish. No browser pass on it yet: Luc tests it."
     ],
     "running": [],
     "waiting": [

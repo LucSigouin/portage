@@ -16,11 +16,11 @@
     },
     {
       "label": "Stage",
-      "value": "Version 1 is live, with ten review fixes"
+      "value": "Version 1 is live, with ten review fixes and a faster canoe"
     },
     {
       "label": "Tests",
-      "value": "1129 unit, 119 in a browser"
+      "value": "1131 unit, 119 in a browser"
     },
     {
       "label": "Running",
@@ -648,6 +648,27 @@
       ],
       "pictures": [],
       "report": "docs/report-fixes.html"
+    },
+    {
+      "when": "Nov 12",
+      "title": "The canoe goes twice as fast",
+      "state": "done",
+      "asked": "The time between islands is super long. Double the speed of paddling.",
+      "built": [
+        "Paddle 4.4 m/s, power stroke 6.4, back 2.4",
+        "The nearest island is about a minute away, not two and a half"
+      ],
+      "proof": [
+        "1131 unit tests pass",
+        "Six bot runs finish with no fails, in 72 to 88 minutes"
+      ],
+      "snags": [
+        "No browser test pass on this one: Luc tests it",
+        "A paddler now outruns the sail",
+        "A bare canoe can reach the first island of the Reach"
+      ],
+      "pictures": [],
+      "report": ""
     }
   ],
   "calls": [
@@ -690,7 +711,7 @@
   "numbers": [
     {
       "label": "Commits",
-      "value": "188"
+      "value": "191"
     },
     {
       "label": "Worker runs",
@@ -698,7 +719,7 @@
     },
     {
       "label": "Unit tests",
-      "value": "1129"
+      "value": "1131"
     },
     {
       "label": "Browser tests",
@@ -714,7 +735,7 @@
     },
     {
       "label": "Deploys",
-      "value": "7"
+      "value": "8"
     },
     {
       "label": "Agent hours",
@@ -726,6 +747,10 @@
     }
   ],
   "left": [
+    {
+      "what": "Browser tests on the faster canoe",
+      "hours": "0.5"
+    },
     {
       "what": "Score the three low points again",
       "hours": "0.5"
@@ -757,6 +782,7 @@
   ],
   "yours": [
     "Play the live game: your old save continues",
+    "The faster canoe: is it calm to watch? Should the sail and the rough water rise to match?",
     "Claude Code keeps breaking: find what reinstalls it",
     "The review page: six calls",
     "Your 5120 wide screen: steady 60, or every pixel?",
