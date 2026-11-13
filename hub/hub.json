@@ -11,7 +11,7 @@
   ],
   "name": "Portage",
   "pitch": "A browser survival-crafting game. The valley flooded. You have a leaky canoe, and you bolt what you build onto it.",
-  "updated": "2026-11-12, night",
+  "updated": "2026-11-12, late night",
   "status": {
     "done": [
       "Rules engine. Runs with no screen. 179 tests pass. A bot finishes the whole main quest.",
@@ -39,8 +39,9 @@
       "The asset viewer: every drawn thing alone, on a grid. Live at https://sigouin.net/portage-assets/ .",
       "A fresh scored review: look 8, speed 8, friends 8, first minutes 7, canoe 7, solid 6. 1098 tests pass, plus 118 browser tests.",
       "The fix round: ten fixes from the review, each with a test seen red. 1129 tests pass, plus 119 browser tests. Old saves from the live game are tested on every build.",
-      "Live on Nov 12: everything built that day, at https://sigouin.net/portage/ . Friends by a link stays off until the relay is deployed.",
-      "A faster canoe: paddle 3.2 m/s (was 2.2), power stroke 4.2 (was 3.2), with rough water raised by the same share. Doubling was tried first and broke the sail and the rough-water gates. 1131 unit tests pass. No browser pass on it yet: Luc tests it."
+      "Live on Nov 12: everything built that day, at https://sigouin.net/portage/ .",
+      "A faster canoe: paddle 3.2 m/s (was 2.2), power stroke 4.2 (was 3.2), with rough water raised by the same share. Doubling was tried first and broke the sail and the rough-water gates. 1131 unit tests pass. No browser pass on it yet: Luc tests it.",
+      "Friends by a link, live: the relay runs on Cloudflare at sigouin.net/portage/relay, and the live lobby has Host a crew and Join a crew. A host and a guest met through it (52 ms there and back). Every deploy ends with two browsers in one canoe on the live site. Not yet tried on two real computers."
     ],
     "running": [],
     "waiting": [
@@ -52,15 +53,15 @@
         "text": "The review: six scores and sixteen fixes, worst first.",
         "href": "docs/report-review.html"
       },
-      "Luc: six calls from the review. Build payoff, the first hull upgrade, trees hiding the player, the relay rate limit, crafts made early, steady 30 on very slow chips.",
-      "Luc: the relay needs your go and a small Cloudflare service before friends can join over the internet.",
+      "Luc: six calls from the review. Build payoff, the first hull upgrade, trees hiding the player, a dial limit on the relay (it is live without one), crafts made early, steady 30 on very slow chips.",
       {
         "text": "Luc: the starting canoe is weathered grey, not red. Keep or bring the red back?",
         "href": "game/?shot=play"
       },
       "Luc: the game is live with the Nov 12 work. Your old save continues. Play it and say what feels wrong.",
       "Luc: Claude Code broke twice today (a reinstall without its last step). New workers cannot start while it is broken.",
-      "Next: score the three low points again, then the slow-chip start and one shaky speed test."
+      "Next: score the three low points again, then the slow-chip start and one shaky speed test.",
+      "Luc: host a crew on the live game and send the link to a friend. Two real computers is the one thing no test here covers."
     ]
   },
   "addresses": [

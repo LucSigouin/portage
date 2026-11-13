@@ -6,7 +6,7 @@
   ],
   "title": "Portage",
   "subtitle": "The workbench: every step so far",
-  "updated": "2026-11-12, night",
+  "updated": "2026-11-12, late night",
   "ask": "A flooded world and all you have is a canoe. Scavenge islands, craft, and build a crazy impressive canoe.",
   "now": [
     {
@@ -16,11 +16,11 @@
     },
     {
       "label": "Stage",
-      "value": "Version 1 is live, with ten review fixes and a faster canoe"
+      "value": "Version 1 is live, and friends join by a link"
     },
     {
       "label": "Tests",
-      "value": "1131 unit, 119 in a browser"
+      "value": "1132 unit, 119 in a browser"
     },
     {
       "label": "Running",
@@ -28,15 +28,15 @@
     },
     {
       "label": "Live now",
-      "value": "Everything built up to Nov 12. The asset viewer"
+      "value": "Everything built, with Host a crew and Join a crew"
     },
     {
       "label": "Not live yet",
-      "value": "Friends by a link: it needs the relay deployed"
+      "value": "Nothing is waiting to go live"
     },
     {
       "label": "Waiting on you",
-      "value": "Six calls from the review, and a go for the relay"
+      "value": "Play with a friend. Six calls from the review"
     }
   ],
   "steps": [
@@ -585,7 +585,7 @@
         "A fifth player let in fails a test"
       ],
       "snags": [
-        "Not deployed: it needs your go and a small Cloudflare service",
+        "Deployed later the same day: see \"Friends by a link, live\"",
         "Never tried on two real computers"
       ],
       "pictures": [
@@ -671,6 +671,30 @@
       ],
       "pictures": [],
       "report": ""
+    },
+    {
+      "when": "Nov 12",
+      "title": "Friends by a link, live",
+      "state": "done",
+      "asked": "Let us build the multiplayer link and the Cloudflare stuff.",
+      "built": [
+        "The relay runs on Cloudflare, on sigouin.net itself",
+        "The live lobby has Host a crew and Join a crew",
+        "Copy the link, send it, your friend types a name",
+        "Only pages on sigouin.net may use the relay"
+      ],
+      "proof": [
+        "A host and a guest met through the live relay: 52 ms there and back",
+        "Relay, co-op and lobby browser tests pass on this build",
+        "Every deploy now ends with two browsers in one canoe on the live site"
+      ],
+      "snags": [
+        "Never tried on two real computers: that one is yours",
+        "No limit yet on how often one address may dial",
+        "The free plan carries about 7 hours of four-player play a day"
+      ],
+      "pictures": [],
+      "report": ""
     }
   ],
   "calls": [
@@ -713,7 +737,7 @@
   "numbers": [
     {
       "label": "Commits",
-      "value": "194"
+      "value": "198"
     },
     {
       "label": "Worker runs",
@@ -721,7 +745,7 @@
     },
     {
       "label": "Unit tests",
-      "value": "1131"
+      "value": "1132"
     },
     {
       "label": "Browser tests",
@@ -737,7 +761,7 @@
     },
     {
       "label": "Deploys",
-      "value": "9"
+      "value": "10"
     },
     {
       "label": "Agent hours",
@@ -766,12 +790,12 @@
       "hours": "yours"
     },
     {
-      "what": "Deploy the relay, so friends join by a link",
-      "hours": "1"
-    },
-    {
       "what": "Play with a friend on two computers",
       "hours": "yours"
+    },
+    {
+      "what": "A dial limit on the relay (a Cloudflare rate rule)",
+      "hours": "0.5"
     },
     {
       "what": "Ribbed hull, cargo rack, hull floor",
@@ -788,7 +812,7 @@
     "Claude Code keeps breaking: find what reinstalls it",
     "The review page: six calls",
     "Your 5120 wide screen: steady 60, or every pixel?",
-    "The relay: go, or not yet",
+    "Host a crew and send the link to a friend on another computer",
     "Storm, sound and motion: still yours to judge",
     "Starting canoe: weathered grey, or red?"
   ],
