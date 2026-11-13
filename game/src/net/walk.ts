@@ -20,11 +20,15 @@
  * they slow to a stand. Both sides walk those steps (`COAST_STEPS`), and while the host waits for a guest's walk it
  * holds the player exactly as they are (`HOLD_INPUT`), so the speed agrees as well as the place.
  *
+ * A jump is part of the walk: the jump key is held over a stretch like any other (`Walk.jump`), and the same on-foot
+ * rule runs it on both sides, so a guest's own jump is on its screen at once and the host's answer finds it where it
+ * is. A jump goes on after the key is up (the air, the landing): both sides walk those steps too (`LEAP_TAIL_STEPS`).
+ *
  * No DOM in here, and nothing here changes the guest's copy of the truth.
  */
 import { TUNING } from '../data/index.ts';
-import { FIXED_STEP, NEUTRAL_INPUT, groundHeight, stepOnFoot } from '../sim/index.ts';
-import type { GameState, PlayerId, PlayerState, StepInput, Vector3 } from '../sim/index.ts';
+import { FIXED_STEP, LEAP_COAST_STEPS, NEUTRAL_INPUT, groundHeight, stepOnFoot } from '../sim/index.ts';
+import type { GameState, Leap, PlayerId, PlayerState, StepInput, Vector3 } from '../sim/index.ts';
 
 /** What a player on foot held over a stretch of steps. Standing still is all zeros, whatever the camera did. */
 export interface Walk {
@@ -33,6 +37,8 @@ export interface Walk {
   run: boolean;
   /** The camera bearing the movement is relative to. */
   yaw: number;
+  /** The jump key is down. */
+  jump: boolean;
 }
 
 /** A stretch of a guest's walk: `start` is the first step it covers; it lasts until the next stretch begins. */
@@ -40,8 +46,10 @@ export interface WalkRun extends Walk {
   start: number;
 }
 
-/** A stretch on the wire: `[start, moveX, moveY, run (0 or 1), yaw]`. */
-export type WireRun = [start: number, moveX: number, moveY: number, run: number, yaw: number];
+/** A stretch on the wire: `[start, moveX, moveY, keys, yaw]`. `keys` is 1 for the run key plus 2 for the jump key. */
+export type WireRun = [start: number, moveX: number, moveY: number, keys: number, yaw: number];
+const RUN_KEY = 1;
+const JUMP_KEY = 2;
 
 /** Stretches sent with each input: the newest and the ones before it, so one lost message loses nothing. */
 export const WALK_RUNS_SENT = 6;
@@ -60,45 +68,62 @@ const EASE_SHARE_OF_MOVEMENT = 0.6;
  * walk them one by one; only the still steps after them are passed over.
  */
 export const COAST_STEPS = Math.ceil(TUNING.foot.runSpeed / (TUNING.foot.braking * FIXED_STEP));
+/**
+ * Steps after the jump key comes up on which the jump can still change the player: the rest of the air, the landing,
+ * and the slowing to a stand after it. Both sides walk them one by one, whatever else is held.
+ */
+export const LEAP_TAIL_STEPS = LEAP_COAST_STEPS + COAST_STEPS;
 /** What the host hands a guest's player while its walk has not arrived: nothing changes, not even the speed. */
 export const HOLD_INPUT: Readonly<StepInput> = Object.freeze({ ...NEUTRAL_INPUT, hold: true });
 /** Stretches a walk keeps. */
 const RUNS_KEPT = 256;
 
-const STILL: Walk = Object.freeze({ moveX: 0, moveY: 0, run: false, yaw: 0 });
+const STILL: Walk = Object.freeze({ moveX: 0, moveY: 0, run: false, yaw: 0, jump: false });
+/** A jump on the spot: the jump key and nothing else. */
+const HOP: Walk = Object.freeze({ ...STILL, jump: true });
 
-export const isStill = (walk: Walk): boolean => walk.moveX === 0 && walk.moveY === 0;
+/** Nothing is held: no way to go and no jump. */
+export const isStill = (walk: Walk): boolean => walk.moveX === 0 && walk.moveY === 0 && !walk.jump;
 
 const sameWalk = (first: Walk, second: Walk): boolean =>
-  first.moveX === second.moveX && first.moveY === second.moveY && first.run === second.run && first.yaw === second.yaw;
+  first.moveX === second.moveX && first.moveY === second.moveY && first.run === second.run && first.yaw === second.yaw
+  && first.jump === second.jump;
 
-/** The walking in an input. Not moving (the rules' own threshold), or not `allowed` to: standing still. */
-export function walkOf(input: Pick<StepInput, 'moveX' | 'moveY' | 'run' | 'cameraYaw'>, allowed = true): Walk {
-  if (!allowed || !(Math.hypot(input.moveX, input.moveY) > 0.01)) return STILL;
-  return { moveX: input.moveX, moveY: input.moveY, run: input.run, yaw: input.cameraYaw };
+/** The walking in an input. Not moving (the rules' own threshold) and not jumping, or not `allowed` to: standing still. */
+export function walkOf(input: Pick<StepInput, 'moveX' | 'moveY' | 'run' | 'cameraYaw' | 'jump'>, allowed = true): Walk {
+  if (!allowed) return STILL;
+  const jump = input.jump === true;
+  if (!(Math.hypot(input.moveX, input.moveY) > 0.01)) return jump ? HOP : STILL;
+  return { moveX: input.moveX, moveY: input.moveY, run: input.run, yaw: input.cameraYaw, jump };
 }
 
-/** The input the rules are handed for one step of a walk. */
+/** The input the rules are handed for one step of a walk. The jump key is named only when it is down, as the keys name it. */
 export function inputOfWalk(walk: Walk): StepInput {
-  return { ...NEUTRAL_INPUT, moveX: walk.moveX, moveY: walk.moveY, run: walk.run, cameraYaw: walk.yaw };
+  const input: StepInput = { ...NEUTRAL_INPUT, moveX: walk.moveX, moveY: walk.moveY, run: walk.run, cameraYaw: walk.yaw };
+  if (walk.jump) input.jump = true;
+  return input;
 }
+
+const wireOf = (run: WalkRun): WireRun => [run.start, run.moveX, run.moveY, (run.run ? RUN_KEY : 0) + (run.jump ? JUMP_KEY : 0), run.yaw];
 
 /** A stretch from the wire: five numbers, the axes clamped, standing still made plain. Null when it is anything else. */
 export function readWalkRun(raw: unknown): WireRun | null {
   if (!Array.isArray(raw) || raw.length !== 5) return null;
-  const [start, moveX, moveY, run, yaw] = raw as unknown[];
+  const [start, moveX, moveY, keys, yaw] = raw as unknown[];
   if (typeof start !== 'number' || !Number.isSafeInteger(start) || start < 0) return null;
   if (typeof moveX !== 'number' || typeof moveY !== 'number' || typeof yaw !== 'number') return null;
   if (!Number.isFinite(moveX) || !Number.isFinite(moveY) || !Number.isFinite(yaw) || Math.abs(yaw) > 1e6) return null;
-  if (run !== 0 && run !== 1) return null;
+  if (keys !== 0 && keys !== RUN_KEY && keys !== JUMP_KEY && keys !== RUN_KEY + JUMP_KEY) return null;
   const clamp = (value: number): number => Math.max(-1, Math.min(1, value));
-  const walk = walkOf({ moveX: clamp(moveX), moveY: clamp(moveY), run: run === 1, cameraYaw: yaw });
-  return [start, walk.moveX, walk.moveY, walk.run ? 1 : 0, walk.yaw];
+  const walk = walkOf({ moveX: clamp(moveX), moveY: clamp(moveY), run: (keys & RUN_KEY) !== 0, cameraYaw: yaw, jump: (keys & JUMP_KEY) !== 0 });
+  return wireOf({ ...walk, start });
 }
 
 /** A walk: stretches in step order. */
 export class WalkStream {
   runs: WalkRun[] = [];
+  /** After each stretch with the jump key down: the steps on which that jump can still change the player. */
+  private tails: { from: number; until: number }[] = [];
 
   /** What was held on this step. Before the first stretch known: standing still. */
   at(step: number): Walk {
@@ -116,11 +141,16 @@ export class WalkStream {
 
   /**
    * The step after the last one of this still stretch that can move the player (its first `COAST_STEPS`, when a walk
-   * came before it), or the stretch's start when none can. Only for a step in a still stretch.
+   * came before it, and the steps a jump is still playing out on), or the stretch's start when none can. Only for a
+   * step in a still stretch.
    */
   private coastEnd(index: number): number {
     const run = this.runs[index]!;
-    return index > 0 && !isStill(this.runs[index - 1]!) ? run.start + COAST_STEPS : run.start;
+    let end = index > 0 && !isStill(this.runs[index - 1]!) ? run.start + COAST_STEPS : run.start;
+    for (const tail of this.tails) {
+      if (tail.from <= run.start && tail.until > end) end = tail.until;
+    }
+    return end;
   }
 
   /** True when this step can move the player: something is held, or the player is still slowing from a walk. */
@@ -165,12 +195,18 @@ export class WalkStream {
     while (index > 0 && this.runs[index - 1]!.start > run.start) index -= 1;
     if (index > 0 && this.runs[index - 1]!.start === run.start) return;
     this.runs.splice(index, 0, run);
+    // Where the jump key came up, the jump itself plays on: over this stretch and, it may be, the ones after it.
+    const before = this.runs[index - 1];
+    const after = this.runs[index + 1];
+    if (before?.jump && !run.jump) this.tails.push({ from: run.start, until: run.start + LEAP_TAIL_STEPS });
+    if (run.jump && after && !after.jump) this.tails.push({ from: after.start, until: after.start + LEAP_TAIL_STEPS });
     if (this.runs.length > RUNS_KEPT) this.runs.shift();
   }
 
   /** Forget the stretches that ended before `step`, all but the last of them: it says whether a still stretch follows a walk. */
   dropBefore(step: number): void {
     while (this.runs.length > 2 && this.runs[2]!.start <= step) this.runs.shift();
+    if (this.tails.length > 0) this.tails = this.tails.filter((tail) => tail.until > step);
   }
 }
 
@@ -200,7 +236,9 @@ export class WalkTimeline {
 
   /** An input arrived: the guest has taken `step` steps, and these are its last few stretches. */
   heard(step: number, runs: readonly WireRun[]): void {
-    for (const [start, moveX, moveY, run, yaw] of runs) this.stream.add({ start, moveX, moveY, run: run === 1, yaw });
+    for (const [start, moveX, moveY, keys, yaw] of runs) {
+      this.stream.add({ start, moveX, moveY, run: (keys & RUN_KEY) !== 0, yaw, jump: (keys & JUMP_KEY) !== 0 });
+    }
     if (step > this.known) this.known = step;
   }
 
@@ -257,6 +295,8 @@ export interface WalkShown {
   heading: number;
   running: boolean;
   exerting: boolean;
+  /** The figure's own jump, as its own walk has it. Absent on the ground. */
+  leap?: Leap;
 }
 
 const mayWalk = (player: PlayerState): boolean => player.connected && !player.asleep && player.dialogue === null;
@@ -305,7 +345,7 @@ export class WalkPredictor {
     const runs = this.stream.runs;
     let first = Math.max(0, runs.length - WALK_RUNS_SENT);
     while (first < runs.length - 1 && runs[first + 1]!.start <= this.walked) first += 1;
-    return runs.slice(first).map((run): WireRun => [run.start, run.moveX, run.moveY, run.run ? 1 : 0, run.yaw]);
+    return runs.slice(first).map(wireOf);
   }
 
   /** True when the newest stretch began at or after `step`: there is something the host has not been sent. */
@@ -415,5 +455,6 @@ export class WalkPredictor {
     const z = guess.position.z + this.offsetZ;
     const y = this.offsetX === 0 && this.offsetZ === 0 ? guess.position.y : groundHeight(x, z);
     this.shown = { position: { x, y, z }, heading: guess.heading, running: guess.running, exerting: guess.exerting };
+    if (guess.leap) this.shown.leap = guess.leap;
   }
 }

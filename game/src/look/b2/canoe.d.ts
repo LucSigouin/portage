@@ -57,8 +57,9 @@ export interface Crew {
   /**
    * Ashore, without the paddle: it stays in the canoe. time: kept for callers, unused (standing still is still).
    * stride: radians of the walk cycle. moving 0..1. lying 0..1: stretched out flat. holding: a tool is in the right hand.
+   * jump: how the figure holds itself in a jump (`look/jump-pose.ts`). Left out, or all 0: standing and walking as ever.
    */
-  stand(time: number, stride?: number, moving?: number, lying?: number, holding?: boolean): void;
+  stand(time: number, stride?: number, moving?: number, lying?: number, holding?: boolean, jump?: { trail: number; tuck: number; arms: number; crouch: number } | null): void;
   /** The paddle left in the canoe: laid across the gunwales in `holder`, a group placed as the seated figure would be. */
   leave(holder: Object3D, restSide?: number): void;
 }

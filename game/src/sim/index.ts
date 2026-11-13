@@ -186,13 +186,15 @@ export { dispatch } from './commands.ts';
 // The on-foot step by itself, for a guest's screen to walk its own player ahead of the host's answer (`src/net/walk.ts`).
 export { stepOnFoot } from './foot.ts';
 export { updatePlaces, placesKnownFromTraces, isAtPlace } from './places.ts';
+// The jump: how high a `Leap` is, and how long it lasts.
+export { airborne, blendLeap, leapHeight, LEAP_AIR_STEPS, LEAP_COAST_STEPS, LEAP_FALL_STEPS, LEAP_LAND_STEPS, LEAP_RISE_STEPS } from './foot.ts';
 export { playerOf, playersAboard, connectedPlayers, eventsFor } from './inventory.ts';
 export { BELT_SLOTS, NUMBERED_BELT_SLOTS, beltOf, discardRefusal, questHolding, roomFor } from './inventory.ts';
 
 // --- State, input, commands, events -----------------------------------------
 export { STATE_VERSION, MAXIMUM_PLAYERS, MAXIMUM_NAME_LENGTH } from './types.ts';
 export type {
-  GameState, GameOptions, PlayerState, CanoeState, WeatherState, QuestState, NodeState, DialogueState,
+  GameState, GameOptions, PlayerState, Leap, CanoeState, WeatherState, QuestState, NodeState, DialogueState,
   Statistics, ItemStack, Vector3, StepInput, CrewInput, PlayerId, Command, Container, CommandResult, CommandSuccess,
   CommandFailure, FailureReason, Missing, GameEvent, GameEventType, FailCause,
 } from './types.ts';

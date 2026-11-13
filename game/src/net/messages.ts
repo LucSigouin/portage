@@ -29,8 +29,9 @@ import type { WireRun } from './walk.ts';
  * Bump when a message changes shape. Host and guest must match.
  * 2: a guest's walking is numbered by step (`input.step`, `input.walk`, `command.at`, `state.walked`, `welcome.walked`).
  * 3: the state is save version 4 (the crew's chart, each player's quest card), and `track_quest` may say `tracked`.
+ * 4: the jump key (`input.input.jump`, and 2 added to the keys of a stretch in `input.walk`).
  */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 export interface JoinMessage { v: number; type: 'join'; name: string; key: string }
 export interface InputMessage {
@@ -132,7 +133,8 @@ const INPUT_KEYS = ['paddle', 'steer', 'powerStroke', 'bail', 'moveX', 'moveY', 
 
 /** A `StepInput` from the wire: the eight fields and nothing else, axes clamped to -1..1. Null when it is anything else. */
 export function readInput(raw: unknown): StepInput | null {
-  if (!isRecord(raw) || !hasOnly(raw, INPUT_KEYS)) return null;
+  if (!isRecord(raw) || !hasOnly(raw, INPUT_KEYS, ['jump'])) return null;
+  if (raw.jump !== undefined && typeof raw.jump !== 'boolean') return null;
   const { paddle, steer, powerStroke, bail, moveX, moveY, run, cameraYaw } = raw;
   if (!isAxis(paddle) || !isAxis(steer) || !isAxis(moveX) || !isAxis(moveY) || !isAxis(cameraYaw)) return null;
   if (typeof powerStroke !== 'boolean' || typeof bail !== 'boolean' || typeof run !== 'boolean') return null;
@@ -140,6 +142,7 @@ export function readInput(raw: unknown): StepInput | null {
   return {
     paddle: clampAxis(paddle), steer: clampAxis(steer), powerStroke, bail,
     moveX: clampAxis(moveX), moveY: clampAxis(moveY), run, cameraYaw,
+    ...(raw.jump === true ? { jump: true } : {}),
   };
 }
 

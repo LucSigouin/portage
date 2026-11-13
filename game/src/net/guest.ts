@@ -14,12 +14,13 @@
  *   what a solo session does with the rules engine, done over the wire.
  * - `update(seconds)`: call once a frame. Runs the clock, the resends and the pings.
  */
-import { hashState } from '../sim/index.ts';
+import { airborne, blendLeap, hashState } from '../sim/index.ts';
 import type { Command, CommandResult, GameEvent, GameState, PlayerId, PlayerState, StepInput } from '../sim/index.ts';
 import { PROTOCOL_VERSION, readHostMessage } from './messages.ts';
 import type { ClientMessage, LeaveReason } from './messages.ts';
 import type { Transport } from './transport.ts';
 import { WALK_AHEAD_STEPS, WalkPredictor } from './walk.ts';
+import type { WalkShown } from './walk.ts';
 
 export interface GuestOptions {
   /** The name to play under. The host cuts it to 12 letters. */
@@ -97,7 +98,7 @@ interface Held {
 
 /** Everything a player holds but the camera bearing, as text: a change here is a key going down or up. */
 const keysOf = (input: StepInput): string =>
-  `${input.paddle},${input.steer},${input.powerStroke},${input.bail},${input.moveX},${input.moveY},${input.run}`;
+  `${input.paddle},${input.steer},${input.powerStroke},${input.bail},${input.moveX},${input.moveY},${input.run}${input.jump ? ',jump' : ''}`;
 
 /** The short way round from one bearing to another, taken `share` of the way. */
 function turnToward(from: number, to: number, share: number): number {
@@ -127,7 +128,12 @@ export function blendStates(from: GameState, to: GameState, share: number): Game
   const players = to.players.map((player): PlayerState => {
     const before = from.players.find((candidate) => candidate.id === player.id);
     if (!before || before.mode !== player.mode || !close(before.position, player.position)) return player;
-    return { ...player, position: place(before.position, player.position), heading: turnToward(before.heading, player.heading, share) };
+    const placed: PlayerState = { ...player, position: place(before.position, player.position), heading: turnToward(before.heading, player.heading, share) };
+    // A jump is placed between the two states as well, so a crewmate rises and falls as smoothly as they walk.
+    const leap = blendLeap(before.leap, player.leap, share);
+    if (leap) placed.leap = leap;
+    else delete placed.leap;
+    return placed;
   });
   return {
     ...to,
@@ -136,6 +142,14 @@ export function blendStates(from: GameState, to: GameState, share: number): Game
     time: Math.abs(to.time - from.time) <= SNAP_CLOCK_SECONDS ? mix(from.time, to.time) : to.time,
     playedSeconds: mix(from.playedSeconds, to.playedSeconds),
   };
+}
+
+/** This guest's own player as its own walk has it: the place, the facing, the run and the jump. */
+function ownFigure(me: PlayerState, shown: WalkShown): PlayerState {
+  const figure: PlayerState = { ...me, position: shown.position, heading: shown.heading, running: shown.running, exerting: shown.exerting };
+  if (shown.leap) figure.leap = shown.leap;
+  else delete figure.leap;
+  return figure;
 }
 
 export class GuestLink {
@@ -397,7 +411,7 @@ export class GuestLink {
    * `update`. Takes the frame's steps of this guest's own walk (so `view()`
    * shows them at once), and sends the input: at once when a key changes (and
    * on the two frames after), 30 times a second while walking or while the
-   * camera turns, and 20 times a second while nothing does.
+   * camera turns or the figure is in the air, and 20 times a second while nothing does.
    */
   sendInput(input: StepInput): void {
     if (this.status !== 'playing') return;
@@ -408,7 +422,8 @@ export class GuestLink {
     const text = JSON.stringify(input);
     const keys = keysOf(input);
     const since = this.clock - this.inputSentAt;
-    const walking = Math.hypot(input.moveX, input.moveY) > 0.01;
+    // In the air counts as walking: the host is walking this guest through the jump, and should not have to wait for it.
+    const walking = Math.hypot(input.moveX, input.moveY) > 0.01 || airborne(this.walk.shown?.leap);
     const changed = walking || text !== this.inputSent || this.walk.changedSince(this.stepSent);
     const keyChanged = keys !== this.keysSent;
     const repeat = this.repeats > 0;
@@ -469,7 +484,7 @@ export class GuestLink {
     return {
       ...base,
       players: base.players.map((player) => (player === me
-        ? { ...me, position: shown.position, heading: shown.heading, running: shown.running, exerting: shown.exerting } : player)),
+        ? ownFigure(me, shown) : player)),
     };
   }
 

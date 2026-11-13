@@ -95,6 +95,8 @@ export function setConnected(state: GameState, playerId: PlayerId, connected: bo
   player.running = false;
   player.asleep = false;
   player.dialogue = null;
+  // An away player is not stepped: one who left in the middle of a jump is put down.
+  if (player.leap !== undefined) delete player.leap;
   if (!quiet) emit(state, { type: 'crew_changed', who: player.id, change: connected ? 'back' : 'away' });
   if (!connected) skipNightIfCrewAsleep(state, playerOf(state, connectedPlayers(state)[0]?.id ?? player.id));
   return true;
@@ -227,6 +229,8 @@ function fixedStep(state: GameState, inputs: readonly (StepInput | undefined)[])
     let moving: boolean;
     if (player.mode === 'canoe') {
       moving = input.paddle !== 0;
+      // Nobody is in the air aboard: a jump cut short by boarding is over.
+      if (player.leap !== undefined) delete player.leap;
     } else {
       stepOnFoot(state, player, input, deltaSeconds);
       moving = Math.hypot(input.moveX, input.moveY) > 0.01;

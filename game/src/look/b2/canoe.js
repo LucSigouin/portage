@@ -813,29 +813,43 @@ export function createCrew(outfit) {
     // ashore, empty-handed or with a tool in the right hand: the paddle stays in the canoe. Standing still is
     // still: no breath, no turn of the shoulders. t: kept for callers, unused. stride: radians of the walk cycle,
     // moving 0..1. lying 0..1: stretched out flat, for a sleeper (the caller lays the figure down). holding: a tool
-    // is in the right hand, carried a little forward and up.
-    stand(t, stride = 0, moving = 0, lying = 0, holding = false) {
+    // is in the right hand, carried a little forward and up. jump: { trail, tuck, arms, crouch }, each 0..1 (see
+    // look/jump-pose.ts): the legs trailing from the push, the knees drawn up, the arms thrown up, and the knees
+    // giving over planted feet on landing. Left out, or all 0: the figure stands and walks exactly as it did.
+    stand(t, stride = 0, moving = 0, lying = 0, holding = false, jump = null) {
       if (tin) tin.visible = false;
       if (paddler.paddle.parent === paddler.root) paddler.paddle.visible = false;
       const up = 1 - lying;
-      const swing = Math.sin(stride) * 0.2 * moving;
+      const trail = jump ? jump.trail * up : 0;
+      const tuck = jump ? jump.tuck * up : 0;
+      const arms = jump ? jump.arms * up : 0;
+      const crouch = jump ? jump.crouch * up : 0;
+      // Off the ground the stride is held where it was, a little closed: a running jump keeps one leg ahead.
+      const swing = Math.sin(stride) * 0.2 * moving * (1 - 0.4 * tuck);
       const liftL = Math.max(0, Math.cos(stride)) * 0.07 * moving;
       const liftR = Math.max(0, -Math.cos(stride)) * 0.07 * moving;
       const carry = holding ? up : 0;
-      // The arms swing against the legs; a hand with a tool in it swings less.
-      handR.set(-0.27 + 0.01 * carry, 0.74 + 0.08 * carry, 0.06 * up + 0.12 * carry - 0.08 * lying + swing * (0.6 - 0.3 * carry));
-      handL.set(0.27, 0.74, 0.06 * up - 0.08 * lying - swing * 0.6);
+      // The arms swing against the legs; a hand with a tool in it swings less, and is thrown up less in a jump.
+      // Up means to the chest and out ahead, the elbows bent: a swing for balance, not hands in the air.
+      const armR = arms * (1 - 0.6 * carry);
+      handR.set(-0.27 + 0.01 * carry - 0.03 * armR, 0.74 + 0.08 * carry + 0.4 * armR - 0.17 * crouch, 0.06 * up + 0.12 * carry - 0.08 * lying + swing * (0.6 - 0.3 * carry) + 0.3 * armR + 0.16 * crouch);
+      handL.set(0.27 + 0.03 * arms, 0.74 + 0.4 * arms - 0.17 * crouch, 0.06 * up - 0.08 * lying - swing * 0.6 + 0.3 * arms + 0.16 * crouch);
+      // The legs: trailing behind from the push, drawn up under the body, or bent over planted feet.
+      const kneeY = 0.03 * trail + 0.16 * tuck - 0.06 * crouch;
+      const kneeZ = -0.07 * trail + 0.22 * tuck + 0.2 * crouch;
+      const footY = 0.12 * trail + 0.22 * tuck;
+      const footZ = -0.24 * trail + 0.05 * tuck;
       paddler.pose({
-        hipY: 0.8 - 0.012 * moving * Math.abs(Math.cos(stride)),
-        lean: (0.03 + 0.05 * moving) * up,
+        hipY: 0.8 - 0.012 * moving * Math.abs(Math.cos(stride)) - 0.17 * crouch,
+        lean: (0.03 + 0.05 * moving) * up + 0.16 * trail - 0.04 * tuck + 0.26 * crouch,
         twist: 0.06 * (1 - moving) * up,
         tilt: 0,
         handL,
         handR,
-        kneeL: sKneeL.set(0.1, 0.43 + liftL * 0.5, 0.03 * up - 0.07 * lying + swing * 0.55 + 0.05 * moving),
-        kneeR: sKneeR.set(-0.1, 0.43 + liftR * 0.5, 0.05 * up - 0.07 * lying - swing * 0.55 + 0.05 * moving),
-        footL: sFootL.set(0.11, 0.06 + liftL, swing - 0.1 * lying),
-        footR: sFootR.set(-0.12, 0.06 + liftR, 0.06 * (1 - moving) * up - 0.1 * lying - swing),
+        kneeL: sKneeL.set(0.1, 0.43 + liftL * 0.5 + kneeY, 0.03 * up - 0.07 * lying + swing * 0.55 + 0.05 * moving + kneeZ),
+        kneeR: sKneeR.set(-0.1, 0.43 + liftR * 0.5 + kneeY, 0.05 * up - 0.07 * lying - swing * 0.55 + 0.05 * moving + kneeZ),
+        footL: sFootL.set(0.11, 0.06 + liftL + footY, swing - 0.1 * lying + footZ),
+        footR: sFootR.set(-0.12, 0.06 + liftR + footY, 0.06 * (1 - moving) * up - 0.1 * lying - swing + footZ),
         footYaw: 0,
       });
     },

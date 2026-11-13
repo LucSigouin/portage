@@ -11,7 +11,7 @@
 import { ISLANDS_BY_ID } from '../data/index.ts';
 import type { RegionId, WeatherKind } from '../data/index.ts';
 import {
-  FIXED_STEP, nearestIsland, playerOf, selectInventory, selectMeters, selectTimeOfDay, selectWeather, waterRoughnessAt,
+  FIXED_STEP, airborne, nearestIsland, playerOf, selectInventory, selectMeters, selectTimeOfDay, selectWeather, waterRoughnessAt,
 } from '../sim/index.ts';
 import type { GameState, PlayerId } from '../sim/index.ts';
 import { SCAVENGE_INTERVAL, scavengeRequest } from './cues.ts';
@@ -229,7 +229,8 @@ export function deriveLayerInputs(state: GameState, memory: DeriveMemory, frameS
     nearCanoe: aboard || Math.hypot(player.position.x - canoe.position.x, player.position.z - canoe.position.z) < 8,
     nearFire: memory.nearFire,
     onFoot: !aboard,
-    footSpeed: memory.footSpeed,
+    // In the air of a jump no foot lands: no footsteps until the feet are down again.
+    footSpeed: airborne(player.leap) ? 0 : memory.footSpeed,
     wading: !aboard && player.position.y < 0.02,
     heightAboveWater: Math.max(0, player.position.y),
     // Scavenging takes one press: the `harvest_started` event plays its hit, and nothing is held.

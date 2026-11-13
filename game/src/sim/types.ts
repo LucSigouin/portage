@@ -61,6 +61,8 @@ export interface StepInput {
    * They stay exactly as they are, speed and all, instead of slowing down as if they had let go of the keys.
    */
   hold?: boolean;
+  /** On foot: the jump key is down. One press is one jump (`PlayerState.leap`). Left out: not down. */
+  jump?: boolean;
   /** Bearing the camera looks along, radians (0 = north, clockwise). */
   cameraYaw: number;
 }
@@ -83,6 +85,19 @@ export interface Gait {
   speed: number;
   x: number;
   z: number;
+}
+
+/** A jump under way, or the jump key still down after one: see `PlayerState.leap`. */
+export interface Leap {
+  /**
+   * Steps since the feet left the ground. The air lasts `airSteps()` of them (the height is `leapHeight`), then the
+   * knees give for `landSteps()` more. 0: on the ground, only the key is still down.
+   */
+  steps: number;
+  /** The jump key was down on the last step: the next jump needs it let go first. */
+  held: boolean;
+  /** The key was pressed again late in the fall: jump again on landing. */
+  again: boolean;
 }
 
 export interface PlayerState {
@@ -108,6 +123,12 @@ export interface PlayerState {
    * starts from a stand. Absent until the first step on foot, and in saves from before it existed.
    */
   gait?: Gait;
+  /**
+   * On foot: a jump, from the step the feet leave the ground until the knees have straightened after the landing
+   * (and for as long after that as the key stays down). Absent the rest of the time, and in every save from before
+   * jumping. `position.y` stays the ground's height all through: the height of the jump is `leapHeight(leap)`.
+   */
+  leap?: Leap;
   hunger: number;
   thirst: number;
   energy: number;
