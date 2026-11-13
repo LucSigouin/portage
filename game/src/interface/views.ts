@@ -80,7 +80,7 @@ export function lobbyView(lobby: LobbyModel): ViewNode[] {
 const METER_ICON = { hunger: ICON.hunger, thirst: ICON.thirst, energy: ICON.energy } as const;
 
 /**
- * The crew list, hung under the vitals card: one row a player. Their toque in their own colour,
+ * The crew list, stood on top of the vitals card: one row a player. Their toque in their own colour,
  * their label, three small meters in the order of the big ones above, where they are and how far.
  * A low meter is marked three ways: its bar is ringed in rust, the row gets a rust mark, and the
  * words say which. An away player's toque and meters are washed out and their name is tagged
@@ -113,7 +113,7 @@ export function crewView(crew: CrewRowModel[], patterned: boolean): ViewNode {
       mate.lowText !== '' ? h('b.iw-mate-low', null, mate.lowText) : null))));
 }
 
-/** Top left: the three meters, the water in the hull and the canoe's status lines. With a crew, the crew list under them. */
+/** Bottom left: the three meters, the water in the hull and the canoe's status lines. With a crew, the crew list over them. */
 export function vitalsView(hud: HudModel, patterned: boolean): ViewNode[] {
   const water = hud.water;
   return [h('div.iw-vitals.iw-paper', { key: 'vitals' },
@@ -135,7 +135,7 @@ export function vitalsView(hud: HudModel, patterned: boolean): ViewNode[] {
     hud.crew.length > 1 ? crewView(hud.crew, patterned) : null)];
 }
 
-/** Top right: the field notes. The day, the place, the weather and the tracked quest. */
+/** Top left: the field notes. The day, the place, the weather and the tracked quest. */
 export function notesView(hud: HudModel): ViewNode[] {
   const tracker = hud.tracker;
   return [h('div.iw-notes.iw-paper', { key: 'notes' },

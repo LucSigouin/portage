@@ -214,12 +214,15 @@ html.iw-document {
   display: contents;
 }
 
-/* ---------- HUD ---------- */
+/* ---------- HUD ----------
+   Where the cards stand (Luc's bugfix list, line 13): the field notes with the quest top left, the meters bottom
+   left with the crew card over them, the notes of what happened bottom right. The top right is left clear for a
+   map. The compass stays at the top in the middle; the prompt, the tip and the tool belt at the bottom in the middle. */
 .iw-vitals {
   --tilt: -0.6deg;
   position: absolute;
   left: 1.6rem;
-  top: 1.5rem;
+  bottom: 1.5rem;
   width: 15.6rem;
   padding: 0.75rem 0.95rem 0.7rem;
 }
@@ -467,15 +470,15 @@ html.iw-document {
 .iw-notes {
   --tilt: 0.9deg;
   position: absolute;
-  right: 1.7rem;
+  left: 1.7rem;
   top: 1.6rem;
   width: 17.6rem;
   padding: 0.85rem 1rem 0.75rem;
 }
 .iw-notes .iw-tape {
   top: -0.5rem;
-  right: 1.4rem;
-  transform: rotate(5deg);
+  left: 1.4rem;
+  transform: rotate(-5deg);
 }
 .iw-over {
   display: flex;
@@ -693,16 +696,20 @@ html.iw-document {
   border: 0.09rem solid var(--iw-rust-deep);
 }
 
-/* ---------- toasts: slips of paper down the left edge ---------- */
+/* ---------- toasts: slips of paper up the right edge, from the bottom ---------- */
 .iw-toasts {
   position: absolute;
-  left: 1.6rem;
+  right: 1.6rem;
   bottom: 1.5rem;
   width: 22rem;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: flex-end;
   gap: 0.35rem;
+}
+/* The tester's lines (debug) stand in the corner: the slips start above them. */
+.iw:has(> .iw-debug:not([hidden])) > .iw-toasts {
+  bottom: 5.6rem;
 }
 .iw-toast {
   display: flex;
@@ -2095,14 +2102,14 @@ html.iw-document {
 }
 
 /* ---------- the crew ----------
-   A card hung under the vitals, drawn only for a crew of two or more. One row a player: their
+   A card stood on top of the vitals, drawn only for a crew of two or more. One row a player: their
    toque in their own colour, their label, three small meters in the order of the big ones above,
    and where they are. Nothing here moves: no transition, no animation. */
 .iw-crew {
   --tilt: 0.5deg;
   position: absolute;
   left: 0;
-  top: calc(100% + 1.05rem);
+  bottom: calc(100% + 1.05rem);
   width: 100%;
   padding: 0.55rem 0.95rem 0.42rem;
 }

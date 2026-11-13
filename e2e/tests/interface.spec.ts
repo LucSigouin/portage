@@ -1231,7 +1231,8 @@ function crewCardProblems(): string[] {
   // The middle of the play view is the canoe and the water ahead of it: the card keeps to the left quarter.
   if (card.right > width / 4) problems.push(`the crew card reaches ${Math.round((card.right / width) * 100)}% across the view`);
   const vitals = document.querySelector('.iw-vitals')!.getBoundingClientRect();
-  if (card.top < vitals.bottom) problems.push('the crew card is not under the vitals card');
+  // The vitals stand bottom left (Luc's bugfix list, line 13), and the crew card on top of them.
+  if (card.bottom > vitals.top) problems.push('the crew card is not over the vitals card');
   if (Math.abs(card.left - vitals.left) > 0.5 || Math.abs(card.width - vitals.width) > 0.5) problems.push('the crew card is not lined up with the vitals card');
   for (const selector of ['.iw-vitals', '.iw-notes', '.iw-strip', '.iw-mark-chip', '.iw-hotbar', '.iw-hint', '.iw-prompt', '.iw-toast', '.iw-debug']) {
     for (const other of document.querySelectorAll(selector)) {
@@ -1243,17 +1244,87 @@ function crewCardProblems(): string[] {
   return problems;
 }
 
-test('the crew card hangs under the vitals, clear of the middle of the view and of every other card, at every size', async ({ page }) => {
+test('the crew card stands on the vitals, clear of the middle of the view and of every other card, at every size', async ({ page }) => {
   const problems = watch(page);
   for (const size of SIZES) {
     await page.setViewportSize(size);
     for (const name of ['crew of 2, afloat', 'crew of 4, ashore', 'crew of 4, split up', 'crew of 4, everyone in trouble']) {
       await show(page, CREW.find((view) => view.name === name)!);
-      // The busiest the left edge gets: the notes queue full, on top of everything else.
+      // The busiest the screen gets: the notes queue full, on top of everything else.
       await stage(page, 'for (let note = 1; note <= 6; note += 1) portage.app.toasts.add({ text: `A note, number ${note}`, tone: "info" });');
       await frames(page, 3);
       expect(await page.locator('.iw-toast').count()).toBe(6);
       expect(await page.evaluate(crewCardProblems), `${name} at ${size.width}x${size.height}`).toEqual([]);
+    }
+  }
+  expect(problems).toEqual([]);
+});
+
+/** Run in the page: where the HUD's cards stand against Luc's layout (bugfix list, line 13), and what overlaps. */
+function hudLayoutProblems(): string[] {
+  const problems: string[] = [];
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+  const boxOf = (selector: string): DOMRect | null => {
+    const element = document.querySelector(selector);
+    const box = element?.getBoundingClientRect();
+    return box && box.width > 0 && box.height > 0 ? box : null;
+  };
+  const vitals = boxOf('.iw-vitals');
+  const notes = boxOf('.iw-notes');
+  const tracker = boxOf('.iw-tracker');
+  if (!vitals || !notes) return ['no vitals or notes card'];
+  // The meters: bottom left.
+  if (vitals.left > width / 4 || vitals.bottom < height - 4 * rem) problems.push(`the meters are not bottom left: ${Math.round(vitals.left)},${Math.round(vitals.bottom)}`);
+  // The quest: top left.
+  if (!tracker) problems.push('no quest on the notes card');
+  else if (tracker.left > width / 4 || notes.top > 4 * rem) problems.push(`the quest is not top left: ${Math.round(tracker.left)},${Math.round(notes.top)}`);
+  // The top right is the map's: nothing of the HUD in a square 17 rem a side from that corner (16 for the map, 1 of margin).
+  const corner = { left: width - 17 * rem, top: 0, right: width, bottom: 17 * rem };
+  const cards = ['.iw-vitals', '.iw-crew', '.iw-notes', '.iw-strip', '.iw-mark-chip', '.iw-hotbar', '.iw-hint', '.iw-prompt', '.iw-toast', '.iw-debug'];
+  const placed: { selector: string; box: DOMRect }[] = [];
+  for (const selector of cards) {
+    for (const element of document.querySelectorAll(selector)) {
+      if (element.closest('[hidden]')) continue;
+      const box = element.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) continue;
+      placed.push({ selector, box });
+      if (box.left < corner.right && box.right > corner.left && box.top < corner.bottom && box.bottom > corner.top) {
+        problems.push(`${selector} stands in the top right corner, the map's place`);
+      }
+      if (box.left < 0 || box.top < 0 || box.right > width || box.bottom > height) problems.push(`${selector} runs off the screen`);
+    }
+  }
+  // No two cards overlap. (The compass chips ride under the strip by design: a chip and the strip are not compared.)
+  for (let first = 0; first < placed.length; first += 1) {
+    for (let second = first + 1; second < placed.length; second += 1) {
+      const [one, other] = [placed[first]!, placed[second]!];
+      if (one.selector === other.selector) continue;
+      if ([one.selector, other.selector].includes('.iw-mark-chip') && [one.selector, other.selector].includes('.iw-strip')) continue;
+      const [a, b] = [one.box, other.box];
+      if (a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top) problems.push(`${one.selector} overlaps ${other.selector}`);
+    }
+  }
+  return problems;
+}
+
+test('the HUD: meters bottom left, quest top left, the top right clear for a map, and no card on another, at every size', async ({ page }) => {
+  const problems = watch(page);
+  const views: View[] = [
+    SHOTS.find((shot) => shot.name === 'play')!, SHOTS.find((shot) => shot.name === 'island')!, SHOTS.find((shot) => shot.name === 'storm')!,
+    CREW.find((view) => view.name === 'crew of 4, everyone in trouble')!, CREW.find((view) => view.name === 'crew of 4, split up')!,
+  ];
+  for (const size of [...SIZES, { width: 1366, height: 768 }]) {
+    await page.setViewportSize(size);
+    for (const view of views) {
+      await show(page, view);
+      // The busiest it gets: the notes queue full, and the tester's lines in the corner (every staged shot has them).
+      await stage(page, 'for (let note = 1; note <= 6; note += 1) portage.app.toasts.add({ text: `A longer note, number ${note}, about a thing`, tone: "info" });');
+      await frames(page, 3);
+      expect(await page.locator('.iw-toast').count()).toBe(6);
+      expect(await page.locator('.iw-debug:not([hidden])').count(), `${view.name}: the tester's lines`).toBe(1);
+      expect(await page.evaluate(hudLayoutProblems), `${view.name} at ${size.width}x${size.height}`).toEqual([]);
     }
   }
   expect(problems).toEqual([]);
