@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "wrangler dev --port 8791",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --test-concurrency=1 tests/room.test.ts tests/dial.test.ts tests/worker.test.ts",
-    "check": "tsc --noEmit && node --test --test-concurrency=1 tests/room.test.ts tests/dial.test.ts tests/worker.test.ts"
+    "test": "node --test --test-concurrency=1 tests/room.test.ts tests/dial.test.ts tests/feedback.test.ts tests/worker.test.ts tests/feedback-worker.test.ts",
+    "check": "tsc --noEmit && node --test --test-concurrency=1 tests/room.test.ts tests/dial.test.ts tests/feedback.test.ts tests/worker.test.ts tests/feedback-worker.test.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260916.1",

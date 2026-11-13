@@ -1,6 +1,6 @@
 // Dials the relay the way the game does and checks that a crew can meet in a room.
 //
-//   node deploy/smoke-relay.mjs <relay address> <the page's origin> [--build <name>] [--limit] [--address <address>]
+//   node deploy/smoke-relay.mjs <relay address> <the page's origin> [--build <name>] [--limit] [--address <address>] [--feedback on|off]
 //   node deploy/smoke-relay.mjs wss://sigouin.net/portage/relay https://sigouin.net --build 78b15bf-20261113T140000Z --limit
 //
 // It opens one room under a random code, passes a message each way, closes the room, and checks that a page
@@ -13,6 +13,9 @@
 //                    opened, and up to 90 s of waiting. This is the one place the limit is seen on Cloudflare itself.
 // --address <a>      Only for a relay on this computer (ws://): the address to dial as. The local relay never
 //                    limits this computer, so --limit needs it there. Cloudflare sets the address itself.
+// --feedback on|off  Also try the feedback address (relay/src/feedback.ts). `on`: it has no way to read, it turns
+//                    away a page from somewhere else, and it keeps one note, which says it is the deploy's check
+//                    and not a player's. `off`: it answers that feedback is off. Left out: feedback is not tried.
 import { randomBytes } from 'node:crypto';
 import { request as plainRequest } from 'node:http';
 import { request as secureRequest } from 'node:https';
@@ -23,8 +26,10 @@ const option = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] ?? 
 const wantBuild = option('--build');
 const tryLimit = args.includes('--limit');
 const address = option('--address');
-if (!relay || !origin || !/^wss?:\/\//.test(relay) || wantBuild === '' || address === '' || (address !== null && relay.startsWith('wss://'))) {
-  console.error('usage: node smoke-relay.mjs <ws:// or wss:// relay address> <origin of the game page> [--build <name>] [--limit] [--address <address, ws:// only>]');
+const feedback = option('--feedback');
+if (!relay || !origin || !/^wss?:\/\//.test(relay) || wantBuild === '' || address === '' || (address !== null && relay.startsWith('wss://'))
+  || (feedback !== null && feedback !== 'on' && feedback !== 'off')) {
+  console.error('usage: node smoke-relay.mjs <ws:// or wss:// relay address> <origin of the game page> [--build <name>] [--limit] [--address <address, ws:// only>] [--feedback on|off]');
   process.exit(2);
 }
 /** Sent only to a relay on this computer, which believes it. */
@@ -152,6 +157,33 @@ for (const from of strangers) {
   }
 }
 
+// Feedback: the address that keeps a play tester's note. It is plain HTTP, and wakes no room.
+let feedbackWords = '';
+if (feedback !== null) {
+  const note = (from) => fetch(`${door}/feedback`, {
+    method: 'POST', cache: 'no-store',
+    headers: { 'content-type': 'application/json', ...(from === null ? {} : { Origin: from }), ...addressHeader },
+    body: JSON.stringify({
+      kind: 'other', name: 'deploy check', version: (build ?? 'not named').slice(0, 40),
+      note: 'This note is the relay deploy\'s own check that feedback is kept. It is not from a player.',
+      context: { where: 'deploy/smoke-relay.mjs' },
+    }),
+  }).then(async (answer) => ({ status: answer.status, words: (await answer.text()).trim().slice(0, 80) }), (error) => ({ status: 0, words: error.message }));
+  if (feedback === 'off') {
+    const answer = await note(origin);
+    if (answer.status !== 503 || answer.words !== 'feedback is off') fail(`feedback should be off, but a note was answered ${answer.status}: ${answer.words}`);
+    feedbackWords = ', feedback is off';
+  } else {
+    const read = await fetch(`${door}/feedback`, { cache: 'no-store', headers: { Origin: origin } });
+    if (read.status !== 405) fail(`a GET of the feedback address answered ${read.status}, not 405: there must be no way to read notes`);
+    const stranger = await note('https://evil.example');
+    if (stranger.status !== 403) fail(`a note from another site's page was answered ${stranger.status}, not 403`);
+    const kept = await note(origin);
+    if (kept.status !== 201 || kept.words !== 'kept') fail(`the feedback store did not keep a note. It answered ${kept.status}: ${kept.words}`);
+    feedbackWords = ', feedback kept one note (the deploy\'s own, marked as such) and turned a stranger away';
+  }
+}
+
 // 6. The dial limit: a script that dials in a loop is stopped at the door, and the address is let in again later.
 /** One dial written by hand, so the status and the words of a refusal can be read. A socket the relay takes is dropped at once. */
 function knock() {
@@ -210,5 +242,5 @@ if (wantBuild !== null) {
   if (now !== wantBuild) fail(`the build changed under the test. It began on ${wantBuild} and ended on ${now ?? 'a relay that names no build'}`);
 }
 
-console.log(`relay: ${relay} build ${build ?? 'not named'}, room opened in ${opened} ms, a message there and back in ${roundTrip} ms, ${strangers.length} strangers turned away, ${limitWords}`);
+console.log(`relay: ${relay} build ${build ?? 'not named'}, room opened in ${opened} ms, a message there and back in ${roundTrip} ms, ${strangers.length} strangers turned away, ${limitWords}${feedbackWords}`);
 process.exit(0);

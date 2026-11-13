@@ -12,6 +12,9 @@
  * from somewhere else, a bad code, and an address that dials too often
  * (`dial.ts`). Those answers are plain HTTP, and cost no room request.
  *
+ * One more address, `<anything>/feedback`, takes a play tester's note and keeps
+ * it in a database (`feedback.ts`). It is plain HTTP and has nothing to do with rooms.
+ *
  * Sockets are taken with the hibernation API: a room nobody is talking in
  * costs no running time, and comes back from its sockets' attachments. Its
  * memory does not come back: about ten seconds of quiet and it is gone. So
@@ -19,10 +22,12 @@
  */
 import { DurableObject } from 'cloudflare:workers';
 import { DIAL_WINDOW_SECONDS, TOO_MANY_DIALS, dialKey } from './dial.ts';
+import { answerFeedback, isFeedbackPath } from './feedback.ts';
+import type { NotesEnv } from './feedback.ts';
 import { CLOSE, RELAY_PROTOCOL, ROOM_CODE_PATTERN, RoomLogic, originAllowed } from './room.ts';
 import type { IdleCount, SeatRecord, Wire } from './room.ts';
 
-export interface Env {
+export interface Env extends NotesEnv {
   ROOMS: DurableObjectNamespace<Room>;
   /** Counts dials per address (`dial.ts`). Cloudflare's rate limiting binding: its two numbers are in `wrangler.jsonc`. */
   DIALS?: RateLimit;
@@ -60,6 +65,8 @@ export default {
     const url = new URL(request.url);
     // The second line says which build answers, so a deploy can tell the new relay from the old one.
     if (request.method === 'GET' && /(^|\/)health$/.test(url.pathname)) return text(`portage relay: ok\nbuild ${buildName(env)}`, 200);
+    // Feedback: a play tester's note, kept for Luc (`feedback.ts`). It wakes no room.
+    if (isFeedbackPath(url.pathname)) return answerFeedback(request, env);
     const match = /(?:^|\/)room\/([^/]+)$/.exec(url.pathname);
     if (!match) return text('not found', 404);
     if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') return text('this address takes WebSockets only', 426);
