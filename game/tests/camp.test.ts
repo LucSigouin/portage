@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { CAMP_LAYOUTS, ISLANDS, ISLANDS_BY_ID, TUNING, spotPosition } from '../src/data/index.ts';
 import type { IslandId, LandmarkKind } from '../src/data/index.ts';
-import { dispatch, drainEvents, selectInteractable, selectInventory } from '../src/sim/index.ts';
+import { dispatch, drainEvents, selectInteractable, selectInventory, selectMeters } from '../src/sim/index.ts';
 import type { GameState } from '../src/sim/index.ts';
 import { campInReach } from '../src/sim/inventory.ts';
 import { newGame, standOn, teleport } from './support.ts';
@@ -121,10 +121,11 @@ describe('standing where the quests send you', () => {
     expect(state.respawnCampIslandId).toBe('home_knoll');
   });
 
-  it('offers a bed at every camp\'s bed, and still beside every fire', () => {
+  it('offers a bed at every camp\'s bed, and sleeps there', () => {
     for (const island of campIslands) {
       const layout = CAMP_LAYOUTS[island.id]!;
-      for (const spot of [layout.fire, ...layout.beds]) {
+      expect(layout.beds.length, `${island.id} has a bed`).toBeGreaterThan(0);
+      for (const spot of layout.beds) {
         const state = standingAt(island.id, spot.x + 1, spot.z);
         state.time = 21 * HOUR;
         expect(selectInteractable(state), `${island.id} at ${spot.x.toFixed(0)}, ${spot.z.toFixed(0)}`).toMatchObject({ kind: 'bed' });
@@ -133,7 +134,25 @@ describe('standing where the quests send you', () => {
     }
   });
 
-  it('offers no bed between the fire and the bench: only at the fire and at the bed', () => {
+  it('sleeps at the bed, not the campfire (Luc\'s list, line 3): the fire offers no bed, and still warms and cooks', () => {
+    for (const island of campIslands) {
+      const layout = CAMP_LAYOUTS[island.id]!;
+      // Beside the fire, on the side away from every bed, so no bed is in reach.
+      const away = layout.beds.reduce((sum, bed) => ({ x: sum.x + layout.fire.x - bed.x, z: sum.z + layout.fire.z - bed.z }), { x: 0, z: 0 });
+      const length = Math.hypot(away.x, away.z) || 1;
+      const x = layout.fire.x + (away.x / length) * 1.2;
+      const z = layout.fire.z + (away.z / length) * 1.2;
+      const state = standingAt(island.id, x, z);
+      state.time = 21 * HOUR;
+      const label = `${island.id} by the fire`;
+      expect(selectInteractable(state)?.kind ?? null, label).not.toBe('bed');
+      expect(dispatch(state, { type: 'sleep' }), label).toMatchObject({ ok: false, reason: 'no_bed_in_reach' });
+      expect(selectInventory(state).stations, label).toContain('fire');
+      expect(selectMeters(state).sheltered, label).toBe(true);
+    }
+  });
+
+  it('offers no bed between the fire and the bench: only at the bed', () => {
     const bench = landmarkOf('home_knoll', 'stump_bench');
     const state = standingAt('home_knoll', bench.x, bench.z);
     state.time = 21 * HOUR;

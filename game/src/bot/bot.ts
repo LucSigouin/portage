@@ -13,7 +13,7 @@ import type {
   QuestDefinition, QuestId, RecipeDefinition, StationId, ToolId,
 } from '../data/types.ts';
 import {
-  ATTACHMENTS, ATTACHMENT_IDS, HULL_TIERS, ISLANDS, ISLANDS_BY_ID, ITEMS, LOOT_TABLES, MAIN_QUESTS, NODES,
+  ATTACHMENTS, ATTACHMENT_IDS, CAMP_LAYOUTS, HULL_TIERS, ISLANDS, ISLANDS_BY_ID, ITEMS, LOOT_TABLES, MAIN_QUESTS, NODES,
   NODES_BY_ID, NODES_BY_ISLAND, NPCS, NPC_IDS, RECIPES, RECIPE_IDS, STOCK_FOOD_IDS, TUNING, isStackable,
   spotPosition,
 } from '../data/index.ts';
@@ -608,13 +608,20 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
     }
   }
 
+  /** Where to lie down in an island's camp: its bed (the lean-to, a bedroll, the keeper's hut), not its fire. */
+  const bedOf = (islandId: IslandId): Point => {
+    const bed = CAMP_LAYOUTS[islandId]?.beds[0];
+    if (!bed) throw new BotStuck(`no bed in the camp on ${islandId}`);
+    return { x: bed.x, z: bed.z };
+  };
+
   /** Sleep through the night when a bed is on this island. Costs no played time. */
   function* sleepIfNight(): Generator<StepInput> {
     const islandId = here();
     if (!islandId || !selectTimeOfDay(state).isNight) return;
     const definition = ISLANDS_BY_ID[islandId];
     if (!definition.camp?.sleep) return;
-    yield* walkTo(spotPosition(definition, definition.camp.spot), 2);
+    yield* walkTo(bedOf(islandId), 2);
     useFire();
     upkeep();
     if (send({ type: 'sleep' }).ok) log(`slept on ${islandId}`);
@@ -1202,7 +1209,7 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
         bed ??= ISLANDS.find((definition) => definition.camp?.sleep && canReachIsland(definition.id, limits()));
         if (!bed) throw new BotStuck('no bed in reach');
         yield* travelTo(bed.id);
-        yield* walkTo(spotPosition(bed, bed.camp!.spot), 2);
+        yield* walkTo(bedOf(bed.id), 2);
         useFire();
         // Too early to sleep: rest by the fire until dusk.
         const giveUpTick = state.tick + 20 * 60 * 60;

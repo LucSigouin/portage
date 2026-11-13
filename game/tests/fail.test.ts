@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TUNING } from '../src/data/index.ts';
 import { dispatch, landingBerth, selectRespawnPoint, selectTimeOfDay } from '../src/sim/index.ts';
 import { distanceToHull } from '../src/sim/interact.ts';
-import { build, countIn, floatCanoeAt, give, newGame, run, runUntilFail, standOn, teleportToCamp } from './support.ts';
+import { build, countIn, floatCanoeAt, give, newGame, run, runUntilFail, standOn, teleportToBed } from './support.ts';
 
 /** Afloat in the Reach in a bare canoe, loaded, about to go under. */
 function aboutToCapsize() {
@@ -101,7 +101,7 @@ describe('respawn point', () => {
     const state = newGame();
     expect(selectRespawnPoint(state)).toMatchObject({ islandId: 'home_knoll', islandName: 'Home Knoll', mobile: false });
     standOn(state, 'orchard_hill');
-    teleportToCamp(state, 'orchard_hill');
+    teleportToBed(state, 'orchard_hill');
     state.time = 23 * 60;
     expect(dispatch(state, { type: 'sleep' }).ok).toBe(true);
     expect(selectRespawnPoint(state).islandId).toBe('orchard_hill');

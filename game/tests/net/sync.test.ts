@@ -4,11 +4,11 @@
  * and with messages that try to cheat. No network: loopback wires.
  */
 import { describe, expect, it } from 'vitest';
-import { ISLANDS_BY_ID, TUNING, spotPosition } from '../../src/data/index.ts';
+import { ISLANDS_BY_ID, TUNING } from '../../src/data/index.ts';
 import { GuestLink, HostLink, PROTOCOL_VERSION, STALE_INPUT_SECONDS, createLoopbackPair } from '../../src/net/index.ts';
 import { FIXED_STEP, NEUTRAL_INPUT, dispatch, drainEvents, hashState, setConnected, terrainHeight } from '../../src/sim/index.ts';
 import type { GameState } from '../../src/sim/index.ts';
-import { countIn, newGame, standOn } from '../support.ts';
+import { bedSide, countIn, newGame, standOn } from '../support.ts';
 import { calmGame, createRig, key } from './rig.ts';
 
 const v = PROTOCOL_VERSION;
@@ -28,11 +28,11 @@ function campGame(crew = 1): GameState {
 }
 
 function seatByFire(game: GameState): void {
-  const camp = spotPosition(ISLANDS_BY_ID.home_knoll, ISLANDS_BY_ID.home_knoll.camp!.spot);
+  // In camp, by the lean-to: the bed is where the night is slept, the fire only warms.
   game.players.forEach((player, index) => {
-    const x = camp.x + 1 + index * 0.9;
+    const { x, z } = bedSide('home_knoll', index);
     Object.assign(player, {
-      mode: 'foot', seat: null, islandId: 'home_knoll', position: { x, y: terrainHeight(x, camp.z), z: camp.z },
+      mode: 'foot', seat: null, islandId: 'home_knoll', position: { x, y: terrainHeight(x, z), z },
       hunger: 100, thirst: 100, energy: 100,
     });
   });

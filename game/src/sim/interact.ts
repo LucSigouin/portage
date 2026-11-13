@@ -1,11 +1,11 @@
-import type { IslandId, ItemAmount, NodeDefinition, NodeId, NpcId } from '../data/types.ts';
+import type { ItemAmount, NodeDefinition, NodeId, NpcId } from '../data/types.ts';
 import { NPCS, NPC_IDS } from '../data/dialogue.ts';
 import { ITEMS } from '../data/items.ts';
 import { LOOT_TABLES, NODES, NODES_BY_ISLAND } from '../data/nodes.ts';
 import { TUNING } from '../data/tuning.ts';
-import { CAMP_LAYOUTS, ISLANDS_BY_ID, spotPosition } from '../data/world.ts';
+import { ISLANDS_BY_ID, spotPosition } from '../data/world.ts';
 import {
-  campInReach, emit, emptyMissing, grantItems, hasAttachment, hasMissing, hasTool,
+  distanceToBed, emit, emptyMissing, grantItems, hasAttachment, hasMissing, hasTool,
 } from './inventory.ts';
 import { questGateOpen, updateQuests } from './quests.ts';
 import { nextRandom, randomInteger } from './random.ts';
@@ -160,24 +160,6 @@ export function clearSpot(state: GameState, player: PlayerState, spot: { x: numb
   return spot;
 }
 
-/**
- * How far the player is from somewhere to lie down in this camp, or null when they are at none: beside the fire,
- * or at the camp's bed (the lean-to, a bedroll, the keeper's hut).
- */
-function distanceToBed(islandId: IslandId, player: PlayerState): number | null {
-  const layout = CAMP_LAYOUTS[islandId];
-  if (!layout) return null;
-  const { x, z } = player.position;
-  let nearest: number | null = null;
-  const fire = Math.hypot(layout.fire.x - x, layout.fire.z - z);
-  if (fire <= TUNING.foot.nodeRange) nearest = fire;
-  for (const bed of layout.beds) {
-    const distance = Math.hypot(bed.x - x, bed.z - z);
-    if (distance <= TUNING.foot.campLandmarkRange && (nearest === null || distance < nearest)) nearest = distance;
-  }
-  return nearest;
-}
-
 /** The nearest thing the interact key would act on for this player, or null. */
 export function findInteractable(state: GameState, player: PlayerState): Interactable | null {
   if (player.dialogue) return null;
@@ -215,11 +197,9 @@ export function findInteractable(state: GameState, player: PlayerState): Interac
         consider({ kind: 'npc', npcId, name: npc.name, prompt: `Talk to ${npc.name}`, command: { type: 'talk', npcId }, distance });
       }
     }
-    const camp = campInReach(player);
-    if (camp?.camp?.sleep) {
-      const distance = distanceToBed(camp.id, player);
-      if (distance !== null) consider({ kind: 'bed', name: 'Camp', prompt: 'Sleep until morning', command: { type: 'sleep' }, distance });
-    }
+    // Only a bed sleeps: the lean-to, a bedroll, the keeper's hut. The fire warms and cooks.
+    const bed = distanceToBed(player);
+    if (bed !== null) consider({ kind: 'bed', name: 'Camp', prompt: 'Sleep until morning', command: { type: 'sleep' }, distance: bed });
   }
   const hullDistance = distanceToHull(state, player.position.x, player.position.z);
   if (hullDistance <= TUNING.canoe.boardRange) {

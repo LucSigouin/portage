@@ -9,7 +9,7 @@ import { dispatch, drainEvents, selectQuestLog, step, NEUTRAL_INPUT, FIXED_STEP 
 import type { GameEvent, GameState } from '../src/sim/index.ts';
 import { objectiveRequired } from '../src/sim/quests.ts';
 import {
-  build, countIn, give, newGame, run, scavenge, standOn, teleport, teleportToCamp, teleportToNode,
+  build, countIn, give, newGame, run, scavenge, standOn, teleport, teleportToBed, teleportToNode,
 } from './support.ts';
 
 /**
@@ -245,7 +245,7 @@ function doStep(state: GameState, objective: Step, events: GameEvent[]): void {
       break;
     }
     case 'sleep':
-      teleportToCamp(state, 'home_knoll');
+      teleportToBed(state, 'home_knoll');
       state.players[0].energy = 10;
       expect(dispatch(state, { type: 'sleep' }).ok, 'sleeping').toBe(true);
       break;

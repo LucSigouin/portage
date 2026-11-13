@@ -1,6 +1,6 @@
 /** Shared helpers for the test suite. Tests may set state directly to stage a scene. */
 import type { AttachmentId, IslandId, ItemId, ToolId } from '../src/data/index.ts';
-import { ISLANDS_BY_ID, NODES_BY_ID, isStackable, spotPosition } from '../src/data/index.ts';
+import { CAMP_LAYOUTS, ISLANDS_BY_ID, NODES_BY_ID, isStackable, spotPosition } from '../src/data/index.ts';
 import {
   FIXED_STEP, NEUTRAL_INPUT, createGame, dispatch, drainEvents, landingBerth, step, terrainHeight,
 } from '../src/sim/index.ts';
@@ -80,6 +80,26 @@ export function teleportToCamp(state: GameState, islandId: IslandId): void {
   const definition = ISLANDS_BY_ID[islandId];
   const position = spotPosition(definition, definition.camp!.spot);
   teleport(state, islandId, position.x + 1, position.z);
+}
+
+/**
+ * A spot by an island's camp bed (the lean-to, a bedroll, the keeper's hut), a step toward the fire. `place` moves
+ * further along for a row of players, and the fourth still lies within the bed's reach.
+ */
+export function bedSide(islandId: IslandId, place = 0): { x: number; z: number } {
+  const layout = CAMP_LAYOUTS[islandId]!;
+  const bed = layout.beds[0];
+  const towardX = layout.fire.x - bed.x;
+  const towardZ = layout.fire.z - bed.z;
+  const length = Math.hypot(towardX, towardZ) || 1;
+  const reach = 1.2 + place * 0.8;
+  return { x: bed.x + (towardX / length) * reach, z: bed.z + (towardZ / length) * reach };
+}
+
+/** Stand player 0 by an island's camp bed: where sleep is offered (the fire offers none). */
+export function teleportToBed(state: GameState, islandId: IslandId): void {
+  const spot = bedSide(islandId);
+  teleport(state, islandId, spot.x, spot.z);
 }
 
 /** Hand player 0 items: tools to the crew's belt, key items to key items, the rest to the backpack. */

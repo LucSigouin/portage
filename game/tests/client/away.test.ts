@@ -13,14 +13,14 @@ import { parseDebugParameters } from '../../src/client/debug/parameters.ts';
 import { Session } from '../../src/client/session.ts';
 import { buildHudModel, buildInterfaceModel, toastsForPlayer } from '../../src/client/viewmodels/index.ts';
 import { createPanelState } from '../../src/client/panels.ts';
-import { CREW_MARKS, ISLANDS_BY_ID, TUNING, spotPosition } from '../../src/data/index.ts';
+import { CREW_MARKS, TUNING } from '../../src/data/index.ts';
 import { collectText } from '../../src/interface/dom.ts';
 import type { ViewNode } from '../../src/interface/dom.ts';
 import { crewView } from '../../src/interface/views.ts';
 import { createDefaultSettings } from '../../src/settings/index.ts';
 import { FIXED_STEP, connectedPlayers, setConnected, setPlayerName, terrainHeight } from '../../src/sim/index.ts';
 import type { GameState } from '../../src/sim/index.ts';
-import { FakeStorage, newGame, standOn } from '../support.ts';
+import { FakeStorage, bedSide, newGame, standOn } from '../support.ts';
 
 const settings = createDefaultSettings();
 const HOUR = TUNING.time.hourSeconds;
@@ -36,13 +36,12 @@ function staged(query: string): App {
   return app;
 }
 
-/** The canoe beached at Home Knoll, the whole crew in a row by the fire. */
+/** The canoe beached at Home Knoll, the whole crew in a row by the lean-to. */
 function ashore(state: GameState): GameState {
   standOn(state, 'home_knoll');
-  const camp = spotPosition(ISLANDS_BY_ID.home_knoll, ISLANDS_BY_ID.home_knoll.camp!.spot);
   state.players.forEach((player, index) => {
-    const x = camp.x + 1 + index * 0.9;
-    Object.assign(player, { mode: 'foot', seat: null, islandId: 'home_knoll', position: { x, y: terrainHeight(x, camp.z), z: camp.z } });
+    const { x, z } = bedSide('home_knoll', index);
+    Object.assign(player, { mode: 'foot', seat: null, islandId: 'home_knoll', position: { x, y: terrainHeight(x, z), z } });
   });
   state.events = [];
   return state;

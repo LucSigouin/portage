@@ -11,7 +11,7 @@ import {
   step, terrainHeight,
 } from '../src/sim/index.ts';
 import type { GameEvent, GameState, PlayerState, StepInput } from '../src/sim/index.ts';
-import { countIn, floatCanoeAt, newGame, standOn } from './support.ts';
+import { bedSide, countIn, floatCanoeAt, newGame, standOn } from './support.ts';
 
 const DAY = TUNING.time.daySeconds;
 const HOUR = TUNING.time.hourSeconds;
@@ -58,13 +58,13 @@ function putAtNode(player: PlayerState, nodeId: string): void {
   putAshore(player, node.islandId, node.position.x + 0.5, node.position.z);
 }
 
-/** The canoe beached at Home Knoll with the whole crew standing at the camp fire, fed and rested. */
+/** The canoe beached at Home Knoll with the whole crew in camp, in a row by the lean-to, fed and rested. */
 function crewAtCamp(crew: number): GameState {
   const state = newGame(7, { crew });
   standOn(state, 'home_knoll');
-  const camp = spotPosition(ISLANDS_BY_ID.home_knoll, ISLANDS_BY_ID.home_knoll.camp!.spot);
   state.players.forEach((player, index) => {
-    putAshore(player, 'home_knoll', camp.x + 1 + index * 0.8, camp.z);
+    const spot = bedSide('home_knoll', index);
+    putAshore(player, 'home_knoll', spot.x, spot.z);
     player.hunger = 100;
     player.thirst = 100;
     player.energy = 100;
