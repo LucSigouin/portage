@@ -18,14 +18,15 @@ function calmWater(heading = 0) {
 }
 
 describe('paddling', () => {
-  it('cruises at 2.2 m/s, 3.2 m/s on a power stroke, and backs at 1.2 m/s', () => {
+  // Doubled on 2026-11-12 from 2.2, 3.2 and 1.2: Luc's call, a friend found the crossings far too long.
+  it('cruises at 4.4 m/s, 6.4 m/s on a power stroke, and backs at 2.4 m/s', () => {
     const state = calmWater();
     run(state, { paddle: 1 }, 8);
-    expect(state.canoe.speed).toBeCloseTo(2.2, 2);
+    expect(state.canoe.speed).toBeCloseTo(4.4, 2);
     run(state, { paddle: 1, powerStroke: true }, 8);
-    expect(state.canoe.speed).toBeCloseTo(3.2, 2);
+    expect(state.canoe.speed).toBeCloseTo(6.4, 2);
     run(state, { paddle: -1 }, 10);
-    expect(state.canoe.speed).toBeCloseTo(-1.2, 2);
+    expect(state.canoe.speed).toBeCloseTo(-2.4, 2);
   });
 
   it('covers ground along its heading and glides to a stop', () => {
@@ -41,8 +42,8 @@ describe('paddling', () => {
     const state = calmWater();
     state.canoe.hullTier = 3;
     run(state, { paddle: 1 }, 8);
-    expect(state.canoe.speed).toBeCloseTo(2.2 * HULL_TIERS[3].speedMultiplier, 2);
-    expect(selectCanoeStats(state).paddleSpeed).toBeCloseTo(2.53, 2);
+    expect(state.canoe.speed).toBeCloseTo(4.4 * HULL_TIERS[3].speedMultiplier, 2);
+    expect(selectCanoeStats(state).paddleSpeed).toBeCloseTo(5.06, 2);
   });
 
   it('turns with the steer axis, tighter with the rudder, slower at rest', () => {
@@ -64,7 +65,7 @@ describe('paddling', () => {
     const state = calmWater();
     state.canoe.waterLevel = 80;
     run(state, { paddle: 1 }, 8);
-    expect(state.canoe.speed).toBeCloseTo(2.2 * (1 - 0.35 * 0.8), 1);
+    expect(state.canoe.speed).toBeCloseTo(4.4 * (1 - 0.35 * 0.8), 1);
   });
 });
 
@@ -79,7 +80,7 @@ describe('sail', () => {
     expect(sailFactor(Math.PI * 0.9, wind, true)).toBe(0); // inside the no-go zone
   });
 
-  it('beats paddling downwind and never passes 5 m/s', () => {
+  it('pulls downwind with no hand on a paddle, and by itself never passes 5 m/s', () => {
     const state = calmWater();
     state.canoe.hullTier = 2;
     build(state, 'mast_sail');
@@ -91,9 +92,28 @@ describe('sail', () => {
     expect(state.canoe.speed).toBeGreaterThan(3.5);
     state.weather.windSpeed = 12;
     state.weather.windTarget = 12;
-    run(state, { paddle: 1, powerStroke: true }, 12);
+    run(state, {}, 12);
     expect(state.canoe.speed).toBeLessThanOrEqual(TUNING.canoe.sailMaximumSpeed + 1e-9);
     expect(state.canoe.speed).toBeGreaterThan(4.9);
+  });
+
+  // Since the paddle speeds were doubled (2026-11-12) the sail no longer beats a paddler. It tops out at its own
+  // limit, and a paddler going faster than that gets nothing more from it. Whether the sail should be raised to
+  // match is Luc's call.
+  it('adds nothing to a paddler who already outruns it', () => {
+    const paddled = calmWater();
+    paddled.canoe.hullTier = 2;
+    run(paddled, { paddle: 1, powerStroke: true }, 12);
+    const sailed = calmWater();
+    sailed.canoe.hullTier = 2;
+    build(sailed, 'mast_sail');
+    sailed.weather.windDirection = 0;
+    sailed.weather.windSpeed = 12;
+    sailed.weather.windTarget = 12;
+    dispatch(sailed, { type: 'set_sail', raised: true });
+    run(sailed, { paddle: 1, powerStroke: true }, 12);
+    expect(paddled.canoe.speed).toBeGreaterThan(TUNING.canoe.sailMaximumSpeed);
+    expect(sailed.canoe.speed).toBeCloseTo(paddled.canoe.speed, 6);
   });
 
   it('needs the mast, and drags when pointed into the wind', () => {
@@ -105,7 +125,8 @@ describe('sail', () => {
     state.weather.windTarget = 5;
     dispatch(state, { type: 'set_sail', raised: true });
     run(state, { paddle: 1 }, 8);
-    expect(state.canoe.speed).toBeLessThan(2.2);
+    expect(state.canoe.speed).toBeLessThan(TUNING.canoe.paddleSpeed);
+    expect(state.canoe.speed).toBeGreaterThan(TUNING.canoe.paddleSpeed - 2 * TUNING.canoe.luffingDragSpeed);
   });
 });
 

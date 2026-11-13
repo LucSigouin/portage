@@ -45,7 +45,7 @@ describe('rough water gates the regions', () => {
   });
 
   it('lets a bare canoe try the Reach, and swamps it: no wall, just water', () => {
-    const state = canoeAt(40, 520, 0); // Shallows, pointing north at Steeple Rock
+    const state = canoeAt(150, 520, 0); // Shallows, pointing north up the open middle of the Reach
     const events = run(state, { paddle: 1, powerStroke: true }, 150);
     const types = events.map((event) => event.type);
     expect(types).toContain('region_entered');
@@ -55,6 +55,18 @@ describe('rough water gates the regions', () => {
     expect(state.statistics.fails).toBe(1);
     const entered = events.find((event) => event.type === 'region_entered');
     expect(entered).toMatchObject({ regionId: 'reach' });
+  });
+
+  // Since the paddle speeds were doubled (2026-11-12) the nearest island of the Reach is inside a bare canoe's
+  // reach from the boundary: it lands with water aboard. Before, a power stroke got there at 85 of 100 and a plain
+  // paddle swamped 31 m short. The islands further in still swamp it. Whether the chop should rise to match is Luc's call.
+  it('lets a bare canoe just make the nearest island of the Reach, wet', () => {
+    const state = canoeAt(40, 520, 0); // Shallows, pointing north at Steeple Rock
+    const events = run(state, { paddle: 1 }, 60);
+    expect(events.some((event) => event.type === 'capsized')).toBe(false);
+    expect(regionAt(state.canoe.position.x, state.canoe.position.z).id).toBe('reach');
+    expect(state.canoe.waterLevel).toBeGreaterThan(30);
+    expect(state.statistics.fails).toBe(0);
   });
 
   it('cannot be bailed across: the can is slower than the chop', () => {
@@ -73,8 +85,9 @@ describe('rough water gates the regions', () => {
     expect(reach.statistics.fails).toBe(0);
 
     const narrows = canoeAt(150, -300, 0, 'outrigger_port', 'outrigger_starboard');
-    run(narrows, { paddle: 1 }, 240);
+    run(narrows, { paddle: 1 }, 100); // at the doubled speed 240 s would carry it into the fog and back
     expect(narrows.canoe.position.z).toBeLessThan(-600);
+    expect(regionAt(narrows.canoe.position.x, narrows.canoe.position.z).id).toBe('narrows');
     expect(narrows.canoe.waterLevel).toBe(0);
 
     const tooSoon = canoeAt(150, -300, 0, 'outrigger_port');

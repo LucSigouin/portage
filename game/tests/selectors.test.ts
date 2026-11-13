@@ -10,7 +10,7 @@ describe('canoe stats', () => {
     const state = newGame();
     expect(selectCanoeStats(state)).toMatchObject({
       hullTier: 0, hullName: 'Leaky canoe', stability: 1, roughnessHere: 1, cargoSlots: 8, cargoUsed: 0,
-      paddleSpeed: 2.2, powerStrokeSpeed: 3.2, sailMaximumSpeed: 5, hasSail: false, leakPerSecond: 0.25,
+      paddleSpeed: 4.4, powerStrokeSpeed: 6.4, sailMaximumSpeed: 5, hasSail: false, leakPerSecond: 0.25,
       floodPerSecond: 0, bailPerSecond: 3, canCrossFog: false, stations: [],
     });
     state.canoe.hullTier = 3;
