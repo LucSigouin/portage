@@ -12,6 +12,7 @@ import type { GameState, SolidCircle, StepInput } from '../src/sim/index.ts';
 import { canWalk } from '../src/sim/foot.ts';
 import { newGame, standOn } from './support.ts';
 import { createRig } from './net/rig.ts';
+import { findFootPath } from '../src/bot/navigation.ts';
 
 const BODY = TUNING.foot.bodyRadius;
 /** Walking east: the keys straight ahead, the camera a quarter turn round. */
@@ -216,5 +217,35 @@ describe('the cost', () => {
     const perSecondOfPlay = (performance.now() - started) / 600;
     expect(hits).toBeGreaterThan(0);
     expect(perSecondOfPlay).toBeLessThan(0.5);
+  });
+});
+
+describe('the bot, with solids in its way', () => {
+  it('squeezes out of a cottage roof through its door when there is no roomier way (Luc\'s stuck save stands in one)', () => {
+    const roof = solidIndex().footprints.find((footprint) => footprint.kind === 'cabin_roof')!;
+    // The roof's own frame (x to its right, z out of its door) to the world, as the rules place it.
+    const world = (x: number, z: number): { x: number; z: number } => ({ x: roof.x + x * roof.cosine + z * roof.sine, z: roof.z - x * roof.sine + z * roof.cosine });
+    // From a corner of the attic floor to open ground off to one side of the door: no straight line, and the
+    // door (a metre wide) has no room for the bot's usual berth.
+    const inside = world(-1, -0.5);
+    const outside = world(2, 6);
+    expect(bodyBlocked(inside.x, inside.z)).toBe(false);
+    const route = findFootPath(roof.islandId, inside, outside);
+    expect(route).not.toBeNull();
+    const game = walker(roof.islandId, inside.x, inside.z);
+    for (const waypoint of route!) {
+      for (let count = 0; count < 600 && Math.hypot(waypoint.x - game.players[0].position.x, waypoint.z - game.players[0].position.z) > 0.1; count += 1) {
+        const { x, z } = game.players[0].position;
+        const away = Math.hypot(waypoint.x - x, waypoint.z - z);
+        step(game, { ...NEUTRAL_INPUT, moveX: (waypoint.x - x) / away, moveY: -(waypoint.z - z) / away, cameraYaw: 0 }, FIXED_STEP);
+      }
+    }
+    expect(Math.hypot(outside.x - game.players[0].position.x, outside.z - game.players[0].position.z)).toBeLessThan(0.2);
+  });
+
+  it('wades out of the shallows it stands in (an old save left one at wading depth)', () => {
+    const from = { x: 14.46, z: 1099.89 };
+    expect(terrainHeight(from.x, from.z)).toBeLessThan(-0.45);
+    expect(findFootPath('home_knoll', from, { x: 32, z: 1127 })).not.toBeNull();
   });
 });
