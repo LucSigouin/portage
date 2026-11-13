@@ -23,7 +23,7 @@ import type { AttachmentPiece } from './attachments.ts';
 import { buildBilge, buildHull, buildStarterKit, createCrew, makeHullShape } from './b2/canoe.js';
 import type { Crew as Figure, HullShape } from './b2/canoe.js';
 import { deckInner, deckSpan } from './canoe/deck-parts.ts';
-import { buildMends } from './canoe/mends.ts';
+import { buildMends, buildSheets } from './canoe/mends.ts';
 
 interface TierMeshes {
   shape: HullShape;
@@ -162,8 +162,8 @@ export class CanoeView {
       const kit = buildStarterKit(shape);
       const bilge = buildBilge(shape);
       group.add(buildHull(shape, tier), kit, bilge);
-      // The patched hull is told from the leaky one by its bark, where the paddling camera sees it.
-      if (tier === PATCHED_TIER) group.add(buildMends(shape));
+      // The patched hull is told from the leaky one by its bark: sheets along its sides and inside, laps over its rails.
+      if (tier === PATCHED_TIER) group.add(buildMends(shape), buildSheets(shape));
       group.position.y = -HULL_TIERS[tier].dimensions.draft;
       meshes = { shape, group, kit, kitCrewed: null, bilge };
       this.tiers.set(tier, meshes);
