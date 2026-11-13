@@ -39,6 +39,7 @@ Luc's rule: the player never goes blurry and never loses drawn detail, at any zo
   - It is worked out per pixel, from the depth of the nearest hero texel in the pen's reach. So it does not depend on which window a hero is in, and two heroes side by side at one depth get one line weight.
   - Only pen points within the thinned pen's reach of a hero use it. The rest of the window goes round a second time for the world's own lines at the world's width, with the hero's texels left out.
   - Raise `start` and the far figure gets heavier. Lower it under 16.5 and the staged near views change.
+- **A figure's edge is always a full line** (`CREW_LAYER` in `b2/post.js`, Luc's list item 10). Every mesh of a figure (body, paddle, the tin or tool in hand) is also on the crew layer. The hero pass draws the crew a second time into its ink buffer with `uHero` 2, so their texels are marked 4 higher, and the pen draws the edge between a figure and anything that is not it as a contour. Before, a contour needed a hard step in depth: against the ground a figure stands on, or the hull it sits in, the edge was an interior seam (64% ink, a fifth of that far off), grey and broken. Seams inside a figure (a sleeve over the coat) stay interior lines. Tests: `tests/look/outline.test.ts`.
 
 ## The crew
 

@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { Builder, piece, setSpan, nextId, THIN } from './geo.js';
 import { PAL } from './palette.js';
 import { KIND } from './detail.js';
+import { CREW_LAYER } from './post.js';
 
 const B2_LENGTH = 5.6;
 
@@ -521,6 +522,8 @@ export function createPaddler({ coat: coatColor = PAL.ochre, toque = '#a9483a', 
     paddle.position.copy(G);
   }
 
+  // every piece of a figure is the crew's: the pen draws its edge against anything else as a contour
+  root.traverse((object) => object.layers.enable(CREW_LAYER));
   return { root, pose, setPaddle, paddle, L, R };
 }
 
@@ -631,6 +634,7 @@ export function createCrew(outfit) {
       const b = new Builder(31);
       b.cyl(0.07, 0.065, 0.13, PAL.tin, { pos: [0, 0, 0] }, 9);
       tin = b.mesh();
+      tin.layers.enable(CREW_LAYER);
       paddler.root.add(tin);
     }
     return tin;

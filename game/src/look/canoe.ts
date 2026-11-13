@@ -23,6 +23,7 @@ import type { GameState } from '../sim/index.ts';
 import { buildAttachment } from './attachments.ts';
 import type { AttachmentPiece } from './attachments.ts';
 import { STROKE_PULL, buildBilge, buildHull, buildStarterKit, createCrew, makeHullShape } from './b2/canoe.js';
+import { CREW_LAYER } from './b2/post.js';
 import type { Crew as Figure, HullShape, SeatedPose } from './b2/canoe.js';
 import { deckInner, deckSpan, sparsAlong } from './canoe/deck-parts.ts';
 import { buildMends, buildSheets } from './canoe/mends.ts';
@@ -484,6 +485,8 @@ export class CanoeView {
     let mesh = member.tools.get(tool);
     if (!mesh) {
       mesh = buildHandTool(tool, playerId);
+      // A tool in hand is the crew's: the pen draws it as crisply as the figure holding it.
+      mesh.layers.enable(CREW_LAYER);
       member.tools.set(tool, mesh);
       member.figure.root.add(mesh);
     }
