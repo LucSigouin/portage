@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LOOT_TABLES, NODES, NODES_BY_ID, NODE_IDS, TUNING } from '../src/data/index.ts';
+import { LOOT_TABLES, NODES_BY_ID, NODE_IDS, TUNING } from '../src/data/index.ts';
 import { dispatch, drainEvents, selectInteractable } from '../src/sim/index.ts';
 import type { GameEvent } from '../src/sim/index.ts';
 import {
@@ -45,12 +45,12 @@ describe('scavenging', () => {
     expect(selectInteractable(state)).toMatchObject({ nodeId: 'home_knoll.driftwood_pile.1', available: true });
   });
 
-  it('respawns most nodes after their days, and never a unique cache', () => {
+  it('refills most nodes after ten minutes, and never a unique cache', () => {
     const state = newGame();
     standOn(state, 'home_knoll');
     teleportToNode(state, 'home_knoll.driftwood_pile.1');
     scavenge(state);
-    state.time += 2 * DAY - 10;
+    state.time += TUNING.nodes.refillSeconds - 10;
     expect(selectInteractable(state)).toBeNull();
     state.time += 11;
     expect(selectInteractable(state)).toMatchObject({ nodeId: 'home_knoll.driftwood_pile.1', available: true });
@@ -61,13 +61,6 @@ describe('scavenging', () => {
     expect(state.keyItems.hatchet_head).toBe(1);
     state.time += 100 * DAY;
     expect(selectInteractable(state)).toBeNull();
-    for (const node of NODES) {
-      for (const action of node.actions) {
-        if (action.respawnDays === null) continue;
-        expect(action.respawnDays, node.id).toBeGreaterThanOrEqual(0.5);
-        expect(action.respawnDays, node.id).toBeLessThanOrEqual(4);
-      }
-    }
   });
 
   it('refuses without the tool, and says which', () => {

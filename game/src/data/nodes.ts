@@ -2,6 +2,7 @@ import type {
   AttachmentId, BottleId, IslandId, ItemId, LootEntry, LootTable, LootTableId, NodeActionDefinition,
   NodeDefinition, NodeTypeDefinition, NodeTypeId, QuestId, ToolId,
 } from './types.ts';
+import { TUNING } from './tuning.ts';
 import { ISLANDS_BY_ID, spotPosition } from './world.ts';
 
 const entry = (itemId: ItemId, minimum: number, maximum = minimum): LootEntry => ({ itemId, minimum, maximum });
@@ -75,15 +76,21 @@ interface ActionOptions {
   energyCost?: number;
 }
 
+/** An action that comes back after `TUNING.nodes.refillSeconds`, and one that never does. */
+const REFILLS = true;
+const NEVER = false;
+/** Every refilling action's wait, in days: one number for all of them, from the tuning. */
+const REFILL_DAYS = TUNING.nodes.refillSeconds / TUNING.time.daySeconds;
+
 function action(
   verb: string,
   seconds: number,
   lootTableId: LootTableId,
-  respawnDays: number | null,
+  refills: boolean,
   options: ActionOptions = {},
 ): NodeActionDefinition {
   return {
-    verb, seconds, lootTableId, respawnDays,
+    verb, seconds, lootTableId, respawnDays: refills ? REFILL_DAYS : null,
     tool: options.tool ?? null,
     attachment: options.attachment ?? null,
     questGate: options.questGate ?? null,
@@ -103,52 +110,52 @@ function nodeType(
 
 const NODE_TYPE_LIST: NodeTypeDefinition[] = [
   nodeType('driftwood_pile', 'Driftwood pile', 'Bleached wood stacked by the last high water.',
-    [action('Gather', 2, 'driftwood_pile', 2)]),
+    [action('Gather', 2, 'driftwood_pile', REFILLS)]),
   nodeType('cattail_stand', 'Cattail stand', 'Leaves for cord, roots for the fire.',
-    [action('Pull', 3, 'cattail_stand', 2)]),
+    [action('Pull', 3, 'cattail_stand', REFILLS)]),
   nodeType('berry_bush', 'Berry bush', 'Low blueberry scrub on the open rock.',
-    [action('Pick', 2.5, 'berry_bush', 2)]),
+    [action('Pick', 2.5, 'berry_bush', REFILLS)]),
   nodeType('apple_tree', 'Apple tree', 'An orchard tree with its feet in the water.',
-    [action('Pick', 3, 'apple_tree', 3)]),
+    [action('Pick', 3, 'apple_tree', REFILLS)]),
   nodeType('mushroom_log', 'Mushroom log', 'A rotting trunk ringed with brown caps.',
-    [action('Pick', 2, 'mushroom_log', 2)]),
+    [action('Pick', 2, 'mushroom_log', REFILLS)]),
   nodeType('birch', 'Birch', 'White bark that peels in sheets. Bring a knife.',
-    [action('Peel', 3, 'birch_bark', 3, { tool: 'stone_knife' })]),
+    [action('Peel', 3, 'birch_bark', REFILLS, { tool: 'stone_knife' })]),
   nodeType('spruce', 'Spruce', 'Gum by hand. Logs if you have the hatchet out.',
     [
-      action('Scrape gum', 2.5, 'spruce_gum', 2),
-      action('Chop', 5, 'spruce_logs', 4, { tool: 'hatchet', energyCost: 5 }),
+      action('Scrape gum', 2.5, 'spruce_gum', REFILLS),
+      action('Chop', 5, 'spruce_logs', REFILLS, { tool: 'hatchet', energyCost: 5 }),
     ]),
   nodeType('stone_outcrop', 'Stone outcrop', 'Frost-split granite. Loose pieces come away by hand.',
-    [action('Break', 3, 'stone_outcrop', 3, { energyCost: 2 })]),
+    [action('Break', 3, 'stone_outcrop', REFILLS, { energyCost: 2 })]),
   nodeType('clay_bank', 'Clay bank', 'A grey seam at the waterline.',
-    [action('Dig', 3, 'clay_bank', 3, { energyCost: 2 })]),
+    [action('Dig', 3, 'clay_bank', REFILLS, { energyCost: 2 })]),
   nodeType('crate', 'Crate', 'Washed up and nailed shut.',
-    [action('Pry open', 3, 'crate', 4, { tool: 'pry_bar' })]),
+    [action('Pry open', 3, 'crate', REFILLS, { tool: 'pry_bar' })]),
   nodeType('attic', 'Attic', 'Dry rafters above the waterline.',
-    [action('Search', 4, 'attic', 4)]),
+    [action('Search', 4, 'attic', REFILLS)]),
   nodeType('shed', 'Shed', 'Shelves of things someone meant to fix.',
-    [action('Search', 4, 'shed', 4)]),
+    [action('Search', 4, 'shed', REFILLS)]),
   nodeType('junk_heap', 'Junk heap', 'A tangle of whatever the current dropped.',
-    [action('Pick over', 3, 'junk_heap', 3)]),
+    [action('Pick over', 3, 'junk_heap', REFILLS)]),
   nodeType('boat_wreck', 'Boat wreck', 'A stove-in hull, good for parts.',
-    [action('Strip', 4, 'boat_wreck', 4)]),
+    [action('Strip', 4, 'boat_wreck', REFILLS)]),
   nodeType('machinery', 'Machinery', 'Seized solid, but the parts inside are fine.',
-    [action('Strip', 5, 'machinery_motor', 4, { tool: 'wrench', energyCost: 3 })]),
+    [action('Strip', 5, 'machinery_motor', REFILLS, { tool: 'wrench', energyCost: 3 })]),
   nodeType('rain_barrel', 'Rain barrel', 'Roof water, clean enough to drink.',
-    [action('Fill up', 2, 'rain_barrel', 2)]),
+    [action('Fill up', 2, 'rain_barrel', REFILLS)]),
   nodeType('garden_bed', 'Garden bed', 'A raised bed gone wild.',
-    [action('Harvest', 3, 'garden_bed', 3)]),
+    [action('Harvest', 3, 'garden_bed', REFILLS)]),
   nodeType('fishing_spot', 'Fishing spot', 'Rings on the water where perch are feeding.',
-    [action('Fish', 8, 'fishing_spot', 0.5, { tool: 'fishing_rod' })]),
+    [action('Fish', 8, 'fishing_spot', REFILLS, { tool: 'fishing_rod' })]),
   nodeType('wreck_buoy', 'Sunken wreck buoy', 'A faded float tied to something heavy below.',
-    [action('Haul up', 8, 'wreck_tackle_locker', null, { attachment: 'winch' })], 'canoe'),
+    [action('Haul up', 8, 'wreck_tackle_locker', NEVER, { attachment: 'winch' })], 'canoe'),
   nodeType('message_bottle', 'Message bottle', 'Green glass, corked, with paper inside.',
-    [action('Open', 1, 'message_bottle', null)]),
+    [action('Open', 1, 'message_bottle', NEVER)]),
   nodeType('cache', 'Cache', 'Something put away carefully before the water came.',
-    [action('Search', 4, 'cache_hatchet_head', null)]),
+    [action('Search', 4, 'cache_hatchet_head', NEVER)]),
   nodeType('beacon_lamp', 'Beacon lamp', 'The great lamp at the foot of the radio tower.',
-    [action('Light', 6, 'beacon_lamp', null, { questGate: 'the_beacon' })]),
+    [action('Light', 6, 'beacon_lamp', NEVER, { questGate: 'the_beacon' })]),
 ];
 
 export const NODE_TYPES: Record<NodeTypeId, NodeTypeDefinition> = Object.fromEntries(

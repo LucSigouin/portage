@@ -284,7 +284,10 @@ export interface NodeActionDefinition {
   seconds: number;
   energyCost: number;
   lootTableId: LootTableId;
-  /** Days until the action is available again. null = unique, never respawns. */
+  /**
+   * Days until the action is available again: the same for every action that refills, `TUNING.nodes.refillSeconds`
+   * in days (`data/nodes.ts`). null = never: a bottle, a cache, a sunken locker, the Beacon lamp.
+   */
   respawnDays: number | null;
 }
 

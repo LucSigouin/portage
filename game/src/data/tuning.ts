@@ -132,6 +132,16 @@ export const TUNING = {
     workbenchRange: 1.8,
   },
 
+  nodes: {
+    /**
+     * Every scavenge action that refills comes back this long after it was used, seconds of the world clock (a real
+     * second while playing; a night slept passes it too). Luc, 2026-11-13: "refills should be every 10 mins, for
+     * everything except the nevers". It was 0.5 to 4 game days, set spot by spot. The nevers (message bottles,
+     * caches, the sunken lockers, the Beacon lamp) are marked in `data/nodes.ts` and never come back.
+     */
+    refillSeconds: 10 * 60,
+  },
+
   inventory: {
     stackSize: 20,
     backpackSlots: 8,

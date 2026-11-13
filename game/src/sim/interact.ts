@@ -297,9 +297,8 @@ export function completeHarvest(state: GameState, player: PlayerState, definitio
     nodeState.leftover.push(stack);
     emit(state, { type: 'item_left_behind', nodeId: definition.id, itemId: stack.itemId, count: stack.count }, player);
   }
-  nodeState.readyAt[actionIndex] = action.respawnDays === null
-    ? null
-    : state.time + action.respawnDays * TUNING.time.daySeconds;
+  // One wait for every action that refills (Luc, 2026-11-13: ten minutes); a never stays empty for good.
+  nodeState.readyAt[actionIndex] = action.respawnDays === null ? null : state.time + TUNING.nodes.refillSeconds;
   player.energy = Math.max(0, player.energy - action.energyCost);
   state.statistics.nodesHarvested += 1;
   emit(state, { type: 'node_depleted', nodeId: definition.id }, player);
