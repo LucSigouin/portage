@@ -18,6 +18,7 @@ import type { CompassModel, GameInterface, InterfaceIntent, InterfaceModel, Pane
 import { arrivalView } from './arrival.ts';
 import { intentOf, reconcile } from './dom.ts';
 import { DROP_KEY_CODE, quickIntent } from './inventoryview.ts';
+import { toastKeyIntent } from './takeback.ts';
 import type { ViewNode } from './dom.ts';
 import { MapChart, MinimapCard } from './chart.ts';
 import { feedbackInputIntent, focusFeedbackNote } from './feedback.ts';
@@ -184,6 +185,8 @@ export class InkInterface implements GameInterface {
   private readonly openItems = new Set<string>();
   /** The panel last drawn, so a row opened by a press is drawn at once, not a frame later. */
   private lastPanel: PanelModel | null = null;
+  /** The notes last drawn: one of them may offer a key (takeback.ts). */
+  private toasts: InterfaceModel['toasts'] = [];
 
   // The keyboard.
   /** The top thing with controls on it: `confirm`, `panel:<id>`, `lobby`, or nothing. */
@@ -413,9 +416,18 @@ export class InkInterface implements GameInterface {
   private onKeyDown(event: KeyboardEvent): void {
     // While the built view holds the screen every key is the game's: any one of them ends it.
     if (event.ctrlKey || event.metaKey || event.altKey || this.capturing || this.builtDismiss) return;
+    const target = event.target instanceof Element ? event.target : null;
+    // A note that offers a key (a dropped stack's way back) has it for as long as it stands, in a panel and in play.
+    // Not while a line is being typed on, and the game never sees the key.
+    const offered = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement ? null : toastKeyIntent(this.toasts, event.code);
+    if (offered) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!event.repeat) this.emit(offered);
+      return;
+    }
     const surface = this.topSurface();
     if (!surface) return;
-    const target = event.target instanceof Element ? event.target : null;
     // A box of several lines (the Feedback card's) keeps its arrows, its Enter and its Space, as a line does.
     const inField = target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement;
     const onControl = target !== null && surface.contains(target) && (inField || target instanceof HTMLButtonElement);
@@ -567,7 +579,8 @@ export class InkInterface implements GameInterface {
     if (hud && model.chart) this.minimap?.update(hud.minimap, model.chart);
 
     let toastSignature = '';
-    for (const toast of model.toasts) toastSignature += `${toast.id}|${toast.tone}|${toast.text}\n`;
+    for (const toast of model.toasts) toastSignature += `${toast.id}|${toast.tone}|${toast.text}|${toast.action ? `${toast.action.label}|${toast.action.keyLabel}` : ''}\n`;
+    this.toasts = model.toasts;
     this.draw('toasts', toastSignature, () => toastsView(model.toasts));
     // The arrival card (arrival.ts): its words are written once, and only its ink's styles change from frame to frame.
     this.draw('arrival', model.arrival ? JSON.stringify(model.arrival) : '', () => arrivalView(model.arrival!));

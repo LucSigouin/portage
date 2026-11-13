@@ -3,7 +3,7 @@
  * UI and a sound engine, and runs one frame at a time. No DOM in here, so
  * the whole frame can run in a test with fakes; `main.ts` adds the browser.
  */
-import { FIXED_STEP, eventsFor, selectTrackedQuestTarget } from '../sim/index.ts';
+import { FIXED_STEP, eventsFor, selectTrackedQuestTarget, standingDrop } from '../sim/index.ts';
 import type { GameState } from '../sim/index.ts';
 import { builtViewPose, builtWords } from './builtview.ts';
 import type { BuiltView } from './builtview.ts';
@@ -224,7 +224,7 @@ export class App {
       hostQuiet: session.hostQuiet,
       paused: session.paused,
       cameraYaw: this.camera.yaw,
-      toasts: this.toasts.models(),
+      toasts: this.toasts.models((dropId) => session.game !== null && standingDrop(session.game, session.localPlayerId, dropId) !== null),
       slots: session.slotSummaries(),
       latestSlot: session.latestSlot(),
       currentSlot: session.slot,

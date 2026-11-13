@@ -219,6 +219,16 @@ export interface ToastModel {
   itemId: ItemId | null;
   /** 1 fresh to 0 about to go. */
   life: number;
+  /** What the note offers while it stands: a dropped stack's way back (`takeback.ts`). Absent or null: nothing. */
+  action?: ToastActionModel | null;
+}
+
+/** A button on a note, and the key that presses it (`keyCode` null: the button only). */
+export interface ToastActionModel {
+  label: string;
+  keyCode: string | null;
+  keyLabel: string;
+  intent: InterfaceIntent;
 }
 
 // --- Lobby and menus ----------------------------------------------------------

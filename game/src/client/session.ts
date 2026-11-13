@@ -697,6 +697,14 @@ export class Session {
       if (!repeat) this.endBuiltView();
       return;
     }
+    // Aboard with the inventory open, the auto-paddle key still switches the paddle (the master review, finding 2).
+    // With the pointer on a tile the key is the drop key, and the interface keeps it: it never gets here.
+    const game = this.game;
+    if (!repeat && game && !this.driver && !this.frozen && this.screen === 'game' && topPanel(this.panels) === 'inventory'
+      && playerOf(game, this.localPlayerId).mode === 'canoe') {
+      const switched = this.input.autoPaddleKeyInInventory(keyCode);
+      if (switched) return void this.applyOutcome(switched);
+    }
     for (const outcome of this.input.keyDown(keyCode, repeat, this.inputSnapshot())) this.applyOutcome(outcome);
   }
 

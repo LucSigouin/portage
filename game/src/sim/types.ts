@@ -1,4 +1,5 @@
 import type { Ping } from './pings.ts';
+import type { DropLedger } from './takeback.ts';
 import type {
   AttachmentId, BottleId, Difficulty, FlagId, IslandId, ItemAmount, ItemId, NodeId, NpcId, QuestId,
   QuestStatus, RecipeId, RegionId, StationId, ToolId, WeatherKind,
@@ -161,6 +162,11 @@ export interface PlayerState {
    * The first is the one the world's quest mark points to. Each player's own: the quests themselves are the crew's.
    */
   trackedQuestIds: QuestId[];
+  /**
+   * This player's last drops, while they may still be taken back (`src/sim/takeback.ts`). Absent until the player's
+   * first drop, and in every save from before it existed.
+   */
+  drops?: DropLedger;
 }
 
 export interface CanoeState {
@@ -305,6 +311,8 @@ export type Command =
   | { type: 'stow_backpack' }
   | { type: 'transfer'; from: Container; itemId: ItemId; count: number }
   | { type: 'discard'; from: Container; itemId: ItemId; count: number }
+  /** Take back this player's own drop numbered `drop`, for a few seconds after it (`src/sim/takeback.ts`). */
+  | { type: 'take_back'; drop: number }
   | { type: 'eat'; itemId: ItemId }
   | { type: 'drink'; itemId: ItemId }
   | { type: 'fill_water'; count: number }
@@ -364,6 +372,9 @@ export type FailureReason =
   | 'tool_kept'
   | 'key_item_kept'
   | 'quest_needs_item'
+  /** A drop asked back that is back already or was never made, and one whose few seconds are over. */
+  | 'nothing_to_take_back'
+  | 'take_back_too_late'
   | 'nothing_to_claim'
   /** The command was sent for a player who is away. */
   | 'player_away'
@@ -417,8 +428,10 @@ export type FailCause = 'capsized' | 'exhausted';
 export type GameEvent = GameEventBody & { playerId?: PlayerId };
 
 type GameEventBody =
-  | { type: 'item_gained'; itemId: ItemId; count: number; container: Container | 'belt' | 'key_items' }
-  | { type: 'item_lost'; itemId: ItemId; count: number }
+  /** `dropId`: the gain is this player's drop of that number, taken back. */
+  | { type: 'item_gained'; itemId: ItemId; count: number; container: Container | 'belt' | 'key_items'; dropId?: number }
+  /** `dropId`: the player dropped it by hand, and may take that drop back for a few seconds (`src/sim/takeback.ts`). */
+  | { type: 'item_lost'; itemId: ItemId; count: number; dropId?: number }
   | { type: 'item_left_behind'; nodeId: NodeId; itemId: ItemId; count: number }
   | { type: 'crafted'; recipeId: RecipeId; count: number }
   | { type: 'ate'; itemId: ItemId }

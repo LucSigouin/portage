@@ -20,6 +20,7 @@ import { ICON, SEAL, itemIcon, logotype, toqueIcon, waterGauge } from './icons.t
 import { boatTabsView, elsewhereView } from './stations.ts';
 import { inventoryBodyView, inventoryHintView } from './inventoryview.ts';
 import { previewView } from './preview.ts';
+import { toastActionView } from './takeback.ts';
 
 const icon = (markup: string, className = ''): ViewNode => h('i.iw-i', { class: className, html: markup, 'aria-hidden': 'true' });
 
@@ -215,8 +216,10 @@ export function hotbarView(hotbar: HotbarSlotModel[]): ViewNode[] {
 }
 
 export const toastsView = (toasts: ToastModel[]): ViewNode[] => toasts.map((toast) =>
-  h('div.iw-toast', { key: toast.id, class: `iw-toast-${toast.tone}`, role: 'status' }, h('i.iw-dab'),
-    toast.itemId ? itemIconView(toast.itemId) : null, h('span', null, toast.text)));
+  h('div.iw-toast', { key: toast.id, class: `iw-toast-${toast.tone}${toast.action ? ' iw-toast-offer' : ''}`, role: 'status' }, h('i.iw-dab'),
+    toast.itemId ? itemIconView(toast.itemId) : null, h('span', null, toast.text),
+    // A dropped stack's way back, while it may still be taken (takeback.ts).
+    toast.action ? toastActionView(toast.action) : null));
 
 export function debugView(debug: DebugModel): ViewNode[] {
   const lines = debug.showFrameRate

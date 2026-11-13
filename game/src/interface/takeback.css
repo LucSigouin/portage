@@ -1,0 +1,45 @@
+/* A note that offers something (takeback.ts): the note of a dropped stack, with its way back.
+   It stands over an open panel's wash, so it can be read and pressed while the inventory is open.
+   Written once and whole: no transition, no animation. */
+.iw-toast.iw-toast-offer {
+  position: relative;
+  z-index: 4;
+  align-items: center;
+  padding-right: 0.4rem;
+  pointer-events: auto;
+}
+.iw-toast-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: -0.1rem 0 0 0.3rem;
+  padding: 0.12rem 0.55rem 0.02rem 0.4rem;
+  font: inherit;
+  font-family: var(--iw-hand);
+  font-size: 0.98rem;
+  line-height: 1.25;
+  color: var(--iw-ink);
+  background-color: var(--iw-paper);
+  border: 0.09rem solid var(--iw-ink);
+  border-radius: 0.4rem 0.28rem 0.42rem 0.28rem;
+  box-shadow: 0.06rem 0.1rem 0 rgba(42, 43, 51, 0.2);
+  cursor: pointer;
+  pointer-events: auto;
+  white-space: nowrap;
+}
+.iw-toast-act:hover,
+.iw-toast-act:focus-visible {
+  background-color: var(--iw-ink);
+  color: var(--iw-paper);
+  outline: none;
+}
+.iw-toast-key {
+  min-width: 1.15rem;
+  padding: 0 0.22rem;
+  font-family: var(--iw-hand);
+  font-size: 0.86rem;
+  line-height: 1.2;
+  text-align: center;
+  border: 0.08rem solid currentColor;
+  border-radius: 0.22rem;
+}

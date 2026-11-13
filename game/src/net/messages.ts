@@ -31,8 +31,9 @@ import type { WireRun } from './walk.ts';
  * 3: the state is save version 4 (the crew's chart, each player's quest card), and `track_quest` may say `tracked`.
  * 4: the jump key (`input.input.jump`, and 2 added to the keys of a stretch in `input.walk`).
  * 5: a guest may send `ping` and `clear_ping` (an older host would drop them unanswered, and the guest's next commands with them).
+ * 6: a guest may send `take_back`, for the same reason.
  */
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 export interface JoinMessage { v: number; type: 'join'; name: string; key: string }
 export interface InputMessage {
@@ -166,6 +167,8 @@ const COMMAND_READERS: { [Type in Command['type']]: (raw: Raw) => Command | null
   stow_backpack: bare('stow_backpack'),
   transfer: (raw) => readMove(raw, 'transfer'),
   discard: (raw) => readMove(raw, 'discard'),
+  // Only the drop's number: what comes back, and how many, is the host's own record (`src/sim/takeback.ts`).
+  take_back: (raw) => (hasOnly(raw, ['type', 'drop']) && isWhole(raw.drop, 1, Number.MAX_SAFE_INTEGER) ? { type: 'take_back', drop: raw.drop } : null),
   eat: (raw) => (hasOnly(raw, ['type', 'itemId']) && isIdOf(ITEMS, raw.itemId) ? { type: 'eat', itemId: raw.itemId } as Command : null),
   drink: (raw) => (hasOnly(raw, ['type', 'itemId']) && isIdOf(ITEMS, raw.itemId) ? { type: 'drink', itemId: raw.itemId } as Command : null),
   fill_water: (raw) => (hasOnly(raw, ['type', 'count']) && isWhole(raw.count, 1, COUNT_LIMIT) ? { type: 'fill_water', count: raw.count } : null),
