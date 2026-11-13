@@ -126,6 +126,10 @@ export const TUNING = {
     campLandmarkRange: 4,
     /** Largest standing depth when stepping out of the canoe, metres. */
     disembarkDepth: 0.5,
+    /** The interact key offers "Use the bench" this close to a camp's stump bench, metres. */
+    benchRange: 2.5,
+    /** And this close to the workbench on the canoe's port deck, so the rest of the hull still offers boarding. */
+    workbenchRange: 1.8,
   },
 
   inventory: {

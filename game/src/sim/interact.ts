@@ -1,9 +1,10 @@
-import type { ItemAmount, NodeDefinition, NodeId, NpcId } from '../data/types.ts';
+import type { ItemAmount, LandmarkKind, NodeDefinition, NodeId, NpcId } from '../data/types.ts';
+import { ATTACHMENTS, attachmentTransformForHull } from '../data/canoe.ts';
 import { NPCS, NPC_IDS } from '../data/dialogue.ts';
 import { ITEMS } from '../data/items.ts';
 import { LOOT_TABLES, NODES, NODES_BY_ISLAND } from '../data/nodes.ts';
 import { TUNING } from '../data/tuning.ts';
-import { ISLANDS_BY_ID, spotPosition } from '../data/world.ts';
+import { CAMP_LAYOUTS, ISLANDS_BY_ID, spotPosition } from '../data/world.ts';
 import {
   distanceToBed, emit, emptyMissing, grantItems, hasAttachment, hasMissing, hasTool,
 } from './inventory.ts';
@@ -38,7 +39,25 @@ export type Interactable =
   | { kind: 'npc'; npcId: NpcId; name: string; prompt: string; command: Command; distance: number }
   | { kind: 'board'; name: string; prompt: string; command: Command; distance: number }
   | { kind: 'land'; name: string; prompt: string; command: Command; distance: number }
-  | { kind: 'bed'; name: string; prompt: string; command: Command; distance: number };
+  | { kind: 'bed'; name: string; prompt: string; command: Command; distance: number }
+  /**
+   * A bench to work at: the stump bench in a camp, or the workbench on the canoe. No command: the interact key opens
+   * the crafting panel, as the crafting key does (Luc's list, line 21). The panel is the screen's, not the rules'.
+   */
+  | { kind: 'bench'; name: string; prompt: string; distance: number };
+
+/** The camp landmarks that are a bench to work at. */
+const BENCH_KINDS: readonly LandmarkKind[] = ['stump_bench'];
+
+/** Where the workbench stands on the canoe now, in world metres: its mount, turned with the hull. */
+export function workbenchPosition(state: GameState): { x: number; z: number } {
+  const canoe = state.canoe;
+  const [x, , z] = attachmentTransformForHull('workbench', Math.max(canoe.hullTier, ATTACHMENTS.workbench.minimumHullTier)).position;
+  // Canoe space: starboard is +x, the bow is -z.
+  const forwardX = Math.sin(canoe.heading);
+  const forwardZ = -Math.cos(canoe.heading);
+  return { x: canoe.position.x + forwardX * -z - forwardZ * x, z: canoe.position.z + forwardZ * -z + forwardX * x };
+}
 
 export function actionReady(state: GameState, nodeId: NodeId, actionIndex: number): boolean {
   const nodeState = state.nodes[nodeId];
@@ -197,9 +216,22 @@ export function findInteractable(state: GameState, player: PlayerState): Interac
         consider({ kind: 'npc', npcId, name: npc.name, prompt: `Talk to ${npc.name}`, command: { type: 'talk', npcId }, distance });
       }
     }
+    // A bench: F opens the crafting panel. Only where the camp has the bench station.
+    if (ISLANDS_BY_ID[player.islandId].camp?.stations.includes('bench')) {
+      for (const landmark of CAMP_LAYOUTS[player.islandId]?.landmarks ?? []) {
+        if (!BENCH_KINDS.includes(landmark.kind)) continue;
+        const distance = Math.hypot(landmark.x - player.position.x, landmark.z - player.position.z);
+        if (distance <= TUNING.foot.benchRange) consider({ kind: 'bench', name: 'Stump bench', prompt: 'Use the bench', distance });
+      }
+    }
     // Only a bed sleeps: the lean-to, a bedroll, the keeper's hut. The fire warms and cooks.
     const bed = distanceToBed(player);
     if (bed !== null) consider({ kind: 'bed', name: 'Camp', prompt: 'Sleep until morning', command: { type: 'sleep' }, distance: bed });
+  }
+  if (hasAttachment(state, 'workbench')) {
+    const bench = workbenchPosition(state);
+    const distance = Math.hypot(bench.x - player.position.x, bench.z - player.position.z);
+    if (distance <= TUNING.foot.workbenchRange) consider({ kind: 'bench', name: 'Workbench', prompt: 'Use the bench', distance });
   }
   const hullDistance = distanceToHull(state, player.position.x, player.position.z);
   if (hullDistance <= TUNING.canoe.boardRange) {

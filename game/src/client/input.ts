@@ -141,8 +141,11 @@ export class InputController {
 
     switch (action) {
       case 'interact':
+        if (!snapshot.interactable) return [];
+        // At a bench the key opens the crafting panel, as the crafting key does.
+        if (snapshot.interactable.kind === 'bench') return [{ type: 'toggle_panel', panel: 'crafting' }];
         // Land, board, talk, sleep, scavenge, pick up: one press, one command.
-        return snapshot.interactable ? [{ type: 'command', command: snapshot.interactable.command }] : [];
+        return [{ type: 'command', command: snapshot.interactable.command }];
       case 'lantern':
         return [{ type: 'command', command: { type: 'toggle_lantern' } }];
       case 'sail':
