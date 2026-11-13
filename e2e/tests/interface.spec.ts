@@ -875,7 +875,8 @@ function itemIconProblems(): { problems: string[]; named: number; smallest: numb
     const range = document.createRange();
     const texts = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
     for (let node = texts.nextNode(); node; node = texts.nextNode()) {
-      if (!(node.textContent ?? '').trim() || node.parentElement!.closest('.iw-n, .iw-nm, .iw-tool-name, svg')) continue;
+      // A slot's number and the red ! before what a quest asks for stand to the left of the drawing on purpose.
+      if (!(node.textContent ?? '').trim() || node.parentElement!.closest('.iw-n, .iw-nm, .iw-tool-name, .iw-quest-mark, svg')) continue;
       range.selectNodeContents(node);
       const first = range.getClientRects()[0];
       if (first && first.left < box.right - 1 && first.top < box.bottom && first.bottom > box.top) problems.push(`${id}: its words run under the icon`);
