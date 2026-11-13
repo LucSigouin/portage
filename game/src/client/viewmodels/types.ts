@@ -7,9 +7,9 @@ import type { AttachmentId, IslandId, ItemId, QuestId, RecipeId, ToolId } from '
 import type { InputAction } from '../../settings/index.ts';
 import type { PlayerId } from '../../sim/index.ts';
 import type { InterfaceIntent, SettingId, SettingValue } from '../intents.ts';
-import type { ChartGeometry } from './chart.ts';
+import type { ChartGeometry, ChartPingModel } from './chart.ts';
 
-export type { ChartGeometry } from './chart.ts';
+export type { ChartGeometry, ChartPingModel } from './chart.ts';
 import type { PanelId, ScreenId, SettingsTabId } from '../panels.ts';
 
 export type Tone = 'info' | 'good' | 'warning' | 'danger';
@@ -113,6 +113,8 @@ export interface ChartModel {
   seen: Uint8Array;
   /** The map table: every island charted and the fog lifted. */
   fullChart: boolean;
+  /** The spots the crew has marked (`chartPings`). The same array while none changes. */
+  pings: ChartPingModel[];
 }
 
 export interface CompassMarkModel {

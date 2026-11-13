@@ -1,0 +1,5 @@
+/* Pings on the map panel (chart.ts): the round chart takes clicks, and says so with its pointer.
+   The marks themselves are painted on the chart's canvas. */
+.iw-chart {
+  cursor: crosshair;
+}
