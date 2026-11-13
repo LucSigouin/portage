@@ -80,6 +80,8 @@ const FAILURE_TEXT: Record<FailureReason, string> = {
   nothing_to_claim: 'Nothing waiting.',
   player_away: 'That player is away.',
   invalid_amount: 'That is not an amount.',
+  off_the_map: 'That spot is off the map.',
+  ping_too_soon: 'One mark a second. Try again.',
 };
 
 /** Why a command failed, as one sentence. Names what is missing when the engine says. */

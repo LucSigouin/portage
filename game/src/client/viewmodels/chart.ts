@@ -7,7 +7,8 @@
  * (`state.seen`), handed to the interface unpacked one byte a cell (`seenCells`).
  */
 import { REGIONS } from '../../data/index.ts';
-import { FOG, cellSeen, terrainHeight, valleyHalfWidth } from '../../sim/index.ts';
+import { FOG, cellSeen, pingColour, standingPings, terrainHeight, valleyHalfWidth } from '../../sim/index.ts';
+import type { GameState, PlayerId } from '../../sim/index.ts';
 
 /** The round chart: a circle over the valley, north up. It holds the whole lake but the far corners of the Shallows. */
 export const CHART = { centerX: 0, centerZ: -25, radius: 1650 } as const;
@@ -168,4 +169,35 @@ export function lakeSeenShare(cells: Uint8Array): number {
     if (cells[cell]) seen += 1;
   }
   return total > 0 ? seen / total : 0;
+}
+
+// --- Pings ---------------------------------------------------------------------------------
+
+/** A spot a crewmate marked for the crew: a mark on the map and the minimap, in that player's colour. */
+export interface ChartPingModel {
+  playerId: PlayerId;
+  /** Where, in world metres. */
+  x: number;
+  z: number;
+  /** The player's toque colour, `#rrggbb`: the colour the crew list and the compass know them by. */
+  color: string;
+}
+
+let lastPings: unknown = null;
+let lastPingModels: ChartPingModel[] = [];
+const NO_PINGS: ChartPingModel[] = [];
+
+/**
+ * The pings standing, for the chart. The same array comes back while the state's list is the same one
+ * (the rules replace it, they never change it in place), so whoever draws it can tell that nothing changed.
+ */
+export function chartPings(state: GameState): ChartPingModel[] {
+  const source: unknown = state.pings;
+  if (source === undefined) return NO_PINGS;
+  if (source === lastPings) return lastPingModels;
+  lastPings = source;
+  lastPingModels = standingPings(state).map((ping) => ({
+    playerId: ping.playerId, x: ping.x, z: ping.z, color: pingColour(ping.playerId),
+  }));
+  return lastPingModels;
 }

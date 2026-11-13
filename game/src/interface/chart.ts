@@ -10,7 +10,8 @@
  * player moves a whole pixel or turns a whole degree, or a mark on it does. Nothing here runs on a clock, and
  * the minimap's chart slides in whole pixels, so its lines never shimmer as it moves.
  */
-import type { ChartGeometry, ChartModel, MinimapMarkModel, MinimapModel } from '../client/contracts.ts';
+import './pings.css';
+import type { ChartGeometry, ChartModel, ChartPingModel, InterfaceIntent, MinimapMarkModel, MinimapModel } from '../client/contracts.ts';
 
 // The theme's tokens (theme.css), for a canvas that cannot read them by name.
 const INK = '#2a2b33';
@@ -285,14 +286,107 @@ export function minimapView(model: MinimapModel, size: number, pixelRatio: numbe
  * Everything the minimap's picture depends on, as one string: when it is the same, the picture is the same, and
  * nothing is drawn. Whole pixels and whole degrees only, so standing still, or drifting under a pixel, draws nothing.
  */
-export function minimapKey(model: MinimapModel, size: number, pixelRatio: number): string {
+export function minimapKey(model: MinimapModel, size: number, pixelRatio: number, pings: readonly ChartPingModel[] = []): string {
   const view = minimapView(model, size, pixelRatio);
   let key = `${size}|${pixelRatio}|${Math.round(view.middleX * view.pixelsPerMetre)}|${Math.round(view.middleZ * view.pixelsPerMetre)}|${model.headingDegrees}`;
   for (const mark of model.marks) {
     const place = minimapPlace(view, size, mark.x, mark.z);
     key += `|${mark.kind}${mark.color}@${place.x},${place.y}`;
   }
+  for (const ping of pings) {
+    const place = minimapPlace(view, size, ping.x, ping.z);
+    key += `|ping${ping.color}@${place.x},${place.y}`;
+  }
   return key;
+}
+
+// --- Pings ------------------------------------------------------------------------------------
+
+/**
+ * A ping's mark: a glint, a four-pointed star taller than it is wide, in its player's colour with an ink line
+ * round it. Half its height, half its width and its waist, in CSS pixels.
+ */
+export const PING_MARK = { tall: 10.5, wide: 6, waist: 2.1 } as const;
+
+/** A click this near a ping's mark, in CSS pixels, is a click on the mark: it takes the ping down. */
+export const PING_GRAB = 12;
+
+function pingPath(context: CanvasRenderingContext2D, x: number, y: number, unit: number): void {
+  const tall = PING_MARK.tall * unit;
+  const wide = PING_MARK.wide * unit;
+  const waist = PING_MARK.waist * unit;
+  context.beginPath();
+  context.moveTo(x, y - tall);
+  context.lineTo(x + waist, y - waist);
+  context.lineTo(x + wide, y);
+  context.lineTo(x + waist, y + waist);
+  context.lineTo(x, y + tall);
+  context.lineTo(x - waist, y + waist);
+  context.lineTo(x - wide, y);
+  context.lineTo(x - waist, y - waist);
+  context.closePath();
+}
+
+/** Draw a ping's mark at each place, in canvas pixels. `unit` is device pixels to a CSS pixel. */
+export function paintPingMarks(context: CanvasRenderingContext2D, places: readonly { x: number; y: number; color: string }[], unit: number): void {
+  context.lineJoin = 'round';
+  for (const place of places) {
+    pingPath(context, place.x, place.y, unit);
+    context.fillStyle = place.color || PAPER;
+    context.fill();
+    context.strokeStyle = INK;
+    context.lineWidth = 1.3 * unit;
+    context.stroke();
+    // An ink dot on the spot itself.
+    context.beginPath();
+    context.arc(place.x, place.y, 1.1 * unit, 0, Math.PI * 2);
+    context.fillStyle = INK;
+    context.fill();
+  }
+}
+
+/** The map panel's view of the world: the whole chart, its middle at the canvas's. */
+export function mapChartView(geometry: ChartGeometry, size: number, pixelRatio: number): ChartView {
+  return {
+    middleX: geometry.minimumX + geometry.sideMetres / 2,
+    middleZ: geometry.minimumZ + geometry.sideMetres / 2,
+    pixelsPerMetre: size / geometry.sideMetres,
+    pixelRatio,
+  };
+}
+
+/**
+ * What a click on the map panel's chart asks for. `x`, `y` are from the chart's top left corner and `size` is its
+ * side, all in the same pixels; `grab` is how near a mark counts as on it.
+ * - Off the round chart: nothing.
+ * - On a ping's mark (the nearest, when two are close): take that ping down.
+ * - Anywhere else: mark that very spot, to the metre. Islands and landmarks pull nothing toward them, and the fog
+ *   hides nothing from a click.
+ */
+export function chartClick(
+  geometry: ChartGeometry, pings: readonly ChartPingModel[], size: number, x: number, y: number, grab = PING_GRAB,
+): InterfaceIntent | null {
+  if (!(size > 0) || Math.hypot(x - size / 2, y - size / 2) > size / 2) return null;
+  const view = mapChartView(geometry, size, 1);
+  let nearest: ChartPingModel | null = null;
+  let nearestDistance = grab;
+  for (const ping of pings) {
+    const [px, py] = toCanvas(view, size, ping.x, ping.z);
+    const distance = Math.hypot(px - x, py - y);
+    if (distance <= nearestDistance) {
+      nearest = ping;
+      nearestDistance = distance;
+    }
+  }
+  if (nearest) return { type: 'command', command: { type: 'clear_ping', playerId: nearest.playerId } };
+  return {
+    type: 'command',
+    command: {
+      type: 'ping',
+      x: Math.round(view.middleX + (x - size / 2) / view.pixelsPerMetre),
+      z: Math.round(view.middleZ + (y - size / 2) / view.pixelsPerMetre),
+    },
+  };
 }
 
 function markPath(context: CanvasRenderingContext2D, mark: MinimapMarkModel, x: number, y: number, unit: number): void {
@@ -333,6 +427,8 @@ export function paintMinimap(context: CanvasRenderingContext2D, size: number, ch
       context.stroke();
     }
   }
+  // The crew's pings, each where it is, or on the rim at its bearing when it is past it.
+  paintPingMarks(context, chart.pings.map((ping) => ({ ...minimapPlace(view, size, ping.x, ping.z), color: ping.color })), unit);
   // The player: an arrow at the middle, pointing the way they face. North is always up.
   const middle = size / 2;
   context.save();
@@ -368,6 +464,7 @@ export class MinimapCard {
   private model: MinimapModel | null = null;
   private chart: ChartModel | null = null;
 
+  // (A click on the minimap does nothing: it is too small to aim a ping with. The map panel takes the clicks.)
   constructor(parent: HTMLElement) {
     this.element = document.createElement('div');
     this.element.className = 'iw-minimap iw-paper';
@@ -403,7 +500,7 @@ export class MinimapCard {
     this.model = model;
     this.chart = chart;
     if (this.size === 0) return;
-    const key = minimapKey(model, this.size, this.pixelRatio);
+    const key = minimapKey(model, this.size, this.pixelRatio, chart.pings);
     if (key === this.key && chart.seen === this.seen && chart.fullChart === this.fullChart) return;
     this.key = key;
     this.seen = chart.seen;
@@ -420,7 +517,9 @@ export class MinimapCard {
 
 /**
  * The map panel's chart: the canvas the panel's view puts under its names and marks. It is painted when a new
- * one appears (the map opened), when it changes size, and when the crew's fog or the map table changes.
+ * one appears (the map opened), when it changes size, and when the crew's fog, the map table or a ping changes.
+ *
+ * A click on the chart marks that spot for the crew, or takes down the ping whose mark was clicked (`chartClick`).
  */
 export class MapChart {
   private canvas: HTMLCanvasElement | null = null;
@@ -429,7 +528,23 @@ export class MapChart {
   private pixelRatio = 1;
   private seen: Uint8Array | null = null;
   private fullChart: boolean | null = null;
+  private pings: readonly ChartPingModel[] | null = null;
   private chart: ChartModel | null = null;
+  /** The round card the canvas lies on: the clicks are heard there, so one on a name or a mark over the chart counts too. */
+  private card: HTMLElement | null = null;
+  private emit: (intent: InterfaceIntent) => void = () => {};
+  private readonly onClick = (event: MouseEvent): void => {
+    const { canvas, chart } = this;
+    if (!canvas || !chart || event.button !== 0) return;
+    const box = canvas.getBoundingClientRect();
+    const intent = chartClick(chart.geometry, chart.pings, box.width, event.clientX - box.left, event.clientY - box.top);
+    if (intent) this.emit(intent);
+  };
+
+  /** Where the chart's clicks go: the interface's own way of sending an intent to the game. */
+  listen(emit: (intent: InterfaceIntent) => void): void {
+    this.emit = emit;
+  }
 
   /** Call after the panel is drawn, with the panel's element (or null when the map is not open). */
   follow(holder: HTMLElement | null, chart: ChartModel | null): void {
@@ -438,6 +553,10 @@ export class MapChart {
     if (canvas !== this.canvas) {
       this.observer?.disconnect();
       this.observer = null;
+      this.card?.removeEventListener('click', this.onClick);
+      this.card = canvas?.parentElement ?? null;
+      this.card?.addEventListener('click', this.onClick);
+      this.card?.setAttribute('title', 'Click to mark a spot for the crew. Click a mark to take it down.');
       this.canvas = canvas;
       this.size = 0;
       this.seen = null;
@@ -465,24 +584,26 @@ export class MapChart {
   private paint(): void {
     const { canvas, chart } = this;
     if (!canvas || !chart || this.size === 0) return;
-    if (chart.seen === this.seen && chart.fullChart === this.fullChart) return;
+    if (chart.seen === this.seen && chart.fullChart === this.fullChart && chart.pings === this.pings) return;
     this.seen = chart.seen;
     this.fullChart = chart.fullChart;
+    this.pings = chart.pings;
     const context = canvas.getContext('2d');
     if (!context) return;
-    const geometry = chart.geometry;
-    const view: ChartView = {
-      middleX: geometry.minimumX + geometry.sideMetres / 2,
-      middleZ: geometry.minimumZ + geometry.sideMetres / 2,
-      pixelsPerMetre: this.size / geometry.sideMetres,
-      pixelRatio: this.pixelRatio,
-    };
+    const view = mapChartView(chart.geometry, this.size, this.pixelRatio);
     paintChart(context, this.size, chart, view);
+    // The pings last, over the fog: a spot nobody has seen can be marked, and its mark shows.
+    paintPingMarks(context, chart.pings.map((ping) => {
+      const [x, y] = toCanvas(view, this.size, ping.x, ping.z);
+      return { x: Math.round(x), y: Math.round(y), color: ping.color };
+    }), this.pixelRatio);
   }
 
   dispose(): void {
     this.observer?.disconnect();
     this.observer = null;
+    this.card?.removeEventListener('click', this.onClick);
+    this.card = null;
     this.canvas = null;
   }
 }

@@ -14,6 +14,7 @@ import type { CrewInput, GameEvent, GameOptions, GameState, PlayerId, PlayerStat
 import { settleCanoe, stepCanoe } from './canoe.ts';
 import { createWeather, rollNextWeather, updateWeather } from './weather.ts';
 import { revealAround, seenAround } from './fog.ts';
+import { updatePings } from './pings.ts';
 import { defaultTracking } from './tracking.ts';
 import { islandAt, landingBerth, regionAt, waterRoughnessAt, waveHeight } from './world.ts';
 
@@ -243,6 +244,7 @@ function fixedStep(state: GameState, inputs: readonly (StepInput | undefined)[])
     updatePlaces(state);
     refillLostFinds(state);
     updateQuests(state);
+    updatePings(state);
   }
 
   // A capsize takes everyone aboard. A player out of energy fails alone.

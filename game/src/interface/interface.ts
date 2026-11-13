@@ -215,6 +215,7 @@ export class InkInterface implements GameInterface {
     part('vitals', 'iw-part', this.hud);
     this.compass = new CompassStrip(this.hud);
     this.minimap = new MinimapCard(this.hud);
+    this.mapChart.listen(emit);
     part('notes', 'iw-part', this.hud);
     part('hint', 'iw-part', this.hud);
     part('prompt', 'iw-part', this.hud);

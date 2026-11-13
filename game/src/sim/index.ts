@@ -221,6 +221,9 @@ export {
   FOG, SEEN_CELLS, SEEN_LENGTH, emptySeen, fullSeen, cellSeen, cellOf, seenAt, seenCount, revealCircle, chartKnownWaters,
 } from './fog.ts';
 export { MAXIMUM_TRACKED, defaultTracking } from './tracking.ts';
+// `state.pings` is the spots the crew marked on the map, one a player: a column of light in the world.
+export { PING, pingColour, pingInBounds, standingPings } from './pings.ts';
+export type { Ping } from './pings.ts';
 
 // --- World functions shared with rendering ----------------------------------
 export {

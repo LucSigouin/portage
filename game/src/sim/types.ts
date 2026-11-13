@@ -1,3 +1,4 @@
+import type { Ping } from './pings.ts';
 import type {
   AttachmentId, BottleId, Difficulty, FlagId, IslandId, ItemAmount, ItemId, NodeId, NpcId, QuestId,
   QuestStatus, RecipeId, RegionId, StationId, ToolId, WeatherKind,
@@ -269,6 +270,8 @@ export interface GameState {
    * (`src/sim/fog.ts`). Once seen, always seen. The map and the minimap leave the rest in the fog.
    */
   seen: string;
+  /** The spots the crew has marked on the map, one a player (`src/sim/pings.ts`). Absent until the first ping. */
+  pings?: Ping[];
   /** The crew's tool belt: a tool anyone finds, makes or is given is everyone's at once. Takes no slot, never lost. */
   tools: ToolId[];
   /** Unique finds and quest items, held by the crew as one. Take no slot, never lost. */
@@ -325,7 +328,10 @@ export type Command =
   | { type: 'move_tool'; toolId: ToolId; slot: number }
   | { type: 'set_sail'; raised: boolean }
   | { type: 'claim_rewards' }
-  | { type: 'set_difficulty'; difficulty: Difficulty };
+  | { type: 'set_difficulty'; difficulty: Difficulty }
+  /** Mark a spot on the map for the crew, or take a ping down: this player's or a crewmate's (`src/sim/pings.ts`). */
+  | { type: 'ping'; x: number; z: number }
+  | { type: 'clear_ping'; playerId: PlayerId };
 
 export type FailureReason =
   | 'unknown_id'
@@ -363,7 +369,10 @@ export type FailureReason =
   | 'player_away'
   | 'invalid_amount'
   /** A player's card already follows three quests. */
-  | 'tracking_full';
+  | 'tracking_full'
+  /** A ping off the round chart, and a ping within a second of this player's last. */
+  | 'off_the_map'
+  | 'ping_too_soon';
 
 /**
  * What a failed command still needs. The UI turns this into

@@ -17,6 +17,7 @@ import { returnLostGifts } from './keepsakes.ts';
 import { acceptQuest, notifyTalked, turnInQuest, updateQuests } from './quests.ts';
 import { sleep, sleepBlocked } from './survival.ts';
 import { setTracked } from './tracking.ts';
+import { clearPing, placePing } from './pings.ts';
 import type { Command, CommandResult, Container, GameState, PlayerId, PlayerState } from './types.ts';
 import { groundHeight, islandAt, regionAt, terrainHeight } from './world.ts';
 
@@ -124,6 +125,9 @@ export function dispatch(state: GameState, command: Command, playerId: PlayerId 
   const player = playerOf(state, playerId);
   // Nobody acts for a player who is away.
   if (!player.connected) return failure('player_away');
+  // A mark on the map: it works from a bed and in a talk, and gets nobody up.
+  if (command.type === 'ping') return placePing(state, player, command.x, command.z);
+  if (command.type === 'clear_ping') return clearPing(state, command.playerId);
   if (player.dialogue && !DIALOGUE_COMMANDS.includes(command.type)) return failure('in_dialogue');
   // Doing anything else gets a waiting sleeper up.
   if (player.asleep && !BED_COMMANDS.includes(command.type)) player.asleep = false;

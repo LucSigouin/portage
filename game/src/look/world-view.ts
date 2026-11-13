@@ -41,6 +41,7 @@ import { atTheShore } from '../client/viewmodels/shore.ts';
 import { Marks } from './marks.ts';
 import type { Anchor } from './marks.ts';
 import { NODE_MARK_HEIGHT, disposeNodes, nodeGeometry } from './nodes.ts';
+import { PingBeams } from './pings.ts';
 import { floraFor } from './presets.ts';
 import { buildIslandProps, buildValleyForest, disposePropLibrary, instancedMesh } from './props.ts';
 import type { IslandProps } from './props.ts';
@@ -159,6 +160,8 @@ export interface LookProbe {
   islandsDrawn: number;
   /** Puffs of smoke in the air, or about to rise: a gathering or a craft makes three. A build makes none. */
   puffs: number;
+  /** Columns of light standing: one for each ping the crew has on the map. */
+  beams: number;
 }
 
 /** What the chip test at load found. */
@@ -199,6 +202,8 @@ export class InkWashWorldView implements WorldView {
   private canvasHeight = 1;
   private readonly effects = new Effects();
   private readonly glows = new LampGlows();
+  /** A column of light on every spot the crew has pinged (`pings.ts`). */
+  private readonly beams = new PingBeams();
   private readonly rain = new Rain();
   /** `&rain=0` leaves the rain's strokes out (the rings, the wet and the sky stay): to prove that in rain the land changes only where a stroke is drawn. */
   private rainStrokes = true;
@@ -291,6 +296,7 @@ export class InkWashWorldView implements WorldView {
 
     this.heroes.add(this.canoe.group, this.canoe.ashore);
     this.scene.add(sky.mesh, water.mesh, buildValleyTerrain(), this.heroes, this.effects.group, this.beacon, this.glows.mesh);
+    this.scene.add(this.beams.mesh);
     for (const stand of buildValleyForest()) {
       this.scene.add(stand.mesh);
       this.forest.push({ ...stand, shown: true });
@@ -484,6 +490,7 @@ export class InkWashWorldView implements WorldView {
     this.syncWaves(state);
     const dips = this.canoe.sync(state, crewOf(state), this.paintSeconds, this.paintTime, this.stage !== 'lobby', jumped);
     this.syncLamps(state);
+    this.beams.sync(state);
     this.syncWake(state, dips);
     this.syncNodes(state);
     this.effects.update(this.paintSeconds);
@@ -948,6 +955,7 @@ export class InkWashWorldView implements WorldView {
       waterSimAtCanoe: state ? waveHeight(canoe.x, canoe.z, state.time, waterRoughnessAt(canoe.x, canoe.z, state.weather.stormLevel)) : 0,
       islandsDrawn: this.islands.filter((island) => island.group.visible).length,
       puffs: this.effects.active,
+      beams: this.beams.beams.length,
     };
   }
 
@@ -955,6 +963,7 @@ export class InkWashWorldView implements WorldView {
     this.canoe.dispose();
     this.effects.dispose();
     this.glows.dispose();
+    this.beams.dispose();
     this.rain.dispose();
     this.marks?.dispose();
     this.water?.dispose();
