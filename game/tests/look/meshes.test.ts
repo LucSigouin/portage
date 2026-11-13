@@ -54,11 +54,11 @@ describe('mesh registries', () => {
     for (const npcId of NPC_IDS) complete(buildCharacter(npcId).geometry);
   });
 
-  it('build all 19 attachments on the long hull, none of them a placeholder', () => {
+  it('build all 22 attachments on the long hull, none of them a placeholder', () => {
     const tier = 3;
     const dimensions = HULL_TIERS[tier].dimensions;
     const shape = makeHullShape(dimensions);
-    expect(ATTACHMENT_IDS).toHaveLength(19);
+    expect(ATTACHMENT_IDS).toHaveLength(22);
     for (const attachmentId of ATTACHMENT_IDS) {
       const piece = buildAttachment(attachmentId, {
         hullTier: tier, shape, halfBeam: dimensions.beam / 2, gunwaleY: dimensions.depth - dimensions.draft,
