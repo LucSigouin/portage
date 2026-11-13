@@ -28,8 +28,9 @@ import type { WireRun } from './walk.ts';
 /**
  * Bump when a message changes shape. Host and guest must match.
  * 2: a guest's walking is numbered by step (`input.step`, `input.walk`, `command.at`, `state.walked`, `welcome.walked`).
+ * 3: the state is save version 4 (the crew's chart, each player's quest card), and `track_quest` may say `tracked`.
  */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 export interface JoinMessage { v: number; type: 'join'; name: string; key: string }
 export interface InputMessage {
@@ -175,8 +176,9 @@ const COMMAND_READERS: { [Type in Command['type']]: (raw: Raw) => Command | null
   end_dialogue: bare('end_dialogue'),
   accept_quest: (raw) => (hasOnly(raw, ['type', 'questId']) && isIdOf(QUESTS, raw.questId) ? { type: 'accept_quest', questId: raw.questId } as Command : null),
   turn_in_quest: (raw) => (hasOnly(raw, ['type', 'questId']) && isIdOf(QUESTS, raw.questId) ? { type: 'turn_in_quest', questId: raw.questId } as Command : null),
-  track_quest: (raw) => (hasOnly(raw, ['type', 'questId']) && (raw.questId === null || isIdOf(QUESTS, raw.questId))
-    ? { type: 'track_quest', questId: raw.questId } as Command : null),
+  track_quest: (raw) => (hasOnly(raw, ['type', 'questId'], ['tracked']) && (raw.questId === null || isIdOf(QUESTS, raw.questId))
+    && (raw.tracked === undefined || typeof raw.tracked === 'boolean')
+    ? { type: 'track_quest', questId: raw.questId, ...(raw.tracked === undefined ? {} : { tracked: raw.tracked }) } as Command : null),
   toggle_lantern: bare('toggle_lantern'),
   select_tool: (raw) => (hasOnly(raw, ['type', 'toolId']) && (raw.toolId === null || (TOOL_IDS as unknown[]).includes(raw.toolId))
     ? { type: 'select_tool', toolId: raw.toolId } as Command : null),

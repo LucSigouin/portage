@@ -7,6 +7,9 @@ import type { AttachmentId, IslandId, ItemId, QuestId, RecipeId, ToolId } from '
 import type { InputAction } from '../../settings/index.ts';
 import type { PlayerId } from '../../sim/index.ts';
 import type { InterfaceIntent, SettingId, SettingValue } from '../intents.ts';
+import type { ChartGeometry } from './chart.ts';
+
+export type { ChartGeometry } from './chart.ts';
 import type { PanelId, ScreenId, SettingsTabId } from '../panels.ts';
 
 export type Tone = 'info' | 'good' | 'warning' | 'danger';
@@ -73,6 +76,45 @@ export interface QuestTrackerModel {
   objectives: ObjectiveRowModel[];
 }
 
+/** A mark on the minimap: a crewmate, the canoe, or a quest this player follows. */
+export interface MinimapMarkModel {
+  kind: 'crew' | 'canoe' | 'quest';
+  /** Who or what it is: a crewmate's name, "Canoe", a quest's name. */
+  label: string;
+  /** Where, in world metres. */
+  x: number;
+  z: number;
+  /** Crew marks: the toque colour, `#rrggbb`. Empty for the rest. */
+  color: string;
+}
+
+/**
+ * The minimap, top right: a small round chart, north up, round this player. It moves only when they do: its
+ * middle is their place and its arrow their heading. Nothing on it moves by itself.
+ */
+export interface MinimapModel {
+  /** The middle: this player's place, world metres. */
+  x: number;
+  z: number;
+  /** The way they face, whole degrees clockwise from north. */
+  headingDegrees: number;
+  /** Metres from the middle to the rim. */
+  radiusMetres: number;
+  marks: MinimapMarkModel[];
+}
+
+/**
+ * The valley's round chart and the crew's fog over it, for the map and the minimap. The geometry is the same
+ * object every frame; `seen` is the same array while nothing new is seen. Neither is compared by value.
+ */
+export interface ChartModel {
+  geometry: ChartGeometry;
+  /** One byte a fog cell, 1 where the crew has seen it. */
+  seen: Uint8Array;
+  /** The map table: every island charted and the fog lifted. */
+  fullChart: boolean;
+}
+
 export interface CompassMarkModel {
   id: string;
   kind: 'cardinal' | 'quest' | 'canoe' | 'respawn' | 'crew';
@@ -134,8 +176,12 @@ export interface HudModel {
   meters: MeterModel[];
   water: WaterGaugeModel;
   hotbar: HotbarSlotModel[];
+  /** The first quest on the card: the one the compass and the world's mark point to. Null when there is none. */
   tracker: QuestTrackerModel | null;
+  /** Every quest on this player's card, the first one first: the ones they follow, or the first active one. Three at most. */
+  trackers: QuestTrackerModel[];
   compass: CompassModel;
+  minimap: MinimapModel;
   prompt: PromptModel | null;
   /** "Day 2, 14:05". */
   clockText: string;
@@ -312,24 +358,26 @@ export interface QuestRowModel {
   /** "Active", "Ready to hand in", "On offer", "Done". */
   statusText: string;
   done: boolean;
+  /** True while it is on this player's card. */
   tracked: boolean;
   giverText: string;
   objectives: ObjectiveRowModel[];
   /** The items handing it in will give, for their icons. Empty when the reward is not an item, and once the quest is done. */
   rewards: { itemId: ItemId; name: string; count: number }[];
+  /** "Track" puts it on this player's card, "Untrack" takes it off. Null for a quest that is not open. */
   track: ButtonModel | null;
 }
 
 export interface MapIslandModel {
   islandId: IslandId;
   name: string;
-  /** Position on the map, 0 to 1 from the west and north edges. */
+  /** Its middle on the chart, 0 to 1 from the west and north edges of the chart's square. */
   left: number;
   top: number;
-  /** Size on the map, as shares of its width and height. */
+  /** Its size on the chart, as shares of the square's side. The name is written under it. */
   width: number;
   height: number;
-  /** Degrees to rotate the outline, clockwise. */
+  /** Degrees its outline turns, clockwise: for a drawing that has no chart (the greybox). */
   rotationDegrees: number;
   /** "NNE, 420 m" with the map table, otherwise an empty string. */
   bearingText: string;
@@ -387,9 +435,14 @@ export type PanelModel = { title: string; close: ButtonModel } & (
   | {
     id: 'map';
     fullChart: boolean;
-    /** "9 of 15 islands charted". */
+    /** "9 of 19 islands charted, 40% of the lake seen". */
     summary: string;
-    regions: { name: string; top: number; height: number; roughness: number }[];
+    /**
+     * The four waters, south to north: each one's band on the chart (shares of the square's side) and where its
+     * name is written, at the west shore. `seen` is false while nobody has been in it: then it is not named.
+     */
+    regions: { name: string; top: number; height: number; roughness: number; labelLeft: number; labelTop: number; seen: boolean }[];
+    /** The islands the crew has found (every island with the map table). The chart itself draws them. */
     islands: MapIslandModel[];
     markers: MapMarkerModel[];
   }
@@ -473,5 +526,7 @@ export interface InterfaceModel {
   confirm: ConfirmModel | null;
   /** Set while the built view holds the screen. */
   built: BuiltModel | null;
+  /** The chart under the map and the minimap. Null in the lobby. */
+  chart: ChartModel | null;
   debug: DebugModel | null;
 }

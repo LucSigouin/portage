@@ -129,12 +129,20 @@ function wordsOf(model: InterfaceModel): string[] {
   if (pruned.hud) {
     // The compass is drawn straight to the page (`CompassStrip`), not by a view: the browser spec covers it.
     delete pruned.hud.compass;
+    // So is the minimap (`MinimapCard`, a canvas): its marks are drawn, not written.
+    delete pruned.hud.minimap;
+    // The second and third quests on the card list only the steps still to do.
+    for (const tracker of pruned.hud.trackers.slice(1)) tracker.objectives = tracker.objectives.filter((objective: { done: boolean }) => !objective.done);
     // On foot with a dry canoe there is no water gauge to label.
     if (!pruned.hud.water.visible) delete pruned.hud.water;
     // The trend draws as an arrow as well as its word; the mode word shows only while holding.
     if (pruned.hud.prompt && pruned.hud.prompt.mode !== 'hold') delete pruned.hud.prompt.mode;
   }
   const panel = pruned.panel;
+  if (panel?.id === 'map') {
+    // A water nobody in the crew has been on is not named: it is still in the fog.
+    panel.regions = panel.regions.filter((region: { seen: boolean }) => region.seen);
+  }
   if (panel?.id === 'quest_log') {
     // A finished quest keeps its name and story; its ticked-off steps are not listed again.
     for (const group of panel.groups) for (const quest of group.quests) if (quest.done) delete quest.objectives;

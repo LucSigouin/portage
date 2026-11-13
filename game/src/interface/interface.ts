@@ -17,6 +17,7 @@ import './theme.css';
 import type { CompassModel, GameInterface, InterfaceIntent, InterfaceModel, PanelModel, SettingId } from '../client/contracts.ts';
 import { intentOf, reconcile } from './dom.ts';
 import type { ViewNode } from './dom.ts';
+import { MapChart, MinimapCard } from './chart.ts';
 import { FILTER_DEFINITIONS, ICON, toqueIcon } from './icons.ts';
 import { paperTexture, tornPageOutline } from './paper.ts';
 import {
@@ -159,6 +160,9 @@ export class InkInterface implements GameInterface {
   private readonly abort = new AbortController();
   private hud: HTMLElement | null = null;
   private compass: CompassStrip | null = null;
+  /** The minimap, top right, and the map panel's chart. Each paints only when its picture would change. */
+  private minimap: MinimapCard | null = null;
+  private readonly mapChart = new MapChart();
   private hovered: Element | null = null;
   private faceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -207,6 +211,7 @@ export class InkInterface implements GameInterface {
     this.hud = element('iw-hud', root);
     part('vitals', 'iw-part', this.hud);
     this.compass = new CompassStrip(this.hud);
+    this.minimap = new MinimapCard(this.hud);
     part('notes', 'iw-part', this.hud);
     part('hint', 'iw-part', this.hud);
     part('prompt', 'iw-part', this.hud);
@@ -524,7 +529,7 @@ export class InkInterface implements GameInterface {
     }
     this.draw('vitals', hud ? JSON.stringify([hud.meters, hud.water, hud.canoeLines, model.patternedMeters, hud.crew]) : '',
       () => vitalsView(hud!, model.patternedMeters));
-    this.draw('notes', hud ? JSON.stringify([hud.clockText, hud.night, hud.weatherText, hud.stormWarning, hud.placeText, hud.tracker]) : '',
+    this.draw('notes', hud ? JSON.stringify([hud.clockText, hud.night, hud.weatherText, hud.stormWarning, hud.placeText, hud.trackers]) : '',
       () => notesView(hud!));
     // One standing slip under the prompt: the line's trouble when there is any, the tip otherwise.
     const lineNote = hud?.lineNote ?? null;
@@ -532,12 +537,14 @@ export class InkInterface implements GameInterface {
     this.draw('prompt', hud?.prompt ? JSON.stringify(hud.prompt) : '', () => promptView(hud!.prompt!));
     this.draw('hotbar', hud ? JSON.stringify(hud.hotbar) : '', () => hotbarView(hud!.hotbar));
     if (hud) this.compass.update(hud.compass);
+    if (hud && model.chart) this.minimap?.update(hud.minimap, model.chart);
 
     let toastSignature = '';
     for (const toast of model.toasts) toastSignature += `${toast.id}|${toast.tone}|${toast.text}\n`;
     this.draw('toasts', toastSignature, () => toastsView(model.toasts));
 
     if (!this.drawPanel(panel) && rescaled) this.markCut();
+    this.mapChart.follow(panel?.id === 'map' ? part('panel') : null, model.chart);
     if ((panel?.id === 'dialogue') !== this.dialogue) {
       this.dialogue = panel?.id === 'dialogue';
       part('panel').classList.toggle('iw-veil-clear', this.dialogue);
@@ -628,8 +635,11 @@ export class InkInterface implements GameInterface {
       this.root.textContent = '';
     }
     this.parts.clear();
+    this.minimap?.dispose();
+    this.mapChart.dispose();
     this.hud = null;
     this.compass = null;
+    this.minimap = null;
     this.root = null;
   }
 }

@@ -442,8 +442,10 @@ describe('the panels', () => {
     expect(log.groups[0].heading).toBe('Main line');
     const bailOut = log.groups[0].quests[0];
     expect(bailOut).toMatchObject({ questId: 'bail_out', statusText: 'Active', tracked: true, done: false });
-    expect(bailOut.track).toMatchObject({ label: 'Tracked', enabled: false });
-    state.trackedQuestId = null;
+    expect(bailOut.track).toMatchObject({
+      label: 'Untrack', enabled: true, intent: { type: 'command', command: { type: 'track_quest', questId: 'bail_out', tracked: false } },
+    });
+    state.players[0].trackedQuestIds = [];
     expect(buildQuestLogPanel(state).groups[0].quests[0].track).toMatchObject({
       label: 'Track', enabled: true, intent: { type: 'command', command: { type: 'track_quest', questId: 'bail_out' } },
     });
@@ -453,7 +455,7 @@ describe('the panels', () => {
     const state = newGame();
     const map = buildMapPanel(state);
     expect(map.islands.map((island) => island.islandId)).toEqual(['home_knoll']);
-    expect(map.summary).toBe(`1 of ${ISLANDS.length} islands charted`);
+    expect(map.summary).toMatch(new RegExp(`^1 of ${ISLANDS.length} islands charted, \\d+% of the lake seen$`));
     const home = map.islands[0];
     expect(home.left).toBeCloseTo(0.5);
     expect(home.top).toBeGreaterThan(0.8); // far south: low on the chart
@@ -467,7 +469,10 @@ describe('the panels', () => {
       expect(marker.top).toBeLessThanOrEqual(1);
     }
     expect(map.regions.map((region) => region.name)).toEqual(['The Shallows', 'The Reach', 'The Narrows', 'The Fog']);
-    expect(map.regions.reduce((sum, region) => sum + region.height, 0)).toBeCloseTo(1);
+    // The four bands run from the north shore to the south shore, end to end.
+    expect(map.regions.reduce((sum, region) => sum + region.height, 0)).toBeCloseTo((1400 + 1450) / 3300);
+    // Only the Shallows has been seen at the start: the others are not named yet.
+    expect(map.regions.map((region) => region.seen)).toEqual([true, false, false, false]);
 
     state.canoe.attachments.push('map_table');
     const full = buildMapPanel(state);

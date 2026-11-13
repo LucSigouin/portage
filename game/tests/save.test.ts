@@ -4,6 +4,7 @@ import {
 } from '../src/save/index.ts';
 import type { SaveMigration, SaveStore } from '../src/save/index.ts';
 import { FIXED_STEP, NEUTRAL_INPUT, bearingDifference, dispatch, hashState, step } from '../src/sim/index.ts';
+import type { GameState } from '../src/sim/index.ts';
 import { MAIN_QUESTS, TUNING } from '../src/data/index.ts';
 import { createBotDriver } from '../src/bot/bot.ts';
 import { FakeStorage, give, newGame, run, standOn, teleportToBed } from './support.ts';
@@ -22,6 +23,19 @@ function playedGame() {
 
 /** The main line's quests, first to last. */
 const MAIN_QUEST_ORDER = MAIN_QUESTS.map((quest) => quest.id);
+
+/**
+ * A version 4 state put back in the shape of version 3: no chart, the first player's card as the crew's one
+ * tracked quest. What the migration from 3 must leave exactly as it was saved.
+ */
+function asSavedBefore4(state: GameState): Record<string, unknown> {
+  const { seen: _seen, ...rest } = state;
+  return {
+    ...rest,
+    trackedQuestId: state.players[0]!.trackedQuestIds[0] ?? null,
+    players: state.players.map(({ trackedQuestIds: _tracked, ...player }) => player),
+  };
+}
 
 describe('serialize and deserialize', () => {
   it('round-trips a game exactly', () => {
@@ -106,6 +120,10 @@ describe('old saves', () => {
       if (!loaded.ok) return;
       expect(loaded.migratedFrom).toBe(1);
       expect(loaded.savedAt).toBe(1762819200000);
+      // Through version 4 as well: its one tracked quest is on the player's card, and its islands are charted.
+      expect(loaded.state.players[0].trackedQuestIds).toEqual(old.trackedQuestId ? [old.trackedQuestId] : []);
+      expect('trackedQuestId' in loaded.state).toBe(false);
+      expect(typeof loaded.state.seen).toBe('string');
       const state = loaded.state;
       expect(state.version).toBe(SAVE_VERSION);
       expect(state.players).toHaveLength(1);
@@ -131,7 +149,7 @@ describe('old saves', () => {
       expect('dialogue' in state).toBe(false);
       // Everything shared is exactly as it was saved.
       for (const key of ['seed', 'randomState', 'tick', 'time', 'playedSeconds', 'canoe', 'weather', 'nodes', 'quests',
-        'trackedQuestId', 'flags', 'discoveredIslands', 'bottlesFound', 'respawnCampIslandId', 'pendingRewards', 'statistics'] as const) {
+        'flags', 'discoveredIslands', 'bottlesFound', 'respawnCampIslandId', 'pendingRewards', 'statistics'] as const) {
         expect(state[key], `${name} ${key}`).toEqual(old[key]);
       }
       // And it saves again as a current save that loads without a migration.
@@ -182,13 +200,12 @@ describe('saves from before the wind swung', () => {
     expect('windTurn' in old.state.weather).toBe(false);
   });
 
-  it('loads it exactly as it was saved, with no migration to run', () => {
+  it('loads it as it was saved: only the chart and the quest card are new (version 4)', () => {
     const loaded = deserialize(text);
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
-    expect(loaded.migratedFrom).toBeNull();
-    expect(loaded.state).toEqual({ ...JSON.parse(text).state, version: SAVE_VERSION });
-    expect(serialize(loaded.state, 1762819200000) + '\n').toBe(text);
+    expect(loaded.migratedFrom).toBe(3);
+    expect(asSavedBefore4(loaded.state)).toEqual({ ...JSON.parse(text).state, version: SAVE_VERSION });
   });
 
   it('plays on: the wind holds its bearing, then swings at the next weather instead of jumping', () => {
@@ -239,14 +256,13 @@ describe('saves made on the live site', () => {
     for (const save of saved) expect(save.state.flags.beacon_lit ?? false).toBe(false);
   });
 
-  it.each(NAMES)('%s loads with no error, exactly as it was saved', (name) => {
+  it.each(NAMES)('%s loads with no error, as it was saved, with the chart and the quest card of version 4', (name) => {
     const loaded = deserialize(fixture(name));
     expect(loaded.ok, loaded.ok ? '' : loaded.reason).toBe(true);
     if (!loaded.ok) return;
-    // No migration runs on it: the version it was saved with is still the version. Whoever raises
-    // `STATE_VERSION` must write the migration from 3, or this save, and Luc's, stops loading.
-    expect(loaded.migratedFrom).toBeNull();
-    expect(loaded.state).toEqual({ ...JSON.parse(fixture(name)).state, version: SAVE_VERSION });
+    // The migration from 3 runs on it, and changes nothing but what version 4 added.
+    expect(loaded.migratedFrom).toBe(3);
+    expect(asSavedBefore4(loaded.state)).toEqual({ ...JSON.parse(fixture(name)).state, version: SAVE_VERSION });
     // And the lobby lists it and opens it from a slot.
     const storage = new FakeStorage();
     storage.setItem(`${SAVE_KEY_PREFIX}1`, fixture(name));

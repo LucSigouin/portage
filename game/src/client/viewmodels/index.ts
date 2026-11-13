@@ -5,6 +5,7 @@
 import type { SlotSummary } from '../../save/index.ts';
 import type { InputAction, Settings } from '../../settings/index.ts';
 import type { GameState, PlayerId } from '../../sim/index.ts';
+import { seenCells, valleyChart } from './chart.ts';
 import type { CrewView } from '../crewlobby.ts';
 import { topPanel } from '../panels.ts';
 import type { PanelId, PanelState } from '../panels.ts';
@@ -29,6 +30,7 @@ export * from './gamepanels.ts';
 export * from './menus.ts';
 export * from './crew.ts';
 export * from './settings.ts';
+export * from './chart.ts';
 
 export interface InterfaceModelInput {
   panels: PanelState;
@@ -101,7 +103,7 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
     case 'canoe_builder':
       return game ? { ...frame, ...buildCanoeBuilderPanel(game, playerId) } : null;
     case 'quest_log':
-      return game ? { ...frame, ...buildQuestLogPanel(game) } : null;
+      return game ? { ...frame, ...buildQuestLogPanel(game, playerId) } : null;
     case 'map':
       return game ? { ...frame, ...buildMapPanel(game, playerId) } : null;
     case 'dialogue': {
@@ -134,6 +136,9 @@ export function buildInterfaceModel(input: InterfaceModelInput): InterfaceModel 
     openPanels: [...panels.stack],
     confirm: top === 'confirm' && panels.confirm ? buildConfirmModel(panels.confirm, isGuestScreen(input)) : null,
     built: input.built ? { ...input.built, hint: 'Any key', dismiss: { type: 'end_built_view' } } : null,
+    chart: game ? {
+      geometry: valleyChart(), seen: seenCells(game.seen), fullChart: game.canoe.attachments.includes('map_table'),
+    } : null,
     debug: input.debug,
   };
 }

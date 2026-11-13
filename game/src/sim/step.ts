@@ -12,6 +12,8 @@ import { MAXIMUM_NAME_LENGTH, MAXIMUM_PLAYERS, STATE_VERSION } from './types.ts'
 import type { CrewInput, GameEvent, GameOptions, GameState, PlayerId, PlayerState, StepInput } from './types.ts';
 import { settleCanoe, stepCanoe } from './canoe.ts';
 import { createWeather, rollNextWeather, updateWeather } from './weather.ts';
+import { revealAround, seenAround } from './fog.ts';
+import { defaultTracking } from './tracking.ts';
 import { islandAt, landingBerth, regionAt, waterRoughnessAt, waveHeight } from './world.ts';
 
 /** The fixed simulation step, seconds. */
@@ -53,6 +55,7 @@ export function addPlayer(state: GameState): PlayerState | null {
     bailing: false,
     asleep: false,
     dialogue: null,
+    trackedQuestIds: defaultTracking(state),
   };
   state.players.push(player);
   state.players.sort((first, second) => first.id - second.id);
@@ -139,7 +142,7 @@ export function createGame(seed: number, options: GameOptions = {}): GameState {
     weather: createWeather(),
     nodes: {},
     quests: createQuestStates(),
-    trackedQuestId: 'bail_out',
+    seen: seenAround(start.x, start.z),
     tools: ['bailing_can'],
     keyItems: {},
     flags: {},
@@ -163,6 +166,7 @@ export function createGame(seed: number, options: GameOptions = {}): GameState {
 
 /** One player's region, island underfoot and island discovery. Cheap, run a few times a second. */
 function updateSurroundings(state: GameState, player: PlayerState): void {
+  revealAround(state, player.position.x, player.position.z);
   const regionId = regionAt(player.position.x, player.position.z).id;
   if (regionId !== player.regionId) {
     player.regionId = regionId;

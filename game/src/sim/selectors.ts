@@ -172,7 +172,11 @@ export interface QuestView {
   objectives: ObjectiveView[];
 }
 
-function questView(state: GameState, questId: QuestId): QuestView {
+/** The quests on a player's card, in the order they were picked. */
+const trackedBy = (state: GameState, playerId: PlayerId): readonly QuestId[] =>
+  state.players.find((player) => player.id === playerId)?.trackedQuestIds ?? [];
+
+function questView(state: GameState, questId: QuestId, tracked: readonly QuestId[]): QuestView {
   const definition = QUESTS[questId];
   const questState = state.quests[questId];
   return {
@@ -182,7 +186,7 @@ function questView(state: GameState, questId: QuestId): QuestView {
     kind: definition.kind,
     status: questState.status,
     giver: definition.giver,
-    tracked: state.trackedQuestId === questId,
+    tracked: tracked.includes(questId),
     objectives: definition.objectives.map((objective, index) => {
       const required = objectiveRequired(objective);
       const progress = Math.min(required, questState.progress[index]);
@@ -197,22 +201,31 @@ function shownInLog(state: GameState, questId: QuestId): boolean {
   return !definition.hiddenUntilProgress || questState.status === 'completed' || questState.progress.some((value) => value > 0);
 }
 
-/** Active and ready quests with objective progress. The tracked quest comes first. */
-export function selectActiveQuests(state: GameState): QuestView[] {
+/**
+ * Active and ready quests with objective progress, for one player's card. The
+ * quests that player follows come first, in the order they picked them.
+ */
+export function selectActiveQuests(state: GameState, playerId: PlayerId = 0): QuestView[] {
+  const tracked = trackedBy(state, playerId);
+  const place = (questId: QuestId): number => {
+    const index = tracked.indexOf(questId);
+    return index < 0 ? tracked.length : index;
+  };
   return QUEST_LIST
     .filter((definition) => {
       const status = state.quests[definition.id].status;
       return (status === 'active' || status === 'ready') && shownInLog(state, definition.id);
     })
-    .map((definition) => questView(state, definition.id))
-    .sort((first, second) => Number(second.tracked) - Number(first.tracked));
+    .map((definition) => questView(state, definition.id, tracked))
+    .sort((first, second) => place(first.questId) - place(second.questId));
 }
 
-/** Everything for the quest log: active, ready, on offer and completed. */
-export function selectQuestLog(state: GameState): QuestView[] {
+/** Everything for one player's quest log: active, ready, on offer and completed. */
+export function selectQuestLog(state: GameState, playerId: PlayerId = 0): QuestView[] {
+  const tracked = trackedBy(state, playerId);
   return QUEST_LIST
     .filter((definition) => state.quests[definition.id].status !== 'locked' && shownInLog(state, definition.id))
-    .map((definition) => questView(state, definition.id));
+    .map((definition) => questView(state, definition.id, tracked));
 }
 
 export interface MapMarker {
@@ -224,8 +237,10 @@ export interface MapMarker {
 }
 
 export interface MapData {
-  /** True with the map table: every island is charted, with bearings. */
+  /** True with the map table: every island is charted, with bearings, and the fog is lifted. */
   fullChart: boolean;
+  /** The crew's chart: what anyone in the crew has seen (`src/sim/fog.ts`). */
+  seen: string;
   islands: {
     islandId: IslandId;
     name: string;
@@ -276,13 +291,13 @@ export interface QuestTarget {
 }
 
 /**
- * Where the tracked quest (or, with none tracked, the first active one)
- * sends the crew next, for a mark in the world. Null when its next step has
- * no place, or the place is on an island not yet charted and there is no
- * radio to mark it: the same rule as the quest marks on the map.
+ * Where the first quest on a player's card (or, with none followed, the first
+ * active one) sends them next, for a mark in the world. Null when its next
+ * step has no place, or the place is on an island not yet charted and there is
+ * no radio to mark it: the same rule as the quest marks on the map.
  */
-export function selectTrackedQuestTarget(state: GameState): QuestTarget | null {
-  const quest = selectActiveQuests(state)[0];
+export function selectTrackedQuestTarget(state: GameState, playerId: PlayerId = 0): QuestTarget | null {
+  const quest = selectActiveQuests(state, playerId)[0];
   if (!quest) return null;
   const place = objectivePlace(state, quest.questId);
   if (!place) return null;
@@ -321,13 +336,14 @@ export function selectMap(state: GameState, playerId: PlayerId = 0): MapData {
       islandId: npc.islandId, questId: null,
     });
   }
-  for (const quest of selectActiveQuests(state)) {
+  for (const quest of selectActiveQuests(state, playerId)) {
     const islandId = objectiveIsland(state, quest.questId);
     if (!islandId || !(discovered(islandId) || hasRadio)) continue;
     markers.push({ kind: 'quest', label: quest.name, position: { ...ISLANDS_BY_ID[islandId].center }, islandId, questId: quest.questId });
   }
   return {
     fullChart,
+    seen: state.seen,
     islands: ISLANDS.map((definition) => ({
       islandId: definition.id,
       name: definition.name,

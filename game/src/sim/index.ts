@@ -98,7 +98,8 @@
  * | `sleep` / `wake` | Lie down at a camp, or aboard with the canopy; the night skips once the whole crew has. Get up again |
  * | `board` / `disembark` | Get in the canoe, or step ashore and pull it up |
  * | `talk`, `choose_dialogue_option`, `end_dialogue` | Conversations |
- * | `accept_quest`, `turn_in_quest`, `track_quest` | Side quests and the tracker |
+ * | `accept_quest`, `turn_in_quest` | Side quests |
+ * | `track_quest` | Follow a quest on this player's own card, or stop (`tracked: false`); up to three (`MAXIMUM_TRACKED`) |
  * | `toggle_lantern`, `set_sail`, `select_tool` | Canoe and tool belt switches |
  * | `claim_rewards` | Collect rewards that did not fit earlier |
  * | `set_difficulty` | Relaxed (0.6 drain) or Standard |
@@ -206,6 +207,14 @@ export type {
 } from './selectors.ts';
 export type { Interactable } from './interact.ts';
 export type { SleepBlock } from './survival.ts';
+
+// --- The crew's chart and each player's quest card --------------------------
+// `state.seen` is the fog of war: every cell anyone in the crew has seen, shared, saved, never fogged again.
+// `player.trackedQuestIds` is the quests on one player's card, their own pick.
+export {
+  FOG, SEEN_CELLS, SEEN_LENGTH, emptySeen, fullSeen, cellSeen, cellOf, seenAt, seenCount, revealCircle, chartKnownWaters,
+} from './fog.ts';
+export { MAXIMUM_TRACKED, defaultTracking } from './tracking.ts';
 
 // --- World functions shared with rendering ----------------------------------
 export {

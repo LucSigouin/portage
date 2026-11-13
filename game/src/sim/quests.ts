@@ -2,6 +2,7 @@ import type { ItemId, MadeInto, NodeId, NpcId, ObjectiveDefinition, QuestId } fr
 import { STOCK_FOOD_IDS } from '../data/items.ts';
 import { MAIN_QUESTS, QUESTS, QUEST_LIST } from '../data/quests.ts';
 import { connectedPlayers, countHeld, countInStacks, emit, grantItems, removeFromStacks } from './inventory.ts';
+import { afterQuestAccepted, afterQuestCompleted } from './tracking.ts';
 import type { GameState, PlayerState, QuestState } from './types.ts';
 
 /** The count at which an objective is done. */
@@ -181,16 +182,13 @@ function completeQuest(state: GameState, questId: QuestId, actor: PlayerState): 
     const next = MAIN_QUESTS.find((candidate) => candidate.order === definition.order + 1);
     if (next) {
       state.quests[next.id].status = 'active';
-      if (state.trackedQuestId === questId || state.trackedQuestId === null) state.trackedQuestId = next.id;
       emit(state, { type: 'quest_started', questId: next.id });
       announceCarriedProgress(state, next.id);
     } else {
-      if (state.trackedQuestId === questId) state.trackedQuestId = null;
       emit(state, { type: 'game_completed' });
     }
-  } else if (state.trackedQuestId === questId) {
-    state.trackedQuestId = MAIN_QUESTS.find((candidate) => state.quests[candidate.id].status === 'active')?.id ?? null;
   }
+  afterQuestCompleted(state, questId);
 }
 
 /**
@@ -265,7 +263,7 @@ export function notifyTalked(state: GameState, npcId: NpcId): void {
 export function acceptQuest(state: GameState, questId: QuestId, actor: PlayerState): boolean {
   if (state.quests[questId].status !== 'available') return false;
   state.quests[questId].status = 'active';
-  if (state.trackedQuestId === null) state.trackedQuestId = questId;
+  afterQuestAccepted(actor, questId);
   emit(state, { type: 'quest_started', questId });
   announceCarriedProgress(state, questId);
   updateQuests(state, actor);

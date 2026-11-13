@@ -448,7 +448,7 @@ describe('a save that is already stuck', () => {
     const loaded = deserialize(stuckSave);
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
-    expect(loaded.migratedFrom).toBeNull(); // nothing about the shape of a save changed
+    expect(loaded.migratedFrom).toBe(3); // the chart and the quest card of version 4, nothing else
     const state = loaded.state;
     const events: GameEvent[] = [];
     for (let tick = 0; tick < 12; tick += 1) {
@@ -457,7 +457,7 @@ describe('a save that is already stuck', () => {
     }
     expect(state.quests.a_proper_edge.status).toBe('completed');
     expect(state.quests.ribs_and_rails.status).toBe('active');
-    expect(state.trackedQuestId).toBe('ribs_and_rails');
+    expect(state.players[0].trackedQuestIds).toEqual(['ribs_and_rails']);
     expect(events.filter((event) => event.type === 'quest_completed' && event.questId === 'a_proper_edge')).toHaveLength(1);
     expect(events.filter((event) => event.type === 'quest_started' && event.questId === 'ribs_and_rails')).toHaveLength(1);
   });

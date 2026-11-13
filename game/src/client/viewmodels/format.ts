@@ -69,6 +69,7 @@ const FAILURE_TEXT: Record<FailureReason, string> = {
   invalid_option: 'That is not an option.',
   in_dialogue: 'Finish the conversation first.',
   quest_not_available: 'That quest is not on offer.',
+  tracking_full: 'Your card holds three quests. Stop following one first.',
   quest_not_ready: 'Not finished yet.',
   too_tired: 'Too tired for that. Rest first.',
   nothing_in_reach: 'Nothing to do here.',
