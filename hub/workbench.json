@@ -6,7 +6,7 @@
   ],
   "title": "Portage",
   "subtitle": "The workbench: every step so far",
-  "updated": "2026-11-12, late night",
+  "updated": "2026-11-13, early morning",
   "ask": "A flooded world and all you have is a canoe. Scavenge islands, craft, and build a crazy impressive canoe.",
   "now": [
     {
@@ -16,11 +16,11 @@
     },
     {
       "label": "Stage",
-      "value": "Version 1 is live, and friends join by a link"
+      "value": "Version 1 is live. Two small fixes wait for your push"
     },
     {
       "label": "Tests",
-      "value": "1132 unit, 119 in a browser"
+      "value": "1146 unit, 119 in a browser"
     },
     {
       "label": "Running",
@@ -28,15 +28,15 @@
     },
     {
       "label": "Live now",
-      "value": "Everything built, with Host a crew and Join a crew"
+      "value": "Version 1.0.198, with Host a crew and Join a crew"
     },
     {
       "label": "Not live yet",
-      "value": "Nothing is waiting to go live"
+      "value": "Honest chip timing, the autosave note. Say push"
     },
     {
       "label": "Waiting on you",
-      "value": "Play with a friend. Six calls from the review"
+      "value": "The seat fix: yes or no. Play with a friend"
     }
   ],
   "steps": [
@@ -643,8 +643,7 @@
       ],
       "snags": [
         "Claude Code broke twice, so two helpers never started",
-        "The slow-chip start and one shaky speed test are not in",
-        "The three low points are not scored again yet"
+        "Both jobs and the re-score ran the next night: see Nov 13"
       ],
       "pictures": [],
       "report": "docs/report-fixes.html"
@@ -667,7 +666,7 @@
       "snags": [
         "Doubling was tried first and was live for half an hour",
         "It let a paddler outrun the sail and slip through rough water",
-        "No browser test pass on this one: Luc tests it"
+        "The browser tests ran that night: all pass"
       ],
       "pictures": [],
       "report": ""
@@ -695,6 +694,38 @@
       ],
       "pictures": [],
       "report": ""
+    },
+    {
+      "when": "Nov 13",
+      "title": "Overnight: the re-score and four small fixes",
+      "state": "done",
+      "asked": "I am going to bed. I want it done by the time I wake up.",
+      "built": [
+        "The chip test at load now gives an honest first timing",
+        "The shaky speed test reads four runs and judges the middle",
+        "A refused autosave says so once, and stops retrying every frame",
+        "A full canoe gives a seat back: built, waits on your yes",
+        "A fresh reviewer played 19 minutes and scored the low points again"
+      ],
+      "proof": [
+        "1146 unit, 119 in a browser: all pass on main",
+        "First fifteen minutes 7 to 8. Solid 6 to 7. Canoe stays 7",
+        "Every review fix that was checked works in real play",
+        "32 new checks broken on purpose, 32 caught"
+      ],
+      "snags": [
+        "The canoe stays 7: building has no payoff, the first hull upgrade does not show",
+        "Solid stays 7 until the seat fix is in and you rule on a dial limit",
+        "Slow chips were not the test: this Mac draws slower while its screen is on",
+        "None of it is live. It waits for your push"
+      ],
+      "pictures": [
+        {
+          "src": "../scratch/portage/rescore/shots/65-lean-to-after-19.jpg",
+          "alt": "The lean-to at night now offers the bed"
+        }
+      ],
+      "report": "docs/report-rescore.html"
     }
   ],
   "calls": [
@@ -737,15 +768,15 @@
   "numbers": [
     {
       "label": "Commits",
-      "value": "198"
+      "value": "205"
     },
     {
       "label": "Worker runs",
-      "value": "39"
+      "value": "44"
     },
     {
       "label": "Unit tests",
-      "value": "1132"
+      "value": "1146"
     },
     {
       "label": "Browser tests",
@@ -774,19 +805,11 @@
   ],
   "left": [
     {
-      "what": "Browser tests on the faster canoe",
-      "hours": "0.5"
+      "what": "The seat fix: built and tested, needs your yes",
+      "hours": "yours"
     },
     {
-      "what": "Score the three low points again",
-      "hours": "0.5"
-    },
-    {
-      "what": "Slow-chip start, and one shaky speed test",
-      "hours": "0.5"
-    },
-    {
-      "what": "Your six calls from the review",
+      "what": "Your calls from the review and the re-score",
       "hours": "yours"
     },
     {
@@ -794,7 +817,15 @@
       "hours": "yours"
     },
     {
+      "what": "A payoff when you build, and a first hull upgrade you can see",
+      "hours": "3"
+    },
+    {
       "what": "A dial limit on the relay (a Cloudflare rate rule)",
+      "hours": "0.5"
+    },
+    {
+      "what": "The relay deploy should tell the new relay from the old",
       "hours": "0.5"
     },
     {
@@ -808,11 +839,13 @@
   ],
   "yours": [
     "Play the live game: your old save continues",
-    "The faster canoe: is it quick enough, and calm to watch?",
-    "Claude Code keeps breaking: find what reinstalls it",
-    "The review page: six calls",
-    "Your 5120 wide screen: steady 60, or every pixel?",
+    "The seat fix: a full canoe gives the longest-away seat to a new friend. Yes or no?",
+    "Say push: two small fixes are on main, not live",
     "Host a crew and send the link to a friend on another computer",
+    "A dial limit on the relay: build it, or accept the risk",
+    "The faster canoe: is it quick enough, and calm to watch?",
+    "Build payoff and the first hull upgrade: they hold the canoe at 7",
+    "Your 5120 wide screen: steady 60, or every pixel?",
     "Storm, sound and motion: still yours to judge",
     "Starting canoe: weathered grey, or red?"
   ],

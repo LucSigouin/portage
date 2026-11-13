@@ -11,7 +11,7 @@
   ],
   "name": "Portage",
   "pitch": "A browser survival-crafting game. The valley flooded. You have a leaky canoe, and you bolt what you build onto it.",
-  "updated": "2026-11-12, late night",
+  "updated": "2026-11-13, early morning",
   "status": {
     "done": [
       "Rules engine. Runs with no screen. 179 tests pass. A bot finishes the whole main quest.",
@@ -40,8 +40,9 @@
       "A fresh scored review: look 8, speed 8, friends 8, first minutes 7, canoe 7, solid 6. 1098 tests pass, plus 118 browser tests.",
       "The fix round: ten fixes from the review, each with a test seen red. 1129 tests pass, plus 119 browser tests. Old saves from the live game are tested on every build.",
       "Live on Nov 12: everything built that day, at https://sigouin.net/portage/ .",
-      "A faster canoe: paddle 3.2 m/s (was 2.2), power stroke 4.2 (was 3.2), with rough water raised by the same share. Doubling was tried first and broke the sail and the rough-water gates. 1131 unit tests pass. No browser pass on it yet: Luc tests it.",
-      "Friends by a link, live: the relay runs on Cloudflare at sigouin.net/portage/relay, and the live lobby has Host a crew and Join a crew. A host and a guest met through it (52 ms there and back). Every deploy ends with two browsers in one canoe on the live site. Not yet tried on two real computers."
+      "A faster canoe: paddle 3.2 m/s (was 2.2), power stroke 4.2 (was 3.2), with rough water raised by the same share. Doubling was tried first and broke the sail and the rough-water gates. 1131 unit tests pass. The browser tests ran that night: all 119 pass.",
+      "Friends by a link, live: the relay runs on Cloudflare at sigouin.net/portage/relay, and the live lobby has Host a crew and Join a crew. A host and a guest met through it (52 ms there and back). Every deploy ends with two browsers in one canoe on the live site. Not yet tried on two real computers.",
+      "Overnight on Nov 13: a fresh reviewer scored the three low points again (first minutes 7 to 8, solid 6 to 7, canoe stays 7). Three small fixes are on main: an honest chip timing at load, a steadier speed test, a refused autosave that says so. 1146 tests pass, plus 119 browser tests. The two that change the game are not live: they wait for a push."
     ],
     "running": [],
     "waiting": [
@@ -53,14 +54,21 @@
         "text": "The review: six scores and sixteen fixes, worst first.",
         "href": "docs/report-review.html"
       },
-      "Luc: six calls from the review. Build payoff, the first hull upgrade, trees hiding the player, a dial limit on the relay (it is live without one), crafts made early, steady 30 on very slow chips.",
+      {
+        "text": "The re-score: 8, 7 and 7 on the three low points, and nine findings.",
+        "href": "docs/report-rescore.html"
+      },
+      {
+        "text": "Luc: the seat fix. A full canoe gives the longest-away seat to a new friend. Built and tested on a branch. Yes or no?",
+        "href": "docs/report-seats.html"
+      },
+      "Luc: say push. Two small fixes are on main and not live: the chip timing at load and the autosave note.",
+      "Luc: your calls. Build payoff, the first hull upgrade, trees hiding the player, a dial limit on the relay (it is live without one), crafts made early.",
       {
         "text": "Luc: the starting canoe is weathered grey, not red. Keep or bring the red back?",
         "href": "game/?shot=play"
       },
       "Luc: the game is live with the Nov 12 work. Your old save continues. Play it and say what feels wrong.",
-      "Luc: Claude Code broke twice today (a reinstall without its last step). New workers cannot start while it is broken.",
-      "Next: score the three low points again, then the slow-chip start and one shaky speed test.",
       "Luc: host a crew on the live game and send the link to a friend. Two real computers is the one thing no test here covers."
     ]
   },
@@ -826,6 +834,36 @@
               "href": "docs/report-fixes.html",
               "see": "Ten fixes, the test and the break for each, and the calls made for you.",
               "from": "../scratch/portage/fixes-report.md"
+            },
+            {
+              "title": "Report: the re-score",
+              "href": "docs/report-rescore.html",
+              "see": "Three points scored again, each built fix tried in real play, nine findings.",
+              "from": "../scratch/portage/rescore-report.md"
+            },
+            {
+              "title": "Report: the seat fix",
+              "href": "docs/report-seats.html",
+              "see": "The rule, three stories before and after, and seven choices made for you.",
+              "from": "../scratch/portage/fix-seats-report.md"
+            },
+            {
+              "title": "Report: the chip test",
+              "href": "docs/report-chip.html",
+              "see": "The first timing, before and after, and why slow chips started low.",
+              "from": "../scratch/portage/fix-chip-report.md"
+            },
+            {
+              "title": "Report: the doubling test",
+              "href": "docs/report-doubling.html",
+              "see": "Why it was shaky: the screen shares the chip. What the test reads now.",
+              "from": "../scratch/portage/fix-doubling-report.md"
+            },
+            {
+              "title": "Report: the autosave note",
+              "href": "docs/report-savenote.html",
+              "see": "A refused save: 3,601 tries became 1, and the player is told.",
+              "from": "../scratch/portage/fix-savenote-report.md"
             }
           ]
         }
