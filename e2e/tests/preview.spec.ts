@@ -83,6 +83,30 @@ async function pictureOnPage(page: Page): Promise<{ width: number; height: numbe
   });
 }
 
+/** The pixels that differ between two pictures of the same size: how many, and the box round them (picture pixels). */
+function moved(page: Page, first: Buffer, second: Buffer): Promise<string> {
+  return page.evaluate(async ([a, b]) => {
+    const read = async (data: string): Promise<ImageData> => {
+      const bitmap = await createImageBitmap(await (await fetch(`data:image/png;base64,${data}`)).blob());
+      const sheet = new OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d')!;
+      sheet.drawImage(bitmap, 0, 0);
+      return sheet.getImageData(0, 0, bitmap.width, bitmap.height);
+    };
+    const [one, two] = [await read(a), await read(b)];
+    if (one.width !== two.width || one.height !== two.height) return `sizes differ: ${one.width}x${one.height} and ${two.width}x${two.height}`;
+    let [count, left, top, right, bottom] = [0, one.width, one.height, -1, -1];
+    for (let y = 0; y < one.height; y += 1) {
+      for (let x = 0; x < one.width; x += 1) {
+        const at = (y * one.width + x) * 4;
+        if (one.data[at] === two.data[at] && one.data[at + 1] === two.data[at + 1] && one.data[at + 2] === two.data[at + 2] && one.data[at + 3] === two.data[at + 3]) continue;
+        count += 1;
+        [left, top, right, bottom] = [Math.min(left, x), Math.min(top, y), Math.max(right, x), Math.max(bottom, y)];
+      }
+    }
+    return count === 0 ? 'none' : `${count} pixels differ, from ${left},${top} to ${right},${bottom} of ${one.width}x${one.height}`;
+  }, [first.toString('base64'), second.toString('base64')]);
+}
+
 test('with a save the lobby shows that canoe, with its line; drawn once, after the third frame, and its context given back', async ({ page }) => {
   const problems = await openLobby(page, SAVE);
   const picture = await pictureOnPage(page);
@@ -106,12 +130,26 @@ test('with a save the lobby shows that canoe, with its line; drawn once, after t
   expect(await contexts(page)).toEqual({ made: 2, alive: 1 });
 
   // Still: the same pixels 0.3 s on and two seconds on, and nothing was drawn again.
-  const frame = page.locator('.pv');
-  const before = await frame.screenshot();
-  await page.waitForTimeout(300);
-  expect((await frame.screenshot()).equals(before)).toBe(true);
-  await page.waitForTimeout(2_000);
-  expect((await frame.screenshot()).equals(before)).toBe(true);
+  // What is looked at: the picture's whole frame, the words under it, and where the figure stands. Not the empty
+  // corners of the figure's box beside those words: with eight lines in the menu its lower right corner lies on
+  // the torn edge of the page, and five pixels of the lake behind show there and move.
+  const words = await page.evaluate(() => {
+    const range = document.createRange();
+    range.selectNodeContents(document.querySelector('.pv-caption')!);
+    const box = range.getBoundingClientRect();
+    return { x: Math.floor(box.left), y: Math.floor(box.top), width: Math.ceil(box.width) + 1, height: Math.ceil(box.height) + 1 };
+  });
+  const look = async (): Promise<{ sketch: Buffer; words: Buffer; place: unknown }> => ({
+    sketch: await page.locator('.pv-sketch').screenshot(), words: await page.screenshot({ clip: words }), place: await page.locator('.pv').boundingBox(),
+  });
+  const before = await look();
+  for (const [wait, said] of [[300, '0.3 s'], [2_000, '2.3 s']] as const) {
+    await page.waitForTimeout(wait);
+    const now = await look();
+    expect(await moved(page, before.sketch, now.sketch), `pixels of the picture's frame that changed in ${said}`).toBe('none');
+    expect(await moved(page, before.words, now.words), `pixels of the line under it that changed in ${said}`).toBe('none');
+    expect(now.place, `where the figure stands, ${said} on`).toEqual(before.place);
+  }
   expect((await report(page)).draws).toBe(1);
   expect(problems).toEqual([]);
 });
