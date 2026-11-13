@@ -63,7 +63,7 @@ async function store(page: Page, answer: (route: Route) => Promise<void>): Promi
 }
 const kept = (route: Route): Promise<void> => route.fulfill({ status: 201, body: 'kept\n', headers: { 'content-type': 'text/plain; charset=utf-8' } });
 const status = (page: Page) => page.locator(`${CARD} [data-feedback-status]`);
-const settled = (page: Page) => status(page).filter({ hasText: /Sent|Could not/ }).waitFor({ timeout: 20_000 });
+const settled = (page: Page) => status(page).filter({ hasText: /Sent|Could not|The relay is not taking notes/ }).waitFor({ timeout: 20_000 });
 
 test('Feedback is a line of the lobby and of the pause card, and Esc closes the card back to where it was opened', async ({ page }) => {
   await lobby(page);
@@ -147,25 +147,37 @@ test('the request is what the card lists, and "Sent. Thank you." comes only when
   expect(await page.locator(`${CARD} b`).count()).toBe(0);
 });
 
-test('"Could not send" keeps the note in the box and in the browser, whatever went wrong', async ({ page }) => {
+test('a send that fails keeps the note in the box and in the browser, and the card says whether a minute will help', async ({ page }) => {
   await lobby(page);
-  const answers: ((route: Route) => Promise<void>)[] = [
-    (route) => route.fulfill({ status: 503, body: 'feedback is off\n' }),
-    (route) => route.fulfill({ status: 429, body: 'too many notes from this address: wait a minute\n' }),
+  const LATER = 'Could not send. Your note is still in the box, and kept in this browser. Try again in a minute.';
+  // The master review, finding 3: a relay that takes no notes is not told "try again in a minute".
+  const OFF = 'Feedback is off here. The relay is not taking notes. Your note is still in the box, and kept in this browser.';
+  const answers: { answer: (route: Route) => Promise<void>; says: string }[] = [
+    { answer: (route) => route.fulfill({ status: 503, body: 'feedback is off\n' }), says: OFF },
+    // A relay from before feedback has no such address: its plain 404.
+    { answer: (route) => route.fulfill({ status: 404, body: 'not found\n' }), says: OFF },
+    { answer: (route) => route.fulfill({ status: 429, body: 'too many notes from this address: wait a minute\n' }), says: LATER },
     // A page of the site answering in the relay's place is not the store saying yes.
-    (route) => route.fulfill({ status: 200, body: '<!doctype html><title>Portage</title>', headers: { 'content-type': 'text/html' } }),
-    (route) => route.abort(),
+    { answer: (route) => route.fulfill({ status: 200, body: '<!doctype html><title>Portage</title>', headers: { 'content-type': 'text/html' } }), says: LATER },
+    { answer: (route) => route.abort(), says: LATER },
   ];
   let turn = 0;
-  const bodies = await store(page, (route) => answers[turn]!(route));
+  const bodies = await store(page, (route) => answers[turn]!.answer(route));
   await openFromLobby(page);
   await page.locator(`${CARD} textarea`).fill('The map key does nothing on the beach.');
   for (turn = 0; turn < answers.length; turn += 1) {
     await page.locator(`${CARD} button[data-primary]`).click();
     await settled(page);
-    await expect(status(page)).toHaveText('Could not send. Your note is still in the box, and kept in this browser. Try again in a minute.');
+    await expect(status(page)).toHaveText(answers[turn]!.says);
     await expect(page.locator(`${CARD} textarea`)).toHaveValue('The map key does nothing on the beach.');
     await expect(page.locator(`${CARD} button[data-primary] .iw-label`)).toHaveText('Send again');
+    // The sentence fits its card: no line of it is cut, and the card stays on the screen.
+    const fit = await page.evaluate((card) => {
+      const line = document.querySelector<HTMLElement>(`${card} [data-feedback-status]`)!;
+      const box = document.querySelector(card)!.getBoundingClientRect();
+      return { cut: line.scrollWidth > line.clientWidth + 1 || line.scrollHeight > line.clientHeight + 1, inside: box.top >= 0 && box.bottom <= innerHeight };
+    }, CARD);
+    expect(fit, answers[turn]!.says).toEqual({ cut: false, inside: true });
   }
   expect(bodies).toHaveLength(answers.length);
   // The page loaded again: the note is back in the box.

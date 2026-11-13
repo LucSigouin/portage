@@ -4,7 +4,7 @@
  * the code the Worker runs) into a stand-in store. What the panel says is sent is what is sent, and only that.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { CONTEXT_KEYS, NOTE_KINDS, NOTE_LIMITS, answerFeedback, parseNote } from '../../../relay/src/feedback.ts';
+import { CONTEXT_KEYS, NOTE_KINDS, NOTE_LIMITS, WORDS, answerFeedback, parseNote } from '../../../relay/src/feedback.ts';
 import type { NotesEnv } from '../../../relay/src/feedback.ts';
 import { createApp } from '../../src/client/app.ts';
 import { createSilentAudio } from '../../src/client/contracts.ts';
@@ -18,9 +18,9 @@ import { FEEDBACK_TEXT, buildFeedbackContext, buildFeedbackPanel } from '../../s
 import { ISLANDS } from '../../src/data/index.ts';
 import {
   FEEDBACK_CONTEXT_KEYS, FEEDBACK_KINDS, FEEDBACK_LINE_LENGTH, FEEDBACK_NAME_LENGTH, FEEDBACK_NOTE_LENGTH, FEEDBACK_TIMEOUT_MILLISECONDS,
-  FEEDBACK_VERSION_LENGTH, resolveFeedbackAddress, sendFeedback,
+  FEEDBACK_OFF_WORDS, FEEDBACK_VERSION_LENGTH, postFeedback, resolveFeedbackAddress, sendFeedback,
 } from '../../src/net/feedback.ts';
-import type { FeedbackBody, FeedbackFetch } from '../../src/net/feedback.ts';
+import type { FeedbackAnswer, FeedbackBody, FeedbackFetch } from '../../src/net/feedback.ts';
 import { createDefaultSettings } from '../../src/settings/index.ts';
 import { createGame } from '../../src/sim/index.ts';
 import { FakeStorage } from '../support.ts';
@@ -55,6 +55,23 @@ describe('the line to the relay', () => {
     for (const [status, words, sent] of answers) expect(await sendFeedback(ADDRESS, BODY, answering(status, words).fetch), `${status} ${words}`).toBe(sent);
     expect(await sendFeedback(ADDRESS, BODY, async () => { throw new TypeError('Failed to fetch'); })).toBe(false);
     expect(await sendFeedback(ADDRESS, BODY, async () => ({ status: 201, text: async () => { throw new Error('cut off'); } }))).toBe(false);
+  });
+
+  it('tells a relay that takes no notes from a line that dropped (the master review, finding 3)', async () => {
+    // The relay's own words for "off", held to the game's.
+    expect(FEEDBACK_OFF_WORDS).toBe(WORDS.off);
+    const answers: [number, string, FeedbackAnswer][] = [
+      [201, 'kept\n', 'kept'],
+      // Off: the relay says so, or has no feedback address at all (the live relay from before feedback: 404 "not found").
+      [503, 'feedback is off\n', 'off'], [503, 'feedback is off', 'off'], [404, 'not found\n', 'off'], [404, '<!doctype html><title>Not found</title>', 'off'],
+      // Everything else may pass: a full box, too many notes, a page that may not use the relay, a store that fell over.
+      [503, 'the box is full\n', 'failed'], [503, '', 'failed'], [503, '<html>Service Unavailable</html>', 'failed'],
+      [429, 'too many notes from this address: wait a minute\n', 'failed'], [403, 'this page may not use the relay\n', 'failed'],
+      [500, 'the note could not be kept\n', 'failed'], [200, 'feedback is off\n', 'failed'], [201, 'feedback is off\n', 'failed'],
+    ];
+    for (const [status, words, answer] of answers) expect(await postFeedback(ADDRESS, BODY, answering(status, words).fetch), `${status} ${words}`).toBe(answer);
+    expect(await postFeedback(ADDRESS, BODY, async () => { throw new TypeError('Failed to fetch'); })).toBe('failed');
+    expect(await postFeedback(ADDRESS, BODY, async () => ({ status: 503, text: async () => { throw new Error('cut off'); } }))).toBe('failed');
   });
 
   it('gives up on a store that never answers', async () => {
@@ -175,15 +192,17 @@ describe('the feedback desk', () => {
   });
 
   it('keeps the note in the box and in the browser when it could not be sent, however it failed', async () => {
-    const failures: FeedbackFetch[] = [
-      answering(503, 'feedback is off\n').fetch, answering(429, 'too many notes\n').fetch, answering(200, '<html>the site\'s own page</html>').fetch,
-      async () => { throw new TypeError('Failed to fetch'); },
+    // A relay that says it is off, or has no feedback address, ends as `off`; the rest as `failed`. The note stays either way.
+    const failures: [FeedbackFetch, 'off' | 'failed'][] = [
+      [answering(503, 'feedback is off\n').fetch, 'off'], [answering(404, 'not found\n').fetch, 'off'],
+      [answering(429, 'too many notes\n').fetch, 'failed'], [answering(200, '<html>the site\'s own page</html>').fetch, 'failed'],
+      [async () => { throw new TypeError('Failed to fetch'); }, 'failed'],
     ];
-    for (const fetch of failures) {
+    for (const [fetch, phase] of failures) {
       const { desk: failing, storage } = desk(fetch);
       failing.setField('note', 'The paddle sticks.');
       await failing.send();
-      expect(failing.view()).toMatchObject({ phase: 'failed', note: 'The paddle sticks.' });
+      expect(failing.view()).toMatchObject({ phase, note: 'The paddle sticks.' });
       expect(draft(storage)).toMatchObject({ note: 'The paddle sticks.' });
       // It can be sent again as it stands, and a reload still has it.
       expect(failing.canSend).toBe(true);
@@ -231,6 +250,13 @@ describe('the Feedback panel in words', () => {
     const failed = buildFeedbackPanel(view({ note: 'The paddle sticks.', phase: 'failed' }));
     expect(failed.status).toBe('Could not send. Your note is still in the box, and kept in this browser. Try again in a minute.');
     expect([failed.statusTone, failed.send.label, failed.send.enabled, failed.note.value]).toEqual(['danger', 'Send again', true, 'The paddle sticks.']);
+
+    // The relay said it takes no notes: the "off" sentence, the note still there, and no "try again in a minute".
+    const relayOff = buildFeedbackPanel(view({ note: 'The paddle sticks.', phase: 'off' }));
+    expect(relayOff.status).toBe('Feedback is off here. The relay is not taking notes. Your note is still in the box, and kept in this browser.');
+    expect(relayOff.status).not.toMatch(/again|minute/i);
+    expect([relayOff.on, relayOff.statusTone, relayOff.send.label, relayOff.send.enabled, relayOff.note.value, relayOff.note.enabled])
+      .toEqual([true, 'warning', 'Send again', true, 'The paddle sticks.', true]);
 
     const off = buildFeedbackPanel(view({ on: false }));
     expect([off.on, off.status, off.send.enabled, off.note.enabled]).toEqual([false, FEEDBACK_TEXT.off, false, false]);
@@ -466,17 +492,28 @@ describe('what the panel says is sent is what is sent, and only that', () => {
     expect(parseNote(door.bodies[0]!)).toMatchObject({ ok: true });
   });
 
-  it('says so, and keeps the note, when the store refuses: off, full, or too many', async () => {
-    const refusals: Partial<NotesEnv>[] = [{ FEEDBACK: 'off' }, { NOTES_DB: undefined }, { NOTES: { limit: async () => ({ success: false }) } }];
-    for (const more of refusals) {
+  it('says so, and keeps the note, when the store refuses: off, no store, a relay with no feedback address, or too many', async () => {
+    const OFF = 'Feedback is off here. The relay is not taking notes. Your note is still in the box, and kept in this browser.';
+    const LATER = 'Could not send. Your note is still in the box, and kept in this browser. Try again in a minute.';
+    // A relay from before feedback: no such address, and its plain 404 (`relay/src/worker.ts`).
+    const olderRelay: FeedbackFetch = async () => ({ status: 404, text: async () => 'not found\n' });
+    const refusals: { door: ReturnType<typeof relayDoor>; fetch: FeedbackFetch; says: string }[] = [
+      { FEEDBACK: 'off' }, { NOTES_DB: undefined }, { NOTES: undefined },
+    ].map((more: Partial<NotesEnv>) => {
       const door = relayDoor(more);
-      const each = client(door.fetch);
+      return { door, fetch: door.fetch, says: OFF };
+    });
+    refusals.push({ door: relayDoor(), fetch: olderRelay, says: OFF });
+    const busy = relayDoor({ NOTES: { limit: async () => ({ success: false }) } });
+    refusals.push({ door: busy, fetch: busy.fetch, says: LATER });
+    for (const { door, fetch, says } of refusals) {
+      const each = client(fetch);
       each.press(named(each.model().lobby!.buttons, 'Feedback'));
       each.send({ type: 'feedback_field', field: 'note', value: 'The paddle sticks.' });
       each.press(each.panel('feedback').send);
       await settle();
       const after = each.panel('feedback');
-      expect(after.status).toBe('Could not send. Your note is still in the box, and kept in this browser. Try again in a minute.');
+      expect(after.status).toBe(says);
       expect([after.note.value, after.send.label, after.send.enabled]).toEqual(['The paddle sticks.', 'Send again', true]);
       expect(door.rows).toHaveLength(0);
       // The same browser, opened again: the note is in the box.
@@ -484,6 +521,25 @@ describe('what the panel says is sent is what is sent, and only that', () => {
       again.press(named(again.model().lobby!.buttons, 'Feedback'));
       expect(again.panel('feedback').note.value).toBe('The paddle sticks.');
     }
+  });
+
+  it('a relay that was off and is switched on takes the same note on the next press', async () => {
+    let on = false;
+    const door = relayDoor();
+    const each = client(async (address, request) => (on ? door.fetch(address, request) : { status: 503, text: async () => 'feedback is off\n' }));
+    each.press(named(each.model().lobby!.buttons, 'Feedback'));
+    each.send({ type: 'feedback_field', field: 'note', value: 'The paddle sticks.' });
+    each.press(each.panel('feedback').send);
+    await settle();
+    expect(each.panel('feedback').status).toMatch(/^Feedback is off here\. The relay is not taking notes\./);
+    on = true;
+    each.press(each.panel('feedback').send);
+    await settle();
+    expect(each.panel('feedback').status).toBe('Sent. Thank you.');
+    expect(door.rows).toHaveLength(1);
+    // Typing after an "off" clears the sentence, as it does after any other ending.
+    each.send({ type: 'feedback_field', field: 'note', value: 'One more.' });
+    expect(each.panel('feedback').status).toBe('');
   });
 
   it('in a game built without a relay the entry is still there, and the panel says feedback is off', async () => {

@@ -51,6 +51,8 @@ export const FEEDBACK_KIND_LABEL: Readonly<Record<FeedbackKind, string>> = { bug
 
 export const FEEDBACK_TEXT = {
   off: 'Feedback is off here. This copy of the game has no relay to carry a note.',
+  /** The relay answered that it takes no notes, or has no place for them. No "try again in a minute": a minute changes nothing. */
+  relayOff: 'Feedback is off here. The relay is not taking notes. Your note is still in the box, and kept in this browser.',
   sending: 'Sending…',
   sent: 'Sent. Thank you.',
   failed: 'Could not send. Your note is still in the box, and kept in this browser. Try again in a minute.',
@@ -103,8 +105,8 @@ export function buildFeedbackPanel(view: FeedbackView): FeedbackPanelBody {
   const busy = view.phase === 'sending';
   const editable = view.on && !busy;
   const hasNote = view.note.trim() !== '';
-  const status = !view.on ? FEEDBACK_TEXT.off : view.phase === 'writing' ? '' : FEEDBACK_TEXT[view.phase];
-  const statusTone: Tone = !view.on ? 'warning' : view.phase === 'sent' ? 'good' : view.phase === 'failed' ? 'danger' : 'info';
+  const status = !view.on ? FEEDBACK_TEXT.off : view.phase === 'writing' ? '' : view.phase === 'off' ? FEEDBACK_TEXT.relayOff : FEEDBACK_TEXT[view.phase];
+  const statusTone: Tone = !view.on || view.phase === 'off' ? 'warning' : view.phase === 'sent' ? 'good' : view.phase === 'failed' ? 'danger' : 'info';
   return {
     id: 'feedback',
     on: view.on,
@@ -128,7 +130,7 @@ export function buildFeedbackPanel(view: FeedbackView): FeedbackPanelBody {
     ],
     notSent: FEEDBACK_TEXT.notSent,
     send: {
-      label: view.phase === 'failed' ? 'Send again' : 'Send', intent: { type: 'feedback_send' },
+      label: view.phase === 'failed' || view.phase === 'off' ? 'Send again' : 'Send', intent: { type: 'feedback_send' },
       // No words under it: the box above says what to write, and a button that grew a second line would move the card.
       enabled: editable && hasNote, note: null,
     },
