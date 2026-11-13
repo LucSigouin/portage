@@ -73,6 +73,21 @@ describe('the Ink & Wash theme', () => {
     for (const seconds of durations) expect(seconds).toBeLessThanOrEqual(0.25);
   });
 
+  it('has the five short transitions that answer the pointer or a key, and no other', () => {
+    // A menu line's mark and underline, a button's lift on hover, a tick box's tick. Anything new that slides,
+    // fades or turns would be added here, on purpose, or fail. (The last rule turns them all off for reduced motion.)
+    const rules = [...theme.matchAll(/([^{}]+)\{[^{}]*?\btransition:\s*([^;]+);/g)]
+      .map((match) => `${match[1]!.trim().split('\n').pop()!.trim()} → ${match[2]!.trim()}`);
+    expect(rules).toEqual([
+      '.iw .iw-mi → transform 0.18s ease',
+      '.iw-mi::before → transform 0.2s ease',
+      '.iw-mi::after → transform 0.25s ease',
+      '.iw .iw-btn → transform 0.15s',
+      '.iw-tg .iw-tick → stroke-dashoffset 0.22s ease',
+      '.iw *::after → none !important',
+    ]);
+  });
+
   it('the pen wobble is a fixed filter: one seed each, nothing animated', () => {
     const icons = read('icons.ts');
     expect(icons).not.toMatch(/<animate|<set |dur=/);
