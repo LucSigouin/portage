@@ -14,7 +14,7 @@ import type { FrameStats } from './loop.ts';
 import { coversPlayView } from './panels.ts';
 import { Session } from './session.ts';
 import type { SessionOptions, SessionSignal } from './session.ts';
-import { ToastQueue, buildInterfaceModel, toastsForPlayer } from './viewmodels/index.ts';
+import { ArrivalQueue, ToastQueue, arrivalsFromEvents, buildInterfaceModel, toastsForPlayer } from './viewmodels/index.ts';
 import type { InterfaceModel } from './viewmodels/index.ts';
 
 export interface AppOptions extends SessionOptions {
@@ -33,6 +33,8 @@ export class App {
   readonly session: Session;
   readonly camera = new ChaseCamera();
   readonly toasts = new ToastQueue();
+  /** The cards for places the crew has just reached: one at a time, in the middle of the screen. */
+  readonly arrivals = new ArrivalQueue();
   /** Extra lines for the debug readout, asked for every frame: the bot's status, the staged shot. */
   debugSource: (() => string[]) | null = null;
   /** The last model handed to the UI. */
@@ -75,9 +77,11 @@ export class App {
         break;
       case 'screen_changed':
         this.toasts.clear();
+        this.arrivals.clear();
         break;
       case 'game_started':
         this.snapCamera = true;
+        this.arrivals.clear();
         break;
       case 'notice':
         this.toasts.add({ text: signal.text, tone: signal.tone });
@@ -179,6 +183,9 @@ export class App {
     // The built view holds the screen with the notes put away: their clocks wait, and they have their full time after it.
     const built = session.builtView;
     if (!built) this.toasts.update(frameSeconds);
+    // An arrival card waits for a free screen: never over the built view, a panel, a conversation or the lobby.
+    this.arrivals.addAll(arrivalsFromEvents(events));
+    this.arrivals.update(frameSeconds, built !== null || session.screen !== 'game' || session.panels.stack.length > 0, session.settings.accessibility.arrivalCards);
     if (built !== this.builtFor) {
       this.builtFor = built;
       this.builtPose = null;
@@ -227,6 +234,7 @@ export class App {
       progressText: session.progressText(),
       crew: session.crew?.view() ?? null,
       built: built ? builtWords(built.piece) : null,
+      arrival: this.arrivals.model(),
       debug: showFrameRate || debugLines.length > 0 ? {
         showFrameRate,
         framesPerSecond: Math.round(stats?.framesPerSecond ?? 0),
@@ -247,6 +255,7 @@ export class App {
     const session = this.session;
     const events = session.advance(frameSeconds, this.camera.yaw);
     this.toasts.addAll(toastsForPlayer(events, session.activeState, session.localPlayerId));
+    this.arrivals.addAll(arrivalsFromEvents(events));
   }
 
   /** The tab was hidden or shown: pause and save, and quiet the sound. */

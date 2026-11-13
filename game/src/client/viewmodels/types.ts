@@ -8,6 +8,7 @@ import type { InputAction } from '../../settings/index.ts';
 import type { PlayerId } from '../../sim/index.ts';
 import type { InterfaceIntent, SettingId, SettingValue } from '../intents.ts';
 import type { PanelId, ScreenId, SettingsTabId } from '../panels.ts';
+import type { ArrivalModel } from './arrival.ts';
 
 export type Tone = 'info' | 'good' | 'warning' | 'danger';
 
@@ -473,5 +474,7 @@ export interface InterfaceModel {
   confirm: ConfirmModel | null;
   /** Set while the built view holds the screen. */
   built: BuiltModel | null;
+  /** The arrival card, while one is on the screen (`arrival.ts`). Null or absent: none. */
+  arrival?: ArrivalModel | null;
   debug: DebugModel | null;
 }

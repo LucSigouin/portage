@@ -98,6 +98,8 @@ export const DEFAULT_KEY_BINDINGS: Readonly<KeyBindings> = Object.freeze({
 export type QualityPreset = 'low' | 'medium' | 'high' | 'ultra';
 export type ShadowQuality = 'off' | 'low' | 'high';
 export type WaterDetail = 'low' | 'medium' | 'high';
+/** The card at a new place (`client/viewmodels/arrival.ts`): its ink drawn in, written whole with no motion, or not shown. */
+export type ArrivalCards = 'animated' | 'still' | 'off';
 
 export interface Settings {
   version: number;
@@ -138,6 +140,8 @@ export interface Settings {
     uiScale: number;
     reduceCameraMotion: boolean;
     patternedMeters: boolean;
+    /** Animated unless the player says otherwise. A browser that asks for less motion starts on Still (`loadSettings`). */
+    arrivalCards: ArrivalCards;
   };
 }
 
@@ -161,7 +165,7 @@ export function createDefaultSettings(): Settings {
       mouseSensitivity: 1, invertY: false, cameraAutoCentre: true,
     },
     gameplay: { difficulty: 'standard', autosaveIntervalSeconds: 300, hints: true },
-    accessibility: { uiScale: 1, reduceCameraMotion: false, patternedMeters: false },
+    accessibility: { uiScale: 1, reduceCameraMotion: false, patternedMeters: false, arrivalCards: 'animated' },
   };
 }
 
@@ -178,6 +182,7 @@ export const SETTINGS_LIMITS = {
   shadows: ['off', 'low', 'high'] as ShadowQuality[],
   waterDetail: ['low', 'medium', 'high'] as WaterDetail[],
   difficulties: ['relaxed', 'standard'] as Difficulty[],
+  arrivalCards: ['animated', 'still', 'off'] as ArrivalCards[],
 } as const;
 
 /** What each quality preset sets the detailed graphics options to. */
@@ -300,18 +305,40 @@ export function sanitizeSettings(value: unknown): Settings {
       uiScale: numberIn(accessibility.uiScale, limits.uiScale.minimum, limits.uiScale.maximum, defaults.accessibility.uiScale),
       reduceCameraMotion: flag(accessibility.reduceCameraMotion, defaults.accessibility.reduceCameraMotion),
       patternedMeters: flag(accessibility.patternedMeters, defaults.accessibility.patternedMeters),
+      arrivalCards: oneOf(accessibility.arrivalCards, limits.arrivalCards, defaults.accessibility.arrivalCards),
     },
   };
 }
 
-/** Load settings. Anything missing, broken or unreadable falls back to defaults. */
-export function loadSettings(storage: SettingsStorage): Settings {
+/** What the browser says about its user, for the settings nobody has chosen yet. */
+export interface SettingsEnvironment {
+  /** The browser asks for less motion (`prefers-reduced-motion`). */
+  reducedMotion?: boolean;
+}
+
+/** True when what was stored carries the player's own choice of arrival cards. */
+const choseArrivalCards = (stored: unknown): boolean =>
+  SETTINGS_LIMITS.arrivalCards.includes(record(record(stored).accessibility).arrivalCards as ArrivalCards);
+
+/**
+ * Load settings. Anything missing, broken or unreadable falls back to defaults.
+ * The arrival cards start on Still in a browser that asks for less motion, until the player picks for themselves.
+ */
+export function loadSettings(storage: SettingsStorage, environment: SettingsEnvironment = {}): Settings {
+  let stored: unknown = null;
+  let settings = createDefaultSettings();
   try {
     const text = storage.getItem(SETTINGS_KEY);
-    return text ? sanitizeSettings(JSON.parse(text)) : createDefaultSettings();
+    if (text) {
+      stored = JSON.parse(text);
+      settings = sanitizeSettings(stored);
+    }
   } catch {
-    return createDefaultSettings();
+    stored = null;
+    settings = createDefaultSettings();
   }
+  if (environment.reducedMotion === true && !choseArrivalCards(stored)) settings.accessibility.arrivalCards = 'still';
+  return settings;
 }
 
 /** Save settings. Returns false when storage refuses. */

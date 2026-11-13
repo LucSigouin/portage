@@ -15,6 +15,7 @@
 import './fonts.css';
 import './theme.css';
 import type { CompassModel, GameInterface, InterfaceIntent, InterfaceModel, PanelModel, SettingId } from '../client/contracts.ts';
+import { arrivalView } from './arrival.ts';
 import { intentOf, reconcile } from './dom.ts';
 import type { ViewNode } from './dom.ts';
 import { FILTER_DEFINITIONS, ICON, toqueIcon } from './icons.ts';
@@ -24,7 +25,7 @@ import {
   vitalsView,
 } from './views.ts';
 
-type PartName = 'lobby' | 'vitals' | 'notes' | 'hint' | 'prompt' | 'hotbar' | 'toasts' | 'panel' | 'confirm' | 'built' | 'debug';
+type PartName = 'lobby' | 'vitals' | 'notes' | 'hint' | 'prompt' | 'hotbar' | 'toasts' | 'arrival' | 'panel' | 'confirm' | 'built' | 'debug';
 
 interface Part {
   element: HTMLElement;
@@ -212,6 +213,7 @@ export class InkInterface implements GameInterface {
     part('prompt', 'iw-part', this.hud);
     part('hotbar', 'iw-part', this.hud);
     part('toasts', 'iw-toasts', root);
+    part('arrival', 'iw-arrival', root);
     part('panel', 'iw-veil', root);
     part('confirm', 'iw-confirm', root);
     part('built', 'iw-shown', root);
@@ -536,6 +538,8 @@ export class InkInterface implements GameInterface {
     let toastSignature = '';
     for (const toast of model.toasts) toastSignature += `${toast.id}|${toast.tone}|${toast.text}\n`;
     this.draw('toasts', toastSignature, () => toastsView(model.toasts));
+    // The arrival card (arrival.ts): its words are written once, and only its ink's styles change from frame to frame.
+    this.draw('arrival', model.arrival ? JSON.stringify(model.arrival) : '', () => arrivalView(model.arrival!));
 
     if (!this.drawPanel(panel) && rescaled) this.markCut();
     if ((panel?.id === 'dialogue') !== this.dialogue) {

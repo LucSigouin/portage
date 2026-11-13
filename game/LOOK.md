@@ -160,6 +160,12 @@ When the player builds from the canoe builder, the client holds one still, frame
 - The pose has its own lens (34 degrees, `BUILT_VIEW_FIELD`). It is one pose: the client works it out once and hands it over every frame until the view ends.
 - A build draws no puff. `probe().puffs` counts the puffs in the air, for the test.
 
+## The arrival card
+
+- **The one exception to "nothing moves by itself", asked for by Luc** (bugfix list, Round 3): the first time the crew reaches a place, a card in the upper middle of the screen draws a brush stroke under the place's name and presses a seal beside it (`interface/arrival.ts`, clock in `client/viewmodels/arrival.ts`, places in `data/places.ts`).
+- **It is gentle by rule**: once per place per save, 1.3 s to arrive, 2 s held, 0.5 s to leave. The words stand whole and still from the first frame to the last. Only the ink moves. Nothing loops, crosses the screen, flashes or scales, and the camera and the world do not move for it.
+- **Settings, Accessibility, "Arrival cards"**: Animated, Still (written whole, taken away whole) or Off. A browser that asks for less motion starts on Still. `arrival.css` holds no transition and no animation, and a test keeps it so. Do not use this card as leave to animate anything else.
+
 ## Water and ground
 
 - The water mesh is displaced by the rules engine's wave table (`b2/waves.js`). The same code gives the foam line on hulls and rocks.
