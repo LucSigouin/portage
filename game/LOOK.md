@@ -54,7 +54,9 @@ Every player is drawn from their own state by `CanoeView` (`canoe.ts`), the loca
 - **Astern** the stroke is played backwards: the blade goes in behind and is pushed toward the bow. The rules keep no paddling direction per player, so the look reads it from the canoe going astern (`speed` under -0.05; back to forward strokes over +0.05).
 - **A paddle changes sides early in the recovery** (stroke 0.64 to 0.72), when the hands are drawn back over the paddler's own lap. Never across the catch: there the leading hand is furthest forward, over whatever stands ahead. The paddle goes up and over, blade high above the head, never through the hull.
 - **Kneelers beside an outrigger deck paddle in the well.** The deck's inner edge is never nearer the centreline than `DECK.inner` (`canoe/deck-parts.ts`). A kneeler's recovery runs the pull backwards with the blade turned edge on, the shaft stands nearer upright so the tip stays short of the deck (`well`), the stroke stays between the spars (`sparsAlong`), and `clearOfDecks` draws a paddle in along its own shaft wherever its tip would pass the planks' ends. The well is 24 cm on the long hull: there the shaft may come within 1.5 cm under the gunwale. A bow or stern paddler past a deck's end stops the stroke short of it (`span`).
-- **The patched hull wears its bark where the paddling camera sees it** (`canoe/mends.ts`, hung by `CanoeView` on tier 1 only): laps folded over the rails and a sheet on the bow deck, edged in pitch. No lap lies where the lone paddler's blade crosses the rail.
+- **The patched hull wears its bark where it shows** (`canoe/mends.ts`, hung by `CanoeView` on tier 1 only). No other hull is touched by it.
+  - `buildMends`: laps folded over the rails and a sheet on the bow deck, edged in pitch. No lap lies where the lone paddler's blade crosses the rail.
+  - `buildSheets`: four sheets of pale bark along each side (`SIDE_SHEETS`) and five inside each side (`INSIDE_SHEETS`), from the walls to the keel. Each is run round with a fat black line of pitch, and two old seams are payed with pitch from end to end (`PITCHED_SEAMS`). This is what reads from 9 m. The sheets lie on the hull's own stations and strake edges, so they sit flat on the planks. The bow keeps its old paint and her name.
 - **Walking is each player's own change in position.** Stepping out of the canoe, or a new state, is not a stride.
 - **Ashore the paddle stays in the canoe** (Luc's list, item 11): across the gunwales at the seat the player last sat in (`leave()` in `b2/canoe.js`, a `berth` group per player in `CanoeView`), the way it rests aboard. Never seen aboard, the seat of their number. A seat someone else sits in now shows no left paddle. Boarding, it is in the hands again. Hidden with the crew (`showPlayer`).
 - **Ashore the picked tool is in the right hand** (item 16): `player.selectedTool`, drawn by `hand-tools.ts` the first time it is picked, its working end carried ahead and up (`TOOL_CARRY`). Nothing with none picked, nothing aboard (the paddle wins), nothing asleep. Each crewmate's tools draw in ink ids of their own, outside the shared counter's range, so a tool never merges into the mitt that holds it (`tests/look/ashore.test.ts`).
@@ -150,6 +152,14 @@ The rules own the weather. `weather.ts` turns `state.weather` into a handful of 
 - **Rain behind things.** The canvas has no depth of its own, so each pixel of a stroke is held against two depths (`behind` in `rain.ts`): the world's (the ink buffer's), and the heroes'. The heroes are not in the world's depth, so `b2/post.js` hands the rain each hero window's depth as it draws it, and the rain copies it into one buffer of its own: one triangle per window, nothing drawn twice. A stroke's quad is mostly clear paper, so the depths are read only where the stroke marks the pixel, and the heroes' only in a frame that has a hero window: read on every fragment it cost 0.2 ms in a storm. `post.js` finds the hook as `userData.behind` on a layer it draws over the sheet. A stroke nearer the eye than 2.2 m is not drawn at all, so close to the ground there is no rain between the eye and it.
 - New weather effect: add a number to `WeatherLook`, a goal in `weatherGoals`, a rate in `EASE`, and a uniform in `GU`. Gate the shader work on the uniform so a clear day pays nothing.
 
+## The built view
+
+When the player builds from the canoe builder, the client holds one still, framed view of the canoe for two seconds (`client/builtview.ts`, `BUILT_VIEW_SECONDS`). The look's part in it:
+
+- `WorldView.canoeBounds()` says how big the canoe is as drawn, in canoe space, with everything bolted on and the crew left out (`CanoeView.bounds`). The client frames that box.
+- The pose has its own lens (34 degrees, `BUILT_VIEW_FIELD`). It is one pose: the client works it out once and hands it over every frame until the view ends.
+- A build draws no puff. `probe().puffs` counts the puffs in the air, for the test.
+
 ## Water and ground
 
 - The water mesh is displaced by the rules engine's wave table (`b2/waves.js`). The same code gives the foam line on hulls and rocks.
@@ -221,3 +231,4 @@ PORTAGE_URL=http://localhost:5221 npm --prefix e2e test       # browser: bot, ke
 | `window.portage.worldView.bench(n, pass)`, `.stall(ms)` | The same switches, while it runs |
 | `window.portage.worldView.settle()` | Land on the rules' weather at the next frame, without easing: for a staged view that is held still |
 | `probe().weather` | Rain, storm, fog, wind, what is ahead, stars, lamp share, strokes drawn, how far the rain has fallen, pools and glows |
+| `probe().puffs` | Puffs of smoke in the air or about to rise. A build makes none |

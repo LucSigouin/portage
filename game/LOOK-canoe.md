@@ -24,7 +24,7 @@ The paddling camera looks down into the boat from astern. So each tier changes w
 | Tier | What you see |
 |---|---|
 | 0 Leaky | Faded paint flaked to grey wood. Two split seams with rag pushed in. A snapped rail. Half the stern deck gone. Grey planking, and the bilge water at `waterLevel` |
-| 1 Patched | The same boat. White birch bark over both seams and the deck, edged in black pitch. The rail splinted and whipped |
+| 1 Patched | The same boat, mended. Sheets of pale birch bark along both sides and lining the inside, each run round with black pitch. Two seams payed with pitch from end to end. Bark over the rails and the deck. The rail splinted and whipped. The bow keeps its paint and her name |
 | 2 Ribbed | Rebuilt. Fresh cedar with a dark rib every third station. Stout wood rails, rub strakes, mount blocks, a mast step, new decks |
 | 3 Long | 1.5 m longer. Cream rails and a cream band. Tin riveted round the bow. A rib every second station. Floorboards |
 
@@ -102,9 +102,11 @@ PORTAGE_URL=http://localhost:5221 npm --prefix e2e test -- canoe.spec.ts   # bro
 - no crew member is inside a piece on the fitted long hull: at rest, paddling, bailing, asleep. On the ribbed hull the same holds for one paddler, and for two but for the firebox. It tests every triangle of every piece against small boxes along every limb (`tests/look/canoe-geometry.ts`). The one known hit is named in the test;
 - the seated paddlers' paddles touch nothing outboard; the kneelers' touch only the decks and what stands on them.
 
+`tests/look/attachments.test.ts`, "the patched hull": only tier 1 wears the mends; the sheets show over a third of a square metre of bark a side above the water and line the inside; they lie on the planking; each has pitch along its four edges; two seams are payed from end to end; her name still shows. "The canoe says how big it is as drawn": the box the built view frames.
+
 `tests/look/characters.test.ts`: own drawing, feet down, facing -z, told apart by shape and by what they carry.
 
-`e2e/tests/canoe.spec.ts`: tiers tell apart from the paddling camera, bilge water rises, each attachment draws, state changes show, the held canoe does not change by one pixel, 55 frames a second fitted with four aboard, clean console over 32 views.
+`e2e/tests/canoe.spec.ts`: tiers tell apart from the paddling camera, the patched hull from the leaky one at a glance (pixels that differ and pixels of bark, off the bow at 9.5 m and astern), bilge water rises, each attachment draws, state changes show, the held canoe does not change by one pixel, 55 frames a second fitted with four aboard, clean console over 32 views. `e2e/tests/built.spec.ts` checks the built view in a browser.
 
 To prove a check can fail, break the line it guards and watch it go red. `PORTAGE_CANOE_BREAK='&bench=24'` fails the frame-rate check. The full list of breaks is in `scratch/portage/canoe/tool/breaks.py`.
 
