@@ -8,6 +8,7 @@ import {
   MAXIMUM_TRACKED, selectActiveQuests, selectBuildOptions, selectCanoeStats, selectCraftableRecipes, selectDialogue,
   selectInventory, selectMap, selectQuestLog, valleyHalfWidth,
 } from '../../sim/index.ts';
+import { pingColour, standingPings } from '../../sim/index.ts';
 import type { Command, GameState, InventoryView, ItemStack, Missing, PlayerId, QuestView, RecipeAvailability } from '../../sim/index.ts';
 import type { InterfaceIntent } from '../intents.ts';
 import type { BoatTabId } from '../panels.ts';
@@ -15,10 +16,10 @@ import { boatStationOf, boatStationsHint, buildBoatTabs, buildCraftElsewhere, st
 import { DEFAULT_KEY_BINDINGS } from '../../settings/index.ts';
 import type { KeyBindings } from '../../settings/index.ts';
 import { FLAG_SOURCES, capitalise, cardinalName, countedName, distanceText, itemName, needsText, primaryKey } from './format.ts';
-import { crewElsewhere, crewTag, objectiveRows } from './hud.ts';
+import { crewElsewhere, crewName, crewTag, objectiveRows } from './hud.ts';
 import { CHART, lakeSeenShare, seenCells, valleyChart } from './chart.ts';
 import type {
-  BuildRowModel, ButtonModel, CostRowModel, MapIslandModel, MapMarkerModel, NeedChipModel, PanelModel,
+  BuildRowModel, ButtonModel, CostRowModel, MapIslandModel, MapMarkerModel, MapMarkModel, NeedChipModel, PanelModel,
   QuestRowModel, RecipeRowModel,
 } from './types.ts';
 
@@ -413,7 +414,21 @@ export function buildMapPanel(state: GameState, playerId: PlayerId = 0): PanelBo
     }),
     islands,
     markers,
+    marks: mapMarks(state, playerId),
+    markHint: MAP_MARK_HINT,
   };
+}
+
+/** The line on the map panel that says the chart takes clicks (the master review, finding 4). */
+export const MAP_MARK_HINT = 'Click the map to mark a spot for the crew. Click a mark to take it down.';
+
+/** The marks standing, in player order, each named for the one who reads the map: "Your mark", "Sam's mark". */
+export function mapMarks(state: GameState, playerId: PlayerId = 0): MapMarkModel[] {
+  return standingPings(state).map((ping) => ({
+    playerId: ping.playerId,
+    label: ping.playerId === playerId ? 'Your mark' : `${crewName(state, ping.playerId)}'s mark`,
+    color: pingColour(ping.playerId),
+  }));
 }
 
 // --- Dialogue --------------------------------------------------------------------

@@ -166,8 +166,8 @@ function beltTiles(belt: BeltSlotModel[], open: ReadonlySet<string>): ViewNode[]
   });
 }
 
-/** The two quick presses, said in the sheet's footer: they are not written anywhere else. It stands still. */
-export const QUICK_PRESS_HINT = 'Shift+click a tile: to the other side. Q with the pointer on a tile: drop it.';
+/** The quick presses, said in the sheet's footer, and the way back from a drop (`takeback.ts`). It stands still. */
+export const QUICK_PRESS_HINT = 'Shift+click a tile: to the other side. Q with the pointer on a tile: drop it. Z takes a drop back while its note stands.';
 
 export const inventoryHintView = (): ViewNode => h('small.iw-inv-hint', { key: 'hint' }, QUICK_PRESS_HINT);
 

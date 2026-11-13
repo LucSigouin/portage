@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { PROTOCOL_VERSION, readClientMessage, readCommand, readHostMessage, readInput } from '../../src/net/index.ts';
 import { NEUTRAL_INPUT } from '../../src/sim/index.ts';
+import { COMMAND_TYPES } from '../../src/net/messages.ts';
 import type { Command } from '../../src/sim/index.ts';
 
 const v = PROTOCOL_VERSION;
@@ -83,13 +84,33 @@ describe('a command from the wire', () => {
     { type: 'choose_dialogue_option', optionIndex: 0 }, { type: 'end_dialogue' }, { type: 'accept_quest', questId: 'first_haul' },
     { type: 'turn_in_quest', questId: 'first_haul' }, { type: 'track_quest', questId: null }, { type: 'track_quest', questId: 'bail_out' },
     { type: 'toggle_lantern' }, { type: 'select_tool', toolId: 'hatchet' }, { type: 'select_tool', toolId: null },
+    { type: 'move_tool', toolId: 'hatchet', slot: 0 }, { type: 'move_tool', toolId: 'bailing_can', slot: 7 },
     { type: 'set_sail', raised: true }, { type: 'claim_rewards' }, { type: 'set_difficulty', difficulty: 'relaxed' },
+    { type: 'take_back', drop: 1 }, { type: 'ping', x: 120.5, z: -900 }, { type: 'clear_ping', playerId: 3 },
   ];
 
   it('reads every command the game has, unchanged', () => {
     for (const command of good) expect(readCommand(JSON.parse(JSON.stringify(command))), command.type).toEqual(command);
-    // Every type is covered: the list above has one of each.
-    expect(new Set(good.map((command) => command.type)).size).toBe(25);
+    // Every type is covered. The list of types is the reader table's own (`COMMAND_TYPES`), not a number written
+    // here: a command added to the game with no example above fails this line by name.
+    expect([...new Set(good.map((command) => command.type))].sort()).toEqual([...COMMAND_TYPES].sort());
+    expect(COMMAND_TYPES.length).toBeGreaterThanOrEqual(29);
+    // And the table has no reader the list above does not try: each type is read back as itself.
+    for (const type of COMMAND_TYPES) expect(good.some((command) => command.type === type && readCommand({ ...command })?.type === type), type).toBe(true);
+  });
+
+  it('reads a tool moved on the belt, and refuses a tool or a slot the game does not have', () => {
+    expect(readCommand({ type: 'move_tool', toolId: 'hatchet', slot: 4 })).toEqual({ type: 'move_tool', toolId: 'hatchet', slot: 4 });
+    expect(readClientMessage({ v, type: 'command', id: 7, command: { type: 'move_tool', toolId: 'saw', slot: 2 }, at: 12 }))
+      .toEqual({ v, type: 'command', id: 7, command: { type: 'move_tool', toolId: 'saw', slot: 2 }, at: 12 });
+    const bad: unknown[] = [
+      { type: 'move_tool' }, { type: 'move_tool', toolId: 'hatchet' }, { type: 'move_tool', slot: 1 },
+      { type: 'move_tool', toolId: 'sword', slot: 1 }, { type: 'move_tool', toolId: 'driftwood', slot: 1 }, { type: 'move_tool', toolId: null, slot: 1 },
+      { type: 'move_tool', toolId: 'hatchet', slot: -1 }, { type: 'move_tool', toolId: 'hatchet', slot: 8 }, { type: 'move_tool', toolId: 'hatchet', slot: 1.5 },
+      { type: 'move_tool', toolId: 'hatchet', slot: '1' }, { type: 'move_tool', toolId: 'hatchet', slot: 1, playerId: 0 },
+      { type: 'move_tool', toolId: 'hatchet', slot: 1, from: 0 }, { type: 'move_tool', toolId: 'constructor', slot: 1 },
+    ];
+    for (const command of bad) expect(readCommand(command), JSON.stringify(command)).toBeNull();
   });
 
   it('refuses an id the game does not have, so nothing reaches the rules that could trip them', () => {
@@ -108,7 +129,12 @@ describe('a command from the wire', () => {
   });
 
   it('refuses a field the command does not have', () => {
-    for (const command of good) expect(readCommand({ ...command, playerId: 0 }), command.type).toBeNull();
+    for (const command of good) {
+      expect(readCommand({ ...command, extra: 1 }), command.type).toBeNull();
+      // Nothing says who a command is for. `clear_ping` alone has a `playerId` of its own: whose mark comes down.
+      if (!('playerId' in command)) expect(readCommand({ ...command, playerId: 0 }), command.type).toBeNull();
+    }
+    expect(good.filter((command) => 'playerId' in command).map((command) => command.type)).toEqual(['clear_ping']);
   });
 });
 

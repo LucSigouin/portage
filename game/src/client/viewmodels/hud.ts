@@ -271,7 +271,7 @@ function buildHint(state: GameState, settings: Settings, playerId: PlayerId): st
   }
   if (meters.low.thirst) return `Thirsty. Drink from the inventory (${primaryKey(bindings, 'inventory')}); boil water at a fire first.`;
   if (meters.low.hunger) return `Hungry. Eat from the inventory (${primaryKey(bindings, 'inventory')}).`;
-  if (meters.low.energy) return 'Worn out. Stand still to rest, or sleep at a camp.';
+  if (meters.low.energy) return 'Worn out. Stand still to rest, or sleep at a bed.';
   // Ashore with the bail step still open: the tracker asks for it, and bailing is done from inside the canoe.
   if (!aboard && bailStepOpen(state)) {
     return `Board (${primaryKey(bindings, 'interact')}), then hold ${primaryKey(bindings, 'bail')} to bail.`;

@@ -160,3 +160,89 @@ test('a walking jump carries the walk: 1.3 m over the ground in the air, the cam
   expect(Math.hypot(landed.x - from.x, landed.z - from.z)).toBeLessThan(1.31);
   expect(problems).toEqual([]);
 });
+
+/**
+ * The same jump with the game's own loop running: nothing stopped, no frame stepped by hand (the master review of
+ * round 3, finding 9). The numbers above are exact because the frames are counted. Here the clock is the real one,
+ * so this one checks what a player sees: Space lifts the figure, it comes down by itself in about half a second,
+ * a key held does not jump twice, and a second press jumps again.
+ */
+test('with the game\'s own loop running: Space lifts the figure off the ground and it lands again, once a press', async ({ page }) => {
+  const problems: string[] = [];
+  page.on('console', (message) => {
+    if ((message.type() === 'error' || message.type() === 'warning') && !message.text().includes('GL Driver')) problems.push(`${message.type()}: ${message.text()}`);
+  });
+  page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
+  await page.goto(`${BASE}/?shot=island&live=1`);
+  await page.waitForFunction(() => (window as unknown as { portage?: { session?: { game?: unknown } } }).portage?.session?.game !== undefined);
+  await page.waitForTimeout(1500);
+  // The loop is the game's own: its steps go by with nobody calling `app.frame`.
+  const tickBefore = await page.evaluate(() => (window as unknown as { portage: { session: { game: { tick: number } } } }).portage.session.game.tick);
+  await page.waitForFunction((before) => (window as unknown as { portage: { session: { game: { tick: number } } } }).portage.session.game.tick > before + 20, tickBefore);
+
+  /** Watch the figure on every display frame for a while: when it left the ground, how high it got, when it was down again. */
+  const watch = (milliseconds: number) => page.evaluate((span) => new Promise<{ top: number; up: number | null; down: number | null; jumps: number; frames: number; steps: number }>((resolve) => {
+    const { session, worldView } = (window as unknown as { portage: { session: any; worldView: any } }).portage;
+    const lift = (): number => worldView.canoe.figures().find((figure: { id: number }) => figure.id === 0)?.lift ?? -1;
+    const began = performance.now();
+    const firstTick = session.game.tick;
+    const seen = { top: 0, up: null as number | null, down: null as number | null, jumps: 0, frames: 0, steps: 0 };
+    let inAir = false;
+    const look = (): void => {
+      const now = performance.now() - began;
+      const height = lift();
+      seen.frames += 1;
+      seen.top = Math.max(seen.top, height);
+      if (height > 0 && !inAir) {
+        inAir = true;
+        seen.jumps += 1;
+        seen.up ??= now;
+      } else if (height === 0 && inAir) {
+        inAir = false;
+        seen.down ??= now;
+      }
+      if (now < span) requestAnimationFrame(look);
+      else resolve({ ...seen, steps: session.game.tick - firstTick });
+    };
+    requestAnimationFrame(look);
+  }), milliseconds);
+
+  const state = () => page.evaluate(() => {
+    const { session } = (window as unknown as { portage: { session: any } }).portage;
+    return { leap: session.game.players[0].leap ?? null, panels: session.panels.stack.join(','), mode: session.game.players[0].mode as string };
+  });
+  expect(await state()).toEqual({ leap: null, panels: '', mode: 'foot' });
+
+  // Space goes down and stays down for a second and a half: one jump, up and down again, and no second one.
+  const watching = watch(1500);
+  await page.keyboard.down('Space');
+  const held = await watching;
+  await page.keyboard.up('Space');
+  expect(held.steps, 'the game stepped by itself while it was watched').toBeGreaterThan(30);
+  expect(held.up, 'the figure left the ground').not.toBeNull();
+  expect(held.up!).toBeLessThan(500);
+  // The rules' jump is 0.9 m at the top. A display frame may fall either side of the very top.
+  expect(held.top).toBeGreaterThan(0.7);
+  expect(held.top).toBeLessThanOrEqual(0.9 + 1e-6);
+  expect(held.down, 'and came down by itself').not.toBeNull();
+  // In the air about half a second (29 steps of 1/60 s), by the real clock: between a quarter and a whole second.
+  expect(held.down! - held.up!).toBeGreaterThan(250);
+  expect(held.down! - held.up!).toBeLessThan(1000);
+  expect(held.jumps).toBe(1);
+
+  // Let go, press again: a second jump.
+  await page.waitForTimeout(200);
+  const again = watch(1200);
+  await page.keyboard.down('Space');
+  await page.waitForTimeout(80);
+  await page.keyboard.up('Space');
+  const second = await again;
+  expect(second.jumps).toBe(1);
+  expect(second.top).toBeGreaterThan(0.7);
+  expect(second.down).not.toBeNull();
+  // Space did nothing else, and the figure is on the ground with no jump left in the rules.
+  await page.waitForTimeout(300);
+  expect(await state()).toEqual({ leap: null, panels: '', mode: 'foot' });
+  expect(await page.evaluate(() => window.scrollY + document.documentElement.scrollTop)).toBe(0);
+  expect(problems).toEqual([]);
+});

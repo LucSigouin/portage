@@ -6,7 +6,10 @@ import type { InterfaceIntent } from '../intents.ts';
 import type { CrewView } from '../crewlobby.ts';
 import type { ConfirmAction } from '../panels.ts';
 import { buildCrewLobbyButtons, buildCrewPauseButton } from './crew.ts';
-import { SLEEP_FROM_TEXT, actionKeys, capitalise, durationText } from './format.ts';
+import { MAXIMUM_TRACKED } from '../../sim/index.ts';
+import { SLEEP_FROM_TEXT, actionKeys, capitalise, durationText, keyLabel } from './format.ts';
+import { TAKE_BACK_KEY_CODE } from './takeback.ts';
+import { TOAST_SECONDS } from './toasts.ts';
 import type { ButtonModel, ConfirmModel, ControlLineModel, LobbyModel, PanelModel, SaveSlotModel } from './types.ts';
 
 type PanelBody<Id extends PanelModel['id']> = Omit<Extract<PanelModel, { id: Id }>, 'title' | 'close'>;
@@ -98,6 +101,13 @@ export function buildPausePanel(summary: string, crew: CrewView | null = null, g
   };
 }
 
+/**
+ * The inventory's drop key (`DROP_KEY_CODE` in `interface/inventoryview.ts`, which this layer does not read: a test
+ * holds the two together). It is fixed, like the key that takes a drop back.
+ */
+export const HOW_TO_PLAY_DROP_KEY = 'Q';
+const NUMBER_WORDS = ['no', 'one', 'two', 'three', 'four', 'five'];
+
 /** The rules in a page, with the keys as they are bound right now. */
 export function buildHowToPlayPanel(settings: Settings): PanelBody<'how_to_play'> {
   const bindings = settings.controls.keyBindings;
@@ -142,12 +152,17 @@ export function buildHowToPlayPanel(settings: Settings): PanelBody<'how_to_play'
       {
         heading: 'Panels and camera',
         lines: ['Drag with the mouse to look around, wheel to zoom. Full panels pause the game.'],
+        // What round 3 added and the page did not say (the master review, finding 6), each beside the panel it
+        // belongs to. Shift+click, the drop key and the take-back key are fixed, not bound.
         controls: [
           control('Inventory', 'inventory'),
+          { label: 'A stack to the other side', keys: 'Shift+click' },
+          { label: 'Pointer on a stack: drop it', keys: HOW_TO_PLAY_DROP_KEY },
+          { label: `Take a drop back, within ${TOAST_SECONDS.warning} s`, keys: keyLabel(TAKE_BACK_KEY_CODE) },
           control('Crafting', 'craft'),
-          control('The canoe: its builder (beached), and a menu for each station aboard', 'canoeBuilder'),
-          control('Quest log', 'questLog'),
-          control('Map', 'map'),
+          control('The canoe: its builder (beached), its stations (afloat too)', 'canoeBuilder'),
+          control(`Quest log: track up to ${NUMBER_WORDS[MAXIMUM_TRACKED] ?? MAXIMUM_TRACKED} quests`, 'questLog'),
+          control('Map: a click marks a spot for the crew', 'map'),
           control('Pause, or close a panel', 'pause'),
         ],
       },
@@ -155,7 +170,8 @@ export function buildHowToPlayPanel(settings: Settings): PanelBody<'how_to_play'
         heading: 'Staying alive',
         lines: [
           'Hunger and thirst fall slowly; hard paddling and running speed them up. Eat and drink from the inventory. Boil water at a fire first.',
-          `Energy comes back when you rest. Sleep at a camp after ${SLEEP_FROM_TEXT} to refill it and skip the night.`,
+          // A bed, not a camp: the fire warms and cooks, only a bed sleeps (the lean-to, a bedroll, the keeper's hut).
+          `Energy comes back when you rest. Sleep at a bed (the lean-to, or a bedroll) after ${SLEEP_FROM_TEXT} to refill it and skip the night.`,
           'Each region is rougher than the last. Stability is 1, plus 1 for each outrigger. Roughness above stability floods the canoe.',
           'Run out of energy or swamp the canoe and you wake at your last camp, six hours later, with half of every cargo stack gone. Tools and the canoe are never lost.',
         ],

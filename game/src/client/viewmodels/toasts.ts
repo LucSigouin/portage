@@ -7,6 +7,7 @@ import type { GameEvent, GameState, PlayerId } from '../../sim/index.ts';
 import { selectTimeOfDay } from '../../sim/index.ts';
 import { countedName, itemName, needsText } from './format.ts';
 import { crewName } from './hud.ts';
+import { takeBackAction } from './takeback.ts';
 import type { ToastModel, Tone } from './types.ts';
 
 export interface ToastInput {
@@ -14,6 +15,10 @@ export interface ToastInput {
   tone: Tone;
   /** The item a loot toast is about, for its icon. */
   itemId?: ItemId;
+  /** The note of a drop made by hand: it offers to take that drop back, by its number (`takeback.ts`). */
+  takeBack?: number;
+  /** The drops this note says are back: their own notes go. */
+  undoes?: number[];
 }
 
 const toast = (text: string, tone: Tone = 'info', itemId?: ItemId): ToastInput => (itemId ? { text, tone, itemId } : { text, tone });
@@ -53,8 +58,10 @@ export function toastForEvent(event: GameEvent, state: GameState, readerId: Play
       }
       return toast(`+${event.count} ${itemName(event.itemId)}`, 'info', event.itemId);
     }
-    case 'item_lost':
-      return toast(`-${event.count} ${itemName(event.itemId)}`, 'warning', event.itemId);
+    case 'item_lost': {
+      const lost = toast(`-${event.count} ${itemName(event.itemId)}`, 'warning', event.itemId);
+      return event.dropId === undefined ? lost : { ...lost, takeBack: event.dropId };
+    }
     case 'item_left_behind':
       return toast(`No room: ${countedName(event.itemId, event.count)} left at the ${NODES_BY_ID[event.nodeId].name.toLowerCase()}`, 'warning', event.itemId);
     case 'crafted': {
@@ -123,6 +130,9 @@ export function toastForEvent(event: GameEvent, state: GameState, readerId: Play
       return toast('No room for the reward. Claim it from the inventory.', 'warning');
     case 'game_completed':
       return toast('The Beacon is lit.', 'good');
+    case 'spot_marked':
+      // Your own mark is on your map already: the note is for the rest of the crew.
+      return event.who === readerId ? null : toast(`${crewName(state, event.who)} marked a spot on the map`);
     case 'crew_changed': {
       // Your own coming and going is no news to you.
       if (event.who === readerId) return null;
@@ -174,7 +184,10 @@ export function toastsFromEvents(
     if (event.type === 'item_gained' && gains.has(event.itemId)) {
       if (told.has(event.itemId)) continue;
       told.add(event.itemId);
-      toasts.push(toast(`+${gains.get(event.itemId)} ${itemName(event.itemId)}`, 'info', event.itemId));
+      const gained = toast(`+${gains.get(event.itemId)} ${itemName(event.itemId)}`, 'info', event.itemId);
+      // A drop taken back: the note that offered it goes as this one comes.
+      const undoes = events.flatMap((other) => (other.type === 'item_gained' && other.itemId === event.itemId && other.dropId !== undefined ? [other.dropId] : []));
+      toasts.push(undoes.length > 0 ? { ...gained, undoes } : gained);
       continue;
     }
     const made = event.type === 'item_gained' && madeBy.has(`${event.playerId}:${event.itemId}`);
@@ -198,18 +211,23 @@ export const MAXIMUM_TOASTS = 6;
 
 /** The toasts on screen. Runs on real time, so they fade while the game is paused too. */
 export class ToastQueue {
-  private entries: { id: number; text: string; tone: Tone; itemId: ItemId | null; seconds: number; total: number }[] = [];
+  private entries: { id: number; text: string; tone: Tone; itemId: ItemId | null; seconds: number; total: number; takeBack: number | null }[] = [];
   private nextId = 1;
 
   add(input: ToastInput): void {
-    // The same line again restarts its clock instead of stacking up.
-    const existing = this.entries.find((entry) => entry.text === input.text);
+    // A drop came back: its own note, with its offer, is done.
+    const undoes = input.undoes;
+    if (undoes) this.entries = this.entries.filter((entry) => entry.takeBack === null || !undoes.includes(entry.takeBack));
+    // The same line again restarts its clock instead of stacking up. A drop's note is its own: each has its own way back.
+    const existing = input.takeBack === undefined ? this.entries.find((entry) => entry.text === input.text && entry.takeBack === null) : undefined;
     if (existing) {
       existing.seconds = existing.total;
       return;
     }
     const total = TOAST_SECONDS[input.tone];
-    this.entries.push({ id: this.nextId, text: input.text, tone: input.tone, itemId: input.itemId ?? null, seconds: total, total });
+    this.entries.push({
+      id: this.nextId, text: input.text, tone: input.tone, itemId: input.itemId ?? null, seconds: total, total, takeBack: input.takeBack ?? null,
+    });
     this.nextId += 1;
     if (this.entries.length > MAXIMUM_TOASTS) this.entries.splice(0, this.entries.length - MAXIMUM_TOASTS);
   }
@@ -227,11 +245,17 @@ export class ToastQueue {
     this.entries = [];
   }
 
-  /** Oldest first. */
-  models(): ToastModel[] {
+  /**
+   * Oldest first. `standing` says whether a drop may still be taken back (`standingDrop`): a note offers it only
+   * while it may, and the newest such note has the key. Left out: no note offers anything.
+   */
+  models(standing?: (dropId: number) => boolean): ToastModel[] {
+    const offering = standing ? this.entries.filter((entry) => entry.takeBack !== null && standing(entry.takeBack)) : [];
+    const newest = offering.at(-1);
     return this.entries.map((entry) => ({
       id: entry.id, text: entry.text, tone: entry.tone, itemId: entry.itemId,
       life: Math.round((entry.seconds / entry.total) * 10) / 10,
+      ...(entry.takeBack !== null && offering.includes(entry) ? { action: takeBackAction(entry.takeBack, entry === newest) } : {}),
     }));
   }
 }

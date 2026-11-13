@@ -28,6 +28,7 @@ export * from './format.ts';
 export * from './hud.ts';
 export * from './shore.ts';
 export * from './toasts.ts';
+export * from './takeback.ts';
 export * from './arrival.ts';
 export * from './gamepanels.ts';
 export * from './stations.ts';

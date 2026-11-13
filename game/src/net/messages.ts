@@ -31,8 +31,9 @@ import type { WireRun } from './walk.ts';
  * 3: the state is save version 4 (the crew's chart, each player's quest card), and `track_quest` may say `tracked`.
  * 4: the jump key (`input.input.jump`, and 2 added to the keys of a stretch in `input.walk`).
  * 5: a guest may send `ping` and `clear_ping` (an older host would drop them unanswered, and the guest's next commands with them).
+ * 6: a guest may send `take_back`, for the same reason.
  */
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 export interface JoinMessage { v: number; type: 'join'; name: string; key: string }
 export interface InputMessage {
@@ -166,6 +167,8 @@ const COMMAND_READERS: { [Type in Command['type']]: (raw: Raw) => Command | null
   stow_backpack: bare('stow_backpack'),
   transfer: (raw) => readMove(raw, 'transfer'),
   discard: (raw) => readMove(raw, 'discard'),
+  // Only the drop's number: what comes back, and how many, is the host's own record (`src/sim/takeback.ts`).
+  take_back: (raw) => (hasOnly(raw, ['type', 'drop']) && isWhole(raw.drop, 1, Number.MAX_SAFE_INTEGER) ? { type: 'take_back', drop: raw.drop } : null),
   eat: (raw) => (hasOnly(raw, ['type', 'itemId']) && isIdOf(ITEMS, raw.itemId) ? { type: 'eat', itemId: raw.itemId } as Command : null),
   drink: (raw) => (hasOnly(raw, ['type', 'itemId']) && isIdOf(ITEMS, raw.itemId) ? { type: 'drink', itemId: raw.itemId } as Command : null),
   fill_water: (raw) => (hasOnly(raw, ['type', 'count']) && isWhole(raw.count, 1, COUNT_LIMIT) ? { type: 'fill_water', count: raw.count } : null),
@@ -196,6 +199,12 @@ const COMMAND_READERS: { [Type in Command['type']]: (raw: Raw) => Command | null
   ping: (raw) => (hasOnly(raw, ['type', 'x', 'z']) && isAxis(raw.x) && isAxis(raw.z) ? { type: 'ping', x: raw.x, z: raw.z } : null),
   clear_ping: (raw) => (hasOnly(raw, ['type', 'playerId']) && isWhole(raw.playerId, 0, 3) ? { type: 'clear_ping', playerId: raw.playerId } : null),
 };
+
+/**
+ * Every command a guest may send: the keys of the reader table itself. A test reads its list of commands from
+ * here, so a new command with no example on the wire fails it (the master review of round 3, finding 9).
+ */
+export const COMMAND_TYPES = Object.keys(COMMAND_READERS) as Command['type'][];
 
 function readMove(raw: Raw, type: 'transfer' | 'discard'): Command | null {
   if (!hasOnly(raw, ['type', 'from', 'itemId', 'count'])) return null;

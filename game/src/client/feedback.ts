@@ -13,7 +13,7 @@
  * No DOM in here. `main.ts` hands in the browser's `fetch` and its storage.
  */
 import {
-  FEEDBACK_KINDS, FEEDBACK_NAME_LENGTH, FEEDBACK_NOTE_LENGTH, sendFeedback,
+  FEEDBACK_KINDS, FEEDBACK_NAME_LENGTH, FEEDBACK_NOTE_LENGTH, postFeedback,
 } from '../net/feedback.ts';
 import type { FeedbackBody, FeedbackContextKey, FeedbackFetch, FeedbackKind } from '../net/feedback.ts';
 
@@ -44,8 +44,9 @@ export interface FeedbackDeskOptions {
 /**
  * `writing`: nothing sent yet, or typed in since. `sending`: waiting for the store.
  * `sent`: the store kept the note. `failed`: it did not, and the note is still in the box.
+ * `off`: the relay answered that it takes no notes, or has no feedback address: the note is still in the box.
  */
-export type FeedbackPhase = 'writing' | 'sending' | 'sent' | 'failed';
+export type FeedbackPhase = 'writing' | 'sending' | 'sent' | 'failed' | 'off';
 
 export interface FeedbackView {
   /** False in a game built without a relay. */
@@ -124,13 +125,14 @@ export class FeedbackDesk {
     const address = this.options.address;
     if (address === null || !this.canSend) return;
     this.phase = 'sending';
-    const sent = await sendFeedback(address, this.body(), this.options.fetch);
-    if (sent) {
+    const answer = await postFeedback(address, this.body(), this.options.fetch);
+    if (answer === 'kept') {
       // Only now does the note leave the box. The kind and the name stay for the next one.
       this.note = '';
       this.phase = 'sent';
     } else {
-      this.phase = 'failed';
+      // A relay that takes no notes is not a line that dropped: the panel says which (finding 3 of the master review).
+      this.phase = answer === 'off' ? 'off' : 'failed';
     }
     this.keep();
   }

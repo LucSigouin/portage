@@ -13,7 +13,7 @@
  * so a game nobody pings in, and every save from before, is unchanged.
  */
 import { CREW_MARKS } from '../data/crew.ts';
-import { connectedPlayers } from './inventory.ts';
+import { connectedPlayers, emit } from './inventory.ts';
 import type { CommandResult, GameState, PlayerId, PlayerState } from './types.ts';
 
 /**
@@ -112,6 +112,8 @@ export function placePing(state: GameState, player: PlayerState, x: number, z: n
   const ping: Ping = { playerId: player.id, ...spot, tick: state.tick, standing: true, inside: [] };
   ping.inside = playersAt(state, ping);
   state.pings = [...kept.filter((entry) => entry.playerId !== player.id), ping].sort((first, second) => first.playerId - second.playerId);
+  // The rest of the crew is told, in a note (the master review, finding 4). Crew-wide: no `playerId` on it.
+  emit(state, { type: 'spot_marked', who: player.id });
   return done();
 }
 

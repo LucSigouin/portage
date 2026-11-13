@@ -18,6 +18,7 @@ import { acceptQuest, notifyTalked, turnInQuest, updateQuests } from './quests.t
 import { sleep, sleepBlocked } from './survival.ts';
 import { setTracked } from './tracking.ts';
 import { clearPing, placePing } from './pings.ts';
+import { dropFromStacks, takeBack } from './takeback.ts';
 import type { Command, CommandResult, Container, GameState, PlayerId, PlayerState } from './types.ts';
 import { groundHeight, islandAt, regionAt, terrainHeight } from './world.ts';
 
@@ -169,11 +170,14 @@ export function dispatch(state: GameState, command: Command, playerId: PlayerId 
       if (!ITEMS[command.itemId] || !isStackable(command.itemId)) return failure('unknown_id');
       if (!Number.isInteger(command.count) || command.count < 1) return failure('invalid_amount');
       if (command.from === 'cargo' && !cargoAccessible(state, player)) return failure('not_at_canoe');
-      const count = removeFromStacks(stacksOf(state, player, command.from), command.itemId, command.count);
-      if (count === 0) return failure('item_not_held');
-      emit(state, { type: 'item_lost', itemId: command.itemId, count }, player);
-      return success([], [{ itemId: command.itemId, count }]);
+      // The rules remember the drop for a few seconds: `take_back` puts it where it was (`takeback.ts`).
+      const dropped = dropFromStacks(state, player, command.from, command.itemId, command.count);
+      if (!dropped) return failure('item_not_held');
+      emit(state, { type: 'item_lost', itemId: command.itemId, count: dropped.count, dropId: dropped.id }, player);
+      return success([], [{ itemId: command.itemId, count: dropped.count }]);
     }
+    case 'take_back':
+      return takeBack(state, player, command.drop);
 
     case 'eat':
       return consume(state, player, command.itemId, false);

@@ -1,0 +1,16 @@
+/* The map's marks, said on the panel (mapmarks.ts). Written once, standing still: no transition, no animation. */
+
+/* The footer line, in the hand, beside the way out: as the inventory's. */
+.iw-map-hint {
+  min-width: 0;
+  font-family: var(--iw-hand);
+  font-size: 0.86rem;
+  line-height: 1.25;
+  color: var(--iw-ink-soft);
+}
+/* A mark's legend row: the glint is taller than it is wide, and keeps its shape in the row. */
+.iw-legend .iw-legend-mark .iw-glint {
+  width: 0.87rem;
+  height: 1.3rem;
+  margin: 0 0.215rem;
+}

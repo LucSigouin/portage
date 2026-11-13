@@ -24,7 +24,8 @@
     { "name": "NOTES", "namespace_id": "2202", "simple": { "limit": 5, "period": 60 } }],
   // Feedback (src/feedback.ts): play testers' notes, one table in a D1 database. On this computer the database
   // is a file under .wrangler/ and the id below is only a name for it. deploy/deploy-relay.sh puts the real
-  // id in its place, or takes these lines out when Luc's account has no database called portage-feedback.
+  // id in its place, or takes these lines out when Luc's account has no database called portage-feedback,
+  // or when its FEEDBACK switch is off.
   // feedback-store:begin
   "d1_databases": [{ "binding": "NOTES_DB", "database_name": "portage-feedback", "database_id": "local-only-portage-feedback" }],
   // feedback-store:end

@@ -20,6 +20,8 @@ import { ICON, SEAL, itemIcon, logotype, toqueIcon, waterGauge } from './icons.t
 import { boatTabsView, elsewhereView } from './stations.ts';
 import { inventoryBodyView, inventoryHintView } from './inventoryview.ts';
 import { previewView } from './preview.ts';
+import { toastActionView } from './takeback.ts';
+import { mapHintView, markLegendRows } from './mapmarks.ts';
 
 const icon = (markup: string, className = ''): ViewNode => h('i.iw-i', { class: className, html: markup, 'aria-hidden': 'true' });
 
@@ -215,8 +217,10 @@ export function hotbarView(hotbar: HotbarSlotModel[]): ViewNode[] {
 }
 
 export const toastsView = (toasts: ToastModel[]): ViewNode[] => toasts.map((toast) =>
-  h('div.iw-toast', { key: toast.id, class: `iw-toast-${toast.tone}`, role: 'status' }, h('i.iw-dab'),
-    toast.itemId ? itemIconView(toast.itemId) : null, h('span', null, toast.text)));
+  h('div.iw-toast', { key: toast.id, class: `iw-toast-${toast.tone}${toast.action ? ' iw-toast-offer' : ''}`, role: 'status' }, h('i.iw-dab'),
+    toast.itemId ? itemIconView(toast.itemId) : null, h('span', null, toast.text),
+    // A dropped stack's way back, while it may still be taken (takeback.ts).
+    toast.action ? toastActionView(toast.action) : null));
 
 export function debugView(debug: DebugModel): ViewNode[] {
   const lines = debug.showFrameRate
@@ -470,8 +474,10 @@ function mapView(panel: Extract<PanelModel, { id: 'map' }>): ViewNode[] {
       style: `left:${percent(marker.left)};top:${percent(marker.top)}${marker.kind === 'crew' ? `;--n:${marker.crewIndex ?? 0}` : ''}`,
     }, markerIcon(marker))));
   const legend = h('ul.iw-legend', null, panel.markers.map((marker, index) =>
-    h('li', { key: index, class: marker.kind === 'crew' ? 'iw-legend-crew' : '' }, markerIcon(marker), h('span', null, marker.label))));
-  return sheet(panel, 'wide', panel.summary, h('div.iw-body.iw-map-body', { key: 'body' }, chart, legend));
+    h('li', { key: index, class: marker.kind === 'crew' ? 'iw-legend-crew' : '' }, markerIcon(marker), h('span', null, marker.label))),
+    // The marks standing, each with its player's name and colour (mapmarks.ts).
+    markLegendRows(panel));
+  return sheet(panel, 'wide', panel.summary, h('div.iw-body.iw-map-body', { key: 'body' }, chart, legend), mapHintView(panel));
 }
 
 function dialogueView(panel: Extract<PanelModel, { id: 'dialogue' }>): ViewNode[] {

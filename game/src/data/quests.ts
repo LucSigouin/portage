@@ -54,10 +54,12 @@ export const MAIN_QUESTS: QuestDefinition[] = [
     ],
     [amount('rope', 1)]),
   mainQuest(3, 'stop_the_leak', 'Stop the leak',
-    'Gum from the spruce, bark from Birch Islet across the water. Cook pitch and patch the seams.',
+    // Words only (the master review of round 3, finding 5): any birch gives bark, Home Knoll's too, so the card names
+    // Birch Islet as the place thick with birch and no longer as the only place.
+    'Gum from the spruce, bark from any birch. Birch Islet, across the water, is thick with them. Cook pitch and patch the seams.',
     [
       { type: 'have_item', itemId: 'spruce_gum', count: 4, text: 'Scrape spruce gum' },
-      { type: 'have_item', itemId: 'birch_bark', count: 3, text: 'Peel birch bark on Birch Islet' },
+      { type: 'have_item', itemId: 'birch_bark', count: 3, text: 'Peel birch bark, plenty on Birch Islet' },
       { type: 'craft', itemIds: ['pitch'], count: 2, text: 'Cook pitch at the campfire' },
       { type: 'hull', tier: 1, text: 'Patch the hull' },
     ],

@@ -219,6 +219,16 @@ export interface ToastModel {
   itemId: ItemId | null;
   /** 1 fresh to 0 about to go. */
   life: number;
+  /** What the note offers while it stands: a dropped stack's way back (`takeback.ts`). Absent or null: nothing. */
+  action?: ToastActionModel | null;
+}
+
+/** A button on a note, and the key that presses it (`keyCode` null: the button only). */
+export interface ToastActionModel {
+  label: string;
+  keyCode: string | null;
+  keyLabel: string;
+  intent: InterfaceIntent;
 }
 
 // --- Lobby and menus ----------------------------------------------------------
@@ -422,6 +432,13 @@ export interface MapMarkerModel {
   crewIndex?: number;
 }
 
+/** A mark a player left on the map: whose it is, in words ("Your mark", "Sam's mark"), and that player's colour. */
+export interface MapMarkModel {
+  playerId: PlayerId;
+  label: string;
+  color: string;
+}
+
 export type PanelModel = { title: string; close: ButtonModel } & (
   | {
     id: 'settings';
@@ -487,6 +504,10 @@ export type PanelModel = { title: string; close: ButtonModel } & (
     /** The islands the crew has found (every island with the map table). The chart itself draws them. */
     islands: MapIslandModel[];
     markers: MapMarkerModel[];
+    /** The marks standing (the crew's pings), in player order: a legend row each. Absent: none. */
+    marks?: MapMarkModel[];
+    /** One line that says how a spot is marked and how a mark is taken down. Absent or empty: no line. */
+    markHint?: string;
   }
   | { id: 'dialogue'; speaker: string; text: string; options: ButtonModel[] }
   | {

@@ -112,6 +112,42 @@ test('the bag and a boat of 40 stacks fit the sheet at 1920x1080 and 1366x768, a
       pageScrolls: false, below: 0, sideways: 0, panelInside: true, boatTiles: 40, bagTiles: 8, tilesInside: true, square: true,
       bagLeftOfBoat: true, cutMarkHidden: true, running: 0,
     });
+    // No pixel of the sheet's contents is over its box (the master review of round 3, finding 11). The review measured
+    // the sheet 3 pixels taller than its box at 1920x1080: that is the paper itself, which is drawn a little crooked
+    // (`--tilt` on `.iw-paper`), and nothing written on it. Laid level, the sheet is exactly its box; and every
+    // tile, word and button ends inside the sheet's own margins.
+    const sheet = await page.evaluate(() => {
+      const panel = document.querySelector<HTMLElement>('.iw-panel-inventory')!;
+      const style = getComputedStyle(panel);
+      const box = panel.getBoundingClientRect();
+      const inner = {
+        bottom: box.bottom - parseFloat(style.borderBottomWidth) - parseFloat(style.paddingBottom),
+        right: box.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight),
+        left: box.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft),
+      };
+      const contentOver = [...panel.querySelectorAll<HTMLElement>('header *, .iw-body, footer, footer *')].filter((element) => {
+        const each = element.getBoundingClientRect();
+        return each.height > 0 && (each.bottom > inner.bottom + 0.5 || each.right > inner.right + 0.5 || each.left < inner.left - 0.5);
+      }).map((element) => `${element.tagName.toLowerCase()}.${element.className}`);
+      const tilt = style.getPropertyValue('--tilt').trim();
+      const crooked = { tall: panel.scrollHeight - panel.clientHeight, wide: panel.scrollWidth - panel.clientWidth };
+      panel.style.setProperty('--tilt', '0deg');
+      const level = { tall: panel.scrollHeight - panel.clientHeight, wide: panel.scrollWidth - panel.clientWidth };
+      panel.style.removeProperty('--tilt');
+      const footer = panel.querySelector<HTMLElement>('footer')!;
+      const hint = panel.querySelector<HTMLElement>('.iw-inv-hint')!;
+      return {
+        contentOver, level, tilt, crookedTall: crooked.tall,
+        // The footer's line of quick presses is whole, on one line, beside the way out.
+        hintLines: Math.round(hint.getBoundingClientRect().height / parseFloat(getComputedStyle(hint).lineHeight)),
+        hintClear: hint.getBoundingClientRect().right <= footer.querySelector('button')!.getBoundingClientRect().left,
+      };
+    });
+    expect({ contentOver: sheet.contentOver, level: sheet.level, hintLines: sheet.hintLines, hintClear: sheet.hintClear }, where)
+      .toEqual({ contentOver: [], level: { tall: 0, wide: 0 }, hintLines: 1, hintClear: true });
+    // And the few pixels it measures over are the crooked paper's own: under a hundredth of the sheet.
+    expect(sheet.tilt, where).not.toBe('0deg');
+    expect(sheet.crookedTall, where).toBeLessThanOrEqual(6);
     // The tool belt is the top right of the sheet: above the boat's tiles and right of the two drawn buttons.
     const top = await page.evaluate(() => {
       const box = (selector: string): DOMRect => document.querySelector(selector)!.getBoundingClientRect();

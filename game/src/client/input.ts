@@ -194,6 +194,16 @@ export class InputController {
     return null;
   }
 
+  /**
+   * The auto-paddle key pressed aboard with the inventory open, the pointer off every tile: it switches the paddle
+   * as it does in play. Null when the key is not the auto-paddle's.
+   */
+  autoPaddleKeyInInventory(keyCode: string): InputOutcome | null {
+    if (this.captureTarget || actionForKey(this.options.keyBindings, keyCode, 'canoe') !== 'autoPaddle') return null;
+    this.autoPaddling = !this.autoPaddling;
+    return { type: 'auto_paddle', on: this.autoPaddling };
+  }
+
   keyUp(keyCode: string): void {
     this.held.delete(keyCode);
   }

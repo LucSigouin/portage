@@ -165,7 +165,7 @@ describe('the HUD', () => {
     expect(buildHudModel(state, settings, 0).prompt).toEqual({ text: `Sleep (after ${clock})`, keyLabel: '', mode: 'blocked' });
     // The refusal names the same hour, and so does How to Play.
     expect(failureText('not_tired', null)).toBe(`Not tired yet. Sleep after ${clock}, or when worn out.`);
-    expect(JSON.stringify(buildHowToPlayPanel(settings))).toContain(`Sleep at a camp after ${clock} to refill it`);
+    expect(JSON.stringify(buildHowToPlayPanel(settings))).toContain(`Sleep at a bed (the lean-to, or a bedroll) after ${clock} to refill it`);
 
     // A minute before the hour it still does; on the hour the key is back and the key works.
     state.time = from * hour - 60;

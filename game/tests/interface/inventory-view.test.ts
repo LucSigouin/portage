@@ -8,6 +8,7 @@ import { buildInventoryPanel } from '../../src/client/viewmodels/index.ts';
 import { collectIntents, collectText } from '../../src/interface/dom.ts';
 import type { ViewNode } from '../../src/interface/dom.ts';
 import { BUCKET_ICON, STOW_ICON } from '../../src/interface/inventoryicons.ts';
+import { TAKE_BACK_KEY_CODE } from '../../src/client/viewmodels/takeback.ts';
 import { DROP_KEY_CODE, QUICK_PRESS_HINT, inventoryBodyView, itemDetailKey, itemDetailKeys, quickIntent } from '../../src/interface/inventoryview.ts';
 import { panelView } from '../../src/interface/views.ts';
 import { ITEM_IDS, isStackable } from '../../src/data/index.ts';
@@ -208,6 +209,8 @@ describe('a quick press on a tile', () => {
     expect(collectText(footers)).toContain(QUICK_PRESS_HINT);
     expect(QUICK_PRESS_HINT).toContain('Shift+click');
     expect(QUICK_PRESS_HINT).toContain(`${DROP_KEY_CODE.replace('Key', '')} with the pointer on a tile`);
+    // The way back from a drop is said beside the drop key (the master review, finding 2).
+    expect(QUICK_PRESS_HINT).toContain(`${TAKE_BACK_KEY_CODE.replace('Key', '')} takes a drop back`);
   });
 
   it('finds what Shift+click and the drop key send, by the tile\'s key', () => {

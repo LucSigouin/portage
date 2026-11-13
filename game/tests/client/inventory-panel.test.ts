@@ -262,9 +262,13 @@ describe('the drop key with the pointer on a tile', () => {
     expect(countIn(made.game.players[0].backpack, 'driftwood')).toBe(3);
   });
 
-  it('does not also switch the auto-paddle: with the inventory open Q is not the canoe\'s key', () => {
+  // The fix round after the master review (finding 2): the key no longer goes dead with the inventory open. On a
+  // tile the interface keeps it and sends the drop, so the session never sees it; off a tile it reaches the session
+  // and is the auto-paddle's key, as in play. The rest is in `takeback.test.ts`.
+  it('does not also switch the auto-paddle: on a tile the session gets the drop and never the key', () => {
     const game = newGame();
     floatCanoeAt(game, 200, 1300, 0);
+    give(game, 'stone', 9, 'cargo');
     drainEvents(game);
     const made = client();
     const { session } = made.app;
@@ -276,20 +280,38 @@ describe('the drop key with the pointer on a tile', () => {
     session.keyDown('KeyQ');
     session.keyUp('KeyQ');
     expect(session.input.autoPaddle).toBe(false);
-    // With the inventory open the key does nothing to the canoe, whichever way the auto-paddle stood.
+    // With the inventory open, the drop key on a tile drops the stack whichever way the auto-paddle stood.
+    for (const paddling of [false, true]) {
+      if (paddling) {
+        session.keyDown('KeyQ');
+        session.keyUp('KeyQ');
+      }
+      expect(session.input.autoPaddle).toBe(paddling);
+      session.handleIntent({ type: 'open_panel', panel: 'inventory' });
+      made.app.frame(FIXED_STEP);
+      give(game, 'stone', 9, 'cargo');
+      expect(made.press(itemDetailKey('cargo', 'stone'), 'drop')).not.toBeNull();
+      expect(session.input.autoPaddle).toBe(paddling);
+      expect(session.isOpen('inventory')).toBe(true);
+      session.handleIntent({ type: 'close_panel' });
+    }
+  });
+
+  it('off a tile, with the inventory open, Q is the auto-paddle\'s key as it is in play', () => {
+    const game = newGame();
+    floatCanoeAt(game, 200, 1300, 0);
+    drainEvents(game);
+    const made = client();
+    const { session } = made.app;
+    session.adoptGame(game);
     session.handleIntent({ type: 'open_panel', panel: 'inventory' });
+    session.keyDown('KeyQ');
+    session.keyUp('KeyQ');
+    expect(session.input.autoPaddle).toBe(true);
+    expect(session.isOpen('inventory')).toBe(true);
     session.keyDown('KeyQ');
     session.keyUp('KeyQ');
     expect(session.input.autoPaddle).toBe(false);
-    expect(session.isOpen('inventory')).toBe(true);
-    session.handleIntent({ type: 'close_panel' });
-    session.keyDown('KeyQ');
-    session.keyUp('KeyQ');
-    expect(session.input.autoPaddle).toBe(true);
-    session.handleIntent({ type: 'open_panel', panel: 'inventory' });
-    session.keyDown('KeyQ');
-    session.keyUp('KeyQ');
-    expect(session.input.autoPaddle).toBe(true);
   });
 });
 

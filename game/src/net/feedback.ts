@@ -34,6 +34,15 @@ export interface FeedbackBody {
 
 /** The one answer that means the note is in the store. */
 const KEPT = 'kept';
+/** The relay's words for a store that is switched off or was never made (`WORDS.off` there). A test holds the two together. */
+export const FEEDBACK_OFF_WORDS = 'feedback is off';
+
+/**
+ * How a send ended. `kept`: the store has the note. `off`: the relay said in so many words that it takes no notes
+ * (503 and "feedback is off"), or there is no feedback address at that place at all (404, as a relay from before
+ * feedback answers): trying again in a minute would change nothing. `failed`: anything else.
+ */
+export type FeedbackAnswer = 'kept' | 'off' | 'failed';
 /** How long the store gets to answer. */
 export const FEEDBACK_TIMEOUT_MILLISECONDS = 15_000;
 
@@ -70,6 +79,13 @@ export function resolveFeedbackAddress(setting: string, pageOrigin: string): str
 export async function sendFeedback(
   address: string, body: FeedbackBody, fetcher: FeedbackFetch, timeoutMilliseconds = FEEDBACK_TIMEOUT_MILLISECONDS,
 ): Promise<boolean> {
+  return (await postFeedback(address, body, fetcher, timeoutMilliseconds)) === 'kept';
+}
+
+/** Send one note and say how it ended (`FeedbackAnswer`). It never throws. */
+export async function postFeedback(
+  address: string, body: FeedbackBody, fetcher: FeedbackFetch, timeoutMilliseconds = FEEDBACK_TIMEOUT_MILLISECONDS,
+): Promise<FeedbackAnswer> {
   const giveUp = new AbortController();
   const timer = setTimeout(() => giveUp.abort(), timeoutMilliseconds);
   try {
@@ -83,9 +99,12 @@ export async function sendFeedback(
       credentials: 'omit',
       referrerPolicy: 'no-referrer',
     });
-    return answer.status === 201 && (await answer.text()).trim() === KEPT;
+    if (answer.status === 404) return 'off';
+    const words = (await answer.text()).trim();
+    if (answer.status === 201 && words === KEPT) return 'kept';
+    return answer.status === 503 && words === FEEDBACK_OFF_WORDS ? 'off' : 'failed';
   } catch {
-    return false;
+    return 'failed';
   } finally {
     clearTimeout(timer);
   }

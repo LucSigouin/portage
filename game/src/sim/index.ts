@@ -190,6 +190,9 @@ export { updatePlaces, placesKnownFromTraces, isAtPlace } from './places.ts';
 export { airborne, blendLeap, leapHeight, LEAP_AIR_STEPS, LEAP_COAST_STEPS, LEAP_FALL_STEPS, LEAP_LAND_STEPS, LEAP_RISE_STEPS } from './foot.ts';
 export { playerOf, playersAboard, connectedPlayers, eventsFor } from './inventory.ts';
 export { BELT_SLOTS, NUMBERED_BELT_SLOTS, beltOf, discardRefusal, questHolding, roomFor } from './inventory.ts';
+// A dropped stack's way back.
+export { TAKE_BACK, standingDrop } from './takeback.ts';
+export type { DropLedger, DropRecord } from './takeback.ts';
 
 // --- State, input, commands, events -----------------------------------------
 export { STATE_VERSION, MAXIMUM_PLAYERS, MAXIMUM_NAME_LENGTH } from './types.ts';

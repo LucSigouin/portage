@@ -77,6 +77,8 @@ const FAILURE_TEXT: Record<FailureReason, string> = {
   tool_kept: 'Tools stay on the belt. They are never dropped.',
   key_item_kept: 'A key item stays with the crew. It is never dropped.',
   quest_needs_item: 'A quest still needs that. It stays.',
+  nothing_to_take_back: 'Nothing to take back.',
+  take_back_too_late: 'Too late. That drop is gone.',
   nothing_to_claim: 'Nothing waiting.',
   player_away: 'That player is away.',
   invalid_amount: 'That is not an amount.',
