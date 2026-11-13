@@ -32,7 +32,7 @@ test.use({
 test.setTimeout(600_000);
 
 /** `stage` is a script run in the page with `portage` in hand, to put the crew where a view needs them. */
-type Step = { intent: Record<string, unknown> } | { key: string } | { stage: string };
+type Step = { intent: Record<string, unknown> } | { key: string } | { stage: string } | { click: string };
 
 interface View {
   name: string;
@@ -85,6 +85,12 @@ const MENUS: View[] = [
     name: 'join a crew, with a complaint', query: '', shows: '.iw-crew-status.iw-tone-warning',
     steps: [open('crew_join'), { intent: { type: 'crew_field', field: 'code', value: 'HELLO' } },
       { intent: { type: 'crew_field', field: 'name', value: 'Bartholomew W' } }, { intent: { type: 'crew_join' } }],
+  },
+  // An inventory row pressed open: what the item is and what can be done with it. And two open, in both columns.
+  { name: 'inventory, a row opened', query: '?shot=inventory', steps: [{ click: '.iw-item-pick' }], shows: '.iw-item-detail' },
+  {
+    name: 'inventory, a row opened in each column', query: '?shot=inventory', shows: '.iw-item-detail',
+    steps: [{ click: '.iw-columns > section:first-child .iw-item-pick >> nth=-1' }, { click: '.iw-columns > section:last-child .iw-item-pick' }],
   },
   // The room card with its code and its link. This one dials the relay: set PORTAGE_RELAY_UP=1 when it is running (relay/, npm run dev).
   ...(process.env.PORTAGE_RELAY_UP ? [{
@@ -185,6 +191,7 @@ async function show(page: Page, view: View): Promise<void> {
   }
   for (const step of view.steps ?? []) {
     if ('key' in step) await page.keyboard.press(step.key);
+    else if ('click' in step) await page.locator(step.click).first().click();
     else if ('stage' in step) await stage(page, step.stage);
     else await page.evaluate((intent) => (window as any).portage.session.handleIntent(intent), step.intent);
     await frames(page, 3);
@@ -360,6 +367,10 @@ interface Focused {
   /** Position among the controls of the open surface, or -1. */
   index: number;
   button: boolean;
+  /** An inventory row: it opens what the item is under itself and sends nothing to the game. */
+  opens: boolean;
+  /** Its `aria-expanded`, for a row; null for anything else. */
+  expanded: string | null;
   label: string;
 }
 
@@ -385,6 +396,8 @@ function focusState(): { count: number; focused: Focused; ringShown: boolean } {
     focused: {
       index: active ? controls.indexOf(active) : -1,
       button: active instanceof HTMLButtonElement,
+      opens: active?.dataset.detail !== undefined,
+      expanded: active?.getAttribute('aria-expanded') ?? null,
       // A slider, tick box or picker is known by its setting; a button by what it says.
       label: active?.getAttribute('data-setting') ?? (active?.getAttribute('aria-label') ?? active?.textContent ?? '').trim().slice(0, 40),
     },
@@ -423,12 +436,15 @@ test('every control on every menu, panel and dialog is reached and pressed by ke
         if (intent.type !== 'hover') (window as any).sent.push(JSON.stringify(intent));
       };
     });
-    const { count } = await page.evaluate(focusState);
+    let { count } = await page.evaluate(focusState);
     expect(count, `${view.name}: controls`).toBeGreaterThan(0);
 
     // Into the menu: Tab where the game leaves Tab alone, an arrow key where Tab is the game's. Then Tab from control to control.
+    // An inventory row, pressed, opens its actions right under it: they are the next controls, reached and pressed in turn.
     const reached = new Set<number>();
     let buttons = 0;
+    let rowsOpened = 0;
+    let pressed = 0;
     for (let press = 0; press < count; press += 1) {
       await page.keyboard.press(press > 0 || view.tab ? 'Tab' : 'ArrowDown');
       await frames(page, 2);
@@ -440,13 +456,23 @@ test('every control on every menu, panel and dialog is reached and pressed by ke
         await expect.poll(async () => (await page.evaluate(focusState)).ringShown, { message: `${view.name}: no focus mark on "${state.focused.label}"` }).toBe(true);
       }
       if (state.focused.button) {
-        buttons += 1;
+        if (state.focused.opens) rowsOpened += 1;
+        else buttons += 1;
+        pressed += 1;
         // Enter and Space both press a button; use each in turn.
-        await page.keyboard.press(buttons % 2 === 0 ? 'Space' : 'Enter');
+        await page.keyboard.press(pressed % 2 === 0 ? 'Space' : 'Enter');
         const after = await page.evaluate(focusState);
         expect(after.focused.index, `${view.name}: "${state.focused.label}" lost the focus when pressed`).toBe(state.focused.index);
+        if (state.focused.opens) {
+          expect([state.focused.expanded, after.focused.expanded], `${view.name}: "${state.focused.label}" opened`).toEqual(['false', 'true']);
+        }
+        count = after.count;
       }
     }
+    // The inventory's rows are buttons, and every one of them was opened.
+    const rowCount = await page.locator('.iw-veil:not([hidden]) .iw-item-pick').count();
+    expect(rowsOpened, `${view.name}: inventory rows opened`).toBe(rowCount);
+    if (view.name === 'inventory') expect(rowCount).toBeGreaterThan(2);
     expect(reached.size, `${view.name}: controls reached`).toBe(count);
     // One more step wraps round to the first control, and Shift+Tab steps back to the last.
     await page.keyboard.press('Tab');
@@ -455,7 +481,7 @@ test('every control on every menu, panel and dialog is reached and pressed by ke
     expect((await page.evaluate(focusState)).focused.index, `${view.name}: back`).toBe(count - 1);
 
     const sent = await page.evaluate(() => ((window as any).sent as string[]).sort());
-    expect(sent.length, `${view.name}: one intent per button`).toBe(buttons);
+    expect(sent.length, `${view.name}: one intent per button, none for opening a row`).toBe(buttons);
     expect(sent, `${view.name}: the intents the model gave`).toEqual(await page.evaluate(expectedIntents));
   }
 
@@ -937,6 +963,27 @@ test('nothing redraws itself, and opening a panel moves nothing else', async ({ 
   };
   await samePixels(SHOTS.find((shot) => shot.name === 'play')!, ['.iw-vitals', '.iw-notes', '.iw-hotbar', '.iw-compass', '.iw-hint']);
   await samePixels(SHOTS.find((shot) => shot.name === 'inventory')!, ['.iw-panel']);
+  await samePixels(MENUS.find((view) => view.name === 'inventory, a row opened')!, ['.iw-panel']);
+
+  // The two crafting menus and an opened inventory row: not one change to the page in a second, and nothing animating.
+  // (Their pixels are not compared: with the scene hidden behind the veil the graphics chip rasters a pixel of the
+  // small dirty-water drawing a hair differently from one paint to the next, the page unchanged. Seen 2026-11-13.)
+  for (const view of [SHOTS.find((shot) => shot.name === 'crafting')!, SHOTS.find((shot) => shot.name === 'builder')!,
+    MENUS.find((menu) => menu.name === 'inventory, a row opened')!]) {
+    await show(page, view);
+    const still = await page.evaluate(() => new Promise<{ changes: string[]; running: number }>((resolve) => {
+      const changes: string[] = [];
+      const observer = new MutationObserver((list) => {
+        for (const change of list) changes.push(`${change.type} ${String((change.target as Element).className ?? '')} ${change.attributeName ?? ''}`);
+      });
+      observer.observe(document.querySelector('.iw-veil')!, { subtree: true, childList: true, attributes: true, characterData: true });
+      setTimeout(() => {
+        observer.disconnect();
+        resolve({ changes, running: document.getAnimations().filter((animation) => animation.playState === 'running').length });
+      }, 1000);
+    }));
+    expect(still, `${view.name}: the open panel changed with nothing happening`).toEqual({ changes: [], running: 0 });
+  }
   await samePixels(SHOTS.find((shot) => shot.name === 'lobby')!, ['.iw-lobby-col']);
   await samePixels(CREW.find((view) => view.name === 'crew of 4, split up')!, ['.iw-crew', '.iw-compass']);
 

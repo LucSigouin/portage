@@ -17,7 +17,8 @@ import { collectIntents, collectText, h } from '../../src/interface/dom.ts';
 import type { ViewNode } from '../../src/interface/dom.ts';
 import { itemIcon } from '../../src/interface/icons.ts';
 import {
-  confirmView, debugView, hintView, hotbarView, lineNoteView, lobbyView, notesView, panelView, promptView, toastsView, vitalsView,
+  confirmView, debugView, hintView, hotbarView, itemDetailKey, itemDetailKeys, lineNoteView, lobbyView, notesView, panelView, promptView,
+  toastsView, vitalsView,
 } from '../../src/interface/views.ts';
 
 const worldView: WorldView = {
@@ -80,7 +81,11 @@ function everyModel(): { name: string; model: InterfaceModel }[] {
   return models;
 }
 
-/** The whole interface as views, the way `InkInterface.update` draws it. */
+/** Every inventory row opened, the most the player can have on screen at once. */
+const everyRowOpen = (panel: InterfaceModel['panel']): ReadonlySet<string> | undefined =>
+  (panel?.id === 'inventory' ? new Set(itemDetailKeys(panel)) : undefined);
+
+/** The whole interface as views, the way `InkInterface.update` draws it, with every inventory row the player could open opened. */
 function viewsOf(model: InterfaceModel): ViewNode[] {
   const { lobby, hud, panel, confirm, debug } = model;
   return [
@@ -90,7 +95,7 @@ function viewsOf(model: InterfaceModel): ViewNode[] {
     ...(hud?.lineNote ? lineNoteView(hud.lineNote) : hud?.hint ? hintView(hud.hint) : []),
     ...(hud?.prompt ? promptView(hud.prompt) : []),
     ...toastsView(model.toasts),
-    ...(panel ? panelView(panel) : []),
+    ...(panel ? panelView(panel, everyRowOpen(panel)) : []),
     ...(confirm ? confirmView(confirm) : []),
     ...(debug ? debugView(debug) : []),
   ];
@@ -258,6 +263,51 @@ describe('the Ink & Wash views', () => {
     expect(collectText(panelView(crafting.panel))).not.toContain('Scoop it');
     recipes.find((recipe) => recipe.recipeId === 'clean_water')!.sourceText = 'Scoop it at the water, from the inventory (Tab).';
     expect(collectText(panelView(crafting.panel))).toContain('Scoop it at the water, from the inventory (Tab).');
+  });
+
+  it('lists the inventory by drawing, name and count: what an item is and what it does show only once its row is pressed', () => {
+    const model = models.find(({ name }) => name === 'shot inventory')!.model;
+    if (model.panel?.id !== 'inventory') throw new Error('expected the inventory panel');
+    const panel = model.panel;
+    const filled = [...panel.backpack.slots, ...panel.cargo.slots].filter((slot) => slot.itemId !== null);
+    expect(filled.length).toBeGreaterThan(2);
+    const find = (nodes: ViewNode[], test: (node: ViewNode) => boolean): ViewNode[] =>
+      nodes.flatMap((node) => [...(test(node) ? [node] : []), ...find(node.children, test)]);
+    const rowsOf = (nodes: ViewNode[]): ViewNode[] => find(nodes, (node) => node.classes.split(' ').includes('iw-item') && !node.classes.includes('iw-blank'));
+
+    // Closed: each row is one button with the drawing, the name and the count. No description, no action.
+    const closed = panelView(panel);
+    const closedText = collectText(closed);
+    for (const slot of filled) {
+      expect(closedText).toContain(slot.name);
+      expect(closedText).toContain(`× ${slot.count}`);
+      expect(closedText, `${slot.name}: its description is shut away`).not.toContain(slot.description);
+    }
+    const rows = rowsOf(closed);
+    expect(rows.length).toBe(filled.length);
+    for (const row of rows) {
+      const picks = find([row], (node) => node.tag === 'button');
+      expect(picks.length).toBe(1);
+      expect(picks[0]!.attributes['aria-expanded']).toBe('false');
+      expect(picks[0]!.intent, 'opening a row tells the game nothing').toBeNull();
+      expect(find([row], (node) => node.attributes['data-item'] !== undefined).length).toBe(1);
+    }
+    const itemIntents = filled.flatMap((slot) => slot.buttons.map((button) => JSON.stringify(button.intent)));
+    const closedIntents = collectIntents(closed).map((intent) => JSON.stringify(intent));
+    for (const intent of itemIntents) expect(closedIntents).not.toContain(intent);
+
+    // One row pressed: its description and its actions, under it, and nobody else's.
+    const first = filled[0]!;
+    const second = filled.find((slot) => slot.description !== first.description)!;
+    const opened = panelView(panel, new Set([itemDetailKey('backpack', first.itemId!, 0)]));
+    const openedText = collectText(opened);
+    expect(openedText).toContain(first.description);
+    expect(openedText).not.toContain(second.description);
+    const openRows = rowsOf(opened).filter((row) => row.classes.includes('iw-open'));
+    expect(openRows.length).toBe(1);
+    expect(find(openRows, (node) => node.tag === 'button' && node.attributes['data-detail'] !== undefined)[0]!.attributes['aria-expanded']).toBe('true');
+    expect(collectIntents(openRows).map((intent) => JSON.stringify(intent)).sort())
+      .toEqual(first.buttons.map((button) => JSON.stringify(button.intent)).sort());
   });
 
   it('draws the same model the same way: no clock, no randomness', () => {

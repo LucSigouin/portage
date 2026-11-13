@@ -9,17 +9,19 @@
  * string compare and nothing on screen is ever rebuilt.
  *
  * The only state kept here is what a browser needs: which control has the
- * keyboard, and whether the player is steering the menus by key.
+ * keyboard, whether the player is steering the menus by key, and which rows
+ * of the inventory the player has opened to read.
  */
 import './fonts.css';
 import './theme.css';
-import type { CompassModel, GameInterface, InterfaceIntent, InterfaceModel, SettingId } from '../client/contracts.ts';
+import type { CompassModel, GameInterface, InterfaceIntent, InterfaceModel, PanelModel, SettingId } from '../client/contracts.ts';
 import { intentOf, reconcile } from './dom.ts';
 import type { ViewNode } from './dom.ts';
 import { FILTER_DEFINITIONS, ICON, toqueIcon } from './icons.ts';
 import { paperTexture, tornPageOutline } from './paper.ts';
 import {
-  builtView, confirmView, debugView, hintView, hotbarView, lineNoteView, lobbyView, notesView, panelView, promptView, toastsView, vitalsView,
+  builtView, confirmView, debugView, hintView, hotbarView, itemDetailKeys, lineNoteView, lobbyView, notesView, panelView, promptView, toastsView,
+  vitalsView,
 } from './views.ts';
 
 type PartName = 'lobby' | 'vitals' | 'notes' | 'hint' | 'prompt' | 'hotbar' | 'toasts' | 'panel' | 'confirm' | 'built' | 'debug';
@@ -171,6 +173,10 @@ export class InkInterface implements GameInterface {
   private builtDismiss: InterfaceIntent | null = null;
   /** The control that had the keyboard when the built view began: it gets it back. */
   private heldBeforeBuilt: HTMLElement | null = null;
+  /** The inventory rows the player has opened to read (`itemDetailKey`). Emptied when the inventory closes. */
+  private readonly openItems = new Set<string>();
+  /** The panel last drawn, so a row opened by a press is drawn at once, not a frame later. */
+  private lastPanel: PanelModel | null = null;
 
   // The keyboard.
   /** The top thing with controls on it: `confirm`, `panel:<id>`, `lobby`, or nothing. */
@@ -252,6 +258,14 @@ export class InkInterface implements GameInterface {
     if (event.target instanceof HTMLInputElement && event.target.readOnly) event.target.select();
     const button = event.target instanceof Element ? event.target.closest('button') : null;
     if (!button || button.disabled) return;
+    // An inventory row: it opens or closes what the item is and what can be done with it. Nothing goes to the game.
+    const detail = button.dataset.detail;
+    if (detail !== undefined) {
+      if (!this.openItems.delete(detail)) this.openItems.add(detail);
+      this.drawPanel(this.lastPanel, true);
+      if (event.detail > 0) button.blur();
+      return;
+    }
     const intent = intentOf(button);
     if (!intent) return;
     const copy = button.dataset.copy;
@@ -461,6 +475,31 @@ export class InkInterface implements GameInterface {
     return true;
   }
 
+  /**
+   * Draw the panel, if it or the rows opened in it changed. `force` draws it even when they did not (a press that
+   * opened a row). Rows that are gone (eaten, moved, dropped) are forgotten, and every row closes with the inventory.
+   */
+  private drawPanel(panel: PanelModel | null, force = false): boolean {
+    this.lastPanel = panel;
+    if (panel?.id === 'inventory') {
+      const present = new Set(itemDetailKeys(panel));
+      for (const key of this.openItems) if (!present.has(key)) this.openItems.delete(key);
+    } else {
+      this.openItems.clear();
+    }
+    const part = this.parts.get('panel');
+    if (force && part) part.signature = '';
+    const signature = panel ? `${JSON.stringify(panel)}|${[...this.openItems].sort().join(',')}` : '';
+    if (!this.draw('panel', signature, () => panelView(panel!, this.openItems))) return false;
+    const veil = this.parts.get('panel')!.element;
+    veil.hidden = !panel;
+    for (const slider of veil.querySelectorAll<HTMLInputElement>('input[type="range"]')) this.fillSlider(slider);
+    this.capturing = panel?.id === 'settings' && panel.bindings.some((binding) => binding.slots.some((slot) => slot.capturing));
+    // What the panel holds changed, so how far it runs may have.
+    this.markCut();
+    return true;
+  }
+
   update(model: InterfaceModel): void {
     const root = this.root;
     if (!root || !this.hud || !this.compass) return;
@@ -498,16 +537,7 @@ export class InkInterface implements GameInterface {
     for (const toast of model.toasts) toastSignature += `${toast.id}|${toast.tone}|${toast.text}\n`;
     this.draw('toasts', toastSignature, () => toastsView(model.toasts));
 
-    if (this.draw('panel', panel ? JSON.stringify(panel) : '', () => panelView(panel!))) {
-      const veil = part('panel');
-      veil.hidden = !panel;
-      for (const slider of veil.querySelectorAll<HTMLInputElement>('input[type="range"]')) this.fillSlider(slider);
-      this.capturing = panel?.id === 'settings' && panel.bindings.some((binding) => binding.slots.some((slot) => slot.capturing));
-      // What the panel holds changed, so how far it runs may have.
-      this.markCut();
-    } else if (rescaled) {
-      this.markCut();
-    }
+    if (!this.drawPanel(panel) && rescaled) this.markCut();
     if ((panel?.id === 'dialogue') !== this.dialogue) {
       this.dialogue = panel?.id === 'dialogue';
       part('panel').classList.toggle('iw-veil-clear', this.dialogue);

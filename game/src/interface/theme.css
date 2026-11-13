@@ -1685,11 +1685,54 @@ html.iw-document {
   padding: 0.5rem 0 0.45rem;
   border-bottom: 0.09rem dashed var(--iw-ink-faint);
 }
+/* An inventory row: the item's drawing, its name and how many. The row is a button; pressed, what the item is and
+   what can be done with it open under it, and close again on the next press. Nothing here moves by itself. */
 .iw-item {
-  grid-template-columns: auto 1fr auto;
-  column-gap: 0.6rem;
+  display: block;
   min-height: 2.6rem;
   padding: 0.12rem 0 0.08rem;
+}
+.iw-item-pick {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  column-gap: 0.6rem;
+  width: 100%;
+  min-height: 2.4rem;
+  text-align: left;
+}
+.iw-item-pick .iw-more .iw-ico,
+.iw-item-pick .iw-more svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+.iw-item-pick .iw-more path {
+  fill: none;
+  stroke: var(--iw-ink-soft);
+  stroke-width: 1.6;
+}
+/* Open: the caret turns up, the name is inked. */
+.iw-item.iw-open .iw-more svg {
+  transform: scaleY(-1);
+}
+.iw-item-pick:hover .iw-entry-text b,
+.iw-item.iw-open .iw-entry-text b {
+  text-decoration: underline;
+  text-decoration-color: var(--iw-rust-deep);
+  text-underline-offset: 0.18rem;
+}
+.iw-item-detail {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.3rem 0.8rem;
+  margin: 0.1rem 0 0.3rem 2.5rem;
+}
+.iw-item-about {
+  font-family: var(--iw-hand);
+  font-size: 0.86rem;
+  line-height: 1.25;
+  color: var(--iw-ink-soft);
 }
 .iw-item .iw-item-ico .iw-ico {
   width: 1.9rem;
@@ -1702,10 +1745,6 @@ html.iw-document {
 .iw-entry-text .iw-lead .iw-ico {
   width: 1.7rem;
   height: 1.7rem;
-}
-.iw-item .iw-entry-text > small {
-  margin-top: 0;
-  line-height: 1.15;
 }
 .iw-entry-text {
   min-width: 0;

@@ -22,6 +22,8 @@ const icon = (markup: string, className = ''): ViewNode => h('i.iw-i', { class: 
 const itemIconView = (itemId: ItemId, className = ''): ViewNode =>
   h('i.iw-i.iw-item-ico', { class: className, html: itemIcon(itemId), 'aria-hidden': 'true', 'data-item': itemId });
 
+const NONE_OPEN: ReadonlySet<string> = new Set();
+
 const classes = (...names: (string | false | null | undefined)[]): string => names.filter(Boolean).join(' ');
 
 const percent = (share: number): string => `${(share * 100).toFixed(2)}%`;
@@ -312,23 +314,52 @@ function saveSlotView(slot: SaveSlotModel): ViewNode {
     h('div.iw-actions', null, slot.buttons.map((button, index) => buttonView(button, 'button.iw-btn', true, index))));
 }
 
-/** Rows of a pack or the hold. Two stacks of one item are told apart by which comes first. */
-function itemRowsView(slots: ItemSlotModel[]): ViewNode[] {
+/** The name of one row of a pack or the hold, for the rows the player has opened. Two stacks of one item are told apart by which comes first. */
+export const itemDetailKey = (container: 'backpack' | 'cargo', itemId: ItemId, occurrence: number): string =>
+  `${container}:${itemId}:${occurrence}`;
+
+/** Every row key in an inventory panel: what `open` holds when every row is open. For tests and the interface. */
+export function itemDetailKeys(panel: Extract<PanelModel, { id: 'inventory' }>): string[] {
+  const keys: string[] = [];
+  for (const container of ['backpack', 'cargo'] as const) {
+    const seen = new Map<string, number>();
+    for (const slot of panel[container].slots) {
+      if (slot.itemId === null) continue;
+      const occurrence = seen.get(slot.itemId) ?? 0;
+      seen.set(slot.itemId, occurrence + 1);
+      keys.push(itemDetailKey(container, slot.itemId, occurrence));
+    }
+  }
+  return keys;
+}
+
+/**
+ * Rows of a pack or the hold: the item's drawing, its name and how many, and nothing else (Luc's bugfix list,
+ * line 12). The row is a button. Pressed, by click or by Enter or Space, it opens under itself what the item is
+ * and what can be done with it; pressed again it closes. Several rows may be open. Nothing opens or closes by
+ * itself, and nothing moves but what the press asked for.
+ */
+function itemRowsView(slots: ItemSlotModel[], container: 'backpack' | 'cargo', open: ReadonlySet<string>): ViewNode[] {
   const seen = new Map<string, number>();
   return slots.map((slot, index) => {
     if (slot.itemId === null) return h('li.iw-item.iw-blank', { key: `empty-${index}` }, 'empty');
     const occurrence = seen.get(slot.itemId) ?? 0;
     seen.set(slot.itemId, occurrence + 1);
-    return h('li.iw-item', { key: `${slot.itemId}-${occurrence}` },
-      itemIconView(slot.itemId),
-      h('div.iw-entry-text', null,
-        h('b', null, slot.name), ' ', h('span.iw-count', null, `× ${slot.count}`),
-        h('small', null, slot.description)),
-      h('div.iw-actions', null, slot.buttons.map((button, buttonIndex) => buttonView(button, 'button.iw-btn.iw-small', true, buttonIndex))));
+    const detailKey = itemDetailKey(container, slot.itemId, occurrence);
+    const shown = open.has(detailKey);
+    return h('li.iw-item', { key: `${slot.itemId}-${occurrence}`, class: shown ? 'iw-open' : '' },
+      h('button.iw-item-pick', { key: 'pick', type: 'button', 'data-detail': detailKey, 'aria-expanded': String(shown) },
+        itemIconView(slot.itemId),
+        h('span.iw-entry-text', null, h('b', null, slot.name), ' ', h('span.iw-count', null, `× ${slot.count}`)),
+        icon(ICON.caret, 'iw-more')),
+      shown ? h('div.iw-item-detail', { key: 'detail' },
+        h('small.iw-item-about', null, slot.description),
+        h('div.iw-actions', null, slot.buttons.map((button, buttonIndex) => buttonView(button, 'button.iw-btn.iw-small', true, buttonIndex))))
+        : null);
   });
 }
 
-function inventoryView(panel: Extract<PanelModel, { id: 'inventory' }>): ViewNode[] {
+function inventoryView(panel: Extract<PanelModel, { id: 'inventory' }>, open: ReadonlySet<string>): ViewNode[] {
   return sheet(panel, 'wide', panel.stationsText, h('div.iw-body', { key: 'body' },
     panel.pendingRewards ? h('div.iw-reward', { key: 'reward' },
       h('div.iw-reward-text', null,
@@ -339,10 +370,10 @@ function inventoryView(panel: Extract<PanelModel, { id: 'inventory' }>): ViewNod
     h('div.iw-columns', { key: 'columns' },
       h('section', null,
         h('h3', null, panel.backpack.label),
-        h('ul.iw-items', null, itemRowsView(panel.backpack.slots))),
+        h('ul.iw-items', null, itemRowsView(panel.backpack.slots, 'backpack', open))),
       h('section', { class: panel.cargo.accessible ? '' : 'iw-out-of-reach' },
         h('h3', null, panel.cargo.label),
-        h('ul.iw-items', null, itemRowsView(panel.cargo.slots)))),
+        h('ul.iw-items', null, itemRowsView(panel.cargo.slots, 'cargo', open)))),
     h('div.iw-belt-row', { key: 'belt' },
       h('section', null,
         h('h3', null, 'Tool belt'),
@@ -532,7 +563,8 @@ function crewJoinView(panel: Extract<PanelModel, { id: 'crew_join' }>): ViewNode
   ], [panel.join], panel.cancel);
 }
 
-export function panelView(panel: PanelModel): ViewNode[] {
+/** `open`: the inventory rows the player has opened (`itemDetailKey`). Every other panel ignores it. */
+export function panelView(panel: PanelModel, open: ReadonlySet<string> = NONE_OPEN): ViewNode[] {
   switch (panel.id) {
     case 'settings': return settingsView(panel);
     case 'how_to_play': return howToPlayView(panel);
@@ -540,7 +572,7 @@ export function panelView(panel: PanelModel): ViewNode[] {
     case 'pause': return pauseView(panel);
     case 'save_slots':
       return sheet(panel, 'mid', '', h('ul.iw-body.iw-saves', { key: 'body' }, panel.slots.map(saveSlotView)));
-    case 'inventory': return inventoryView(panel);
+    case 'inventory': return inventoryView(panel, open);
     case 'crafting': return craftingView(panel);
     case 'canoe_builder': return canoeBuilderView(panel);
     case 'quest_log': return questLogView(panel);
