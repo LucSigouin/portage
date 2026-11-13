@@ -3,7 +3,8 @@
 Passes messages between one host and up to three guests, so friends on other computers can share a canoe.
 The host's browser still runs the game. The relay only carries frames.
 
-Not deployed. It runs on this computer only, until Luc says go.
+Live since 2026-11-12 as the Cloudflare Worker `portage-relay`, on `sigouin.net/portage/relay/*`.
+Deploy it with `bash deploy/deploy-relay.sh --yes`, on Luc's go each time.
 
 ## What it is
 
@@ -29,7 +30,7 @@ Not deployed. It runs on this computer only, until Luc says go.
 | Frame size | 16 K characters from a guest, 256 K from the host | `LIMITS` |
 | Frame rate | 60 a second from a guest, 240 from the host, 2 s of burst | `LIMITS` |
 | Idle room | closed after 3 looks with nothing through it (looks are 10 min apart) | `LIMITS.quietSweeps`, `IDLE_SWEEP_SECONDS` |
-| Where a connection comes from | `https://sigouin.net`, `localhost` and `127.0.0.1` on any port | `ALLOWED_ORIGINS` |
+| Where a connection comes from | On this computer: `https://sigouin.net`, `localhost` and `127.0.0.1` on any port. Live: `https://sigouin.net` alone (the deploy script sets it) | `ALLOWED_ORIGINS` |
 | Room codes | 6 characters of `FHJKLMQRTWXY34679`, shown as `FHJ-K3M`: 24 million codes | `ROOM_CODE_ALPHABET` |
 
 A socket that breaks a cap is closed, with the reason sent first as a frame.
@@ -86,37 +87,49 @@ PORTAGE_URL=http://localhost:5222 PORTAGE_BARE_URL=http://localhost:5226 PORTAGE
 
 | Value | Result |
 |---|---|
-| not set | No relay. No crew entries in the lobby and no socket ever opened. The bundle has no socket code and no crew lobby in it (the words of the two cards stay, out of reach). This is what `deploy/deploy.sh` builds today. |
-| `/portage/relay` | The relay on the site's own host. The site's security policy needs no change. |
+| not set | No relay. No crew entries in the lobby and no socket ever opened. The bundle has no socket code and no crew lobby in it (the words of the two cards stay, out of reach). |
+| `/portage/relay` | The relay on the site's own host. The site's security policy needs no change. This is what `deploy/deploy.sh` builds. |
 | `wss://relay.example` | The relay somewhere else. The site's `connect-src` must name it. |
 
 The dev server uses `/relay`.
 
-## What a deploy needs (Luc's go first)
+## The deploy (Luc's go each time)
 
-Recommended: the relay on the site's own host, on the route `sigouin.net/portage/relay/*`.
+```
+bash deploy/deploy-relay.sh --yes
+```
 
-Why: the live site's policy (`sigouin-net/site/_headers`) says `connect-src 'self' blob:`. A socket to the site's
-own host is `'self'`, so the policy and the site stay as they are. `e2e/tests/relay.spec.ts` proves that with the
-real `_headers` file, and proves the socket is stopped when `'self'` is taken out.
+The script, in order:
 
-The one thing no test here can settle: sigouin.net is a Cloudflare Pages project (`sigouin-net`), and the relay is a
-Worker. Cloudflare's routes page says a route runs "in front of your application server" and does not name Pages
-(read 2026-11-12). Step 4 settles it before the game is touched.
+1. Runs this package's tests. A red relay does not go live.
+2. Copies `relay/` to an empty folder and runs `wrangler deploy` there, signed in by the browser login only
+   (`deploy/login.sh` when it has expired). Never the token in `personal/.env`: wrangler reads a `.env` from the
+   folder it runs in, so it never runs in one that has it.
+3. Gives wrangler two things that are not in `wrangler.jsonc`: the route `sigouin.net/portage/relay/*`, and
+   `ALLOWED_ORIGINS` set to `https://sigouin.net` alone. So the file stays the one for this computer and its tests.
+4. Waits for `https://sigouin.net/portage/relay/health` to print `portage relay: ok`.
+5. Runs `deploy/smoke-relay.mjs` against the live relay: a host and a guest meet in a room, a message goes each
+   way, a second host with another key is turned away, the host closes the room, and four strangers are refused
+   (two other sites, no page at all, and `localhost`).
+6. Checks the live game page is byte for byte what it was.
 
-1. In `wrangler.jsonc`, turn on the `routes` line at the bottom.
-2. Log wrangler in by its browser login (`wrangler login`). Never the token in `personal/.env`.
-3. `relay/node_modules/.bin/wrangler deploy --cwd relay --var ALLOWED_ORIGINS:https://sigouin.net`. The first deploy
-   creates the Worker and its room class. The `--var` leaves `localhost` off the live relay's list (not tried: nothing was deployed).
-4. Check: `curl https://sigouin.net/portage/relay/health` prints `portage relay: ok`. If the site's own page answers instead, the route is not in front of the Pages site: use a subdomain (below). Nothing is broken at this point: the game has not changed.
-5. Build the game with the setting: in `deploy/deploy.sh`, the build line becomes `PORTAGE_RELAY=/portage/relay "$ROOT/game/node_modules/.bin/vite" build ...`.
-6. Run the game's deploy as usual. Its own smoke test already runs the build under the site's security policy.
-7. On the live site: Host a crew on one computer, open the link on another.
+Where it lives, and why: on the site's own host. The live site's policy (`sigouin-net/site/_headers`) says
+`connect-src 'self' blob:`. A socket to the site's own host is `'self'`, so the policy and the site stay as they
+are. `e2e/tests/relay.spec.ts` proves that with the real `_headers` file, and proves the socket is stopped when
+`'self'` is taken out. A Worker route does sit in front of a Cloudflare Pages site: settled by the first deploy
+(2026-11-12), where the health address answered as the relay and every other page kept its hash.
 
-If the route cannot sit in front of the site: give the Worker a custom domain (`relay.sigouin.net`), build with
-`PORTAGE_RELAY=wss://relay.sigouin.net`, add `wss://relay.sigouin.net` to `connect-src` in `sigouin-net/site/_headers`, and add the new origin nowhere else: the page's origin stays `https://sigouin.net`, which `ALLOWED_ORIGINS` already has.
+The game uses the relay when it is built with `PORTAGE_RELAY=/portage/relay`, which `deploy/deploy.sh` does. That
+script refuses to build while the relay does not answer, and ends by putting two headless browsers in one canoe
+on the live site (`deploy/smoke-crew.mjs`).
 
-To undo: `wrangler delete --cwd relay`, and build the game without the setting. The lobby goes back to five entries.
+To undo: from an empty folder, `<portage>/relay/node_modules/.bin/wrangler delete --name portage-relay` (browser
+login). Then take `PORTAGE_RELAY` and the three relay checks out of `deploy/deploy.sh` and deploy the game. The
+lobby goes back to five entries.
+
+Not built: a limit on how often one address may dial (the review's fix 13). Every cap above is per socket, and the
+page a connection claims to come from can be faked by a script. A script could use up the free plan's day; the
+relay would then be off until midnight UTC. A Cloudflare rate rule on the route is the fix, on Luc's call.
 
 ## Cost
 

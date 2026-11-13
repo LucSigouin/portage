@@ -155,6 +155,9 @@ export function stageShot(name: ShotName, seed: number = BOT_SEED): StagedShot {
       setClock(state, 10);
       setWeather(state, 'clear');
       settle(state, 4, { paddle: 1 });
+      // The picture carries the bail hint, so the hint card is in it for every check that reads this shot.
+      // The water is set here: how much the bot's road left aboard changes whenever the canoe's speed does.
+      state.canoe.waterLevel = 42;
       return game(state);
     }
     case 'island': {

@@ -642,3 +642,13 @@ describe('the version in Settings', () => {
     expect(buildSettingsPanel(settings, 'audio', null, '').version).toBe(`Version ${GAME_VERSION}`);
   });
 });
+
+describe('the staged play picture', () => {
+  it('always carries a hint, whatever the bot\'s road there left in the canoe', async () => {
+    // The browser checks read the hint card from this picture. When the canoe was made faster the bot arrived
+    // with less water aboard, the hint went, and a check waited for it for ever.
+    const { stageShot } = await import('../../src/client/debug/staging.ts');
+    const hud = buildHudModel(stageShot('play').state!, createDefaultSettings(), 0);
+    expect(hud.hint).toBe('Hold R to bail.');
+  });
+});
