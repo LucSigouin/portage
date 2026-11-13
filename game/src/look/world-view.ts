@@ -45,8 +45,8 @@ import { buildIslandProps, buildValleyForest, disposePropLibrary, instancedMesh 
 import type { IslandProps } from './props.ts';
 import { RAIN_SHED_SHARE, Rain } from './rain.ts';
 import {
-  CHIP_TEST_MILLISECONDS, FrameLadder, HATCH_BY_SHADOWS, WATER_CELL_BY_DETAIL, climbTo, drawingPixelRatio, fitMilliseconds, fittingRung, qualityAt,
-  qualityCeiling, shedNote, topFitMilliseconds, windowPixelRatio,
+  CHIP_TEST_MILLISECONDS, FIRST_WARM_UP_FRAMES, FrameLadder, HATCH_BY_SHADOWS, WARM_UP_FRAMES, WATER_CELL_BY_DETAIL, climbTo, drawingPixelRatio, fitMilliseconds,
+  fittingRung, frameMilliseconds, qualityAt, qualityCeiling, shedNote, topFitMilliseconds, windowPixelRatio,
 } from './quality.ts';
 import type { LadderChange, Quality } from './quality.ts';
 import { hashText, scatterIsland } from './scatter.ts';
@@ -729,10 +729,11 @@ export class InkWashWorldView implements WorldView {
 
   /**
    * The honest cost of a frame on a rung, in milliseconds: the frame drawn twice back to back, then the chip is
-   * waited for. Leaves the world sized for that rung. It all happens inside one frame, so none of it is shown:
-   * the caller draws the real frame last. `again`: time it a second time and keep the quicker.
+   * waited for (`frameMilliseconds`). Leaves the world sized for that rung. It all happens inside one frame, so none
+   * of it is shown: the caller draws the real frame last. `again`: time it a second time and keep the quicker.
+   * `warmUps`: frames drawn first and left out. The first on new buffers pays for making them.
    */
-  private frameCost(rung: number, draw: () => void, again: (milliseconds: number) => boolean = () => false, warmed: () => void = () => {}): number {
+  private frameCost(rung: number, draw: () => void, again: (milliseconds: number) => boolean = () => false, warmed: () => void = () => {}, warmUps = WARM_UP_FRAMES): number {
     const renderer = this.renderer;
     if (!renderer) return 0;
     const gl = renderer.getContext();
@@ -740,20 +741,8 @@ export class InkWashWorldView implements WorldView {
       renderer.setRenderTarget(null);
       gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, this.testPixel);
     };
-    const timed = (): number => {
-      const from = performance.now();
-      draw();
-      draw();
-      finish();
-      return (performance.now() - from) / 2;
-    };
     this.applyQuality(rung);
-    // The first frame on new buffers pays for making them (and the very first compiles every shader).
-    draw();
-    finish();
-    warmed();
-    const first = timed();
-    return again(first) ? Math.min(first, timed()) : first;
+    return frameMilliseconds(draw, finish, () => performance.now(), warmUps, again, warmed);
   }
 
   /** The chip test (S1): time the chip on the first frame, before anything is shown, and start on the best rung that fits. */
@@ -766,9 +755,10 @@ export class InkWashWorldView implements WorldView {
     let from = 0;
     const measure = (candidate: number): number => {
       // Top quality gets a second look when it is close: a busy moment must not cost a good chip its pixels.
+      // The test's very first frame compiles every shader, and the frame after it still runs long: two are left out.
       const cost = this.frameCost(candidate, draw, (first) => candidate === 0 && first > topFits && first <= topFits * 2, () => {
         if (from === 0) from = performance.now();
-      });
+      }, timed.length === 0 ? FIRST_WARM_UP_FRAMES : WARM_UP_FRAMES);
       timed.push([candidate, cost]);
       return cost;
     };

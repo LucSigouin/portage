@@ -139,6 +139,15 @@ export const QUICKEST_DUE_SECONDS = 1 / 60;
 export const FIT_SHARE = 0.9;
 /** The chip test at load may take this long, milliseconds. A chip too slow to finish it starts on the last rung. */
 export const CHIP_TEST_MILLISECONDS = 500;
+/** Frames drawn and thrown away before a rung is timed: the first frame on new buffers pays for making them. */
+export const WARM_UP_FRAMES = 1;
+/**
+ * The same before the chip test's first timing, when the first frame has just compiled every shader: the frame
+ * after it still runs long. Measured on this Mac at 1920×1080: with one frame left out, the first timing read a
+ * tenth or more over the next on most loads, on this chip and on one made 8 times slower (51.8 ms against 41.3).
+ * With two it agrees (41.2 against 41.3). A third bought nothing.
+ */
+export const FIRST_WARM_UP_FRAMES = 2;
 /** A clamped frame (the loop hands on 0.25 s at most) is a stall: a hidden tab, a compile. It says nothing about the frame rate. */
 const STALL_SECONDS = 0.25;
 
@@ -159,6 +168,32 @@ export function fitMilliseconds(dueSeconds: number | undefined): number {
  */
 export function topFitMilliseconds(dueSeconds: number | undefined): number {
   return judgedGap(dueSeconds) * 1000 * LONG_SHARE;
+}
+
+/**
+ * The honest cost of a frame, milliseconds. `warmUps` frames are drawn first and left out, each one waited for
+ * (`finish` waits for the chip). Then the frame is drawn twice back to back, the chip waited for, and the time halved.
+ * `warmed` is called once the warm-up is over: the caller's clock starts there.
+ * `again`: given the timing, whether to time it a second time and keep the quicker.
+ */
+export function frameMilliseconds(
+  draw: () => void, finish: () => void, now: () => number, warmUps: number,
+  again: (milliseconds: number) => boolean = () => false, warmed: () => void = () => {},
+): number {
+  for (let frame = 0; frame < warmUps; frame += 1) {
+    draw();
+    finish();
+  }
+  warmed();
+  const timed = (): number => {
+    const from = now();
+    draw();
+    draw();
+    finish();
+    return (now() - from) / 2;
+  };
+  const first = timed();
+  return again(first) ? Math.min(first, timed()) : first;
 }
 
 /**

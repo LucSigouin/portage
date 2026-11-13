@@ -9,9 +9,9 @@ import { describe, expect, it } from 'vitest';
 import { createDefaultSettings } from '../../src/settings/index.ts';
 import { createFrameLoop } from '../../src/client/loop.ts';
 import {
-  ASK_AGAIN_SECONDS, CLIMB_AFTER_SECONDS, DOWN_AGAIN_SECONDS, FAILS_ALLOWED, FINDING_SECONDS, FrameLadder, LADDER, LADDER_REST_SECONDS, PIXEL_BUDGET, WARM_UP_SECONDS,
-  WINDOW_PIXEL_LIMIT, WORLD_FLOOR, climbTo, drawingPixelRatio, fitMilliseconds, fittingRung, qualityAt, qualityCeiling, shedNote, topFitMilliseconds,
-  windowPixelRatio,
+  ASK_AGAIN_SECONDS, CLIMB_AFTER_SECONDS, DOWN_AGAIN_SECONDS, FAILS_ALLOWED, FINDING_SECONDS, FIRST_WARM_UP_FRAMES, FrameLadder, LADDER, LADDER_REST_SECONDS, PIXEL_BUDGET,
+  WARM_UP_FRAMES, WARM_UP_SECONDS, WINDOW_PIXEL_LIMIT, WORLD_FLOOR, climbTo, drawingPixelRatio, fitMilliseconds, fittingRung, frameMilliseconds, qualityAt, qualityCeiling,
+  shedNote, topFitMilliseconds, windowPixelRatio,
 } from '../../src/look/quality.ts';
 
 const graphics = createDefaultSettings().graphics;
@@ -458,6 +458,76 @@ describe('the chip test: start on the rung that fits', () => {
     expect(climbTo(3, 0, () => 17.2, fits, undefined, topFits)).toBeNull();
     // A 30 Hz screen: on time is up to 35 ms.
     expect(topFitMilliseconds(1 / 30)).toBeCloseTo(35, 5);
+  });
+
+  /**
+   * A chip at load, as measured on this Mac while it was busy (`scratch/portage/fix-chip/probe-1.log`): the first
+   * frame compiles every shader, the one after it still runs long, and from the third a frame takes what it takes.
+   * `draw` queues a frame, `finish` waits for the chip, `said` is everything that happened, in order.
+   */
+  const chipAtLoad = (frames: number[], steady: number) => {
+    let clock = 0;
+    let queued = 0;
+    let drawn = 0;
+    const said: string[] = [];
+    return {
+      said,
+      draw: (): void => {
+        queued += frames[drawn] ?? steady;
+        drawn += 1;
+        said.push('draw');
+      },
+      finish: (): void => {
+        clock += queued;
+        queued = 0;
+        said.push('wait');
+      },
+      now: (): number => clock,
+      warmed: (): void => {
+        said.push(`warmed at ${clock}`);
+      },
+    };
+  };
+
+  it('the first timing is honest: the frame that compiled the shaders and the long one after it are both left out', () => {
+    const topFits = topFitMilliseconds(1 / 60);
+    const startUp = [120, 28];
+    // The test's first timing reads what a frame takes from then on: the same as the timing after it.
+    const first = chipAtLoad(startUp, 16);
+    expect(frameMilliseconds(first.draw, first.finish, first.now, FIRST_WARM_UP_FRAMES)).toBe(16);
+    expect(frameMilliseconds(first.draw, first.finish, first.now, WARM_UP_FRAMES)).toBe(16);
+    // With one frame left out, as it was, the long frame is in the timing: 22 ms for a 16 ms chip, and rung 0 "does not fit".
+    const was = chipAtLoad(startUp, 16);
+    expect(frameMilliseconds(was.draw, was.finish, was.now, 1)).toBe(22);
+    expect(22).toBeGreaterThan(topFits);
+    // So a chip that holds the top starts at the top on its first timing, with no second look needed.
+    const top = chipAtLoad(startUp, 16);
+    const timed: number[] = [];
+    expect(fittingRung((rung) => {
+      timed.push(rung);
+      return frameMilliseconds(top.draw, top.finish, top.now, timed.length === 1 ? FIRST_WARM_UP_FRAMES : WARM_UP_FRAMES);
+    }, fits, undefined, undefined, 0, topFits)).toBe(0);
+    expect(timed).toEqual([0]);
+    // Any other rung, and a climb later on, leaves one frame out: new buffers cost one frame, and shaders are compiled by then.
+    expect(WARM_UP_FRAMES).toBe(1);
+  });
+
+  it('every warm-up frame is waited for, the clock starts after them, and the timing is two frames back to back', () => {
+    const chip = chipAtLoad([120, 28], 16);
+    frameMilliseconds(chip.draw, chip.finish, chip.now, 2, undefined, chip.warmed);
+    expect(chip.said).toEqual(['draw', 'wait', 'draw', 'wait', 'warmed at 148', 'draw', 'draw', 'wait']);
+    // Asked to look again, it times a second pair and keeps the quicker.
+    const busy = chipAtLoad([120, 28, 40, 30], 16);
+    const seen: number[] = [];
+    expect(frameMilliseconds(busy.draw, busy.finish, busy.now, 2, (milliseconds) => {
+      seen.push(milliseconds);
+      return true;
+    })).toBe(16);
+    expect(seen).toEqual([35]);
+    expect(busy.said.filter((word) => word === 'draw').length).toBe(6);
+    // And not asked, it keeps the first.
+    const once = chipAtLoad([120, 28, 40, 30], 16);
+    expect(frameMilliseconds(once.draw, once.finish, once.now, 2)).toBe(35);
   });
 
   it('when time runs out keeps the best rung it saw fit, or the last rung', () => {
