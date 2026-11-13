@@ -651,21 +651,23 @@
     },
     {
       "when": "Nov 12",
-      "title": "The canoe goes twice as fast",
+      "title": "A faster canoe",
       "state": "done",
-      "asked": "The time between islands is super long. Double the speed of paddling.",
+      "asked": "The time between islands is super long. Change the speed to something that will not break the game.",
       "built": [
-        "Paddle 4.4 m/s, power stroke 6.4, back 2.4",
-        "The nearest island is about a minute away, not two and a half"
+        "Paddle 3.2 m/s, was 2.2. Power stroke 4.2, was 3.2",
+        "The nearest island is about a minute and a half away, not two and a half",
+        "Rough water fills the canoe faster, by the same share"
       ],
       "proof": [
         "1131 unit tests pass",
-        "Six bot runs finish with no fails, in 72 to 88 minutes"
+        "Six bot runs finish with no fails",
+        "Two new tests: the sail stays quicker, rough water still stops a bare canoe"
       ],
       "snags": [
-        "No browser test pass on this one: Luc tests it",
-        "A paddler now outruns the sail",
-        "A bare canoe can reach the first island of the Reach"
+        "Doubling was tried first and was live for half an hour",
+        "It let a paddler outrun the sail and slip through rough water",
+        "No browser test pass on this one: Luc tests it"
       ],
       "pictures": [],
       "report": ""
@@ -711,7 +713,7 @@
   "numbers": [
     {
       "label": "Commits",
-      "value": "191"
+      "value": "194"
     },
     {
       "label": "Worker runs",
@@ -735,7 +737,7 @@
     },
     {
       "label": "Deploys",
-      "value": "8"
+      "value": "9"
     },
     {
       "label": "Agent hours",
@@ -782,7 +784,7 @@
   ],
   "yours": [
     "Play the live game: your old save continues",
-    "The faster canoe: is it calm to watch? Should the sail and the rough water rise to match?",
+    "The faster canoe: is it quick enough, and calm to watch?",
     "Claude Code keeps breaking: find what reinstalls it",
     "The review page: six calls",
     "Your 5120 wide screen: steady 60, or every pixel?",
