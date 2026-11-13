@@ -12,8 +12,9 @@ import {
   readClientMessage, readWalkRun,
 } from '../../src/net/index.ts';
 import type { GuestOptions, LoopbackConditions } from '../../src/net/index.ts';
-import { FIXED_STEP, NEUTRAL_INPUT, drainEvents, groundHeight, hashState, selectInteractable, step, terrainHeight } from '../../src/sim/index.ts';
-import type { GameState, StepInput } from '../../src/sim/index.ts';
+import { COAST_STEPS, HOLD_INPUT } from '../../src/net/walk.ts';
+import { FIXED_STEP, NEUTRAL_INPUT, drainEvents, groundHeight, hashState, selectInteractable, step, stepOnFoot, terrainHeight } from '../../src/sim/index.ts';
+import type { GameState, PlayerState, StepInput } from '../../src/sim/index.ts';
 import { newGame, standOn } from '../support.ts';
 import { createRig, key } from './rig.ts';
 import type { Rig, Seat } from './rig.ts';
@@ -26,6 +27,32 @@ const BAD: Partial<LoopbackConditions> = { delay: 0.12, loss: 0.2 };
 const ROUGH: Partial<LoopbackConditions> = { delay: 0.12, jitter: 0.1, loss: 0.2 };
 const WALK_STEP = TUNING.foot.walkSpeed * FIXED_STEP;
 const RUN_STEP = TUNING.foot.runSpeed * FIXED_STEP;
+/** The furthest a runner slides after letting go: the sum of the steps it slows over. */
+const RUN_SLIDE = Array.from({ length: COAST_STEPS }, (_, index) => Math.max(0, TUNING.foot.runSpeed - (index + 1) * TUNING.foot.braking * FIXED_STEP) * FIXED_STEP)
+  .reduce((sum, metres) => sum + metres, 0);
+
+/** Where the rules alone take a copy of a player over these inputs, one step each: what a solo player would do. */
+function soloWalk(game: GameState, player: PlayerState, inputs: Partial<StepInput>[]): PlayerState {
+  const copy: PlayerState = structuredClone(player);
+  const sink: GameState = structuredClone(game);
+  for (const input of inputs) stepOnFoot(sink, copy, { ...NEUTRAL_INPUT, ...input }, FIXED_STEP);
+  return copy;
+}
+
+/**
+ * After a command is asked for, the figure's walk is let go of until the answer: it slows to a stand where it is
+ * (no further than a run's slide) and stays there. It never walks on and gets pulled back.
+ */
+function slowsToAStand(asked: { x: number; z: number }, positions: { x: number; z: number }[]): void {
+  let last = 0;
+  positions.forEach((position, index) => {
+    const away = gap(asked, position);
+    expect(away).toBeLessThanOrEqual(RUN_SLIDE + 1e-9);
+    expect(away).toBeGreaterThanOrEqual(last - 1e-9);
+    if (index >= COAST_STEPS) expect(away).toBe(last);
+    last = away;
+  });
+}
 
 const camp = () => spotPosition(ISLANDS_BY_ID.home_knoll, ISLANDS_BY_ID.home_knoll.camp!.spot);
 
@@ -106,13 +133,15 @@ function wander(random: () => number, from: { x: number; z: number }): { input: 
 describe('at once', () => {
   it('moves the guest\'s own figure on the frame the key goes down, whatever the line', () => {
     for (const delay of [0, 0.06, 0.12, 0.25]) {
-      const { sam, shown, frame } = ashore({ delay });
+      const { rig, sam, shown, frame } = ashore({ delay });
       const before = { ...shown() };
+      const solo = soloWalk(rig.game, rig.game.players[1]!, [{ moveX: 1 }]);
       sam.input = { moveX: 1 };
       frame();
       const first = gap(before, shown());
-      // One frame, one step of walking: the same as a solo player gets.
-      expect(first).toBeCloseTo(WALK_STEP, 9);
+      // One frame, one step of walking: the same as a solo player gets, eased in from a stand.
+      expect(first).toBeGreaterThan(0);
+      expect(first).toBeCloseTo(gap(before, solo.position), 12);
       console.log(`WALK first movement, ${delay * 1000} ms each way: 1 frame (${(first * 100).toFixed(2)} cm)`);
     }
   });
@@ -207,19 +236,19 @@ describe('true', () => {
           frames += 1;
           const after = shown();
           const moved = gap(before, after);
+          const own = sam.link.walk.walkedLastFrame;
           worstFrame = Math.max(worstFrame, moved);
           worstEase = Math.max(worstEase, sam.link.walk.eased);
           worstSlip = Math.max(worstSlip, sam.link.walk.slip);
           worstAhead = Math.max(worstAhead, gap(host(), after));
-          if (!still && moved > 0) {
-            // The way the keys point, in the world.
-            const yaw = input.cameraYaw ?? 0;
-            const wantX = (input.moveY ?? 0) * Math.sin(yaw) + (input.moveX ?? 0) * Math.cos(yaw);
-            const wantZ = -(input.moveY ?? 0) * Math.cos(yaw) + (input.moveX ?? 0) * Math.sin(yaw);
-            const along = ((after.x - before.x) * wantX + (after.z - before.z) * wantZ) / Math.hypot(wantX, wantZ);
+          const ownLength = Math.hypot(own.x, own.z);
+          if (ownLength > 0) {
+            // The way the figure's own walk goes this frame (it turns and eases, so not always the way the keys point).
+            const along = ((after.x - before.x) * own.x + (after.z - before.z) * own.z) / ownLength;
             worstBack = Math.min(worstBack, along);
           }
-          if (still) expect(moved).toBeLessThanOrEqual(0.03);
+          // Letting go: a few frames slowing to a stand, then only a little easing at most.
+          if (still) expect(moved).toBeLessThanOrEqual(count < COAST_STEPS ? RUN_STEP + 0.03 : 0.03);
         }
         for (const player of rig.game.players) Object.assign(player, { hunger: 100, thirst: 100, energy: 100 });
       }
@@ -245,6 +274,7 @@ describe('true', () => {
     const { rig, sam, host, shown } = ashore(CLEAN);
     expect(rig.settle()).toBe(true);
     const at = { ...host() };
+    const walkedFrom = rig.game.players[1]!.heading;
     sam.input = { moveX: 1 };
     for (let count = 0; count < 60; count += 1) {
       rig.stand(FIXED_STEP);
@@ -256,11 +286,14 @@ describe('true', () => {
     }
     expect(gap(at, shown())).toBeGreaterThan(2);
     expect(sam.link.mismatches).toBe(0);
-    // The host steps again: it walks the guest the sixty steps it took, to the spot the figure stands on.
+    // The host steps again: it walks the guest the sixty steps it took and the ones it slowed over, to the spot the figure stands on.
     sam.input = {};
     rig.run(1.5);
     expect(gap(host(), shown())).toBeLessThan(1e-9);
-    expect(gap(at, host())).toBeCloseTo(60 * WALK_STEP, 9);
+    const solo = soloWalk(rig.game, { ...rig.game.players[1]!, position: { ...at }, gait: undefined, heading: walkedFrom }, [
+      ...Array.from({ length: 60 }, () => ({ moveX: 1 })), ...Array.from({ length: COAST_STEPS }, () => ({})),
+    ]);
+    expect(gap(solo.position, host())).toBeLessThan(1e-9);
     expect(sam.link.mismatches).toBe(0);
   });
 
@@ -407,14 +440,16 @@ describe('the host stays in charge', () => {
 describe('the host\'s count of a guest\'s walk', () => {
   const forward: [number, number, number, number, number] = [0, 0, 1, 0, 0];
 
-  it('hands out one step of the walk for each step the rules ran, and stands when the walk has not arrived', () => {
+  it('hands out one step of the walk for each step the rules ran, and holds the player as they are when the walk has not arrived', () => {
     const line = new WalkTimeline(100);
     line.heard(3, [forward]);
     let tick = 100;
     const handed: boolean[] = [];
     for (let count = 0; count < 6; count += 1) {
       line.account(tick);
-      handed.push(line.next(true) !== undefined);
+      const input = line.next(true);
+      handed.push(input !== HOLD_INPUT);
+      if (input === HOLD_INPUT) expect(input).toMatchObject({ hold: true, moveX: 0, moveY: 0 });
       tick += 1;
     }
     // Three steps known: three handed out, then nothing, however long the host goes on.
@@ -436,6 +471,30 @@ describe('the host\'s count of a guest\'s walk', () => {
     expect(line.walked).toBe(490);
     expect(line.reached(480)).toBe(true);
     expect(line.reached(495)).toBe(false);
+  });
+
+  it('walks the still steps a player slows over after letting go, one by one, and passes over only the ones after them', () => {
+    const line = new WalkTimeline(0);
+    // Forward for ten steps, then still: known up to step 100.
+    line.heard(100, [[0, 0, 1, 0, 0], [10, 0, 0, 0, 0]]);
+    const handed: string[] = [];
+    for (let tick = 0; tick < 30; tick += 1) {
+      line.account(tick);
+      const input = line.next(true);
+      handed.push(input === HOLD_INPUT ? 'hold' : input!.moveY === 1 ? 'walk' : 'still');
+    }
+    expect(handed.slice(0, 10)).toEqual(Array(10).fill('walk'));
+    expect(handed.slice(10, 10 + COAST_STEPS)).toEqual(Array(COAST_STEPS).fill('still'));
+    expect(handed.slice(10 + COAST_STEPS)).toEqual(Array(30 - 10 - COAST_STEPS).fill('hold'));
+    expect(line.walked).toBe(100);
+    // The count agrees: the slowing steps are owed, the rest are not.
+    const stream = new WalkStream();
+    stream.add({ start: 0, moveX: 0, moveY: 1, run: false, yaw: 0 });
+    stream.add({ start: 10, moveX: 0, moveY: 0, run: false, yaw: 0 });
+    expect(stream.movingSteps(0, 100)).toBe(10 + COAST_STEPS);
+    expect(stream.movesBetween(10 + COAST_STEPS, 100)).toBe(false);
+    expect(stream.movesBetween(10 + COAST_STEPS - 1, 100)).toBe(true);
+    expect(COAST_STEPS).toBe(9);
   });
 
   it('aboard, the walk is not used and counts as walked', () => {
@@ -636,12 +695,14 @@ describe('things done on foot', () => {
       const asked = { ...shown() };
       sam.link.sendCommand({ type: 'board' });
       let worstEase = 0;
+      const waiting: { x: number; z: number }[] = [];
       for (let count = 0; count < 120; count += 1) {
         frame();
         worstEase = Math.max(worstEase, sam.link.walk.eased);
-        // Until the view shows it aboard, the figure stands where it asked from: it does not walk on and get pulled back.
-        if (view().players[1]!.mode === 'foot') expect(gap(asked, shown())).toBe(0);
+        // Until the view shows it aboard, the figure slows to a stand where it asked from: it does not walk on and get pulled back.
+        if (view().players[1]!.mode === 'foot') waiting.push({ ...shown() });
       }
+      slowsToAStand(asked, waiting);
       expect(sam.results.at(-1)).toMatchObject({ command: { type: 'board' }, result: { ok: true } });
       expect(host().mode).toBe('canoe');
       expect(view().players[1]!.mode).toBe('canoe');
@@ -657,11 +718,14 @@ describe('things done on foot', () => {
     // Out of reach of the canoe now. Ask to board anyway, the key still down.
     sam.link.sendCommand({ type: 'board' });
     const asked = { ...shown() };
-    frame();
-    frame();
-    // Asking holds the walk for a moment: if the host says yes, the figure must not have walked on.
-    expect(gap(asked, shown())).toBe(0);
-    rig.run(0.6);
+    const waiting: { x: number; z: number }[] = [];
+    for (let count = 0; count < 12; count += 1) {
+      frame();
+      waiting.push({ ...shown() });
+    }
+    // Asking lets go of the walk for a moment: if the host says yes, the figure must not have walked on, only slowed to a stand.
+    slowsToAStand(asked, waiting);
+    rig.run(0.4);
     expect(sam.results.at(-1)).toMatchObject({ command: { type: 'board' }, result: { ok: false, reason: 'not_at_canoe' } });
     expect(sam.link.commandsWaiting).toBe(0);
     // And it walks again, with nothing to put right.
@@ -686,8 +750,12 @@ describe('things done on foot', () => {
     };
     sam.link.sendCommand({ type: 'board' });
     const asked = { ...shown() };
-    rig.run(2.5);
-    expect(gap(asked, shown())).toBe(0);
+    const waiting: { x: number; z: number }[] = [];
+    for (let count = 0; count < 150; count += 1) {
+      rig.run(FIXED_STEP);
+      waiting.push({ ...shown() });
+    }
+    slowsToAStand(asked, waiting);
     rig.run(1.5);
     expect(gap(asked, shown())).toBeGreaterThan(1);
   });

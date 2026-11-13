@@ -53,6 +53,11 @@ export interface StepInput {
   moveY: number;
   /** On foot: hold to run (costs energy). */
   run: boolean;
+  /**
+   * On foot: nothing was heard from this player for this step (a guest whose walk has not reached the host yet).
+   * They stay exactly as they are, speed and all, instead of slowing down as if they had let go of the keys.
+   */
+  hold?: boolean;
   /** Bearing the camera looks along, radians (0 = north, clockwise). */
   cameraYaw: number;
 }
@@ -69,6 +74,13 @@ export interface NodeState {
 
 /** Longest name a player may carry, in letters. The crew list has room for this many. */
 export const MAXIMUM_NAME_LENGTH = 12;
+
+/** A walker's way of going: see `PlayerState.gait`. */
+export interface Gait {
+  speed: number;
+  x: number;
+  z: number;
+}
 
 export interface PlayerState {
   id: PlayerId;
@@ -87,6 +99,12 @@ export interface PlayerState {
   position: Vector3;
   /** Bearing the player faces, radians. */
   heading: number;
+  /**
+   * On foot: the walking speed along the heading, metres per second, and where the last step on foot left the player.
+   * A player found anywhere else was put there by something other than walking (a landing, a fail, a load) and
+   * starts from a stand. Absent until the first step on foot, and in saves from before it existed.
+   */
+  gait?: Gait;
   hunger: number;
   thirst: number;
   energy: number;

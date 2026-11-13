@@ -16,6 +16,10 @@
  *   on the line, the host dropping a backlog), the figure is eased onto the
  *   truth; a big difference is a cut.
  *
+ * Walking eases in and out (`TUNING.foot`): the first few steps after the keys come up still move the player while
+ * they slow to a stand. Both sides walk those steps (`COAST_STEPS`), and while the host waits for a guest's walk it
+ * holds the player exactly as they are (`HOLD_INPUT`), so the speed agrees as well as the place.
+ *
  * No DOM in here, and nothing here changes the guest's copy of the truth.
  */
 import { TUNING } from '../data/index.ts';
@@ -51,6 +55,13 @@ export const WALK_EASE_SECONDS = 0.1;
 export const WALK_CUT_METRES = 1.5;
 /** While walking, easing may take at most this share of a frame's own movement, so the figure never backs up against the keys. */
 const EASE_SHARE_OF_MOVEMENT = 0.6;
+/**
+ * Still steps after a walk that can still move the player: the longest a run takes to slow to a stand. Both sides
+ * walk them one by one; only the still steps after them are passed over.
+ */
+export const COAST_STEPS = Math.ceil(TUNING.foot.runSpeed / (TUNING.foot.braking * FIXED_STEP));
+/** What the host hands a guest's player while its walk has not arrived: nothing changes, not even the speed. */
+export const HOLD_INPUT: Readonly<StepInput> = Object.freeze({ ...NEUTRAL_INPUT, hold: true });
 /** Stretches a walk keeps. */
 const RUNS_KEPT = 256;
 
@@ -91,10 +102,32 @@ export class WalkStream {
 
   /** What was held on this step. Before the first stretch known: standing still. */
   at(step: number): Walk {
+    const index = this.indexAt(step);
+    return index < 0 ? STILL : this.runs[index]!;
+  }
+
+  /** The stretch this step is in, or -1 before the first one known. */
+  private indexAt(step: number): number {
     for (let index = this.runs.length - 1; index >= 0; index -= 1) {
-      if (this.runs[index]!.start <= step) return this.runs[index]!;
+      if (this.runs[index]!.start <= step) return index;
     }
-    return STILL;
+    return -1;
+  }
+
+  /**
+   * The step after the last one of this still stretch that can move the player (its first `COAST_STEPS`, when a walk
+   * came before it), or the stretch's start when none can. Only for a step in a still stretch.
+   */
+  private coastEnd(index: number): number {
+    const run = this.runs[index]!;
+    return index > 0 && !isStill(this.runs[index - 1]!) ? run.start + COAST_STEPS : run.start;
+  }
+
+  /** True when this step can move the player: something is held, or the player is still slowing from a walk. */
+  movesAt(step: number): boolean {
+    const index = this.indexAt(step);
+    if (index < 0) return false;
+    return !isStill(this.runs[index]!) || step < this.coastEnd(index);
   }
 
   /** The first step after `step` on which something else was held, or `limit` when nothing changes before it. */
@@ -105,20 +138,22 @@ export class WalkStream {
     return limit;
   }
 
-  /** True when any step from `from` up to but not `to` moves the player. */
+  /** True when any step from `from` up to but not `to` moves the player. A still stretch can move them only at its start. */
   movesBetween(from: number, to: number): boolean {
     for (let step = from; step < to; step = this.nextChange(step, to)) {
-      if (!isStill(this.at(step))) return true;
+      if (this.movesAt(step)) return true;
     }
     return false;
   }
 
-  /** How many steps from `from` up to but not `to` move the player. */
+  /** How many steps from `from` up to but not `to` can move the player. */
   movingSteps(from: number, to: number): number {
     let count = 0;
     for (let step = from; step < to;) {
       const next = this.nextChange(step, to);
-      if (!isStill(this.at(step))) count += next - step;
+      const index = this.indexAt(step);
+      if (index >= 0 && !isStill(this.runs[index]!)) count += next - step;
+      else if (index >= 0) count += Math.max(0, Math.min(next, this.coastEnd(index)) - step);
       step = next;
     }
     return count;
@@ -133,9 +168,9 @@ export class WalkStream {
     if (this.runs.length > RUNS_KEPT) this.runs.shift();
   }
 
-  /** Forget the stretches that ended before `step`. */
+  /** Forget the stretches that ended before `step`, all but the last of them: it says whether a still stretch follows a walk. */
   dropBefore(step: number): void {
-    while (this.runs.length > 1 && this.runs[1]!.start <= step) this.runs.shift();
+    while (this.runs.length > 2 && this.runs[2]!.start <= step) this.runs.shift();
   }
 }
 
@@ -181,17 +216,18 @@ export class WalkTimeline {
     return this.walked >= at || (this.known >= at && !this.stream.movesBetween(this.walked, at));
   }
 
+  /** Pass over the still steps that move nobody: not the first ones after a walk, while the player slows to a stand. */
   private passStill(): void {
-    while (this.walked < this.known && isStill(this.stream.at(this.walked))) this.walked = this.stream.nextChange(this.walked, this.known);
+    while (this.walked < this.known && !this.stream.movesAt(this.walked)) this.walked = this.stream.nextChange(this.walked, this.known);
   }
 
   /**
    * What the guest's player is handed for the host's next step. On foot: the
-   * next step of its walk, or undefined (standing) while that has not arrived.
-   * Aboard, the walk is not used: it is counted as walked, and `null` says to
-   * use the guest's newest input as it is.
+   * next step of its walk, or `HOLD_INPUT` (exactly as they are) while that has
+   * not arrived. Aboard, the walk is not used: it is counted as walked, and
+   * `null` says to use the guest's newest input as it is.
    */
-  next(onFoot: boolean): StepInput | undefined | null {
+  next(onFoot: boolean): StepInput | null {
     if (!onFoot) {
       this.following = false;
       if (this.known > this.walked) this.walked = this.known;
@@ -209,7 +245,7 @@ export class WalkTimeline {
     }
     this.stream.dropBefore(this.walked);
     this.following = this.walked < this.known;
-    return this.following ? inputOfWalk(this.stream.at(this.walked)) : undefined;
+    return this.following ? inputOfWalk(this.stream.at(this.walked)) : HOLD_INPUT;
   }
 }
 
@@ -232,6 +268,8 @@ export class WalkPredictor {
   shown: WalkShown | null = null;
   /** Metres the easing moved the figure in the last frame, on top of its own walking. 0 when guess and truth agree. */
   eased = 0;
+  /** The guess's own walking in the last frame, metres east and south, before any easing: the way the figure is going. */
+  readonly walkedLastFrame = { x: 0, z: 0 };
   /** Metres between the guess and the host's answer the last time an answer came: what there was to put right. */
   slip = 0;
   /** Times the figure was put straight on the host's place, as a cut. */
@@ -276,14 +314,13 @@ export class WalkPredictor {
     return newest !== undefined && newest.start >= step;
   }
 
-  /** One step of the walk on a player, by the rules' own on-foot step. */
+  /**
+   * One step of the walk on a player, by the rules' own on-foot step, as the rules hand it: a talk or a bed lets go of
+   * the keys, and an away player is not stepped at all. A still step still slows a player who was walking.
+   */
   private walkOne(player: PlayerState, walk: Walk): void {
-    if (isStill(walk) || !mayWalk(player)) {
-      player.running = false;
-      player.exerting = false;
-      return;
-    }
-    stepOnFoot(this.sink!, player, inputOfWalk(walk), FIXED_STEP);
+    if (!player.connected) return;
+    stepOnFoot(this.sink!, player, mayWalk(player) ? inputOfWalk(walk) : NEUTRAL_INPUT, FIXED_STEP);
   }
 
   /**
@@ -296,6 +333,8 @@ export class WalkPredictor {
     const me = truth.players.find((player) => player.id === playerId);
     const onFoot = me !== undefined && me.mode === 'foot';
     this.eased = 0;
+    this.walkedLastFrame.x = 0;
+    this.walkedLastFrame.z = 0;
 
     // The host's answer: start again from where it has this player, over the steps it has not walked.
     if (truth !== this.truth) {
@@ -344,6 +383,8 @@ export class WalkPredictor {
     }
     if (this.carry < 0) this.carry = 0;
     if (!guess) return;
+    this.walkedLastFrame.x = guess.position.x - fromX;
+    this.walkedLastFrame.z = guess.position.z - fromZ;
 
     // Ease out what is left of a difference: quickly when standing, and when walking never by more than a share of the step itself.
     if (this.offsetX !== 0 || this.offsetZ !== 0) {

@@ -79,7 +79,8 @@ describe('a guest walks', () => {
     const before = { ...me().position };
     guest.app.session.keyDown('KeyW');
     tick(FIXED_STEP);
-    expect(gap(before, me().position)).toBeCloseTo(TUNING.foot.walkSpeed * FIXED_STEP, 9);
+    // One step of easing in from a stand, as the rules give a solo player.
+    expect(gap(before, me().position)).toBeCloseTo(TUNING.foot.acceleration * FIXED_STEP * FIXED_STEP, 9);
     // What the session calls the game is what the look drew.
     expect(guest.app.session.game).toBe(guest.drawn.at(-1));
   });

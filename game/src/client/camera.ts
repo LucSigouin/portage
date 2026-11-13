@@ -3,6 +3,12 @@
  * slow orbit for the lobby. The client owns it and hands the world view a
  * plain pose every frame. No Three.js and no DOM in here.
  *
+ * On foot the camera never turns by itself (Luc gets motion sick, and the keys
+ * go by the camera: a camera that swung round behind the figure turned the
+ * keys with it, so holding D walked a circle). Only the mouse turns it. Its
+ * look-at point stays on the figure, so when the figure stops the view stops
+ * on the same frame, with no glide after it.
+ *
  * Angles use the game's bearing convention: `yaw` is the bearing the camera
  * looks along (0 = north, clockwise), so it goes straight into
  * `StepInput.cameraYaw`. `pitch` is the camera's elevation above the subject.
@@ -31,7 +37,7 @@ export interface CameraSubject {
 export interface CameraOptions {
   /** Vertical field of view, degrees. */
   fieldOfView: number;
-  /** Swing back behind the heading when the mouse is left alone. */
+  /** Aboard: swing back behind the canoe's heading when the mouse is left alone. Never on foot. */
   autoCentre: boolean;
   /** Accessibility: no wave bob, slower recentring. */
   reduceMotion: boolean;
@@ -50,13 +56,13 @@ interface ModeTuning {
   minimumDistance: number;
   maximumDistance: number;
   defaultPitch: number;
-  /** Auto-recentre rate, per second. */
+  /** Auto-recentre rate, per second. 0: never. */
   recentreRate: number;
 }
 
 export const CAMERA_TUNING: Readonly<Record<'canoe' | 'foot', ModeTuning>> = {
   canoe: { focusHeight: 1.1, defaultDistance: 8.5, minimumDistance: 4, maximumDistance: 28, defaultPitch: 0.36, recentreRate: 1.6 },
-  foot: { focusHeight: 1.5, defaultDistance: 6, minimumDistance: 2.5, maximumDistance: 18, defaultPitch: 0.34, recentreRate: 0.9 },
+  foot: { focusHeight: 1.5, defaultDistance: 6, minimumDistance: 2.5, maximumDistance: 18, defaultPitch: 0.34, recentreRate: 0 },
 };
 
 export const MINIMUM_PITCH = 0.06;
@@ -67,8 +73,11 @@ export const SURFACE_CLEARANCE = 0.35;
 export const RECENTRE_DELAY_SECONDS = 1.2;
 /** A subject that moves further than this in one frame was teleported: snap, do not glide. */
 const SNAP_DISTANCE = 15;
-/** On foot, do not swing round when the player walks toward the camera. */
-const FOOT_RECENTRE_LIMIT = 2.2;
+/**
+ * Stepping ashore, the look-at point glides from the canoe to the figure, at least this fast (metres a second, more
+ * than a run, so it gets there even while the player runs off). Once there it stays on the figure.
+ */
+const FOOT_CATCH_UP_SPEED = 6;
 
 const clamp = (value: number, minimum: number, maximum: number): number => Math.max(minimum, Math.min(maximum, value));
 
@@ -137,6 +146,8 @@ export class ChaseCamera {
   private mode: 'canoe' | 'foot' | null = null;
   private focus: Vector3 = { x: 0, y: 0, z: 0 };
   private secondsSinceOrbit = Infinity;
+  /** On foot: true once the look-at point has reached the figure. From then on it stays on it exactly. */
+  private onFigure = false;
 
   /** Jump straight behind the subject: a new game, a load, a respawn. */
   snapBehind(subject: CameraSubject): void {
@@ -147,6 +158,7 @@ export class ChaseCamera {
     this.distance = tuning.defaultDistance;
     this.focus = { x: subject.position.x, y: subject.position.y + tuning.focusHeight, z: subject.position.z };
     this.secondsSinceOrbit = Infinity;
+    this.onFigure = subject.mode === 'foot';
   }
 
   /** Place the camera by hand, for staged shots. */
@@ -170,6 +182,7 @@ export class ChaseCamera {
       // Boarding or stepping ashore: keep the view direction, take the new mode's framing.
       this.mode = subject.mode;
       this.distance = tuning.defaultDistance;
+      this.onFigure = false;
     }
 
     // Orbit and zoom from the mouse.
@@ -179,26 +192,39 @@ export class ChaseCamera {
     this.distance = clamp(this.distance * Math.exp(input.zoomDelta), tuning.minimumDistance, tuning.maximumDistance);
     this.secondsSinceOrbit = orbiting ? 0 : this.secondsSinceOrbit + frameSeconds;
 
-    // Swing back behind the heading once the mouse has been left alone.
-    if (options.autoCentre && subject.moving && this.secondsSinceOrbit >= RECENTRE_DELAY_SECONDS) {
-      const offset = bearingDifference(subject.heading, this.yaw);
-      if (subject.mode === 'canoe' || Math.abs(offset) <= FOOT_RECENTRE_LIMIT) {
-        const rate = tuning.recentreRate * (options.reduceMotion ? 0.5 : 1);
-        this.yaw = easeBearing(this.yaw, subject.heading, 1 - Math.exp(-rate * frameSeconds));
-      }
+    // Aboard, swing back behind the canoe once the mouse has been left alone. On foot, never: only the mouse turns it.
+    if (options.autoCentre && tuning.recentreRate > 0 && subject.moving && this.secondsSinceOrbit >= RECENTRE_DELAY_SECONDS) {
+      const rate = tuning.recentreRate * (options.reduceMotion ? 0.5 : 1);
+      this.yaw = easeBearing(this.yaw, subject.heading, 1 - Math.exp(-rate * frameSeconds));
     }
     // Keep the bearing small so it never loses precision.
     this.yaw = bearingDifference(this.yaw, 0);
 
-    // The look-at point trails the subject a little; with reduced motion it ignores the wave bob.
+    // Aboard, the look-at point trails the canoe a little; with reduced motion it ignores the wave bob.
     const restingHeight = subject.mode === 'canoe' && options.reduceMotion ? 0 : subject.position.y;
     const goal = { x: subject.position.x, y: restingHeight + tuning.focusHeight, z: subject.position.z };
     const jump = Math.hypot(goal.x - this.focus.x, goal.z - this.focus.z);
-    if (jump > SNAP_DISTANCE) {
+    if (jump > SNAP_DISTANCE || this.onFigure) {
+      // On foot, once on the figure, the look-at point is the figure's: the figure's own easing is the only easing.
       this.focus = goal;
+    } else if (subject.mode === 'foot') {
+      // Just ashore: glide to the figure, eased, and never slower than a run, so it arrives.
+      const gap = Math.hypot(goal.x - this.focus.x, goal.y - this.focus.y, goal.z - this.focus.z);
+      const move = Math.max(gap * (1 - Math.exp(-12 * frameSeconds)), FOOT_CATCH_UP_SPEED * frameSeconds);
+      if (move >= gap) {
+        this.focus = goal;
+        this.onFigure = true;
+      } else {
+        const share = move / gap;
+        this.focus = {
+          x: this.focus.x + (goal.x - this.focus.x) * share,
+          y: this.focus.y + (goal.y - this.focus.y) * share,
+          z: this.focus.z + (goal.z - this.focus.z) * share,
+        };
+      }
     } else {
       const follow = 1 - Math.exp(-12 * frameSeconds);
-      const bob = 1 - Math.exp(-(subject.mode === 'canoe' ? 3 : 8) * frameSeconds);
+      const bob = 1 - Math.exp(-3 * frameSeconds);
       this.focus = {
         x: this.focus.x + (goal.x - this.focus.x) * follow,
         y: this.focus.y + (goal.y - this.focus.y) * bob,

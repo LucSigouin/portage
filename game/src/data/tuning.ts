@@ -114,6 +114,21 @@ export const TUNING = {
   foot: {
     walkSpeed: 2.6,
     runSpeed: 4.4,
+    /**
+     * How walking feels from the keys (Luc's list, line 11: "the character movement on land needs complete rework").
+     * It was instant: full speed on the first step of 1/60 s, a dead stop, the figure snapped round in one step.
+     * Speed gained per second when starting off or speeding up, m/s per second: a stand to a walk in 9 steps of the
+     * rules (0.15 s), to a run in 15 (0.25 s).
+     */
+    acceleration: 18,
+    /** Speed lost per second when the keys come up or a sharp turn slows the walk: a walk stands still in 5 steps (0.08 s, 9 cm), a run in 8 (0.13 s, 29 cm). */
+    braking: 30,
+    /**
+     * How fast the figure turns to face the way the keys point, radians per second: 720 degrees a second, a right
+     * angle in 8 steps (0.13 s), an about-face in 15 (0.25 s). The figure always walks the way it faces, so it never
+     * slides sideways or backwards; a turn sharper than 60 degrees slows it (see `stepOnFoot`).
+     */
+    turnRate: 4 * Math.PI,
     /** A walker's half-width: how close their middle comes to a trunk, a rock or a wall (Luc's list, line 1). */
     bodyRadius: 0.3,
     /** Steepest climb, as rise over run (tan 40 degrees). */
