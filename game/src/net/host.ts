@@ -7,6 +7,10 @@
  *   `join`; then they are one player, and every later message on that wire is
  *   that player's. Nothing on the wire can name another, and a second `join`
  *   under another key is refused: one wire never holds two seats.
+ * - A seat is given back. While the canoe has room a key gets its own player
+ *   and a name its old seat. When the canoe is full, a new guest takes the
+ *   seat of a player who is away, the one away the longest (`longestAway`).
+ *   Nobody who is here loses a seat, and the host never does.
  * - `crewInput(input, playerId)`: the host's own input plus every guest's
  *   latest, indexed by player id, ready for `step`.
  * - `afterFrame(events, seconds)`: call once a frame after stepping and
@@ -110,6 +114,12 @@ export class HostLink {
   private readonly connections: Connection[] = [];
   /** What the room remembers: which player each key is. Never sent to anyone. */
   private readonly keys = new Map<string, PlayerId>();
+  /**
+   * When each player last went away, as a count of leavings: 1 for the first this host saw, 2 for the next.
+   * A player with no number was already away when this host started. Read only for players who are away.
+   */
+  private readonly leftAt = new Map<PlayerId, number>();
+  private leavings = 0;
   private history: Snapshot[] = [];
   private nextSnapshotId = 1;
   private nextSitting = 1;
@@ -172,7 +182,10 @@ export class HostLink {
     connection.input = { ...NEUTRAL_INPUT };
     connection.waiting = [];
     // Someone else may already be playing them on a new wire.
-    if (!this.connections.some((other) => other !== connection && other.playerId === playerId)) setConnected(this.game, playerId, false);
+    if (this.connections.some((other) => other !== connection && other.playerId === playerId)) return;
+    if (!setConnected(this.game, playerId, false)) return;
+    this.leavings += 1;
+    this.leftAt.set(playerId, this.leavings);
   }
 
   private turnAway(connection: Connection, reason: LeaveReason): void {
@@ -288,9 +301,34 @@ export class HostLink {
     }
   }
 
-  /** Is anyone bound to this player by a key? Such a player can only be had back with that key. */
+  /** Is anyone bound to this player by a key? While the canoe has room, such a player can only be had back with that key. */
   private bound(playerId: PlayerId): boolean {
     return [...this.keys.values()].includes(playerId);
+  }
+
+  /**
+   * The seat a new guest takes when the canoe is full: the player who has been
+   * away the longest. Never one who is here, never the host's.
+   *
+   * "Longest" is the one who left first, of those this host saw leave. A
+   * player who was already away when the host started has been away longer
+   * than any of those. The host has no memory of the order such players left
+   * in (the saved game does not keep it), so among them the highest seat goes
+   * first: seats are handed out in order, so the first friend to have joined
+   * the save is the last to lose a seat.
+   */
+  private longestAway(): { id: PlayerId; connected: boolean } | undefined {
+    let longest: { id: PlayerId; connected: boolean } | undefined;
+    let longestLeft = 0;
+    for (const player of this.game.players) {
+      if (player.connected || player.id === this.hostPlayerId) continue;
+      const left = this.leftAt.get(player.id) ?? 0;
+      if (longest === undefined || left < longestLeft || (left === longestLeft && player.id > longest.id)) {
+        longest = player;
+        longestLeft = left;
+      }
+    }
+    return longest;
   }
 
   private join(connection: Connection, rawName: string, key: string): void {
@@ -310,10 +348,21 @@ export class HostLink {
         !player.connected && player.id !== this.hostPlayerId && !this.bound(player.id);
       // Someone who played under this name before the host last started, a new seat, or a stand-in nobody named.
       const returning = name === '' ? undefined : game.players.find((player) => free(player) && player.name === name);
-      const taken = returning ?? addPlayer(game) ?? game.players.find((player) => free(player) && player.name === '');
+      const room = returning ?? addPlayer(game) ?? game.players.find((player) => free(player) && player.name === '');
+      // The canoe is full: the seat of whoever has been away the longest. All four here: no seat.
+      const taken = room ?? this.longestAway();
       if (!taken) {
         this.turnAway(connection, 'full');
         return;
+      }
+      if (!room) {
+        // The seat changes hands, as it stands: pack, meters, spot. Whoever held it is a new guest if they come back,
+        // so their key is forgotten and their name comes off. The crew is told someone joined, not that someone is back.
+        for (const [held, holder] of this.keys) {
+          if (holder === taken.id) this.keys.delete(held);
+        }
+        setPlayerName(game, taken.id, name);
+        setConnected(game, taken.id, true, true);
       }
       joined = taken !== returning && taken.connected;
       playerId = taken.id;
