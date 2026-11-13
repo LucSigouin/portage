@@ -246,6 +246,16 @@ export interface CostRowModel {
   enough: boolean;
 }
 
+/**
+ * Something a recipe or a part needs that is not an item: a hull, another part, a survivor's word, a station.
+ * Drawn as a chip beside the item chips, only while it is missing (Luc's bugfix list, line 15: icons, not lines).
+ */
+export interface NeedChipModel {
+  kind: 'hull' | 'attachment' | 'person' | 'station';
+  /** "Ribbed canoe", "Port outrigger", "A word with Tink", "Fire". */
+  name: string;
+}
+
 export interface RecipeRowModel {
   recipeId: RecipeId;
   /** The item the recipe makes, for its icon. Null while the recipe is untaught. */
@@ -257,8 +267,13 @@ export interface RecipeRowModel {
   /** False until a survivor teaches it. */
   known: boolean;
   inputs: CostRowModel[];
-  /** "Needs 3 more plank, hammer", or an empty string when craftable. */
+  /**
+   * "Needs 3 more plank, hammer", or an empty string when craftable. Not drawn (the chips say it): it is the
+   * Make button's note.
+   */
   missingText: string;
+  /** What is missing that is not an item, as chips. The station is left out: its heading says "not in reach". */
+  needs: NeedChipModel[];
   /**
    * Where a missing ingredient comes from, when it comes from nowhere a player would look: dirty water is scooped,
    * and the button for it is in the inventory. An empty string otherwise.
@@ -275,7 +290,10 @@ export interface BuildRowModel {
   description: string;
   built: boolean;
   costs: CostRowModel[];
+  /** "Needs 4 more plank, the ribbed canoe". Not drawn (the chips say it): it is the Build button's note. */
   missingText: string;
+  /** What is missing that is not an item, as chips. */
+  needs: NeedChipModel[];
   build: ButtonModel | null;
 }
 

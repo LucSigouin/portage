@@ -142,6 +142,21 @@ function wordsOf(model: InterfaceModel): string[] {
   if (panel?.id === 'canoe_builder') {
     // What is already bolted on does not show its bill of materials.
     for (const row of [panel.hull, ...panel.attachments]) if (row?.built) delete row.costs;
+    // What is missing is said by the chips, not by a line of words (Luc's bugfix list, line 15).
+    // The Build button's note is those words too, and it is not drawn.
+    for (const row of [panel.hull, ...panel.attachments]) {
+      if (!row) continue;
+      if (row.build?.note === row.missingText) delete row.build.note;
+      delete row.missingText;
+    }
+  }
+  if (panel?.id === 'crafting') {
+    for (const station of panel.stations) {
+      for (const recipe of station.recipes) {
+        if (recipe.craft.note === recipe.missingText) delete recipe.craft.note;
+        delete recipe.missingText;
+      }
+    }
   }
   const words: string[] = [];
   const walk = (value: unknown, key: string): void => {
@@ -308,6 +323,35 @@ describe('the Ink & Wash views', () => {
     expect(find(openRows, (node) => node.tag === 'button' && node.attributes['data-detail'] !== undefined)[0]!.attributes['aria-expanded']).toBe('true');
     expect(collectIntents(openRows).map((intent) => JSON.stringify(intent)).sort())
       .toEqual(first.buttons.map((button) => JSON.stringify(button.intent)).sort());
+  });
+
+  it('both crafting menus say what is missing by their chips: no line of words, a tick or a cross on every chip', () => {
+    const find = (nodes: ViewNode[], className: string): ViewNode[] =>
+      nodes.flatMap((node) => [...(node.classes.split(' ').includes(className) ? [node] : []), ...find(node.children, className)]);
+    for (const name of ['shot crafting', 'shot builder']) {
+      const panel = models.find((entry) => entry.name === name)!.model.panel!;
+      if (panel.id !== 'crafting' && panel.id !== 'canoe_builder') throw new Error(`${name}: expected a crafting menu`);
+      const views = panelView(panel);
+      const text = collectText(views);
+      expect(text, `${name}: a line of what is missing`).not.toMatch(/Needs \d+ more|\bNeeds\b/);
+      expect(find(views, 'iw-missing')).toEqual([]);
+      const rows = panel.id === 'crafting'
+        ? panel.stations.flatMap((station) => station.recipes).map((recipe) => ({ costs: recipe.inputs, needs: recipe.needs }))
+        : [panel.hull, ...panel.attachments].filter((row) => row !== null && !row.built).map((row) => ({ costs: row!.costs, needs: row!.needs }));
+      const costs = rows.flatMap((row) => row.costs);
+      const short = find(views, 'iw-short');
+      const enough = find(views, 'iw-enough');
+      expect(enough.length, `${name}: chips with enough`).toBe(costs.filter((cost) => cost.enough).length);
+      expect(short.length, `${name}: short chips`).toBe(costs.filter((cost) => !cost.enough).length + rows.flatMap((row) => row.needs).length);
+      expect(short.length).toBeGreaterThan(0);
+      // Not by colour alone: every short chip is crossed, every chip with enough is ticked.
+      for (const chip of short) expect(find([chip], 'iw-mark-have')[0]!.html).toContain('iw-cross');
+      for (const chip of enough) expect(find([chip], 'iw-mark-have')[0]!.html).toContain('iw-tick');
+    }
+    // The builder at quest 7 asks for the ribbed canoe on the parts that need it, as a chip with the canoe's name.
+    const builder = models.find((entry) => entry.name === 'shot builder')!.model.panel!;
+    if (builder.id !== 'canoe_builder') throw new Error('expected the builder');
+    expect(builder.attachments.some((row) => row.needs.length > 0) || builder.hull?.needs.length).toBeTruthy();
   });
 
   it('draws the same model the same way: no clock, no randomness', () => {

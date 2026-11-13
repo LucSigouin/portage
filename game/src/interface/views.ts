@@ -8,7 +8,7 @@
  */
 import type {
   BuildRowModel, BuiltModel, ButtonModel, ConfirmModel, CostRowModel, CrewRowModel, DebugModel, HotbarSlotModel, HudModel, InterfaceIntent,
-  ItemSlotModel, LobbyModel, MapMarkerModel, ObjectiveRowModel, PanelModel, PromptModel, QuestRowModel, RecipeRowModel,
+  ItemSlotModel, LobbyModel, MapMarkerModel, NeedChipModel, ObjectiveRowModel, PanelModel, PromptModel, QuestRowModel, RecipeRowModel,
   SaveSlotModel, SettingRowModel, TextFieldModel, ToastModel,
 } from '../client/contracts.ts';
 import { control, h } from './dom.ts';
@@ -62,9 +62,20 @@ function objectivesView(objectives: ObjectiveRowModel[]): ViewNode {
   }));
 }
 
-const costsView = (costs: CostRowModel[]): ViewNode => h('div.iw-costs', null, costs.map((cost, index) =>
-  h('span.iw-cost', { key: index, class: cost.enough ? '' : 'iw-short' },
-    itemIconView(cost.itemId), cost.name, ' ', h('b', null, `${cost.have}/${cost.need}`))));
+const NEED_ICON: Record<NeedChipModel['kind'], string> = { hull: ICON.canoe, attachment: ICON.canoe, person: ICON.person, station: ICON.camp };
+
+/**
+ * What a recipe or a part asks for, a chip each: the drawing, the name, have/need. Luc's bugfix list, line 15: the
+ * chips say what is missing, so no line of words repeats it. A chip that has enough is ruled in ink and ticked; a chip
+ * that is short is ruled dashed in rust and crossed. The tick and the cross, and the solid and dashed rule, tell them
+ * apart without the colour. What is missing that is not an item (a hull, a part, a survivor's word) gets a chip too.
+ */
+const costsView = (costs: CostRowModel[], needs: NeedChipModel[] = []): ViewNode => h('div.iw-costs', null,
+  costs.map((cost, index) => h('span.iw-cost', { key: index, class: cost.enough ? 'iw-enough' : 'iw-short' },
+    itemIconView(cost.itemId), cost.name, ' ', h('b', null, `${cost.have}/${cost.need}`),
+    icon(cost.enough ? ICON.check : ICON.cross, 'iw-mark-have'))),
+  needs.map((need, index) => h('span.iw-cost.iw-short.iw-need', { key: `need-${index}`, class: `iw-need-${need.kind}`, title: `Needs ${need.name}` },
+    icon(NEED_ICON[need.kind], 'iw-need-ico'), need.name, icon(ICON.cross, 'iw-mark-have'))));
 
 // --- Lobby -------------------------------------------------------------------------
 
@@ -397,8 +408,7 @@ function recipeView(recipe: RecipeRowModel): ViewNode {
       h('b', null, recipe.name), ' ', h('span.iw-count', null, recipe.outputText),
       recipe.known ? null : h('small.iw-kind', null, 'not learned'),
       h('small', null, recipe.description),
-      costsView(recipe.inputs),
-      recipe.missingText ? h('p.iw-missing', null, recipe.missingText) : null,
+      costsView(recipe.inputs, recipe.needs),
       recipe.sourceText ? h('p.iw-source', null, recipe.sourceText) : null),
     h('div.iw-actions', null,
       buttonView(recipe.craft, 'button.iw-btn.iw-small', false, 'one'),
@@ -418,8 +428,7 @@ function buildRowView(row: BuildRowModel): ViewNode {
       h('b', null, row.name),
       row.built ? h('span.iw-stamp', null, icon(ICON.check, 'iw-ready'), 'built') : null,
       h('small', null, row.description),
-      row.built ? null : costsView(row.costs),
-      row.missingText ? h('p.iw-missing', null, row.missingText) : null),
+      row.built ? null : costsView(row.costs, row.needs)),
     row.build ? h('div.iw-actions', null, buttonView(row.build, 'button.iw-btn.iw-small', false)) : null);
 }
 

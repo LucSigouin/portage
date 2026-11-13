@@ -10,7 +10,7 @@ export const itemName = (itemId: ItemId): string => ITEMS[itemId].name;
 /** "3 x Plank". */
 export const countedName = (itemId: ItemId, count: number): string => `${count} x ${itemName(itemId)}`;
 
-const FLAG_SOURCES: Record<FlagId, string> = {
+export const FLAG_SOURCES: Record<FlagId, string> = {
   wren_taught_sailcloth: 'Wren to teach you',
   wren_gave_cloth: 'a word with Wren',
   tink_gave_wrench: 'a word with Tink',

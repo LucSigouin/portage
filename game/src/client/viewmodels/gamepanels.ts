@@ -11,10 +11,10 @@ import type { Command, Container, GameState, InventoryView, ItemStack, Missing, 
 import type { InterfaceIntent } from '../intents.ts';
 import { DEFAULT_KEY_BINDINGS } from '../../settings/index.ts';
 import type { KeyBindings } from '../../settings/index.ts';
-import { cardinalName, countedName, distanceText, itemName, needsText, primaryKey } from './format.ts';
+import { FLAG_SOURCES, capitalise, cardinalName, countedName, distanceText, itemName, needsText, primaryKey } from './format.ts';
 import { crewElsewhere, crewTag, objectiveRows } from './hud.ts';
 import type {
-  BuildRowModel, ButtonModel, CostRowModel, ItemSlotModel, MapIslandModel, MapMarkerModel, PanelModel,
+  BuildRowModel, ButtonModel, CostRowModel, ItemSlotModel, MapIslandModel, MapMarkerModel, NeedChipModel, PanelModel,
   QuestRowModel, RecipeRowModel,
 } from './types.ts';
 
@@ -40,6 +40,20 @@ function costRows(costs: readonly ItemAmount[], inventory: InventoryView, state:
     const have = countInReach(inventory, state, itemId);
     return { itemId, name: itemName(itemId), have, need: count, enough: have >= count };
   });
+}
+
+/**
+ * What is missing that no item chip shows, as chips: the hull, another part, a survivor's word, and the station when
+ * `withStation` (the crafting panel leaves it out: the station's own heading says it is not in reach).
+ */
+export function needChips(missing: Missing | null, withStation: boolean): NeedChipModel[] {
+  if (!missing) return [];
+  const chips: NeedChipModel[] = [];
+  if (withStation && missing.station) chips.push({ kind: 'station', name: STATIONS[missing.station].name });
+  if (missing.hullTier !== null) chips.push({ kind: 'hull', name: HULL_TIERS[missing.hullTier].name });
+  for (const attachmentId of missing.attachments) chips.push({ kind: 'attachment', name: ATTACHMENTS[attachmentId].name });
+  if (missing.flag) chips.push({ kind: 'person', name: capitalise(FLAG_SOURCES[missing.flag]) });
+  return chips;
 }
 
 // --- Inventory -----------------------------------------------------------------
@@ -147,6 +161,7 @@ export function buildCraftingPanel(state: GameState, playerId: PlayerId = 0, bin
               })),
             ] : [],
             missingText,
+            needs: entry.known ? needChips(entry.missing, false) : [],
             sourceText: entry.known && entry.missing.items.some((item) => item.itemId === 'dirty_water') ? scoopText(bindings) : '',
             craft: button('Make', command({ type: 'craft', recipeId: recipe.id, count: 1 }), entry.craftable, missingText || null),
             craftAll: entry.maximumCount > 1
@@ -183,6 +198,7 @@ function buildRow(
     id, name, description, built,
     costs: built ? [] : costRows(costs, inventory, state),
     missingText,
+    needs: built ? [] : needChips(missing, true),
     build: built ? null : button('Build', intent, buildable, missingText || blockedText || null),
   };
 }

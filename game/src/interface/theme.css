@@ -1853,7 +1853,22 @@ html.iw-document {
   border-color: var(--iw-rust-deep);
   border-style: dashed;
 }
-.iw-missing,
+/* Enough or short, told without the colour too: a tick or a cross after the count, a solid or a dashed rule. */
+.iw-cost .iw-mark-have svg {
+  width: 0.8rem;
+  height: 0.8rem;
+  stroke-width: 2.6;
+}
+.iw-cost.iw-enough .iw-mark-have svg {
+  stroke: var(--iw-ink-soft);
+}
+.iw-cost.iw-short .iw-mark-have svg {
+  stroke: var(--iw-rust-deep);
+}
+.iw-cost .iw-need-ico .iw-ico {
+  width: 1.2rem;
+  height: 1.2rem;
+}
 .iw-blocked {
   margin-top: 0.25rem;
   font-family: var(--iw-hand);

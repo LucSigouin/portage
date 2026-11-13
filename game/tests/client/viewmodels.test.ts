@@ -384,6 +384,9 @@ describe('the panels', () => {
     expect(outrigger.missingText).toContain('the ribbed canoe');
     expect(outrigger.missingText).toContain('2 more spruce log');
     expect(outrigger.build!.enabled).toBe(false);
+    // What no item chip can say is a chip of its own: the hull it needs. The items are chips already.
+    expect(outrigger.needs).toEqual([{ kind: 'hull', name: 'Ribbed canoe' }]);
+    expect(panel.hull!.needs).toEqual([]);
 
     give(state, 'pitch', 2);
     give(state, 'birch_bark', 3);
