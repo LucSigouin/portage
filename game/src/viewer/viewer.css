@@ -424,3 +424,40 @@ body {
   right: 2.4rem;
   transform: rotate(4deg);
 }
+
+/* ---------- the guide: where to find it, what it is for ---------- */
+.vw-guide {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 0.8rem;
+  padding-top: 0.6rem;
+  border-top: 0.09rem solid var(--iw-ink-faint);
+}
+.vw-guide h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.76rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--iw-ink-soft);
+}
+.vw-guide ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.vw-guide li {
+  padding-left: 0.7rem;
+  border-left: 0.14rem solid var(--iw-ink-faint);
+  font-size: 0.95rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.vw-guide strong {
+  font-style: italic;
+  font-weight: 600;
+}
+.vw-guide .vw-note {
+  margin-top: 0 !important;
+}

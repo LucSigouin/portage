@@ -17,6 +17,7 @@ import { Stage } from './stage.ts';
 import type { Background, View } from './stage.ts';
 import { BACKGROUNDS, LIGHTS, fromQuery, toQuery } from './state.ts';
 import type { ViewName, ViewerState } from './state.ts';
+import type { GuideSection } from './guide.ts';
 import type { Control, Entry, Options, Subject } from './types.ts';
 import { MAXIMUM_PITCH, MINIMUM_PITCH, distanceLimits, viewFor } from './views.ts';
 
@@ -475,6 +476,7 @@ class Viewer {
     this.facts.append(make('h2', '', entry.name));
     this.facts.append(make('p', 'vw-kind', `${group?.label ?? ''} · `), make('code', 'vw-id', entry.id));
     if (entry.description) this.facts.append(make('p', 'vw-about', entry.description));
+    if (entry.guide) this.facts.append(this.guide(entry.guide()));
     if (this.failure) {
       this.facts.append(make('p', 'vw-failure', `Could not be built: ${this.failure}`));
       return;
@@ -500,6 +502,28 @@ class Viewer {
     for (const file of entry.source) source.append(make('code', '', file));
     this.facts.append(source);
     for (const note of subject.notes) this.facts.append(make('p', 'vw-note', note));
+  }
+
+  /** The guide: each section a heading and short lines, a bold lead then the rest. Words only, nothing moves. */
+  private guide(sections: GuideSection[]): HTMLElement {
+    const guide = make('div', 'vw-guide');
+    for (const section of sections) {
+      const block = make('section', 'vw-guide-part');
+      block.append(make('h3', '', section.title));
+      if (section.lines.length === 0) {
+        block.append(make('p', 'vw-note', section.empty ?? 'Nothing.'));
+      } else {
+        const list = make('ul');
+        for (const line of section.lines) {
+          const row = make('li');
+          row.append(make('strong', '', line.lead), document.createTextNode(` ${line.text}`));
+          list.append(row);
+        }
+        block.append(list);
+      }
+      guide.append(block);
+    }
+    return guide;
   }
 
   private buildChoices(): void {
