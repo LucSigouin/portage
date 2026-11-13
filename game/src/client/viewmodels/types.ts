@@ -325,6 +325,8 @@ export type PanelModel = { title: string; close: ButtonModel } & (
     /** "Press a key for Paddle. Esc cancels.", a conflict report, or an empty string. */
     bindingNotice: string;
     resetBindings: ButtonModel | null;
+    /** "Version 1.0.185 · 931d4b0": which build this is, for a player to read out. */
+    version: string;
   }
   | { id: 'how_to_play'; sections: { heading: string; lines: string[]; controls: ControlLineModel[] }[] }
   | { id: 'credits'; lines: string[]; completed: boolean }

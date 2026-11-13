@@ -253,7 +253,7 @@ function settingsView(panel: Extract<PanelModel, { id: 'settings' }>): ViewNode[
             type: 'button', 'aria-label': 'Remove this key', title: 'Remove this key', html: ICON.cross,
           }), slot.clear) : null)))))),
   ] : null;
-  return sheet(panel, 'wide', '', [
+  return sheet(panel, 'wide', panel.version, [
     tabs,
     h('div.iw-body', { key: 'body' }, h('div.iw-rows', null, panel.rows.map(settingRowView)), bindings),
   ], panel.resetBindings ? buttonView(panel.resetBindings, 'button.iw-btn.iw-quiet') : null);
