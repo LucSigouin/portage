@@ -60,7 +60,9 @@ Every other cap is per socket. This one is per address: how often one address ma
 - **What the game shows.** A browser cannot read why a handshake was refused, so the game sees a dial that
   failed. On a first dial it tries three times in two seconds and then says "The relay cannot be reached. Check
   your connection and try again." A line that was open keeps trying for 45 seconds, as it does for any drop,
-  and gets back in as soon as the minute has passed. Trying again a minute later is the right thing to do.
+  and gets back in if the minute passes in that time. If not, it ends on the same sentence. Trying again a
+  minute later is the right thing to do, so the sentence holds. The game cannot tell this refusal from a relay
+  that is down, and no code in the game was changed.
 - **If the count cannot be asked** (the binding missing, or failing), the dial is let in. A relay with no limit
   is better than no relay. `deploy/deploy-relay.sh` ends by checking, on the live relay, that the limit works.
 - **On this computer** (`127.x.x.x`, `::1`) there is no limit, so the game's own browser tests are never
@@ -86,9 +88,11 @@ change to the room's rules: not built, Luc's call.
 
 ### The rule in front (Luc's call, his account)
 
-A Cloudflare rate limiting rule runs before the Worker. A request it blocks is not a Worker request at all
-(Cloudflare: "Only requests that hit a Worker will count against your limits"). It is the only thing that
-protects the account's 100,000 Worker requests a day. It cannot be tested from this computer.
+A Cloudflare rate limiting rule sits in front of the Worker, and is the only thing that can protect the
+account's 100,000 Worker requests a day. Cloudflare's pages say a request a rule blocks "stops and does not
+reach later phases", and that "Only requests that hit a Worker will count against your limits". No page says in
+one sentence that a blocked request never counts as a Worker request: that is reasoned from those two, not seen.
+It cannot be tested from this computer.
 
 The free plan gives `sigouin.net` one such rule: counted per address, over 10 seconds, blocked for 10 seconds.
 That is too coarse to replace the limit above (a script still gets through 60 times a minute), so it goes on top.
@@ -249,5 +253,5 @@ Figures read from Cloudflare's own pages on 2026-11-11 and read again twice on 2
 - Where a connection comes from is only as honest as a browser. A script can lie about it. The caps are what protect the relay.
 - A dial that reaches a room is one room request, whether the room seats it or turns it away. A dial the door refuses (the dial limit, another site's page, a bad code) is none: it never gets to a room.
 - A dial of either kind is one Worker request. Cloudflare's rate limiting page (last updated Nov 12, 2026) and Workers pricing page (Oct 2, 2026) were read on 2026-11-13: the binding's count is per Cloudflare location, approximate, a window is 10 or 60 seconds, and neither page names a price for it.
-- The rule in front, on the free plan (Cloudflare's rate limiting rules page, last updated Aug 25, 2026): one rule, counted per address, 10 seconds counted, 10 seconds blocked, matched on the path.
+- The rule in front, on the free plan (Cloudflare's rate limiting rules page, last updated Aug 25, 2026): one rule, counted per address, 10 seconds counted, 10 seconds blocked, matched on the path. Its counts are per Cloudflare data center too (their request rate page, last updated Apr 16, 2026).
 - Not said on either page: whether the rooms' 100,000 requests are the same 100,000 as the account's Workers. Count on the worst: an hour of four players takes 13% of what Luc's other Workers have that day.
