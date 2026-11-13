@@ -16,6 +16,7 @@ import './fonts.css';
 import './theme.css';
 import type { CompassModel, GameInterface, InterfaceIntent, InterfaceModel, PanelModel, SettingId } from '../client/contracts.ts';
 import { intentOf, reconcile } from './dom.ts';
+import { DROP_KEY_CODE, quickIntent } from './inventoryview.ts';
 import type { ViewNode } from './dom.ts';
 import { FILTER_DEFINITIONS, ICON, toqueIcon } from './icons.ts';
 import { paperTexture, tornPageOutline } from './paper.ts';
@@ -260,6 +261,13 @@ export class InkInterface implements GameInterface {
     if (!button || button.disabled) return;
     // An inventory row: it opens or closes what the item is and what can be done with it. Nothing goes to the game.
     const detail = button.dataset.detail;
+    if (detail !== undefined && event.shiftKey) {
+      // Shift+click on a tile: its whole stack goes to the other side. The tile does not open.
+      const quick = quickIntent(this.lastPanel, detail, 'shift');
+      if (quick) this.emit(quick);
+      if (event.detail > 0) button.blur();
+      return;
+    }
     if (detail !== undefined) {
       if (!this.openItems.delete(detail)) this.openItems.add(detail);
       this.drawPanel(this.lastPanel, true);
@@ -399,6 +407,17 @@ export class InkInterface implements GameInterface {
     const inField = target instanceof HTMLInputElement || target instanceof HTMLSelectElement;
     const onControl = target !== null && surface.contains(target) && (inField || target instanceof HTMLButtonElement);
     switch (event.code) {
+      case DROP_KEY_CODE: {
+        // The drop key with the pointer on an inventory tile drops that stack, and the game never sees the key.
+        // Not while a line is being typed on, and not while the key is held down.
+        const tile = inField ? null : surface.querySelector<HTMLElement>('.iw-item-pick:hover');
+        const drop = tile && tile.dataset.detail !== undefined ? quickIntent(this.lastPanel, tile.dataset.detail, 'drop') : null;
+        if (!drop) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (!event.repeat) this.emit(drop);
+        return;
+      }
       case 'Tab':
         event.preventDefault();
         if (onControl) {

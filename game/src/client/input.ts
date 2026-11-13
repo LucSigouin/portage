@@ -21,8 +21,8 @@ export interface InputSnapshot {
   /** `selectInteractable(state)`. */
   interactable: Interactable | null;
   sailRaised: boolean;
-  /** The tool belt, in hotbar order. */
-  tools: readonly ToolId[];
+  /** The tool belt, in hotbar order: this player's own (`beltOf`). Null is an empty slot. */
+  tools: readonly (ToolId | null)[];
   selectedTool: ToolId | null;
 }
 
@@ -160,7 +160,7 @@ export class InputController {
         const toolSlot = TOOL_SLOT_FOR_ACTION[action];
         if (toolSlot === undefined) return [];
         const toolId = snapshot.tools[toolSlot];
-        if (toolId === undefined) return [];
+        if (toolId === undefined || toolId === null) return [];
         return [{ type: 'command', command: { type: 'select_tool', toolId: snapshot.selectedTool === toolId ? null : toolId } }];
       }
     }

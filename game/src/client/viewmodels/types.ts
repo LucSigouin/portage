@@ -235,6 +235,29 @@ export interface ItemSlotModel {
   count: number;
   description: string;
   buttons: ButtonModel[];
+  /** What Shift+click on the tile sends: the whole stack to the other side. Null for an empty slot. */
+  shift: InterfaceIntent | null;
+  /** What the drop key sends with the pointer on the tile: the whole stack dropped. Null for an empty slot. */
+  drop: InterfaceIntent | null;
+}
+
+/** One slot of the tool belt, in this player's own order. */
+export interface BeltSlotModel {
+  /** 0 is the first slot. The first five answer the tool keys; a slot past them is spare. */
+  slot: number;
+  /** The key that picks the slot (its number when the key is unbound). Empty for a spare slot. */
+  keyLabel: string;
+  toolId: ToolId | null;
+  /** The tool as an item, for its icon. Null for an empty slot. */
+  itemId: ItemId | null;
+  name: string;
+  description: string;
+  /** In this player's hand. */
+  selected: boolean;
+  /** Take it in hand or put it away, then one button a numbered slot to move it to. None for an empty slot. */
+  buttons: ButtonModel[];
+  /** What the drop key sends with the pointer on the tile: a drop the rules refuse, saying why. */
+  drop: InterfaceIntent | null;
 }
 
 export interface CostRowModel {
@@ -366,8 +389,9 @@ export type PanelModel = { title: string; close: ButtonModel } & (
     id: 'inventory';
     backpack: { label: string; slots: ItemSlotModel[] };
     cargo: { label: string; slots: ItemSlotModel[]; accessible: boolean };
-    tools: { toolId: ToolId; itemId: ItemId; name: string; selected: boolean; intent: InterfaceIntent }[];
-    keyItems: { itemId: ItemId; name: string; count: number }[];
+    /** The crew's tools on this player's belt: the five numbered slots, then any spare slot with a tool on it. */
+    belt: BeltSlotModel[];
+    keyItems: { itemId: ItemId; name: string; count: number; description: string; drop: InterfaceIntent }[];
     stow: ButtonModel;
     fillWater: ButtonModel;
     /** Rewards that did not fit, with the button that claims them. */

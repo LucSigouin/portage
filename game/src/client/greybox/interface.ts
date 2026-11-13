@@ -151,8 +151,8 @@ function panelBodyHtml(panel: PanelModel): string {
         + `${buttonHtml(panel.stow)} ${buttonHtml(panel.fillWater)}</section>`
         + `<section class="${panel.cargo.accessible ? '' : 'gb-dim'}"><h3>${escapeHtml(panel.cargo.label)}</h3>`
         + `<ul class="gb-list">${panel.cargo.slots.map(slotHtml).join('')}</ul></section></div>`
-        + `<h3>Tool belt</h3><p>${panel.tools.map((tool) =>
-          `<button class="${tool.selected ? 'gb-selected' : ''}" ${intentAttribute(tool.intent)}>${escapeHtml(tool.name)}</button>`).join(' ') || 'No tools'}</p>`
+        + `<h3>Tool belt</h3><p>${panel.belt.filter((tool) => tool.toolId !== null).map((tool) =>
+          `<button class="${tool.selected ? 'gb-selected' : ''}" ${intentAttribute(tool.buttons[0]!.intent)}>${escapeHtml(tool.name)}</button>`).join(' ') || 'No tools'}</p>`
         + (panel.keyItems.length > 0 ? `<h3>Key items</h3><p>${panel.keyItems.map((item) => `${escapeHtml(item.name)} x${item.count}`).join(', ')}</p>` : '')
         + (panel.pendingRewards ? `<p class="gb-warning">${escapeHtml(panel.pendingRewards.text)} ${buttonHtml(panel.pendingRewards.claim)}</p>` : '')
         + `<p>${escapeHtml(panel.stationsText)}</p>`;

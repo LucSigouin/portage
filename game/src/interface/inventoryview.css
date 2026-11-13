@@ -1,0 +1,214 @@
+/* The inventory as a grid of tiles (inventoryview.ts). Sized in rem like the rest of the theme, so it is the same
+   sheet at 1366x768 and at 1920x1080.
+
+   Nothing here moves by itself, and nothing moves at all: no transition, no animation, no transform on hover.
+   A tile under the pointer changes its paper, a label under a drawn button is written whole or not at all.
+
+   The sums, in rem. A tile is 3.7 and the gap 0.5. The backpack is 4 across (16.3), the cargo and the belt up to
+   8 across (33.1). The sheet's body is about 55 wide and 38 tall: 40 stacks of cargo are 5 rows (20.5) under the
+   belt (3.7), with room left for one open strip. More rows than fit scroll inside the sheet, under its cut mark. */
+.iw-inv .iw-columns {
+  /* Two columns, two rows: the buttons and the belt on top, the backpack and the cargo under them. */
+  grid-template-columns: 16.3rem minmax(0, 1fr);
+  column-gap: 2.6rem;
+  row-gap: 0.7rem;
+  align-items: start;
+}
+.iw-body.iw-inv .iw-columns > section > h3 {
+  margin-top: 0;
+}
+.iw-body.iw-inv .iw-columns > section > h3.iw-next {
+  margin-top: 0.9rem;
+}
+
+/* --- The top left: two drawn buttons ------------------------------------------------- */
+.iw-inv .iw-pack-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 0.7rem;
+  /* The buttons stand level with the belt's tiles beside them (the belt's heading is 1.5 tall, its grid starts 0.5
+     lower), and stay there when a strip opens under the belt. */
+  align-self: start;
+  padding: 2rem 0 0.2rem;
+}
+.iw .iw-icon-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 3.7rem;
+  height: 3.7rem;
+  border: 0.115rem solid var(--iw-ink);
+  border-radius: 0.6rem 0.4rem 0.7rem 0.36rem;
+  background: var(--iw-paper);
+  box-shadow: 0.1rem 0.16rem 0 var(--iw-ink);
+}
+.iw-icon-btn .iw-ico {
+  width: 2.7rem;
+  height: 2.7rem;
+}
+.iw-icon-btn:enabled:hover {
+  background: var(--iw-paper-bright);
+}
+.iw .iw-icon-btn:disabled {
+  border-style: dashed;
+  border-color: var(--iw-ink-soft);
+  background: none;
+  box-shadow: none;
+}
+/* Off: the drawing is washed out. Its words, under it, keep their full ink. */
+.iw-icon-btn:disabled .iw-ico {
+  opacity: 0.45;
+}
+/* The label: what the button does, and under that why it is off or what it gives. It hangs under the button
+   while the pointer or the keyboard is on it. */
+.iw-icon-btn::after {
+  content: attr(data-tip) '\A' attr(data-note);
+  display: none;
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  top: calc(100% + 0.45rem);
+  width: max-content;
+  max-width: 15rem;
+  padding: 0.3rem 0.6rem 0.22rem;
+  font-family: var(--iw-hand);
+  font-size: 0.9rem;
+  line-height: 1.25;
+  text-align: left;
+  white-space: pre-line;
+  color: var(--iw-ink);
+  background: var(--iw-paper-bright);
+  border: 0.09rem solid var(--iw-ink);
+  border-radius: 0.4rem 0.28rem 0.45rem 0.24rem;
+  pointer-events: none;
+}
+.iw-icon-btn:hover::after,
+.iw-icon-btn:focus-visible::after,
+.iw.iw-by-keys .iw-icon-btn:focus::after {
+  display: block;
+}
+
+/* --- The grids -------------------------------------------------------------------------- */
+.iw-inv .iw-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 3.7rem);
+  /* A strip takes a whole row; the tiles after it fill the row it left, in their order. */
+  grid-auto-flow: row dense;
+  gap: 0.5rem;
+  padding: 0.5rem 0 0.2rem;
+  list-style: none;
+}
+.iw-inv .iw-tile {
+  display: block;
+  position: relative;
+  width: 3.7rem;
+  height: 3.7rem;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+}
+.iw-inv .iw-tile .iw-item-pick {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr auto;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0.22rem 0.2rem 0.14rem;
+  text-align: center;
+  border: 0.09rem solid var(--iw-ink);
+  border-radius: 0.5rem 0.28rem 0.6rem 0.24rem;
+  background: var(--iw-paper-bright);
+}
+.iw-inv .iw-tile .iw-item-pick:hover {
+  background: var(--iw-paper);
+  box-shadow: inset 0 0 0 0.09rem var(--iw-ink);
+}
+.iw-inv .iw-tile .iw-item-ico .iw-ico {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+/* How many: x12, in the hand, under the drawing at the right. */
+.iw-tile-count {
+  justify-self: end;
+  padding-right: 0.12rem;
+  font-family: var(--iw-hand);
+  font-weight: 700;
+  font-size: 0.82rem;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--iw-ink);
+}
+/* An empty slot: a dashed outline on the deeper paper, the same as an empty slot of the hotbar. */
+.iw-inv .iw-tile.iw-blank {
+  border: 0.09rem dashed var(--iw-ink-soft);
+  border-radius: 0.5rem 0.28rem 0.6rem 0.24rem;
+  background: var(--iw-paper-deep);
+}
+/* Open: the tile is ruled twice and marked in rust under it, so the strip below is seen to be its own. */
+.iw-inv .iw-tile.iw-open .iw-item-pick {
+  background: var(--iw-paper);
+  box-shadow: inset 0 0 0 0.09rem var(--iw-ink), 0 0.26rem 0 var(--iw-rust-deep);
+}
+/* The cargo out of reach: the drawings are washed out. The counts keep their ink. */
+.iw-inv .iw-out-of-reach .iw-item-ico .iw-ico {
+  opacity: 0.5;
+}
+
+/* --- The tool belt ----------------------------------------------------------------------- */
+/* The key that picks the slot, in the corner, as on the hotbar. */
+.iw-inv .iw-tile .iw-n {
+  position: absolute;
+  left: 0.3rem;
+  top: 0.08rem;
+  font-family: var(--iw-hand);
+  font-weight: 700;
+  font-size: 0.8rem;
+  line-height: 1.1;
+  color: var(--iw-ink-soft);
+}
+.iw-inv .iw-belt-tiles .iw-tile-count {
+  font-weight: 400;
+  font-size: 0.72rem;
+  color: var(--iw-ink-soft);
+}
+/* The tool in hand: the rust underline of the hotbar's selected card, drawn still. */
+.iw-inv .iw-tile.iw-held .iw-item-pick {
+  border-width: 0.14rem;
+  box-shadow: 0 0.26rem 0 var(--iw-rust);
+}
+.iw-inv .iw-tile.iw-held.iw-open .iw-item-pick {
+  box-shadow: inset 0 0 0 0.09rem var(--iw-ink), 0 0.26rem 0 var(--iw-rust-deep);
+}
+
+/* --- A tile's strip: what it is and what can be done with it ------------------------------ */
+.iw-inv .iw-item-detail {
+  grid-column: 1 / -1;
+  display: block;
+  margin: 0;
+  padding: 0.35rem 0.6rem 0.45rem;
+  border: 0.09rem solid var(--iw-ink);
+  border-radius: 0.4rem 0.28rem 0.45rem 0.24rem;
+  background: var(--iw-paper);
+}
+.iw-item-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+  line-height: 1.2;
+}
+.iw-item-head b {
+  font-weight: 400;
+}
+.iw-inv .iw-item-detail .iw-item-about {
+  display: block;
+  margin-top: 0.1rem;
+}
+.iw-inv .iw-item-detail .iw-actions {
+  justify-content: flex-start;
+  margin-top: 0.4rem;
+}

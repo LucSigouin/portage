@@ -95,7 +95,7 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
     case 'save_slots':
       return { ...frame, ...buildSaveSlotsPanel(input.slots, input.now, input.currentSlot) };
     case 'inventory':
-      return game ? { ...frame, ...buildInventoryPanel(game, playerId) } : null;
+      return game ? { ...frame, ...buildInventoryPanel(game, playerId, input.settings.controls.keyBindings) } : null;
     case 'crafting':
       return game ? { ...frame, ...buildCraftingPanel(game, playerId, input.settings.controls.keyBindings) } : null;
     case 'canoe_builder':

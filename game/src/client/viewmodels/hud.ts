@@ -3,7 +3,7 @@ import { ISLANDS_BY_ID, ITEMS, QUEST_LIST, REGIONS_BY_ID, WEATHER } from '../../
 import { CREW_MARKS } from '../../data/crew.ts';
 import type { Settings } from '../../settings/index.ts';
 import {
-  bearingBetween, bearingDifference, playerOf, selectActiveQuests, selectCanoeStats, selectInteractable, selectMap,
+  beltOf, bearingBetween, bearingDifference, playerOf, selectActiveQuests, selectCanoeStats, selectInteractable, selectMap,
   selectMeters, selectTimeOfDay, selectWeather,
 } from '../../sim/index.ts';
 import type { GameState, PlayerId, PlayerState, QuestView, TimeOfDay } from '../../sim/index.ts';
@@ -130,8 +130,8 @@ function buildWaterGauge(state: GameState, playerId: PlayerId): WaterGaugeModel 
 }
 
 function buildHotbar(state: GameState, settings: Settings, playerId: PlayerId): HotbarSlotModel[] {
-  // The crew's tools, the same for everyone; the tool in hand is this player's own.
-  const tools = state.tools;
+  // The crew's tools, the same for everyone; the order on the belt and the tool in hand are this player's own.
+  const tools = beltOf(state, playerOf(state, playerId));
   const { selectedTool } = playerOf(state, playerId);
   return HOTBAR_ACTIONS.map((action, index) => {
     const toolId = tools[index] ?? null;

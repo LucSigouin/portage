@@ -7,14 +7,14 @@ import {
   selectActiveQuests, selectBuildOptions, selectCanoeStats, selectCraftableRecipes, selectDialogue, selectInventory, selectMap,
   selectQuestLog,
 } from '../../sim/index.ts';
-import type { Command, Container, GameState, InventoryView, ItemStack, Missing, PlayerId, QuestView } from '../../sim/index.ts';
+import type { Command, GameState, InventoryView, ItemStack, Missing, PlayerId, QuestView } from '../../sim/index.ts';
 import type { InterfaceIntent } from '../intents.ts';
 import { DEFAULT_KEY_BINDINGS } from '../../settings/index.ts';
 import type { KeyBindings } from '../../settings/index.ts';
 import { FLAG_SOURCES, capitalise, cardinalName, countedName, distanceText, itemName, needsText, primaryKey } from './format.ts';
 import { crewElsewhere, crewTag, objectiveRows } from './hud.ts';
 import type {
-  BuildRowModel, ButtonModel, CostRowModel, ItemSlotModel, MapIslandModel, MapMarkerModel, NeedChipModel, PanelModel,
+  BuildRowModel, ButtonModel, CostRowModel, MapIslandModel, MapMarkerModel, NeedChipModel, PanelModel,
   QuestRowModel, RecipeRowModel,
 } from './types.ts';
 
@@ -111,68 +111,8 @@ export function questWants(state: GameState): QuestWants {
 
 // --- Inventory -----------------------------------------------------------------
 
-function itemSlots(stacks: ItemStack[], capacity: number, container: Container, inventory: InventoryView): ItemSlotModel[] {
-  const other = container === 'backpack' ? 'cargo' : 'backpack';
-  const usable = container === 'backpack' || inventory.cargoAccessible;
-  const slots: ItemSlotModel[] = stacks.map((stack) => {
-    const definition = ITEMS[stack.itemId];
-    const buttons: ButtonModel[] = [];
-    if (definition.edible) {
-      buttons.push(button(
-        definition.isDrink ? 'Drink' : 'Eat',
-        command(definition.isDrink ? { type: 'drink', itemId: stack.itemId } : { type: 'eat', itemId: stack.itemId }),
-        usable,
-      ));
-    }
-    buttons.push(button(
-      other === 'cargo' ? 'To cargo' : 'To backpack',
-      command({ type: 'transfer', from: container, itemId: stack.itemId, count: stack.count }),
-      inventory.cargoAccessible,
-      inventory.cargoAccessible ? null : 'The canoe is out of reach',
-    ));
-    buttons.push(button('Drop', command({ type: 'discard', from: container, itemId: stack.itemId, count: stack.count }), usable));
-    return { itemId: stack.itemId, name: definition.name, count: stack.count, description: definition.description, buttons };
-  });
-  while (slots.length < capacity) slots.push({ itemId: null, name: '', count: 0, description: '', buttons: [] });
-  return slots;
-}
-
-export function buildInventoryPanel(state: GameState, playerId: PlayerId = 0): PanelBody<'inventory'> {
-  const inventory = selectInventory(state, playerId);
-  const rewards = inventory.pendingRewards;
-  return {
-    id: 'inventory',
-    backpack: {
-      label: `Backpack ${inventory.backpack.length} / ${inventory.backpackSlots}`,
-      slots: itemSlots(inventory.backpack, inventory.backpackSlots, 'backpack', inventory),
-    },
-    cargo: {
-      label: `Canoe cargo ${inventory.cargo.length} / ${inventory.cargoSlots}${inventory.cargoAccessible ? '' : ' (out of reach)'}`,
-      slots: itemSlots(inventory.cargo, inventory.cargoSlots, 'cargo', inventory),
-      accessible: inventory.cargoAccessible,
-    },
-    tools: inventory.tools.map((toolId) => ({
-      toolId, itemId: toolId, name: ITEMS[toolId].name, selected: toolId === inventory.selectedTool,
-      intent: command({ type: 'select_tool', toolId: toolId === inventory.selectedTool ? null : toolId }),
-    })),
-    keyItems: inventory.keyItems.map(({ itemId, count }) => ({ itemId, name: itemName(itemId), count })),
-    stow: button(
-      'Stow backpack in the canoe', command({ type: 'stow_backpack' }),
-      inventory.cargoAccessible && inventory.backpack.length > 0,
-      inventory.cargoAccessible ? null : 'The canoe is out of reach',
-    ),
-    fillWater: button(
-      'Scoop water', command({ type: 'fill_water', count: 1 }), inventory.tools.includes('bailing_can'),
-      'Dirty water. Boil it at a fire before drinking.',
-    ),
-    pendingRewards: rewards.length === 0 ? null : {
-      text: `Waiting for room: ${rewards.map((stack) => countedName(stack.itemId, stack.count)).join(', ')}`,
-      items: rewards.map((stack) => ({ itemId: stack.itemId, name: itemName(stack.itemId), count: stack.count })),
-      claim: button('Claim', command({ type: 'claim_rewards' })),
-    },
-    stationsText: `In reach: ${inventory.stations.map((station) => STATIONS[station].name.toLowerCase()).join(', ')}`,
-  };
-}
+// The inventory panel has its own module.
+export { buildInventoryPanel } from './inventory.ts';
 
 // --- Crafting ------------------------------------------------------------------
 
