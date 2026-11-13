@@ -411,6 +411,17 @@ body {
   .vw-items {
     max-height: 22rem;
   }
+  /* a phone: the bar wraps instead of pushing the page sideways, and the guide reads at a phone's size */
+  .vw-bar {
+    flex-wrap: wrap;
+    gap: 0.4rem 1.2rem;
+  }
+  .vw-tools {
+    margin-left: 0;
+  }
+  .vw .vw-guide li {
+    font-size: 1.12rem;
+  }
 }
 
 /* The tape on a card: the theme places it only inside its own panels. */

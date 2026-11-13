@@ -7,6 +7,7 @@
  * - the saved PNG has see-through pixels around the thing, and none of the grid;
  * - a pasted link reopens the same thing and view, pixel for pixel;
  * - the list, the search, the views and the stage answer the keyboard;
+ * - every item says where to find it and what it is for, and the guide fits a phone;
  * - a normal game load fetches no viewer code, and the viewer fetches nothing from another site.
  *
  * Needs the dev server (PORTAGE_URL, default http://localhost:5227).
@@ -164,6 +165,32 @@ test('every entry opens with a clean console and draws something', async ({ page
   }
   console.log(`opened ${ids.length} entries`);
   expect(bare).toEqual([]);
+  expect(problems).toEqual([]);
+});
+
+test('every item says where to find it and what it is for, and the guide fits a phone', async ({ page }) => {
+  const problems = watchConsole(page);
+  await openViewer(page, '?thing=icon/pitch');
+  const items = (await probe(page)).ids.filter((id) => id.startsWith('icon/'));
+  expect(items.length).toBeGreaterThan(40);
+  const thin: string[] = [];
+  for (const id of items) {
+    await page.evaluate((target) => (window as unknown as Hooks).viewer.open(target), id);
+    const parts = await page.locator('.vw-guide-part').evaluateAll((sections) => sections.map((section) => ({
+      title: section.querySelector('h3')?.textContent ?? '',
+      lines: section.querySelectorAll('li').length,
+    })));
+    const where = parts.find((part) => part.title === 'Where to find it');
+    const usedFor = parts.find((part) => part.title === 'Used for');
+    if (!where || where.lines === 0 || !usedFor || usedFor.lines === 0) thin.push(`${id}: ${JSON.stringify(parts)}`);
+  }
+  expect(thin).toEqual([]);
+  // a phone: the guide is on the page and the page does not scroll sideways
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openViewer(page, '?thing=icon/nails');
+  await expect(page.locator('.vw-guide li').first()).toBeVisible();
+  const wide = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(wide).toBeLessThanOrEqual(390);
   expect(problems).toEqual([]);
 });
 
