@@ -8,7 +8,7 @@
  * - nothing leaves the page, nothing is stored, and the player's own settings and saves are as they were;
  * - the console is clean;
  * - a normal game, without the switch, loads none of it;
- * - doubling the work (`&bench=2`) about doubles the honest frame cost.
+ * - doubling the work (`&bench=2`) about doubles the honest frame cost, and that cost is the chip's time, not the script's.
  *
  * Two ways to run it:
  *   PORTAGE_URL=http://localhost:5224 npx playwright test tests/perf.spec.ts        the dev server
@@ -51,7 +51,7 @@ const FIELDS = [
   "Browser's full name: ",
 ];
 
-interface Cost { name: string; rung: number; milliseconds: number; worldWidth: number; worldHeight: number; frames: number }
+interface Cost { name: string; rung: number; milliseconds: number; quickest: number; worldWidth: number; worldHeight: number; frames: number }
 interface Readout {
   done: boolean;
   text: string;
@@ -277,15 +277,40 @@ test('the time caps hold on a slow chip: 24 times the work, still inside a minut
 });
 
 test.describe('true numbers', () => {
-  // Other pages share the chip, and it then gives each about half: a pair of runs can straddle that. So the pair is tried again.
-  test.describe.configure({ retries: 2 });
-
+  // The chip is not always ours. Measured on this Mac with no other test running: the same plain run read 5.2 ms a
+  // frame with the chip to itself and 12.3 to 13.2 ms a few minutes earlier, when another program was on it. That
+  // program takes about half for minutes at a time, and its bursts push the middle batch up by a fifth to a half.
+  // One plain run against one doubled run, 30 seconds apart, then reads 2.0 on a quiet chip and 2.0 to 3.1 on a
+  // shared one. It is not a cold start: the first run in a new browser reads within a tenth of the next plain one. So:
+  //  - each run is read by its quickest batch, the chip at its least disturbed (the sheet prints it: "batches A to B");
+  //  - the runs go plain, doubled, plain, doubled, and each doubled run is set against the plain runs beside it;
+  //  - the middle of those three ratios is judged. One change on the chip spoils one ratio, never the middle.
+  // No retries: a red here is two spoiled ratios out of three, or a real fault.
   test('doubling the work about doubles the honest frame cost', async ({ page }) => {
     await serveBuild(page);
-    const once = costOf((await run(page)).result, 'Top quality').milliseconds;
-    const twice = costOf((await run(page, '&bench=2')).result, 'Top quality').milliseconds;
-    console.log(`top quality: ${once.toFixed(1)} ms a frame, with the work doubled ${twice.toFixed(1)} ms: ${(twice / once).toFixed(2)} times`);
-    expect(twice / once).toBeGreaterThan(1.6);
-    expect(twice / once).toBeLessThan(2.5);
+    const runs: { top: Cost; last: Cost }[] = [];
+    for (const switches of ['', '&bench=2', '', '&bench=2']) {
+      const { result } = await run(page, switches);
+      runs.push({ top: costOf(result, 'Top quality'), last: costOf(result, 'Lowest rung') });
+    }
+    // The same two pictures four times: top quality on the whole window, and the last rung at half that size.
+    for (const { top, last } of runs) {
+      expect([top.rung, top.worldWidth, top.worldHeight]).toEqual([0, 1920, 1080]);
+      expect([last.rung, last.worldWidth, last.worldHeight]).toEqual([11, 960, 540]);
+    }
+    const [once, twice, onceAgain, twiceAgain] = runs.map(({ top }) => top.quickest);
+    const ratios = [twice / once, twice / onceAgain, twiceAgain / onceAgain];
+    const middle = [...ratios].sort((first, second) => first - second)[1];
+    const smaller = runs.map(({ top, last }) => top.quickest / last.quickest);
+    console.log(`top quality, quickest batch (middle batch): ${runs.map(({ top }, index) => `${index % 2 === 0 ? 'plain' : 'doubled'} ${top.quickest.toFixed(1)} (${top.milliseconds.toFixed(1)}) ms`).join(', ')}. `
+      + `Doubled against plain: ${ratios.map((ratio) => ratio.toFixed(2)).join(', ')} times, middle ${middle.toFixed(2)}. `
+      + `Top quality against the last rung: ${smaller.map((ratio) => ratio.toFixed(2)).join(', ')} times`);
+    // It is the chip's time, not the script's. A timer that does not wait for the chip reads the script's time in its
+    // quickest batch: the same at any size (and 1.6 to 2.1 times with the draws doubled, which the check below lets by).
+    // The last rung makes the same draw calls on a quarter of the pixels: honest, top quality costs 2 to 3 times that.
+    // The second lowest of the four is judged, so one run that straddles a change on the chip is forgiven.
+    expect([...smaller].sort((first, second) => first - second)[1]).toBeGreaterThan(1.5);
+    expect(middle).toBeGreaterThan(1.6);
+    expect(middle).toBeLessThan(2.5);
   });
 });
