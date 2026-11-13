@@ -38,6 +38,8 @@ export interface InterfaceModelInput {
   playerId?: PlayerId;
   /** The player whose browser runs a shared game, for the crew list's host tag. Null or absent when the game is not shared. */
   hostId?: PlayerId | null;
+  /** True on a guest's screen while it has had no word from the host: the HUD says so until it has. */
+  hostQuiet?: boolean;
   paused: boolean;
   /** Bearing the camera looks along, radians. */
   cameraYaw: number;
@@ -56,6 +58,10 @@ export interface InterfaceModelInput {
   crew?: CrewView | null;
   debug: DebugModel | null;
 }
+
+/** True when this screen is a guest's: the game it shows runs in somebody else's browser. */
+const isGuestScreen = (input: InterfaceModelInput): boolean =>
+  input.hostId !== null && input.hostId !== undefined && input.hostId !== (input.playerId ?? 0);
 
 const PANEL_TITLES: Readonly<Record<PanelId, string>> = {
   settings: 'Settings', how_to_play: 'How to Play', credits: 'Credits', pause: 'Paused', save_slots: 'Save slots',
@@ -82,13 +88,13 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
     case 'credits':
       return { ...frame, ...buildCreditsPanel(game?.flags.beacon_lit === true) };
     case 'pause':
-      return { ...frame, ...buildPausePanel(input.progressText, input.crew ?? null) };
+      return { ...frame, ...buildPausePanel(input.progressText, input.crew ?? null, isGuestScreen(input)) };
     case 'save_slots':
       return { ...frame, ...buildSaveSlotsPanel(input.slots, input.now, input.currentSlot) };
     case 'inventory':
       return game ? { ...frame, ...buildInventoryPanel(game, playerId) } : null;
     case 'crafting':
-      return game ? { ...frame, ...buildCraftingPanel(game, playerId) } : null;
+      return game ? { ...frame, ...buildCraftingPanel(game, playerId, input.settings.controls.keyBindings) } : null;
     case 'canoe_builder':
       return game ? { ...frame, ...buildCanoeBuilderPanel(game, playerId) } : null;
     case 'quest_log':
@@ -119,11 +125,11 @@ export function buildInterfaceModel(input: InterfaceModelInput): InterfaceModel 
     patternedMeters: settings.accessibility.patternedMeters,
     paused: input.paused,
     lobby: panels.screen === 'lobby' ? buildLobbyModel(input.slots, input.latestSlot, input.crew ?? null) : null,
-    hud: game ? buildHudModel(game, settings, input.cameraYaw, input.playerId ?? 0, input.hostId ?? null) : null,
+    hud: game ? buildHudModel(game, settings, input.cameraYaw, input.playerId ?? 0, input.hostId ?? null, input.hostQuiet ?? false) : null,
     toasts: input.toasts,
     panel: beneath ? buildPanelModel(beneath, input) : null,
     openPanels: [...panels.stack],
-    confirm: top === 'confirm' && panels.confirm ? buildConfirmModel(panels.confirm) : null,
+    confirm: top === 'confirm' && panels.confirm ? buildConfirmModel(panels.confirm, isGuestScreen(input)) : null,
     debug: input.debug,
   };
 }

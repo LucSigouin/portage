@@ -21,8 +21,12 @@
  * | relay | `{"relay":"bye","code":n,"reason":"..."}` | The relay is letting this socket go, and why. The close that follows carries the same code. |
  *
  * A room exists while a socket is in it. It keeps nothing once the last one
- * closes, and nothing ever goes to disk: no game state, no names, no keys.
- * Names never reach this code at all: they are inside the bodies.
+ * closes, and nothing of the game ever goes to disk: no state, no names, no
+ * keys. Names never reach this code at all: they are inside the bodies.
+ *
+ * One thing must outlive the room's own memory: the idle count (`idle`,
+ * `restoreIdle`). Whoever holds the room keeps it and hands it back, because
+ * a Durable Object's memory is new every time it wakes.
  */
 
 /** Letters and digits that neither look nor sound alike, read aloud over a call. No vowels: no words by accident. */
@@ -94,6 +98,14 @@ interface Seat extends SeatRecord {
   refilledAt: number;
 }
 
+/** How the idle cap stands. Two small values, and all a room ever asks to have kept for it. */
+export interface IdleCount {
+  /** Looks in a row that found nothing had gone through the room. */
+  quietSweeps: number;
+  /** True once a frame has gone through since the last look. */
+  sawFrame: boolean;
+}
+
 export interface RoomStats {
   /** Frames passed on, and frames thrown away (not JSON, wrong shape, nobody to give them to). */
   relayed: number;
@@ -134,6 +146,20 @@ export class RoomLogic {
     this.seats.set(wire, seat);
     this.nextPeer = Math.max(this.nextPeer, record.peer + 1);
     return seat;
+  }
+
+  /** The idle count as it stands, for whoever holds the room to keep through its sleep. */
+  get idle(): IdleCount {
+    return { quietSweeps: this.quietSweeps, sawFrame: this.sawFrame };
+  }
+
+  /**
+   * Put the idle count back after the room slept. Without it every waking
+   * starts the count at nothing, and a silent room is never closed.
+   */
+  restoreIdle(count: IdleCount): void {
+    this.quietSweeps = Math.max(0, Math.floor(Number(count.quietSweeps) || 0));
+    this.sawFrame = count.sawFrame === true;
   }
 
   /** Put back a socket the room held before it slept. */

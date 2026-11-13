@@ -8,7 +8,7 @@ import {
   savedAgoText, settingsRows, toastForEvent, toastsFromEvents,
 } from '../../src/client/viewmodels/index.ts';
 import type { InterfaceModelInput } from '../../src/client/viewmodels/index.ts';
-import { ISLANDS, NODES_BY_ISLAND } from '../../src/data/index.ts';
+import { ISLANDS, NODES_BY_ISLAND, TUNING } from '../../src/data/index.ts';
 import type { SlotSummary } from '../../src/save/index.ts';
 import { INPUT_ACTIONS, createDefaultSettings } from '../../src/settings/index.ts';
 import { dispatch, selectInteractable } from '../../src/sim/index.ts';
@@ -17,6 +17,8 @@ import { SETTINGS_TABS } from '../../src/client/panels.ts';
 import { floatCanoeAt, give, newGame, run, standOn, teleport, teleportToCamp, teleportToNode } from '../support.ts';
 
 const settings = createDefaultSettings();
+/** Every source file of the game, as text. */
+const sources = import.meta.glob('../../src/**/*.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 const missing = (overrides: Partial<Missing>): Missing => ({
   items: [], tools: [], station: null, hullTier: null, attachments: [], flag: null, ...overrides,
 });
@@ -146,6 +148,86 @@ describe('the HUD', () => {
     expect(blocked.text).toContain('needs stone knife');
   });
 
+  it('offers a bed no key before the sleep hour, says the hour from the rules\' table, and offers the key from then on', () => {
+    const state = newGame();
+    standOn(state, 'home_knoll');
+    teleportToCamp(state, 'home_knoll');
+    const hour = TUNING.time.hourSeconds;
+    const from = TUNING.time.sleepFromHour;
+    const clock = `${String(from).padStart(2, '0')}:00`;
+
+    // Midday, rested: the bed tells when, and promises nothing.
+    state.time = 12 * hour;
+    expect(selectInteractable(state)).toMatchObject({ kind: 'bed', command: { type: 'sleep' } });
+    expect(dispatch(state, { type: 'sleep' })).toMatchObject({ ok: false, reason: 'not_tired' });
+    expect(buildHudModel(state, settings, 0).prompt).toEqual({ text: `Sleep (after ${clock})`, keyLabel: '', mode: 'blocked' });
+    // The refusal names the same hour, and so does How to Play.
+    expect(failureText('not_tired', null)).toBe(`Not tired yet. Sleep after ${clock}, or when worn out.`);
+    expect(JSON.stringify(buildHowToPlayPanel(settings))).toContain(`Sleep at a camp after ${clock} to refill it`);
+
+    // A minute before the hour it still does; on the hour the key is back and the key works.
+    state.time = from * hour - 60;
+    expect(buildHudModel(state, settings, 0).prompt!.keyLabel).toBe('');
+    state.time = from * hour;
+    expect(buildHudModel(state, settings, 0).prompt).toEqual({ text: 'Sleep until morning', keyLabel: 'F', mode: 'press' });
+
+    // Worn out by day, the bed takes you: so the key is offered.
+    state.time = 12 * hour;
+    state.players[0].energy = TUNING.time.sleepWhenEnergyAtMost;
+    expect(buildHudModel(state, settings, 0).prompt).toEqual({ text: 'Sleep until morning', keyLabel: 'F', mode: 'press' });
+    expect(dispatch(state, { type: 'sleep' }).ok).toBe(true);
+  });
+
+  it('types the sleep hour in nowhere: no file of the game spells it out', () => {
+    const clock = `${String(TUNING.time.sleepFromHour).padStart(2, '0')}:00`;
+    expect(Object.keys(sources).length).toBeGreaterThan(100);
+    expect(Object.entries(sources).filter(([, text]) => text.includes(clock)).map(([path]) => path)).toEqual([]);
+  });
+
+  it('ashore with the bail step still open, says that bailing is done aboard, with both keys as they are bound', () => {
+    const state = newGame();
+    // A new game: the canoe is half full, and the first quest asks for it to be bailed.
+    expect(state.canoe.waterLevel).toBeGreaterThan(10);
+    expect(buildHudModel(state, settings, 0).tracker!.objectives[0]).toMatchObject({ text: 'Bail the canoe nearly dry', done: false });
+    expect(buildHudModel(state, settings, 0).hint).toBe('Hold R to bail.');
+    // The player lands first, as the review did. The water is still aboard and the step is still open.
+    standOn(state, 'home_knoll');
+    state.canoe.waterLevel = 60;
+    run(state, {}, 0.1);
+    expect(state.players[0].mode).toBe('foot');
+    expect(buildHudModel(state, settings, 0).tracker!.objectives[0]!.done).toBe(false);
+    expect(buildHudModel(state, settings, 0).hint).toBe('Board (F), then hold R to bail.');
+    // Both keys are read from the bindings.
+    const rebound = { ...settings, controls: { ...settings.controls, keyBindings: { ...settings.controls.keyBindings, interact: ['KeyG'], bail: ['KeyB'] } } };
+    expect(buildHudModel(state, rebound, 0).hint).toBe('Board (G), then hold B to bail.');
+    // And the words are true: boarded and bailing, the water goes down and the step is done.
+    expect(dispatch(state, { type: 'board' }).ok).toBe(true);
+    run(state, { bail: true }, 25);
+    expect(state.canoe.waterLevel).toBeLessThanOrEqual(10);
+    expect(buildHudModel(state, settings, 0).tracker?.objectives.find((objective) => objective.text === 'Bail the canoe nearly dry')?.done ?? true).toBe(true);
+    // Ashore again with the step done, nothing more is said about bailing.
+    expect(dispatch(state, { type: 'disembark' }).ok).toBe(true);
+    run(state, {}, 0.1);
+    expect(buildHudModel(state, settings, 0).hint ?? '').not.toContain('bail');
+    // Bailed dry afloat, then ashore somewhere that is not Home Knoll: the quest is still open, its bail step is not.
+    const elsewhere = newGame();
+    elsewhere.canoe.waterLevel = 0;
+    run(elsewhere, {}, 0.1);
+    standOn(elsewhere, 'birch_islet');
+    run(elsewhere, {}, 0.1);
+    expect(elsewhere.quests.bail_out).toMatchObject({ status: 'active', progress: [1, 0] });
+    expect(buildHudModel(elsewhere, settings, 0).hint ?? '').not.toContain('bail');
+    // A thirsty player is told about the thirst first, and with hints off nobody is told anything.
+    const dry = newGame();
+    standOn(dry, 'home_knoll');
+    dry.canoe.waterLevel = 60;
+    run(dry, {}, 0.1);
+    dry.players[0].thirst = 10;
+    expect(buildHudModel(dry, settings, 0).hint).toContain('Thirsty.');
+    dry.players[0].thirst = 100;
+    expect(buildHudModel(dry, { ...settings, gameplay: { ...settings.gameplay, hints: false } }, 0).hint).toBeNull();
+  });
+
   it('gives a hint only when the setting is on and one applies', () => {
     const state = newGame();
     expect(buildHudModel(state, settings, 0).hint).toBe('Hold R to bail.');
@@ -242,6 +324,35 @@ describe('the panels', () => {
     expect(fire.recipes.find((recipe) => recipe.recipeId === 'pitch')!.missingText).toContain('the fire');
     teleportToCamp(state, 'home_knoll');
     expect(buildCraftingPanel(state).stations.find((station) => station.name === 'Fire')!.inReach).toBe(true);
+  });
+
+  it('says where dirty water comes from on the recipe that is short of it, with the inventory key as it is bound', () => {
+    const state = newGame();
+    standOn(state, 'home_knoll');
+    teleportToCamp(state, 'home_knoll');
+    const recipes = (bindings = settings.controls.keyBindings) => buildCraftingPanel(state, 0, bindings).stations.flatMap((station) => station.recipes);
+    const boil = (bindings = settings.controls.keyBindings) => recipes(bindings).find((recipe) => recipe.recipeId === 'clean_water')!;
+    expect(boil()).toMatchObject({ name: 'Boil water', missingText: 'Needs 1 more dirty water', sourceText: 'Scoop it at the water, from the inventory (Tab).' });
+    // Nothing else is short of dirty water, so nothing else says it.
+    expect(recipes().filter((recipe) => recipe.sourceText !== '').map((recipe) => recipe.recipeId)).toEqual(['clean_water']);
+    // The key is read from the bindings, not typed in.
+    const rebound = { ...settings.controls.keyBindings, inventory: ['KeyI'] };
+    expect(boil(rebound).sourceText).toBe('Scoop it at the water, from the inventory (I).');
+    // The whole interface model passes the player's own bindings through.
+    const model = buildInterfaceModel({
+      panels: reducePanels(createPanelState('game'), { type: 'open', panel: 'crafting' }, { canoeBeached: true }).state,
+      settings: { ...settings, controls: { ...settings.controls, keyBindings: rebound } },
+      game: state, paused: false, cameraYaw: 0, toasts: [], slots: [], latestSlot: null, currentSlot: null, now: 0, capture: null,
+      bindingNotice: '', progressText: '', debug: null,
+    });
+    if (model.panel?.id !== 'crafting') throw new Error('expected the crafting panel');
+    expect(model.panel.stations.flatMap((station) => station.recipes).find((recipe) => recipe.recipeId === 'clean_water')!.sourceText)
+      .toBe('Scoop it at the water, from the inventory (I).');
+    // With the water in the pack the line is gone, and the words were true: it was scooped at the water.
+    standOn(state, 'home_knoll');
+    expect(dispatch(state, { type: 'fill_water', count: 1 }).ok).toBe(true);
+    teleportToCamp(state, 'home_knoll');
+    expect(boil()).toMatchObject({ missingText: '', sourceText: '', craft: { enabled: true } });
   });
 
   it('offers "make all" only when more than one can be made, and hides untaught recipes', () => {

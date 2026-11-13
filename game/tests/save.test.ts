@@ -4,7 +4,8 @@ import {
 } from '../src/save/index.ts';
 import type { SaveMigration } from '../src/save/index.ts';
 import { FIXED_STEP, NEUTRAL_INPUT, bearingDifference, dispatch, hashState, step } from '../src/sim/index.ts';
-import { TUNING } from '../src/data/index.ts';
+import { MAIN_QUESTS, TUNING } from '../src/data/index.ts';
+import { createBotDriver } from '../src/bot/bot.ts';
 import { FakeStorage, give, newGame, run, standOn, teleportToCamp } from './support.ts';
 
 /** A game with some history in it. */
@@ -18,6 +19,9 @@ function playedGame() {
   state.events = [];
   return state;
 }
+
+/** The main line's quests, first to last. */
+const MAIN_QUEST_ORDER = MAIN_QUESTS.map((quest) => quest.id);
 
 describe('serialize and deserialize', () => {
   it('round-trips a game exactly', () => {
@@ -215,6 +219,70 @@ describe('saves from before the wind swung', () => {
   });
 });
 
+describe('saves made on the live site', () => {
+  // Real saves, written as the build that is live on sigouin.net writes them (commit 0d3a8fd), by that build's
+  // own bot: seed 3 at 8 minutes (afloat, the leaky hull, quest 3) and at 30 minutes (afloat, patched, quest 6),
+  // and seed 7 at 100 minutes (ashore, the long hull, quest 12). Luc's own games on the site are saves like these.
+  // They are version 3, as today's are: nothing migrates them, so nothing may change under them.
+  const fixtures = import.meta.glob<string>('./fixtures/save-live-*.json', { eager: true, query: '?raw', import: 'default' });
+  const NAMES = ['seed3-min008', 'seed3-min030', 'seed7-min100'] as const;
+  const fixture = (name: string): string => fixtures[`./fixtures/save-live-${name}.json`]!;
+
+  it('has the three real saves to test with, each further into the game', () => {
+    expect(Object.keys(fixtures).sort()).toEqual(NAMES.map((name) => `./fixtures/save-live-${name}.json`));
+    const saved = NAMES.map((name) => JSON.parse(fixture(name)));
+    expect(saved.map((save) => save.version)).toEqual([3, 3, 3]);
+    expect(saved.map((save) => [save.state.seed, Math.round(save.state.playedSeconds / 60), save.state.canoe.hullTier, save.state.players[0].mode]))
+      .toEqual([[3, 8, 0, 'canoe'], [3, 30, 1, 'canoe'], [7, 100, 3, 'foot']]);
+    expect(saved.map((save) => MAIN_QUEST_ORDER.find((questId) => save.state.quests[questId].status === 'active')))
+      .toEqual(['stop_the_leak', 'ribs_and_rails', 'the_beacon']);
+    for (const save of saved) expect(save.state.flags.beacon_lit ?? false).toBe(false);
+  });
+
+  it.each(NAMES)('%s loads with no error, exactly as it was saved', (name) => {
+    const loaded = deserialize(fixture(name));
+    expect(loaded.ok, loaded.ok ? '' : loaded.reason).toBe(true);
+    if (!loaded.ok) return;
+    // No migration runs on it: the version it was saved with is still the version. Whoever raises
+    // `STATE_VERSION` must write the migration from 3, or this save, and Luc's, stops loading.
+    expect(loaded.migratedFrom).toBeNull();
+    expect(loaded.state).toEqual({ ...JSON.parse(fixture(name)).state, version: SAVE_VERSION });
+    // And the lobby lists it and opens it from a slot.
+    const storage = new FakeStorage();
+    storage.setItem(`${SAVE_KEY_PREFIX}1`, fixture(name));
+    const store = createSaveStore(storage, () => 1000);
+    expect(store.list()[1]).toMatchObject({ empty: false, corrupt: false, playedSeconds: loaded.state.playedSeconds });
+    expect(store.load(1).ok).toBe(true);
+  });
+
+  it.each(NAMES)('%s plays on to the end: the bot takes it from where it was saved and lights the Beacon', (name) => {
+    const loaded = deserialize(fixture(name));
+    if (!loaded.ok) throw new Error(`${name} did not load: ${loaded.reason}`);
+    const state = loaded.state;
+    const savedAt = state.playedSeconds;
+    const fails = state.statistics.fails;
+    const driver = createBotDriver(state);
+    // Four hours of play is the bot's own limit for a whole game.
+    const lastStep = state.tick + 4 * 3600 * 60;
+    for (let input = driver.next(); input !== null && state.tick < lastStep; input = driver.next()) {
+      step(state, input, FIXED_STEP);
+      state.events = [];
+    }
+    expect(driver.stoppedBecause, name).toBeNull();
+    expect(driver.finished, name).toBe(true);
+    expect(state.flags.beacon_lit, name).toBe(true);
+    expect(state.quests.the_beacon.status, name).toBe('completed');
+    expect(MAIN_QUEST_ORDER.every((questId) => state.quests[questId].status === 'completed'), name).toBe(true);
+    expect(state.playedSeconds, name).toBeGreaterThan(savedAt);
+    // The bot plays a careful game: nothing after the save cost it a capsize or a collapse.
+    expect(state.statistics.fails, name).toBe(fails);
+    // What it ends on saves and loads again as today's save.
+    const again = deserialize(serialize(state, 5));
+    expect(again.ok && again.migratedFrom).toBeNull();
+    expect(again.ok && again.state).toEqual({ ...state, events: [] });
+  });
+});
+
 describe('crew saves', () => {
   it('round-trips a game with four players exactly', () => {
     const state = newGame(11, { crew: 4 });
@@ -343,6 +411,49 @@ describe('autosave', () => {
     expect(autosaver.update(state, [], 119)).toBeNull();
     expect(autosaver.update(state, [], 1.1)).toBe('timer');
     expect(autosaver.update(state, [], 60)).toBeNull(); // the timer restarted
+  });
+
+  it('saves when a quest completes and when a tool joins the belt, timer or no timer', () => {
+    const storage = new FakeStorage();
+    const store = createSaveStore(storage, () => 1);
+    const autosaver = createAutosaver(store, 0, 0);
+    const state = newGame();
+    const frame = (): ReturnType<typeof autosaver.update> => {
+      const events = state.events;
+      state.events = [];
+      return autosaver.update(state, events, 1 / 60);
+    };
+    state.events = [];
+    expect(frame()).toBeNull();
+    expect(store.load(0).ok).toBe(false);
+
+    // A tool is made: the knife, with the quest that wants it still short of driftwood.
+    give(state, 'stone', 2);
+    give(state, 'driftwood', 1);
+    give(state, 'fiber', 2);
+    expect(dispatch(state, { type: 'craft', recipeId: 'stone_knife' }).ok).toBe(true);
+    expect(state.events.map((event) => event.type)).not.toContain('quest_completed');
+    expect(frame()).toBe('tool');
+    let saved = store.load(0);
+    expect(saved.ok && saved.state.tools).toEqual(['bailing_can', 'stone_knife']);
+    // A tool that is found counts the same: it is on the belt, and it would be lost the same.
+    state.events = [{ type: 'item_gained', itemId: 'pry_bar', count: 1, container: 'belt', playerId: 0 }];
+    expect(frame()).toBe('tool');
+    // What goes into a pack does not save: that would be every scavenge.
+    state.events = [{ type: 'item_gained', itemId: 'driftwood', count: 3, container: 'backpack', playerId: 0 }];
+    expect(frame()).toBeNull();
+
+    // A quest completes: the first one, bailed dry and landed.
+    state.canoe.waterLevel = 0;
+    standOn(state, 'home_knoll');
+    run(state, {}, 0.05);
+    state.events = [{ type: 'quest_completed', questId: 'bail_out' }];
+    expect(frame()).toBe('quest');
+    // When the rules ask by name in the same frame, that is the reason given.
+    state.events = [{ type: 'quest_completed', questId: 'first_haul' }, { type: 'autosave_requested', reason: 'landing' }];
+    expect(frame()).toBe('landing');
+    saved = store.load(0);
+    expect(saved.ok && saved.state.players[0].mode).toBe('foot');
   });
 
   it('turns the timer off at interval 0 and reports nothing when the save fails', () => {

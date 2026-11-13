@@ -49,6 +49,11 @@ export const HOST_PROBLEM_TEXT: Readonly<Record<RelayFailure, string>> = {
   refused: 'The relay closed the room. Open a new one.',
 };
 
+/** What stands on a guest's screen while the host is unheard: the line has stalled, whether or not it has closed. */
+export const HOST_QUIET_TEXT = 'No word from the host. Waiting…';
+/** And what a guest is told, once, when the host is heard again. */
+export const HOST_BACK_TEXT = 'Back with the crew.';
+
 /** A room code as it is shown and read aloud: "FHJ-K3M". */
 export const roomCodeText = (code: string): string => `${code.slice(0, 3)}-${code.slice(3)}`;
 

@@ -137,8 +137,9 @@ describe('the lobby and the pause menu', () => {
     expect(pause(null)).toEqual(['Resume', 'Settings', 'How to Play', 'Save and quit to the lobby']);
     expect(pause(crewView())).toEqual(['Resume', 'Host a crew', 'Settings', 'How to Play', 'Save and quit to the lobby']);
     expect(pause(crewView({ host: OPEN }))).toEqual(['Resume', 'Crew room', 'Settings', 'How to Play', 'Save and quit to the lobby']);
-    // A guest has no room of their own to show.
-    expect(pause(crewView({ join: { phase: 'playing' } }))).toEqual(['Resume', 'Settings', 'How to Play', 'Save and quit to the lobby']);
+    // A guest has no room of their own to show, and no game of their own to save: they leave.
+    expect(buildPausePanel('Quest 1', crewView({ join: { phase: 'playing' } }), true).buttons.map((button) => button.label))
+      .toEqual(['Resume', 'Settings', 'How to Play', 'Leave the crew']);
   });
 });
 

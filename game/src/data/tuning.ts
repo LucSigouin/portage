@@ -110,7 +110,10 @@ export const TUNING = {
     nodeRange: 2.5,
     canoeNodeRange: 7,
     npcRange: 3.5,
+    /** A camp reaches this far from its fire. */
     campRange: 8,
+    /** And this far from each thing that stands in it (the bench, the lean-to, a bedroll): at one of them, you are in camp. */
+    campLandmarkRange: 4,
     /** Largest standing depth when stepping out of the canoe, metres. */
     disembarkDepth: 0.5,
   },

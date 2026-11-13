@@ -59,7 +59,7 @@ function hudHtml(hud: HudModel, patterned: boolean): string {
   const offscreen = hud.compass.marks.filter((mark) => mark.kind !== 'cardinal' && Math.abs(mark.relativeDegrees) > 90).map((mark) =>
     `${escapeHtml(mark.label)} ${mark.relativeDegrees < 0 ? 'behind left' : 'behind right'}, ${escapeHtml(mark.distanceText)}`).join(' | ');
   const prompt = hud.prompt
-    ? `<div class="gb-prompt gb-prompt-${hud.prompt.mode}"><kbd>${escapeHtml(hud.prompt.keyLabel)}</kbd> `
+    ? `<div class="gb-prompt gb-prompt-${hud.prompt.mode}">${hud.prompt.keyLabel ? `<kbd>${escapeHtml(hud.prompt.keyLabel)}</kbd> ` : ''}`
       + `${escapeHtml(hud.prompt.text)}</div>`
     : '';
   const hotbar = hud.hotbar.map((slot) => (slot.intent
@@ -72,7 +72,7 @@ function hudHtml(hud: HudModel, patterned: boolean): string {
     + `<div class="gb-top-right"><div class="gb-line">${escapeHtml(hud.clockText)}${hud.night ? ' (night)' : ''}</div>`
     + `<div class="gb-line ${hud.stormWarning ? 'gb-danger' : ''}">${escapeHtml(hud.weatherText)}</div>`
     + `<div class="gb-line">${escapeHtml(hud.placeText)}</div>${tracker}</div>`
-    + `<div class="gb-bottom">${hud.hint ? `<div class="gb-hint">${escapeHtml(hud.hint)}</div>` : ''}${prompt}`
+    + `<div class="gb-bottom">${hud.lineNote ?? hud.hint ? `<div class="gb-hint">${escapeHtml(hud.lineNote ?? hud.hint ?? '')}</div>` : ''}${prompt}`
     + `<div class="gb-hotbar">${hotbar}</div></div>`;
 }
 
@@ -161,7 +161,8 @@ function panelBodyHtml(panel: PanelModel): string {
         `<h3>${escapeHtml(station.name)} ${station.inReach ? '' : '<small>(not in reach)</small>'}</h3><ul class="gb-list">${station.recipes.map((recipe) =>
           `<li class="gb-entry ${recipe.known ? '' : 'gb-dim'}"><div><b>${escapeHtml(recipe.name)}</b> ${escapeHtml(recipe.outputText)}`
           + `<p>${escapeHtml(recipe.description)}</p>${costsHtml(recipe.inputs)}`
-          + `${recipe.missingText ? `<p class="gb-warning">${escapeHtml(recipe.missingText)}</p>` : ''}</div>`
+          + `${recipe.missingText ? `<p class="gb-warning">${escapeHtml(recipe.missingText)}</p>` : ''}`
+          + `${recipe.sourceText ? `<p>${escapeHtml(recipe.sourceText)}</p>` : ''}</div>`
           + `<span class="gb-actions">${buttonHtml({ ...recipe.craft, note: null })}${recipe.craftAll ? buttonHtml(recipe.craftAll) : ''}</span></li>`).join('')}</ul>`).join('');
     case 'canoe_builder':
       return (panel.blockedText ? `<p class="gb-warning">${escapeHtml(panel.blockedText)}</p>` : '')

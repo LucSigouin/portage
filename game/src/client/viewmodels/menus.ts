@@ -6,7 +6,7 @@ import type { InterfaceIntent } from '../intents.ts';
 import type { CrewView } from '../crewlobby.ts';
 import type { ConfirmAction } from '../panels.ts';
 import { buildCrewLobbyButtons, buildCrewPauseButton } from './crew.ts';
-import { actionKeys, capitalise, durationText } from './format.ts';
+import { SLEEP_FROM_TEXT, actionKeys, capitalise, durationText } from './format.ts';
 import type { ButtonModel, ConfirmModel, ControlLineModel, LobbyModel, PanelModel, SaveSlotModel } from './types.ts';
 
 type PanelBody<Id extends PanelModel['id']> = Omit<Extract<PanelModel, { id: Id }>, 'title' | 'close'>;
@@ -79,7 +79,11 @@ export function buildLobbyModel(summaries: readonly SlotSummary[], latestSlot: n
   };
 }
 
-export function buildPausePanel(summary: string, crew: CrewView | null = null): PanelBody<'pause'> {
+/**
+ * `guest` is true on the screen of a guest in someone else's game. A guest saves nothing: the game is the host's.
+ * What a guest does is leave, and the host keeps their seat for them.
+ */
+export function buildPausePanel(summary: string, crew: CrewView | null = null, guest = false): PanelBody<'pause'> {
   const crewButton = crew ? buildCrewPauseButton(crew) : null;
   return {
     id: 'pause',
@@ -89,7 +93,7 @@ export function buildPausePanel(summary: string, crew: CrewView | null = null): 
       ...(crewButton ? [crewButton] : []),
       button('Settings', { type: 'open_panel', panel: 'settings' }),
       button('How to Play', { type: 'open_panel', panel: 'how_to_play' }),
-      button('Save and quit to the lobby', { type: 'quit_to_lobby' }),
+      button(guest ? 'Leave the crew' : 'Save and quit to the lobby', { type: 'quit_to_lobby' }),
     ],
   };
 }
@@ -149,7 +153,7 @@ export function buildHowToPlayPanel(settings: Settings): PanelBody<'how_to_play'
         heading: 'Staying alive',
         lines: [
           'Hunger and thirst fall slowly; hard paddling and running speed them up. Eat and drink from the inventory. Boil water at a fire first.',
-          'Energy comes back when you rest. Sleep at a camp after 19:00 to refill it and skip the night.',
+          `Energy comes back when you rest. Sleep at a camp after ${SLEEP_FROM_TEXT} to refill it and skip the night.`,
           'Each region is rougher than the last. Stability is 1, plus 1 for each outrigger. Roughness above stability floods the canoe.',
           'Run out of energy or swamp the canoe and you wake at your last camp, six hours later, with half of every cargo stack gone. Tools and the canoe are never lost.',
         ],
@@ -186,8 +190,12 @@ const CONFIRM_TEXT: Record<ConfirmAction['type'], (slot: number) => { title: str
   reset_key_bindings: () => ({ title: 'Reset every key?', message: 'All key bindings go back to their defaults.', accept: 'Reset keys' }),
 };
 
-export function buildConfirmModel(action: ConfirmAction): ConfirmModel {
-  const text = CONFIRM_TEXT[action.type]('slot' in action ? action.slot : 0);
+/** What quitting is to a guest: nothing is saved here, and the seat waits in the host's game. */
+const LEAVE_CREW_TEXT = { title: 'Leave the crew?', message: 'Your seat is kept.', accept: 'Leave the crew' };
+
+/** `guest` is true on the screen of a guest in someone else's game: quitting is leaving, and says so. */
+export function buildConfirmModel(action: ConfirmAction, guest = false): ConfirmModel {
+  const text = guest && action.type === 'quit_to_lobby' ? LEAVE_CREW_TEXT : CONFIRM_TEXT[action.type]('slot' in action ? action.slot : 0);
   return {
     title: text.title,
     message: text.message,

@@ -81,7 +81,9 @@ export class App {
         this.audio.playInterface(signal.sound);
         break;
       case 'saved':
-        if (signal.reason !== 'manual') this.toasts.add({ text: 'Game saved', tone: 'info' });
+        // A save made because a quest completed or a tool was made says nothing: that moment already has its own
+        // notes (the quest, the reward, the tool), and one more line would push the oldest of them off the stack.
+        if (signal.reason !== 'manual' && signal.reason !== 'quest' && signal.reason !== 'tool') this.toasts.add({ text: 'Game saved', tone: 'info' });
         break;
       case 'driver_finished':
         break;
@@ -193,6 +195,7 @@ export class App {
       game: session.game,
       playerId: session.localPlayerId,
       hostId: session.hostId,
+      hostQuiet: session.hostQuiet,
       paused: session.paused,
       cameraYaw: this.camera.yaw,
       toasts: this.toasts.models(),

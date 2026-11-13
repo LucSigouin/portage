@@ -14,6 +14,7 @@ import type { GuestLink, LeaveReason } from '../net/index.ts';
 import { RelayGuestWire, RelayHostRoom, makeRoomCode, readRoomCode } from '../net/relay.ts';
 import type { OpenSocket, RelayFailure } from '../net/relay.ts';
 import type { Session } from './session.ts';
+import { HOST_BACK_TEXT } from './viewmodels/crew.ts';
 
 export interface CrewStorage {
   getItem(key: string): string | null;
@@ -303,7 +304,7 @@ export class CrewLobby {
       if (session.game && session.guest) {
         if (join === 'reconnecting') session.announce('The line dropped. Trying again.', 'warning');
         else if (join === 'host-away') session.announce('The host dropped. Waiting for them to come back.', 'warning');
-        else if (join === 'open' && (before === 'reconnecting' || before === 'host-away')) session.announce('Back with the crew.', 'good');
+        else if (join === 'open' && (before === 'reconnecting' || before === 'host-away')) session.announce(HOST_BACK_TEXT, 'good');
       }
     }
   }

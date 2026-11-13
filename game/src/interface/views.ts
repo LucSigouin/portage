@@ -151,9 +151,14 @@ export function hintView(hint: string): ViewNode[] {
   return [h('div.iw-hint', { key: 'hint' }, hint)];
 }
 
+/** The line to the host has stalled: a slip that stands where the tip does until the host is heard again. It does not move. */
+export function lineNoteView(note: string): ViewNode[] {
+  return [h('div.iw-hint.iw-line-note', { key: 'line-note', role: 'status' }, note)];
+}
+
 export function promptView(prompt: PromptModel): ViewNode[] {
-  return [h('div.iw-prompt.iw-paper', { key: 'prompt', class: `iw-prompt-${prompt.mode}` },
-    h('span.iw-key', null, prompt.keyLabel),
+  return [h('div.iw-prompt.iw-paper', { key: 'prompt', class: classes(`iw-prompt-${prompt.mode}`, prompt.keyLabel === '' && 'iw-prompt-keyless') },
+    prompt.keyLabel === '' ? null : h('span.iw-key', null, prompt.keyLabel),
     h('span.iw-prompt-text', null, prompt.text))];
 }
 
@@ -186,6 +191,14 @@ export function debugView(debug: DebugModel): ViewNode[] {
 
 type PanelSize = 'wide' | 'mid' | 'narrow';
 
+/**
+ * The cut mark: a pen rule and two words under a panel's body, for when the body goes on below its bottom edge
+ * (a long panel in a short window). It is in every sheet, hidden. The interface shows it while there is more
+ * below and hides it at the end (`InkInterface.markCut`). It takes no room and it never moves.
+ */
+const cutMarkView = (): ViewNode => h('div.iw-cut', { key: 'cut', hidden: true, 'aria-hidden': 'true' },
+  h('span.iw-cut-words', null, icon(ICON.caret), 'more below', icon(ICON.caret)));
+
 /** The sheet every full panel is written on: taped corners, a title, a body that scrolls, a way out. */
 function sheet(
   panel: PanelModel, size: PanelSize, subtitle: string, body: ViewChild, footerStart: ViewChild = null,
@@ -195,6 +208,7 @@ function sheet(
     size === 'wide' ? h('i.iw-tape.iw-b') : null,
     h('header', null, h('h2', null, panel.title), subtitle ? h('span.iw-sub', null, subtitle) : null),
     body,
+    cutMarkView(),
     h('footer', null, footerStart ?? h('span'), buttonView(panel.close, 'button.iw-btn.iw-go')))];
 }
 
@@ -341,7 +355,8 @@ function recipeView(recipe: RecipeRowModel): ViewNode {
       recipe.known ? null : h('small.iw-kind', null, 'not learned'),
       h('small', null, recipe.description),
       costsView(recipe.inputs),
-      recipe.missingText ? h('p.iw-missing', null, recipe.missingText) : null),
+      recipe.missingText ? h('p.iw-missing', null, recipe.missingText) : null,
+      recipe.sourceText ? h('p.iw-source', null, recipe.sourceText) : null),
     h('div.iw-actions', null,
       buttonView(recipe.craft, 'button.iw-btn.iw-small', false, 'one'),
       recipe.craftAll ? buttonView(recipe.craftAll, 'button.iw-btn.iw-small', true, 'all') : null));
@@ -467,6 +482,7 @@ function crewSheet(panel: PanelModel, body: ViewChild, actions: ButtonModel[], q
     h('i.iw-tape.iw-a'),
     h('header', null, h('h2', null, panel.title)),
     h('div.iw-body', { key: 'body' }, body),
+    cutMarkView(),
     h('footer', null,
       quiet ? buttonView(quiet, 'button.iw-btn.iw-quiet', true, 'quiet') : h('span'),
       h('div.iw-actions', null,

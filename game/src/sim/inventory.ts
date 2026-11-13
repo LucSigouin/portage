@@ -2,7 +2,7 @@ import type { IslandDefinition, ItemAmount, ItemId, ToolId } from '../data/types
 import { ATTACHMENTS, HULL_TIERS } from '../data/canoe.ts';
 import { ITEMS, isStackable } from '../data/items.ts';
 import { TUNING } from '../data/tuning.ts';
-import { ISLANDS_BY_ID, spotPosition } from '../data/world.ts';
+import { CAMP_LAYOUTS, ISLANDS_BY_ID, spotPosition } from '../data/world.ts';
 import { MAXIMUM_PLAYERS } from './types.ts';
 import type { Container, GameEvent, GameState, ItemStack, Missing, PlayerId, PlayerState } from './types.ts';
 
@@ -122,14 +122,21 @@ export function distanceToCanoe(state: GameState, player: PlayerState): number {
   return Math.hypot(player.position.x - state.canoe.position.x, player.position.z - state.canoe.position.z);
 }
 
-/** The island whose camp the player is standing in, or null. */
+/**
+ * The island whose camp the player is standing in, or null. A camp is the ground round its fire, and a few
+ * steps round everything that stands in it: the bench and the lean-to are further from the fire than the fire reaches.
+ */
 export function campInReach(player: PlayerState): IslandDefinition | null {
   if (player.mode !== 'foot' || !player.islandId) return null;
   const definition = ISLANDS_BY_ID[player.islandId];
   if (!definition.camp) return null;
   const position = spotPosition(definition, definition.camp.spot);
   const distance = Math.hypot(player.position.x - position.x, player.position.z - position.z);
-  return distance <= TUNING.foot.campRange ? definition : null;
+  if (distance <= TUNING.foot.campRange) return definition;
+  const { x, z } = player.position;
+  const near = TUNING.foot.campLandmarkRange;
+  const atLandmark = CAMP_LAYOUTS[definition.id]?.landmarks.some((landmark) => Math.hypot(x - landmark.x, z - landmark.z) <= near);
+  return atLandmark ? definition : null;
 }
 
 /** True when aboard or standing close enough to use what is on the canoe. */

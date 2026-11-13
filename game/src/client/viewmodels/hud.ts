@@ -1,13 +1,14 @@
 /** The HUD: meters, water gauge, hotbar, quest tracker, compass, prompt and status lines. */
-import { ISLANDS_BY_ID, ITEMS, REGIONS_BY_ID, WEATHER } from '../../data/index.ts';
+import { ISLANDS_BY_ID, ITEMS, QUEST_LIST, REGIONS_BY_ID, WEATHER } from '../../data/index.ts';
 import { CREW_MARKS } from '../../data/crew.ts';
 import type { Settings } from '../../settings/index.ts';
 import {
   bearingBetween, bearingDifference, playerOf, selectActiveQuests, selectCanoeStats, selectInteractable, selectMap,
   selectMeters, selectTimeOfDay, selectWeather,
 } from '../../sim/index.ts';
-import type { GameState, PlayerId, PlayerState, QuestView } from '../../sim/index.ts';
-import { bearingDegrees, cardinalName, distanceText, durationText, primaryKey } from './format.ts';
+import type { GameState, PlayerId, PlayerState, QuestView, TimeOfDay } from '../../sim/index.ts';
+import { HOST_QUIET_TEXT } from './crew.ts';
+import { SLEEP_FROM_TEXT, bearingDegrees, cardinalName, distanceText, durationText, primaryKey } from './format.ts';
 import type {
   CompassMarkModel, CompassModel, CrewRowModel, HotbarSlotModel, HudModel, MeterModel, ObjectiveRowModel, PromptModel,
   QuestTrackerModel, Tone, WaterGaugeModel,
@@ -185,9 +186,14 @@ function buildCompass(state: GameState, cameraYaw: number, trackedQuestId: strin
   return { headingDegrees: heading < 0 ? heading + 360 : heading, cardinal: cardinalName(cameraYaw, 8), marks };
 }
 
-function buildPrompt(state: GameState, settings: Settings, playerId: PlayerId): PromptModel | null {
+function buildPrompt(state: GameState, settings: Settings, playerId: PlayerId, time: TimeOfDay): PromptModel | null {
   const interactable = selectInteractable(state, playerId);
   if (!interactable) return null;
+  // A bed by day, to someone who is not worn out: it says when it will have them, and names no key.
+  // The key would only be refused.
+  if (interactable.kind === 'bed' && interactable.command.type === 'sleep' && time.sleepBlocked === 'not_tired') {
+    return { text: `Sleep (after ${SLEEP_FROM_TEXT})`, keyLabel: '', mode: 'blocked' };
+  }
   const keyLabel = primaryKey(settings.controls.keyBindings, 'interact');
   const blocked = interactable.kind === 'node' && !interactable.available;
   return { text: interactable.prompt, keyLabel, mode: blocked ? 'blocked' : 'press' };
@@ -216,6 +222,12 @@ function buildCanoeLines(state: GameState, playerId: PlayerId): { text: string; 
   return lines;
 }
 
+/** True while a quest the crew has been given still asks for the canoe to be bailed. */
+function bailStepOpen(state: GameState): boolean {
+  return QUEST_LIST.some((quest) => state.quests[quest.id].status === 'active'
+    && quest.objectives.some((objective, index) => objective.type === 'bail' && state.quests[quest.id].progress[index] < 1));
+}
+
 function buildHint(state: GameState, settings: Settings, playerId: PlayerId): string | null {
   if (!settings.gameplay.hints) return null;
   const bindings = settings.controls.keyBindings;
@@ -228,6 +240,10 @@ function buildHint(state: GameState, settings: Settings, playerId: PlayerId): st
   if (meters.low.thirst) return `Thirsty. Drink from the inventory (${primaryKey(bindings, 'inventory')}); boil water at a fire first.`;
   if (meters.low.hunger) return `Hungry. Eat from the inventory (${primaryKey(bindings, 'inventory')}).`;
   if (meters.low.energy) return 'Worn out. Stand still to rest, or sleep at a camp.';
+  // Ashore with the bail step still open: the tracker asks for it, and bailing is done from inside the canoe.
+  if (!aboard && bailStepOpen(state)) {
+    return `Board (${primaryKey(bindings, 'interact')}), then hold ${primaryKey(bindings, 'bail')} to bail.`;
+  }
   if (!aboard && player.backpack.length >= 8) return 'Backpack full. Stow it in the canoe from the inventory.';
   if (state.pendingRewards.length > 0) return `Rewards are waiting. Make room, then claim them in the inventory (${primaryKey(bindings, 'inventory')}).`;
   return null;
@@ -235,10 +251,11 @@ function buildHint(state: GameState, settings: Settings, playerId: PlayerId): st
 
 /**
  * The HUD of one player (`playerId`, player 0 by default). `cameraYaw` is the
- * bearing the camera looks along; the compass turns with it.
+ * bearing the camera looks along; the compass turns with it. `hostQuiet` is true
+ * on a guest's screen while the host is unheard.
  */
 export function buildHudModel(
-  state: GameState, settings: Settings, cameraYaw: number, playerId: PlayerId = 0, hostId: PlayerId | null = null,
+  state: GameState, settings: Settings, cameraYaw: number, playerId: PlayerId = 0, hostId: PlayerId | null = null, hostQuiet = false,
 ): HudModel {
   const player = playerOf(state, playerId);
   const time = selectTimeOfDay(state, playerId);
@@ -253,7 +270,7 @@ export function buildHudModel(
     hotbar: buildHotbar(state, settings, playerId),
     tracker,
     compass: buildCompass(state, cameraYaw, tracker?.questId ?? null, playerId),
-    prompt: buildPrompt(state, settings, playerId),
+    prompt: buildPrompt(state, settings, playerId, time),
     clockText: `Day ${time.day}, ${time.clock}`,
     night: time.isNight,
     weatherText: weather.nextKind === weather.kind
@@ -263,5 +280,6 @@ export function buildHudModel(
     placeText: island ?? REGIONS_BY_ID[player.regionId].name,
     canoeLines: buildCanoeLines(state, playerId),
     hint: buildHint(state, settings, playerId),
+    lineNote: hostQuiet ? HOST_QUIET_TEXT : null,
   };
 }

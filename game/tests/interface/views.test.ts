@@ -17,7 +17,7 @@ import { collectIntents, collectText, h } from '../../src/interface/dom.ts';
 import type { ViewNode } from '../../src/interface/dom.ts';
 import { itemIcon } from '../../src/interface/icons.ts';
 import {
-  confirmView, debugView, hintView, hotbarView, lobbyView, notesView, panelView, promptView, toastsView, vitalsView,
+  confirmView, debugView, hintView, hotbarView, lineNoteView, lobbyView, notesView, panelView, promptView, toastsView, vitalsView,
 } from '../../src/interface/views.ts';
 
 const worldView: WorldView = {
@@ -86,7 +86,8 @@ function viewsOf(model: InterfaceModel): ViewNode[] {
   return [
     ...(lobby ? lobbyView(lobby) : []),
     ...(hud ? [...vitalsView(hud, model.patternedMeters), ...notesView(hud), ...hotbarView(hud.hotbar)] : []),
-    ...(hud?.hint ? hintView(hud.hint) : []),
+    // One standing slip: the line's trouble when there is any, the tip otherwise (`InkInterface.update`).
+    ...(hud?.lineNote ? lineNoteView(hud.lineNote) : hud?.hint ? hintView(hud.hint) : []),
     ...(hud?.prompt ? promptView(hud.prompt) : []),
     ...toastsView(model.toasts),
     ...(panel ? panelView(panel) : []),
@@ -226,6 +227,37 @@ describe('the Ink & Wash views', () => {
     const button = find([column!])!;
     expect(button.attributes.disabled).toBe(true);
     expect(collectText([button])).toContain(disabled.note!);
+  });
+
+  it('draws a prompt with its key cap, and a prompt that names no key with none', () => {
+    const find = (nodes: ViewNode[], className: string): ViewNode[] =>
+      nodes.flatMap((node) => [...(node.classes.split(' ').includes(className) ? [node] : []), ...find(node.children, className)]);
+    const pressed = promptView({ text: 'Sleep until morning', keyLabel: 'F', mode: 'press' });
+    expect(find(pressed, 'iw-key').map((node) => collectText([node]))).toEqual(['F']);
+    expect(pressed[0]!.classes).not.toContain('iw-prompt-keyless');
+    const told = promptView({ text: 'Sleep (after 19:00)', keyLabel: '', mode: 'blocked' });
+    expect(find(told, 'iw-key')).toEqual([]);
+    expect(told[0]!.classes).toContain('iw-prompt-keyless');
+    expect(collectText(told)).toBe('Sleep (after 19:00)');
+  });
+
+  it('draws the line\'s trouble as a standing slip in the warning ink, where the tip stands', () => {
+    const [slip] = lineNoteView('No word from the host. Waiting…');
+    expect(collectText([slip!])).toBe('No word from the host. Waiting…');
+    expect(slip!.classes.split(' ')).toEqual(expect.arrayContaining(['iw-hint', 'iw-line-note']));
+    expect(slip!.attributes.role).toBe('status');
+    // The tip is not in the warning ink.
+    expect(hintView('Hold R to bail.')[0]!.classes).not.toContain('iw-line-note');
+  });
+
+  it('writes where a missing ingredient comes from under what is missing, and nothing when there is nothing to say', () => {
+    const crafting = structuredClone(models.find(({ name }) => name === 'shot crafting')!.model);
+    if (crafting.panel?.id !== 'crafting') throw new Error('expected the crafting panel');
+    const recipes = crafting.panel.stations.flatMap((station) => station.recipes);
+    for (const recipe of recipes) recipe.sourceText = '';
+    expect(collectText(panelView(crafting.panel))).not.toContain('Scoop it');
+    recipes.find((recipe) => recipe.recipeId === 'clean_water')!.sourceText = 'Scoop it at the water, from the inventory (Tab).';
+    expect(collectText(panelView(crafting.panel))).toContain('Scoop it at the water, from the inventory (Tab).');
   });
 
   it('draws the same model the same way: no clock, no randomness', () => {

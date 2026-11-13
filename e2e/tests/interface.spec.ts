@@ -9,6 +9,7 @@
  * - with the inventory open the interface adds under half a millisecond a frame, and the whole frame's work stays under 6 ms;
  * - every row that names an item shows that item's icon, sharp and inside its card at every size;
  * - nothing on screen moves by itself, and opening a panel moves nothing else;
+ * - a panel that runs past the bottom of a short window says so with a still mark, and a panel that fits has none;
  * - with a crew: a row a player in the crew card, each following its own player; a toque in each
  *   crewmate's colour at their place on the compass and the map; the card clear of the middle of
  *   the view and of every other card; a crewmate's new tool told on this screen;
@@ -965,6 +966,136 @@ test('nothing redraws itself, and opening a panel moves nothing else', async ({ 
     await frames(page, 3);
     expect(await sheet(), `${tab} tab`).toBe(audio);
   }
+  expect(problems).toEqual([]);
+});
+
+// --- The cut -----------------------------------------------------------------------
+
+/** Run in the page: the open panel's body, the mark under it and the footer below, as they are drawn. */
+function cutState(): {
+  below: number; marked: boolean; words: string; mark: number[] | null; body: number[]; footer: number[]; buttons: number[][]; panel: number[];
+  moving: number; transition: string;
+} {
+  const veil = document.querySelector('.iw-veil')!;
+  const body = veil.querySelector<HTMLElement>('.iw-body')!;
+  const mark = veil.querySelector<HTMLElement>('.iw-cut');
+  const words = mark?.querySelector<HTMLElement>('.iw-cut-words') ?? null;
+  const box = (element: Element): number[] => {
+    const rect = element.getBoundingClientRect();
+    return [rect.left, rect.top, rect.right, rect.bottom].map((value) => Math.round(value * 10) / 10);
+  };
+  const marked = mark !== null && words !== null && !mark.hidden && words.getClientRects().length > 0;
+  return {
+    below: Math.round(body.scrollHeight - body.clientHeight - body.scrollTop),
+    marked,
+    words: marked ? (words!.textContent ?? '').trim() : '',
+    mark: marked ? box(words!) : null,
+    body: box(body),
+    footer: box(veil.querySelector('.iw-panel > footer')!),
+    buttons: [...veil.querySelectorAll('.iw-panel > footer button')].map(box),
+    panel: box(veil.querySelector('.iw-panel')!),
+    moving: mark ? mark.getAnimations({ subtree: true }).length : 0,
+    transition: words ? `${getComputedStyle(words).transitionDuration}|${getComputedStyle(words).animationName}` : '',
+  };
+}
+
+test('a panel cut by a short window says there is more below, with a mark that stands still; a panel that fits has none', async ({ page }) => {
+  const problems = watch(page);
+  // Pictures for the fix round's report, when a folder is given: `<folder>/cut-<tag>-<view>-<width>.png`.
+  const shots = process.env.FIXES_SHOTS ?? '';
+  const tag = process.env.FIXES_SHOT_TAG ?? 'after';
+  const builder = SHOTS.find((shot) => shot.name === 'builder')!;
+  const controls = MENUS.find((view) => view.name === 'settings: controls')!;
+  const inventory = SHOTS.find((shot) => shot.name === 'inventory')!;
+  const small = { width: 1366, height: 768 };
+  const large = { width: 1920, height: 1080 };
+  const picture = async (name: string, width: number): Promise<void> => {
+    if (shots) await page.screenshot({ path: `${shots}/cut-${tag}-${name}-${width}.png` });
+  };
+
+  // What is true of every view, cut or not: the mark is there exactly when the body goes on below its edge.
+  const seen: string[] = [];
+  for (const [size, view, name] of [
+    [small, builder, 'builder'], [small, controls, 'settings-controls'], [small, inventory, 'inventory'],
+    [large, builder, 'builder'], [large, controls, 'settings-controls'], [large, inventory, 'inventory'],
+  ] as const) {
+    await page.setViewportSize(size);
+    await show(page, view);
+    await picture(name, size.width);
+    const state = await page.evaluate(cutState);
+    const where = `${name} at ${size.width}x${size.height}`;
+    seen.push(`${where}: ${state.below > 2 ? 'cut' : 'fits'}`);
+    expect(state.marked, `${where}: ${state.below} px below the edge`).toBe(state.below > 2);
+    if (!state.marked) continue;
+    expect(state.words, where).toBe('more below');
+    // The words hang just under the body's bottom edge: they cover nothing of the body, they are on the sheet,
+    // and they touch no button of the footer.
+    const [left, top, right, bottom] = state.mark!;
+    expect(top, `${where}: under the cut, not over the last row`).toBeGreaterThanOrEqual(state.body[3]! - 0.5);
+    expect(top - state.body[3]!, `${where}: right under the cut`).toBeLessThan(8);
+    expect(bottom, where).toBeLessThan(state.panel[3]!);
+    expect(left, where).toBeGreaterThan(state.panel[0]!);
+    expect(right, where).toBeLessThan(state.panel[2]!);
+    for (const button of state.buttons) {
+      const apart = right < button[0]! || left > button[2]! || bottom < button[1]! || top > button[3]!;
+      expect(apart, `${where}: the words touch a footer button`).toBe(true);
+    }
+    expect(await page.evaluate(layoutProblems), where).toEqual([]);
+  }
+  // The two views the review found cut at 1366 are cut and marked. The interface is sized by the window, so the
+  // same two are cut at the same rows at 1920, where the cut happens to fall between two rows and looks like an
+  // end: they are marked there too. A panel that fits has no mark at either size.
+  expect(seen).toEqual([
+    'builder at 1366x768: cut', 'settings-controls at 1366x768: cut', 'inventory at 1366x768: fits',
+    'builder at 1920x1080: cut', 'settings-controls at 1920x1080: cut', 'inventory at 1920x1080: fits',
+  ]);
+
+  // It stands still: the same pixels half a second later, nothing animating, no transition to run.
+  await page.setViewportSize(small);
+  await show(page, builder);
+  await page.addStyleTag({ content: '#world { visibility: hidden; }' });
+  await page.waitForTimeout(400);
+  const atTop = await page.evaluate(cutState);
+  expect(atTop.marked).toBe(true);
+  expect(atTop.moving).toBe(0);
+  expect(atTop.transition).toBe('0s|none');
+  const [left, top, right, bottom] = atTop.mark!;
+  const clip = { x: Math.floor(atTop.body[0]!), y: Math.floor(top - 6), width: Math.ceil(atTop.body[2]! - atTop.body[0]!), height: Math.ceil(bottom - top + 12) };
+  let earlier = await page.screenshot({ clip });
+  let same = false;
+  for (let look = 0; look < 3 && !same; look += 1) {
+    await page.waitForTimeout(500);
+    const later = await page.screenshot({ clip });
+    same = earlier.equals(later);
+    earlier = later;
+  }
+  expect(same, 'the mark keeps changing with nothing happening').toBe(true);
+  expect(right - left).toBeGreaterThan(40);
+
+  // It takes no room: at the end of the panel it is gone, and the body and the footer are where they were.
+  for (let press = 0; press < 12 && (await page.evaluate(cutState)).below > 2; press += 1) {
+    await page.keyboard.press('PageDown');
+    await frames(page, 2);
+  }
+  const atEnd = await page.evaluate(cutState);
+  expect(atEnd.below).toBeLessThanOrEqual(2);
+  expect(atEnd.marked, 'at the end of the panel there is nothing more to say').toBe(false);
+  expect([atEnd.body, atEnd.footer, atEnd.panel]).toEqual([atTop.body, atTop.footer, atTop.panel]);
+  await picture('builder-at-its-end', small.width);
+  // Back up, and it is back on the very same spot.
+  await page.keyboard.press('PageUp');
+  await frames(page, 2);
+  const backUp = await page.evaluate(cutState);
+  expect(backUp.marked).toBe(true);
+  expect(backUp.mark).toEqual(atTop.mark);
+
+  // The window is made tall enough for every key: the mark goes with the cut, with no click and no key.
+  await show(page, controls);
+  expect((await page.evaluate(cutState)).marked).toBe(true);
+  await page.setViewportSize({ width: 1366, height: 1500 });
+  await frames(page, 3);
+  const grown = await page.evaluate(cutState);
+  expect([grown.below > 2, grown.marked]).toEqual([false, false]);
   expect(problems).toEqual([]);
 });
 

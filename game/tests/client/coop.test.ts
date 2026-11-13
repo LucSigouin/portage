@@ -9,7 +9,8 @@ import type { App } from '../../src/client/app.ts';
 import { createSilentAudio } from '../../src/client/contracts.ts';
 import type { AudioEngine, GameInterface, InterfaceModel, WorldView } from '../../src/client/contracts.ts';
 import type { SessionSignal } from '../../src/client/session.ts';
-import { createLoopbackPair } from '../../src/net/index.ts';
+import { SAVE_KEY_PREFIX, deserialize } from '../../src/save/index.ts';
+import { HOST_QUIET_SECONDS, createLoopbackPair } from '../../src/net/index.ts';
 import type { HostLink, LoopbackConditions, LoopbackPair } from '../../src/net/index.ts';
 import { FIXED_STEP, dispatch, drainEvents, hashState } from '../../src/sim/index.ts';
 import type { GameEvent, GameState } from '../../src/sim/index.ts';
@@ -17,6 +18,8 @@ import { FakeStorage, countIn, floatCanoeAt, newGame } from '../support.ts';
 
 interface Client {
   app: App;
+  /** What this browser keeps: its saves and its settings. */
+  storage: FakeStorage;
   models: InterfaceModel[];
   /** The state the look was last handed. */
   drawn: GameState[];
@@ -40,9 +43,10 @@ function client(): Client {
   };
   const gameInterface: GameInterface = { mount: () => {}, update: (model) => void models.push(model), dispose: () => {} };
   const audio: AudioEngine = { ...createSilentAudio(), handleEvents: (events) => void audioEvents.push(...events) };
-  const app = createApp({ worldView, gameInterface, audio, storage: new FakeStorage(), now: () => 5000, randomSeed: () => 42 });
+  const storage = new FakeStorage();
+  const app = createApp({ worldView, gameInterface, audio, storage, now: () => 5000, randomSeed: () => 42 });
   app.session.subscribe((signal) => void signals.push(signal));
-  return { app, models, drawn, worldEvents, audioEvents, signals, toasts: () => models.at(-1)!.toasts.map((toast) => toast.text) };
+  return { app, storage, models, drawn, worldEvents, audioEvents, signals, toasts: () => models.at(-1)!.toasts.map((toast) => toast.text) };
 }
 
 /** A tight dry hull on calm water, the first quest behind the crew. */
@@ -252,6 +256,131 @@ describe('nothing pauses a shared game', () => {
 });
 
 describe('leaving and coming back', () => {
+  it('tells a guest whose line has stalled, for as long as it has, and once when the crew is back', () => {
+    const { host, guest, pair, game, tick } = table();
+    tick(1);
+    const hud = () => guest.models.at(-1)!.hud!;
+    const QUIET = 'No word from the host. Waiting…';
+    expect(hud().lineNote).toBeNull();
+    // The note is not a tip: it shows with the hints setting off.
+    guest.app.session.updateSettings({ ...guest.app.session.settings, gameplay: { ...guest.app.session.settings.gameplay, hints: false } });
+
+    // The line stalls. The socket stays open and nothing crosses it, either way.
+    pair.conditions.loss = 1;
+    tick(HOST_QUIET_SECONDS - 0.2);
+    expect(hud().lineNote, 'a hiccup shorter than the wait says nothing').toBeNull();
+    tick(0.4);
+    expect(hud().lineNote).toBe(QUIET);
+    expect(guest.app.session.screen).toBe('game');
+    // It stands. A toast would be gone by now (the longest lasts seven seconds), and the host has marked Sam away.
+    tick(10);
+    expect(hud().lineNote).toBe(QUIET);
+    expect(game.players[1]!.connected).toBe(false);
+    expect(guest.toasts()).not.toContain('Back with the crew.');
+    // The host's own screen never carries it.
+    expect(host.models.at(-1)!.hud!.lineNote).toBeNull();
+
+    // The line clears: the note goes, and the guest is told once.
+    pair.conditions.loss = 0;
+    tick(1);
+    expect(hud().lineNote).toBeNull();
+    expect(guest.toasts()).toContain('Back with the crew.');
+    expect(guest.signals.filter((signal) => signal.type === 'notice' && signal.text === 'Back with the crew.')).toHaveLength(1);
+    expect(game.players[1]!.connected).toBe(true);
+    // And a line that is fine says nothing more.
+    tick(8);
+    expect(hud().lineNote).toBeNull();
+    expect(guest.signals.filter((signal) => signal.type === 'notice' && signal.text === 'Back with the crew.')).toHaveLength(1);
+  });
+
+  it('a guest\'s pause menu says what quitting is for a guest: leave the crew, the seat is kept. The host\'s still saves', () => {
+    const { host, guest, game, tick } = table();
+    tick(1);
+    const menu = (who: Client): { quit: string; confirm: { title: string; message: string; accept: string } } => {
+      who.app.session.handleIntent({ type: 'open_panel', panel: 'pause' });
+      who.app.frame(FIXED_STEP);
+      const panel = who.models.at(-1)!.panel!;
+      if (panel.id !== 'pause') throw new Error('expected the pause menu');
+      const quit = panel.buttons.at(-1)!;
+      who.app.session.handleIntent(quit.intent);
+      who.app.frame(FIXED_STEP);
+      const confirm = who.models.at(-1)!.confirm!;
+      return { quit: quit.label, confirm: { title: confirm.title, message: confirm.message, accept: confirm.accept.label } };
+    };
+    expect(menu(guest)).toEqual({ quit: 'Leave the crew', confirm: { title: 'Leave the crew?', message: 'Your seat is kept.', accept: 'Leave the crew' } });
+    expect(menu(host)).toEqual({ quit: 'Save and quit to the lobby', confirm: { title: 'Quit to the lobby?', message: 'The game is saved first.', accept: 'Save and quit' } });
+    // The words are true. The guest leaves, and the seat is kept: the same key gets the same player back.
+    guest.app.session.handleIntent({ type: 'answer_confirm', accepted: true });
+    tick(0.5);
+    expect(guest.app.session.screen).toBe('lobby');
+    expect(game.players[1]).toMatchObject({ name: 'Sam', connected: false });
+    const pair = createLoopbackPair();
+    host.app.session.host!.accept(pair.host);
+    guest.app.session.joinGame(pair.guest, { name: 'Sam', key: KEY });
+    for (let frame = 0; frame < 60; frame += 1) {
+      pair.advance(FIXED_STEP);
+      host.app.frame(FIXED_STEP);
+      guest.app.frame(FIXED_STEP);
+    }
+    expect(guest.app.session.localPlayerId).toBe(1);
+    expect(game.players).toHaveLength(2);
+    expect(game.players[1]).toMatchObject({ name: 'Sam', connected: true });
+  });
+
+  it('a tool a guest makes is saved at once, by the host: the guest\'s own browser saves nothing', () => {
+    const host = client();
+    const guest = client();
+    let link: HostLink | null = null;
+    host.app.session.onShare = (made) => {
+      link = made;
+    };
+    // A real game in a slot of the host's, with no timer: only the moments that ask for a save make one.
+    host.app.session.updateSettings({ ...host.app.session.settings, gameplay: { ...host.app.session.settings.gameplay, autosaveIntervalSeconds: 0 } });
+    host.app.session.newGame(0);
+    const pair = createLoopbackPair();
+    link!.accept(pair.host);
+    guest.app.session.joinGame(pair.guest, { name: 'Sam', key: KEY });
+    const tick = (seconds: number): void => {
+      for (let frame = 0; frame < Math.round(seconds / FIXED_STEP); frame += 1) {
+        pair.advance(FIXED_STEP);
+        host.app.frame(FIXED_STEP);
+        guest.app.frame(FIXED_STEP);
+      }
+    };
+    tick(1);
+    expect(guest.app.session.localPlayerId).toBe(1);
+    const saves = (who: Client): string[] => who.signals.flatMap((signal) => (signal.type === 'saved' ? [signal.reason] : []));
+    const saveKeys = (who: Client): string[] => [...who.storage.entries.keys()].filter((key) => key.startsWith(SAVE_KEY_PREFIX));
+    const savedTools = (): string[] => {
+      const result = deserialize(host.storage.getItem(`${SAVE_KEY_PREFIX}0`));
+      if (!result.ok) throw new Error(result.reason);
+      return result.state.tools;
+    };
+    expect(saves(host)).toEqual(['manual']);
+    expect(savedTools()).toEqual(['bailing_can']);
+
+    // Sam makes the crew's knife.
+    host.app.session.game!.players[1]!.backpack.push({ itemId: 'stone', count: 2 }, { itemId: 'driftwood', count: 1 }, { itemId: 'fiber', count: 2 });
+    tick(0.3);
+    guest.app.session.dispatch({ type: 'craft', recipeId: 'stone_knife', count: 1 });
+    tick(1);
+    expect(host.app.session.game!.tools).toEqual(['bailing_can', 'stone_knife']);
+    expect(saves(host)).toEqual(['manual', 'tool']);
+    expect(savedTools()).toEqual(['bailing_can', 'stone_knife']);
+    // These saves are quiet: the knife has its own notes, and nothing more is stacked on them.
+    expect(host.toasts()).toContain('Sam made a new tool: Stone knife');
+    expect(host.toasts()).not.toContain('Game saved');
+
+    // The guest saw the same events and saved nothing, then or ever: no slot, no write, no signal.
+    expect(guest.toasts()).toContain('You made a new tool: Stone knife');
+    expect(saves(guest)).toEqual([]);
+    expect(saveKeys(guest)).toEqual([]);
+    expect(guest.app.session.saveNow()).toBe(false);
+    guest.app.session.pageClosing();
+    expect(saveKeys(guest)).toEqual([]);
+    expect(saveKeys(host)).toEqual([`${SAVE_KEY_PREFIX}0`]);
+  });
+
   it('a guest who quits is back in the lobby with nothing kept, and shows as away on the host', () => {
     const { host, guest, game, tick } = table();
     tick(1);

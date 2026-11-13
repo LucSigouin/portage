@@ -98,6 +98,7 @@ export interface CompassModel {
 
 export interface PromptModel {
   text: string;
+  /** The key that does it. Empty when no key would: the prompt then only tells (a bed by day). */
   keyLabel: string;
   /** `press`: one tap does it. `blocked`: something is missing. */
   mode: 'press' | 'blocked';
@@ -148,6 +149,11 @@ export interface HudModel {
   canoeLines: { text: string; tone: Tone }[];
   /** A one-line tip, when the hints setting is on and one applies. */
   hint: string | null;
+  /**
+   * How the line to the host is doing, when a guest needs telling: no word from the host. It stands where the tip
+   * does, in its place, for as long as it is true, whatever the hints setting. Null for a host and alone.
+   */
+  lineNote: string | null;
 }
 
 export interface ToastModel {
@@ -248,6 +254,11 @@ export interface RecipeRowModel {
   inputs: CostRowModel[];
   /** "Needs 3 more plank, hammer", or an empty string when craftable. */
   missingText: string;
+  /**
+   * Where a missing ingredient comes from, when it comes from nowhere a player would look: dirty water is scooped,
+   * and the button for it is in the inventory. An empty string otherwise.
+   */
+  sourceText: string;
   craft: ButtonModel;
   /** Present when more than one can be made. */
   craftAll: ButtonModel | null;

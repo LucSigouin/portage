@@ -19,7 +19,7 @@ import type { Command, CommandResult, GameEvent, GameState, PlayerId, PlayerStat
 import { PROTOCOL_VERSION, readHostMessage } from './messages.ts';
 import type { ClientMessage, LeaveReason } from './messages.ts';
 import type { Transport } from './transport.ts';
-import { WalkPredictor } from './walk.ts';
+import { WALK_AHEAD_STEPS, WalkPredictor } from './walk.ts';
 
 export interface GuestOptions {
   /** The name to play under. The host cuts it to 12 letters. */
@@ -74,6 +74,12 @@ const HOLD_ANSWER_SECONDS = 3;
 const HOLD_SHOWN_SECONDS = 1;
 /** No word from the host for this long: ask to join again. */
 export const HOST_SILENCE_SECONDS = 3;
+/**
+ * No word from the host for this long and the guest's screen says so. It is the wait after which the guest's own
+ * walking stops (`WALK_AHEAD_STEPS`, a second and a half): the figure stands, and the words say why. States come
+ * fifteen a second, so this is over twenty of them missing, not a hiccup.
+ */
+export const HOST_QUIET_SECONDS = WALK_AHEAD_STEPS / STEPS_PER_SECOND;
 /** The view snaps instead of sliding when it is this many steps off (a join, a long stall). */
 const SNAP_STEPS = 45;
 /** Something that moved further than this between two states was put there, not moved: do not slide it across the lake. */
@@ -233,6 +239,11 @@ export class GuestLink {
   /** True while the host is talking: false when it has gone quiet and this guest is asking to join again. */
   get hostHeard(): boolean {
     return this.clock - this.heardAt <= HOST_SILENCE_SECONDS;
+  }
+
+  /** True while a seated guest has had no word from the host for `HOST_QUIET_SECONDS`: the line has stalled, open or not. */
+  get hostQuiet(): boolean {
+    return this.status === 'playing' && this.clock - this.heardAt > HOST_QUIET_SECONDS;
   }
 
   private onMessage(raw: unknown): void {
