@@ -23,7 +23,8 @@ import {
   selectInventory, selectTimeOfDay, step, terrainHeight,
 } from '../sim/index.ts';
 import type { Command, CommandResult, GameState, StepInput } from '../sim/index.ts';
-import { canReachIsland, clearGround, findFootPath, findWaterPath, routeLength, walkGoal } from './navigation.ts';
+import { isWildNodeId, wildIndex, wildNodesOn } from '../sim/gathering.ts';
+import { canReachIsland, clearGround, findFootPath, findWaterPath, footReachable, routeLength, walkGoal } from './navigation.ts';
 import type { Point, Seaworthiness } from './navigation.ts';
 
 /** Bot extras on top of the quest objectives: attachments a sensible player builds early. */
@@ -171,8 +172,25 @@ interface NodeSource {
   guaranteed: boolean;
 }
 
+/** The wild trees and stones (`sim/gathering.ts`), as spots: the bot gathers from them as a player would. */
+const WILD_SPOTS: NodeDefinition[] = wildIndex().nodes.map((wild) => wild.definition);
+
+/**
+ * A wild tree or stone the bot can walk to from its island's landing, worked out once each. A placed spot always
+ * can (the tests hold that); a boulder on a rock in the water, a spruce boxed in by others, cannot.
+ */
+const WILD_REACHABLE = new Map<string, boolean>();
+function wildReachable(node: NodeDefinition): boolean {
+  let known = WILD_REACHABLE.get(node.id);
+  if (known === undefined) {
+    known = footReachable(node.islandId, walkGoal(node.position, 1.6).target);
+    WILD_REACHABLE.set(node.id, known);
+  }
+  return known;
+}
+
 const NODE_SOURCES = new Map<ItemId, NodeSource[]>();
-for (const node of NODES) {
+for (const node of [...NODES, ...WILD_SPOTS]) {
   node.actions.forEach((action, actionIndex) => {
     const table = LOOT_TABLES[action.lootTableId];
     const add = (itemId: ItemId, guaranteed: boolean): void => {
@@ -257,6 +275,8 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
     return readyAt !== null && readyAt <= state.time;
   };
   const questDone = (questId: QuestId): boolean => state.quests[questId].status === 'completed';
+  /** Wild trees and stones the bot walked to and could not use: never tried again. */
+  const passedOver = new Set<string>();
   const send = options.dispatch ?? ((command: Command): CommandResult => dispatch(state, command));
   const must = (command: Command): void => {
     const result = send(command);
@@ -562,9 +582,28 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
       if ((state.nodes[node.id]?.leftover.length ?? 0) > 0 && !makeRoom()) break;
     }
     if (nodeReady(node, actionIndex)) {
-      const target = selectInteractable(state);
+      const answers = (candidate: ReturnType<typeof selectInteractable>): boolean => candidate?.kind === 'node'
+        && candidate.nodeId === node.id && candidate.available && candidate.actionIndex === actionIndex;
+      let target = selectInteractable(state);
+      // A tree or a stone nearer than the spot: step up to the spot itself, as a player would.
+      if (!answers(target) && !isWildNodeId(node.id)) {
+        yield* walkTo(node.position, 0.4);
+        target = selectInteractable(state);
+      }
       if (!target || target.kind !== 'node' || target.nodeId !== node.id || !target.available || target.actionIndex !== actionIndex) {
-        throw new BotStuck(`cannot use ${node.id}: ${JSON.stringify(target)}`);
+        // Another tree or stone is nearer, and gives the same: a player uses that one. Anything else, and a wild
+        // one is passed over for good; a placed spot that cannot be used is a fault.
+        const other = target?.kind === 'node' && target.available && target.actionIndex >= 0 ? NODES_BY_ID[target.nodeId] : undefined;
+        if (other && target?.kind === 'node' && other.actions[target.actionIndex].lootTableId === action.lootTableId) {
+          node = other;
+          actionIndex = target.actionIndex;
+        } else if (isWildNodeId(node.id)) {
+          log(`passed over ${node.id}: ${target?.prompt ?? 'nothing in reach'}`);
+          passedOver.add(node.id);
+          return;
+        } else {
+          throw new BotStuck(`cannot use ${node.id}: ${JSON.stringify(target)}`);
+        }
       }
       // One press and it is done.
       must({ type: 'scavenge' });
@@ -843,7 +882,8 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
     return source.node.reach === 'foot' && action.questGate === null
       && (action.attachment === null || hasAttachment(action.attachment))
       && nodeReady(source.node, source.actionIndex)
-      && canReachIsland(source.node.islandId, limits());
+      && canReachIsland(source.node.islandId, limits())
+      && (!isWildNodeId(source.node.id) || (!passedOver.has(source.node.id) && wildReachable(source.node)));
   };
 
   /** Pick up everything on this island that the next quests want. */
@@ -856,7 +896,7 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
       const wantsFood = foodHeld < habits.larder;
       const wantsWater = held('clean_water') + held('dirty_water') < Math.min(3, habits.waterCarried);
       let best: { node: NodeDefinition; actionIndex: number; cost: number } | null = null;
-      for (const node of NODES_BY_ISLAND[islandId]) {
+      for (const node of [...NODES_BY_ISLAND[islandId], ...wildNodesOn(islandId).map((wild) => wild.definition)]) {
         node.actions.forEach((action, actionIndex) => {
           if (!usable({ node, actionIndex, guaranteed: true })) return;
           if (action.tool && held(action.tool) === 0) return;
