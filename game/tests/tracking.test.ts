@@ -161,7 +161,8 @@ describe('in a crew, the card is each player\'s own', () => {
   });
 
   it('the wire reads `tracked` when it is true or false, and refuses anything else', () => {
-    expect(PROTOCOL_VERSION).toBe(3);
+    // (3 brought `tracked`. Later versions keep it: 4 added the pings.)
+    expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(3);
     expect(readCommand({ type: 'track_quest', questId: 'bail_out', tracked: false })).toEqual({ type: 'track_quest', questId: 'bail_out', tracked: false });
     expect(readCommand({ type: 'track_quest', questId: 'bail_out' })).toEqual({ type: 'track_quest', questId: 'bail_out' });
     expect(readCommand({ type: 'track_quest', questId: null })).toEqual({ type: 'track_quest', questId: null });
