@@ -777,12 +777,14 @@ test('with the inventory open, the interface adds under half a millisecond and t
     rates.push(debug.framesPerSecond);
   }
   // The interface's own share, timed directly: `update` with a fresh model object, as every frame gives it.
+  // Fresh but for the chart: the game hands the same valley and the same record of the fog every frame until the
+  // crew sees more (`ChartModel` in viewmodels/types.ts), and the minimap tells by that whether to paint.
   // Batches of 100, because the browser's clock is too coarse to time one call.
   const interfaceOnly = await page.evaluate(() => {
     const { app } = (window as any).portage;
     const batches: number[] = [];
     for (let batch = 0; batch < 20; batch += 1) {
-      const models = Array.from({ length: 100 }, () => structuredClone(app.lastModel));
+      const models = Array.from({ length: 100 }, () => ({ ...structuredClone({ ...app.lastModel, chart: null }), chart: app.lastModel.chart }));
       const start = performance.now();
       for (const model of models) app.gameInterface.update(model);
       batches.push((performance.now() - start) / 100);
