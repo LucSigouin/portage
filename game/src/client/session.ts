@@ -80,6 +80,9 @@ function createBackdrop(time?: number): GameState {
   return state;
 }
 
+/** What the player is told when the browser refuses a save: storage full or blocked. */
+const SAVE_REFUSED_TEXT = 'Could not save: the browser refused the write.';
+
 /** Most fixed steps one frame may run. Keeps a very fast replay from freezing the page. */
 export const MAXIMUM_STEPS_PER_FRAME = 2400;
 
@@ -141,6 +144,11 @@ export class Session {
   private readonly now: () => number;
   private readonly randomSeed: () => number;
   private autosaver: Autosaver | null = null;
+  /**
+   * True from a refused save until the next save that works. An autosave
+   * refused in that stretch says nothing more: the player has been told.
+   */
+  private saveRefused = false;
   private driver: StepDriver | null = null;
   private driverCarry = 0;
   private summaries: SlotSummary[] | null = null;
@@ -282,6 +290,7 @@ export class Session {
     this.driverCarry = 0;
     this.frozen = false;
     this.autosaver = slot === null ? null : createAutosaver(this.store, slot, this.settings.gameplay.autosaveIntervalSeconds);
+    this.saveRefused = false;
     // The difficulty setting is global: it follows the player into every save.
     if (state.difficulty !== this.settings.gameplay.difficulty) {
       dispatch(state, { type: 'set_difficulty', difficulty: this.settings.gameplay.difficulty });
@@ -317,8 +326,9 @@ export class Session {
     if (!this.game || this.slot === null) return false;
     const saved = this.store.save(this.slot, this.game);
     this.summaries = null;
+    this.saveRefused = !saved;
     if (saved) this.signal({ type: 'saved', slot: this.slot, reason: 'manual' });
-    else this.notice('Could not save: the browser refused the write.', 'danger');
+    else this.notice(SAVE_REFUSED_TEXT, 'danger');
     return saved;
   }
 
@@ -432,7 +442,12 @@ export class Session {
     const reason = this.autosaver?.update(game, events, frameSeconds) ?? null;
     if (reason !== null && this.slot !== null) {
       this.summaries = null;
+      this.saveRefused = false;
       this.signal({ type: 'saved', slot: this.slot, reason });
+    } else if (this.autosaver?.refused && !this.saveRefused) {
+      // Said once for the whole bad stretch, in the hand save's words. The autosaver waits a full interval before the clock tries again.
+      this.saveRefused = true;
+      this.notice(SAVE_REFUSED_TEXT, 'danger');
     }
     return events;
   }

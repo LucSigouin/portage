@@ -39,6 +39,28 @@ const savedState = (storage: FakeStorage, slot: number): GameState => {
   return result.state;
 };
 
+/** A storage that counts the writes tried on the save slots, the refused ones too. */
+class CountingStorage extends FakeStorage {
+  saveTries = 0;
+
+  override setItem(key: string, value: string): void {
+    if (key.startsWith(SAVE_KEY_PREFIX)) this.saveTries += 1;
+    super.setItem(key, value);
+  }
+}
+
+/** What a refused save says, by hand or by itself. */
+const SAVE_REFUSED = 'Could not save: the browser refused the write.';
+
+/** Every note about a refused save, whole: the words and the tone. */
+const refusedNotes = (h: Harness): SessionSignal[] =>
+  h.signals.filter((signal) => signal.type === 'notice' && signal.text === SAVE_REFUSED);
+
+/** Queue an event in the running game, as the rules would: the next frame drains it. */
+function queue(session: Session, event: GameState['events'][number]): void {
+  session.game!.events.push(event);
+}
+
 /** Run frames of 1/60 s. */
 function frames(session: Session, seconds: number): void {
   for (let elapsed = 0; elapsed < seconds - 1e-9; elapsed += FIXED_STEP) session.advance(FIXED_STEP, 0);
@@ -266,6 +288,176 @@ describe('autosave', () => {
     expect(h.session.slot).toBeNull();
     expect(h.session.saveNow()).toBe(false);
     expect([...h.storage.entries.keys()].filter((key) => key.startsWith(SAVE_KEY_PREFIX))).toEqual([]);
+  });
+});
+
+describe('a save the browser refuses', () => {
+  /** A game in slot 0, saved once, autosaving every `interval` seconds (0: timer off). */
+  function playing(interval: number): Harness & { storage: CountingStorage; saves(): string[] } {
+    const storage = new CountingStorage();
+    const h = harness(storage);
+    h.session.handleIntent({ type: 'change_setting', setting: 'gameplay.autosaveIntervalSeconds', value: interval });
+    h.session.newGame(0);
+    expect(storage.saveTries).toBe(1);
+    return { ...h, storage, saves: () => h.signals.flatMap((signal) => (signal.type === 'saved' ? [signal.reason] : [])) };
+  }
+
+  it('says so once when the autosave is refused, in the hand save\'s words, and waits a full interval before each new try', () => {
+    const h = playing(60);
+    const { session, storage } = h;
+    storage.failWrites = true;
+    frames(session, 59);
+    expect(storage.saveTries).toBe(1);
+    expect(refusedNotes(h)).toEqual([]);
+    // The timer runs out, the write is refused: one note.
+    frames(session, 2);
+    expect(storage.saveTries).toBe(2);
+    expect(refusedNotes(h)).toEqual([{ type: 'notice', text: SAVE_REFUSED, tone: 'danger' }]);
+    // 57 more seconds, 3,420 frames: not one more try, not one more note.
+    frames(session, 57);
+    expect(storage.saveTries).toBe(2);
+    // Then one try an interval, and still the one note for the whole stretch.
+    frames(session, 4);
+    expect(storage.saveTries).toBe(3);
+    frames(session, 120);
+    expect(storage.saveTries).toBe(5);
+    expect(refusedNotes(h)).toHaveLength(1);
+    expect(h.saves()).toEqual(['manual']);
+    // The hand save says the very same thing.
+    expect(session.saveNow()).toBe(false);
+    expect(refusedNotes(h)).toEqual(Array(2).fill({ type: 'notice', text: SAVE_REFUSED, tone: 'danger' }));
+  });
+
+  it('a later save that works ends the stretch without a word, and a new refusal speaks again', () => {
+    const h = playing(60);
+    const { session, storage } = h;
+    storage.failWrites = true;
+    frames(session, 61);
+    expect(refusedNotes(h)).toHaveLength(1);
+    // The browser takes writes again: the next try saves, as any timed save does.
+    storage.failWrites = false;
+    frames(session, 61);
+    expect(h.saves()).toEqual(['manual', 'timer']);
+    expect(savedState(storage, 0).playedSeconds).toBeGreaterThan(119);
+    frames(session, 30);
+    expect(refusedNotes(h)).toHaveLength(1);
+    expect(h.notices()).toEqual([SAVE_REFUSED]);
+    // A second bad stretch: one note more, and one only.
+    storage.failWrites = true;
+    frames(session, 31);
+    expect(refusedNotes(h)).toHaveLength(2);
+    frames(session, 120);
+    expect(refusedNotes(h)).toHaveLength(2);
+    expect(h.saves()).toEqual(['manual', 'timer']);
+  });
+
+  it('a tool gained in a bad stretch tries at once and adds no second note', () => {
+    const h = playing(60);
+    const { session, storage } = h;
+    storage.failWrites = true;
+    frames(session, 61);
+    expect(storage.saveTries).toBe(2);
+    queue(session, { type: 'item_gained', itemId: 'pry_bar', count: 1, container: 'belt', playerId: 0 });
+    session.advance(FIXED_STEP, 0);
+    expect(storage.saveTries).toBe(3);
+    expect(refusedNotes(h)).toHaveLength(1);
+    // That refusal restarts the clock: the next timed try is a full interval after it.
+    frames(session, 58);
+    expect(storage.saveTries).toBe(3);
+    frames(session, 3);
+    expect(storage.saveTries).toBe(4);
+    expect(refusedNotes(h)).toHaveLength(1);
+  });
+
+  it('with timed autosave off: one note, and no new try until the next quest, tool, landing or sleep', () => {
+    const h = playing(0);
+    const { session, storage } = h;
+    storage.failWrites = true;
+    // The knife is made, as from the crafting panel: that save is refused.
+    give(session.game!, 'stone', 2);
+    give(session.game!, 'driftwood', 1);
+    give(session.game!, 'fiber', 2);
+    session.handleIntent({ type: 'command', command: { type: 'craft', recipeId: 'stone_knife', count: 1 } });
+    session.advance(FIXED_STEP, 0);
+    expect(storage.saveTries).toBe(2);
+    expect(refusedNotes(h)).toEqual([{ type: 'notice', text: SAVE_REFUSED, tone: 'danger' }]);
+    expect(h.saves()).toEqual(['manual']);
+    // Two minutes of play, 7,200 frames: nothing tried, nothing more said.
+    // (Not longer: left alone, this game completes its first quest at 160 s, and that is a moment that tries.)
+    frames(session, 120);
+    expect(storage.saveTries).toBe(2);
+    expect(refusedNotes(h)).toHaveLength(1);
+    // The next such moment tries again. Same stretch: no second note.
+    queue(session, { type: 'item_gained', itemId: 'pry_bar', count: 1, container: 'belt', playerId: 0 });
+    session.advance(FIXED_STEP, 0);
+    expect(storage.saveTries).toBe(3);
+    expect(refusedNotes(h)).toHaveLength(1);
+    // One that works ends the stretch, and is reported as it always was.
+    storage.failWrites = false;
+    queue(session, { type: 'autosave_requested', reason: 'landing' });
+    session.advance(FIXED_STEP, 0);
+    expect(h.saves()).toEqual(['manual', 'landing']);
+    expect(savedState(storage, 0).tools).toEqual(['bailing_can', 'stone_knife']);
+    frames(session, 5);
+    expect(refusedNotes(h)).toHaveLength(1);
+    // A new refusal after it speaks again.
+    storage.failWrites = true;
+    queue(session, { type: 'autosave_requested', reason: 'sleeping' });
+    session.advance(FIXED_STEP, 0);
+    expect(storage.saveTries).toBe(5);
+    expect(refusedNotes(h)).toHaveLength(2);
+  });
+
+  it('a refused hand save speaks every time, as before, and an autosave refused after it says nothing more', () => {
+    const h = playing(60);
+    const { session, storage } = h;
+    storage.failWrites = true;
+    expect(session.saveNow()).toBe(false);
+    expect(session.saveNow()).toBe(false);
+    expect(refusedNotes(h)).toHaveLength(2);
+    // The timer's own refusal, in the same stretch: the player has been told.
+    frames(session, 61);
+    expect(storage.saveTries).toBe(4);
+    expect(refusedNotes(h)).toHaveLength(2);
+    // A hand save that works ends the stretch.
+    storage.failWrites = false;
+    expect(session.saveNow()).toBe(true);
+    expect(h.saves()).toEqual(['manual', 'manual']);
+    storage.failWrites = true;
+    frames(session, 61);
+    expect(storage.saveTries).toBe(6);
+    expect(refusedNotes(h)).toHaveLength(3);
+    expect(refusedNotes(h)).toEqual(Array(3).fill({ type: 'notice', text: SAVE_REFUSED, tone: 'danger' }));
+  });
+
+  it('a game loaded after a bad stretch is told afresh, once', () => {
+    const h = playing(60);
+    const { session, storage } = h;
+    storage.failWrites = true;
+    session.quitToLobby();
+    expect(refusedNotes(h)).toHaveLength(1); // the save on quitting, refused
+    expect(session.loadGame(0)).toBe(true);
+    frames(session, 61);
+    expect(refusedNotes(h)).toHaveLength(2);
+    frames(session, 61);
+    expect(refusedNotes(h)).toHaveLength(2);
+  });
+
+  it('a game with no slot writes nothing and is told nothing, whatever the browser refuses', () => {
+    const storage = new CountingStorage();
+    const h = harness(storage);
+    const donor = harness();
+    donor.session.newGame(0);
+    h.session.handleIntent({ type: 'change_setting', setting: 'gameplay.autosaveIntervalSeconds', value: 60 });
+    h.session.adoptGame(donor.session.game!);
+    storage.failWrites = true;
+    queue(h.session, { type: 'autosave_requested', reason: 'landing' });
+    frames(h.session, 61);
+    expect(h.session.saveNow()).toBe(false);
+    h.session.pageClosing();
+    expect(storage.saveTries).toBe(0);
+    expect(h.notices()).toEqual([]);
+    expect(h.signals.filter((signal) => signal.type === 'saved')).toEqual([]);
   });
 });
 

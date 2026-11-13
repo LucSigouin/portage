@@ -381,6 +381,23 @@ describe('leaving and coming back', () => {
     expect(saveKeys(host)).toEqual([`${SAVE_KEY_PREFIX}0`]);
   });
 
+  it('a guest whose browser refuses every write is told nothing: there is no save of theirs to refuse', () => {
+    const { guest, tick } = table();
+    tick(1);
+    expect(guest.app.session.localPlayerId).toBe(1);
+    guest.storage.failWrites = true;
+    tick(2);
+    expect(guest.app.session.saveNow()).toBe(false);
+    guest.app.session.setHidden(true);
+    guest.app.session.setHidden(false);
+    tick(1);
+    guest.app.session.pageClosing();
+    const notes = guest.signals.flatMap((signal) => (signal.type === 'notice' ? [signal.text] : []));
+    expect(notes).not.toContain('Could not save: the browser refused the write.');
+    expect(guest.signals.filter((signal) => signal.type === 'saved')).toEqual([]);
+    expect([...guest.storage.entries.keys()].filter((key) => key.startsWith(SAVE_KEY_PREFIX))).toEqual([]);
+  });
+
   it('a guest who quits is back in the lobby with nothing kept, and shows as away on the host', () => {
     const { host, guest, game, tick } = table();
     tick(1);

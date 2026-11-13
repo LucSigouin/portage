@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   SAVE_KEY_PREFIX, SAVE_SLOT_COUNT, SAVE_VERSION, createAutosaver, createSaveStore, deserialize, serialize,
 } from '../src/save/index.ts';
-import type { SaveMigration } from '../src/save/index.ts';
+import type { SaveMigration, SaveStore } from '../src/save/index.ts';
 import { FIXED_STEP, NEUTRAL_INPUT, bearingDifference, dispatch, hashState, step } from '../src/sim/index.ts';
 import { MAIN_QUESTS, TUNING } from '../src/data/index.ts';
 import { createBotDriver } from '../src/bot/bot.ts';
@@ -466,5 +466,146 @@ describe('autosave', () => {
     expect(autosaver.update(state, [], 1)).toBe('timer');
     storage.failWrites = true;
     expect(autosaver.update(state, [{ type: 'autosave_requested', reason: 'landing' }], 1)).toBeNull();
+  });
+
+  /** A store over `storage` that counts every save tried, the refused ones too. */
+  function counted(storage: FakeStorage): { store: SaveStore; tries: () => number } {
+    const inner = createSaveStore(storage, () => 1);
+    let tries = 0;
+    const store: SaveStore = {
+      ...inner,
+      save(slot, state) {
+        tries += 1;
+        return inner.save(slot, state);
+      },
+    };
+    return { store, tries: () => tries };
+  }
+
+  it('after a refused save the clock waits a full interval: it does not try again on every frame', () => {
+    const storage = new FakeStorage();
+    const { store, tries } = counted(storage);
+    const autosaver = createAutosaver(store, 0, 60);
+    const state = newGame();
+    expect(autosaver.refused).toBe(false);
+    storage.failWrites = true;
+    expect(autosaver.update(state, [], 59)).toBeNull();
+    expect(tries()).toBe(0);
+    // The timer runs out and the browser refuses the write.
+    expect(autosaver.update(state, [], 1)).toBeNull();
+    expect(autosaver.refused).toBe(true);
+    expect(tries()).toBe(1);
+    // 59 seconds of frames: not one more try.
+    for (let frame = 0; frame < 59 * 60; frame += 1) {
+      expect(autosaver.update(state, [], 1 / 60)).toBeNull();
+      expect(autosaver.refused).toBe(false);
+    }
+    expect(tries()).toBe(1);
+    // A full interval after the refusal the clock tries again, once.
+    expect(autosaver.update(state, [], 1.1)).toBeNull();
+    expect(autosaver.refused).toBe(true);
+    expect(tries()).toBe(2);
+    // The browser takes writes again: the next try, an interval on, saves.
+    storage.failWrites = false;
+    expect(autosaver.update(state, [], 59)).toBeNull();
+    expect(tries()).toBe(2);
+    expect(autosaver.update(state, [], 1)).toBe('timer');
+    expect(autosaver.refused).toBe(false);
+    expect(tries()).toBe(3);
+    expect(store.load(0).ok).toBe(true);
+  });
+
+  it('a landing, a sleep, a quest or a tool still tries at once after a refusal, and a refused one restarts the clock', () => {
+    const storage = new FakeStorage();
+    const { store, tries } = counted(storage);
+    const autosaver = createAutosaver(store, 0, 60);
+    const state = newGame();
+    storage.failWrites = true;
+    expect(autosaver.update(state, [], 60)).toBeNull();
+    expect(tries()).toBe(1);
+    // The very next frames: each of these moments tries, refused or not before.
+    expect(autosaver.update(state, [{ type: 'autosave_requested', reason: 'landing' }], 1 / 60)).toBeNull();
+    expect(autosaver.refused).toBe(true);
+    expect(tries()).toBe(2);
+    expect(autosaver.update(state, [{ type: 'autosave_requested', reason: 'sleeping' }], 1 / 60)).toBeNull();
+    expect(tries()).toBe(3);
+    expect(autosaver.update(state, [{ type: 'quest_completed', questId: 'bail_out' }], 1 / 60)).toBeNull();
+    expect(tries()).toBe(4);
+    // 40 seconds pass before the last of them.
+    expect(autosaver.update(state, [], 40)).toBeNull();
+    expect(autosaver.update(state, [{ type: 'item_gained', itemId: 'pry_bar', count: 1, container: 'belt', playerId: 0 }], 1 / 60)).toBeNull();
+    expect(autosaver.refused).toBe(true);
+    expect(tries()).toBe(5);
+    // The clock counts from that last refusal: 59 seconds on it has not tried, a second later it does.
+    expect(autosaver.update(state, [], 59)).toBeNull();
+    expect(autosaver.refused).toBe(false);
+    expect(tries()).toBe(5);
+    expect(autosaver.update(state, [], 1)).toBeNull();
+    expect(autosaver.refused).toBe(true);
+    expect(tries()).toBe(6);
+    // And when the browser takes writes again, such a moment saves at once, under its own reason.
+    storage.failWrites = false;
+    expect(autosaver.update(state, [{ type: 'autosave_requested', reason: 'landing' }], 1 / 60)).toBe('landing');
+    expect(autosaver.refused).toBe(false);
+    expect(tries()).toBe(7);
+  });
+
+  it('with the timer off, a refused save is tried once and not again until the next landing, sleep, quest or tool', () => {
+    const storage = new FakeStorage();
+    const { store, tries } = counted(storage);
+    const autosaver = createAutosaver(store, 0, 0);
+    const state = newGame();
+    storage.failWrites = true;
+    expect(autosaver.update(state, [{ type: 'quest_completed', questId: 'bail_out' }], 1 / 60)).toBeNull();
+    expect(autosaver.refused).toBe(true);
+    expect(tries()).toBe(1);
+    for (let frame = 0; frame < 600; frame += 1) {
+      expect(autosaver.update(state, [], 1 / 60)).toBeNull();
+      expect(autosaver.refused).toBe(false);
+    }
+    expect(autosaver.update(state, [], 10_000)).toBeNull();
+    expect(tries()).toBe(1);
+    expect(autosaver.update(state, [{ type: 'item_gained', itemId: 'pry_bar', count: 1, container: 'belt', playerId: 0 }], 1 / 60)).toBeNull();
+    expect(autosaver.refused).toBe(true);
+    expect(tries()).toBe(2);
+    expect(autosaver.update(state, [], 10_000)).toBeNull();
+    expect(tries()).toBe(2);
+    storage.failWrites = false;
+    expect(autosaver.update(state, [{ type: 'autosave_requested', reason: 'landing' }], 1 / 60)).toBe('landing');
+    expect(tries()).toBe(3);
+  });
+
+  it('a save that works is as it was: the same reasons, the same timer, one write each, and never `refused`', () => {
+    const storage = new FakeStorage();
+    const { store, tries } = counted(storage);
+    const autosaver = createAutosaver(store, 0, 120);
+    const state = newGame();
+    const told: (string | null)[] = [];
+    const frame = (events: Parameters<typeof autosaver.update>[1], seconds: number): void => {
+      told.push(autosaver.update(state, events, seconds));
+      expect(autosaver.refused).toBe(false);
+    };
+    frame([], 1);
+    frame([{ type: 'autosave_requested', reason: 'landing' }], 1 / 60);
+    frame([{ type: 'autosave_requested', reason: 'sleeping' }], 1 / 60);
+    frame([{ type: 'quest_completed', questId: 'bail_out' }], 1 / 60);
+    frame([{ type: 'item_gained', itemId: 'pry_bar', count: 1, container: 'belt', playerId: 0 }], 1 / 60);
+    frame([], 119);
+    frame([], 1.1);
+    frame([], 60);
+    frame([], 60);
+    expect(told).toEqual([null, 'landing', 'sleeping', 'quest', 'tool', null, 'timer', null, 'timer']);
+    expect(tries()).toBe(6);
+    // One refusal leaves no mark on the saves after it.
+    storage.failWrites = true;
+    expect(autosaver.update(state, [{ type: 'autosave_requested', reason: 'landing' }], 1 / 60)).toBeNull();
+    expect(autosaver.refused).toBe(true);
+    storage.failWrites = false;
+    frame([], 1 / 60);
+    frame([{ type: 'autosave_requested', reason: 'landing' }], 1 / 60);
+    frame([], 119);
+    frame([], 1.1);
+    expect(told.slice(9)).toEqual([null, 'landing', null, 'timer']);
+    expect(tries()).toBe(9);
   });
 });

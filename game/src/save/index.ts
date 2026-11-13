@@ -231,6 +231,13 @@ export interface Autosaver {
    * when it saved, otherwise null.
    */
   update(state: GameState, events: readonly GameEvent[], frameSeconds: number): AutosaveReason | null;
+  /**
+   * True when the last `update` tried to save and the store refused the write
+   * (storage full or blocked). The timer then starts again from zero, so the
+   * clock waits a full interval before its next try; a landing, a sleep, a
+   * quest or a tool still tries at once.
+   */
+  readonly refused: boolean;
   /** Change the timer. 0 turns timed autosave off. */
   setIntervalSeconds(seconds: number): void;
 }
@@ -239,8 +246,13 @@ export interface Autosaver {
 export function createAutosaver(store: SaveStore, slot: number, intervalSeconds: number): Autosaver {
   let interval = intervalSeconds;
   let sinceSave = 0;
+  let refused = false;
   return {
+    get refused() {
+      return refused;
+    },
     update(state, events, frameSeconds) {
+      refused = false;
       sinceSave += frameSeconds;
       let asked: AutosaveReason | null = null;
       let earned: AutosaveReason | null = null;
@@ -253,9 +265,11 @@ export function createAutosaver(store: SaveStore, slot: number, intervalSeconds:
       let reason: AutosaveReason | null = asked ?? earned;
       if (reason === null && interval > 0 && sinceSave >= interval) reason = 'timer';
       if (reason === null) return null;
-      if (!store.save(slot, state)) return null;
+      // Saved or refused, the clock starts again: a refused write is not tried on every frame after.
       sinceSave = 0;
-      return reason;
+      if (store.save(slot, state)) return reason;
+      refused = true;
+      return null;
     },
     setIntervalSeconds(seconds) {
       interval = seconds;
