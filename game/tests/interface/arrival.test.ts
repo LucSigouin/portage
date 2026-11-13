@@ -30,7 +30,14 @@ const drawn = (motion: 'animated' | 'still'): ViewNode[][] => {
 };
 
 const child = (view: ViewNode[], className: string): ViewNode => {
-  const found = view[0].children.find((node) => node.classes.split(' ').includes(className));
+  const search = (nodes: ViewNode[]): ViewNode | null => {
+    for (const node of nodes) {
+      const found = node.classes.split(' ').includes(className) ? node : search(node.children);
+      if (found) return found;
+    }
+    return null;
+  };
+  const found = search(view);
   if (!found) throw new Error(`no ${className}`);
   return found;
 };
@@ -130,7 +137,7 @@ describe('the stylesheet', () => {
 
   it('takes no click, stands in the upper middle, and gives way to the built view', () => {
     expect(rules).toMatch(/\.iw-arrival \{[^}]*pointer-events: none;/);
-    expect(rules).toMatch(/\.iw-arrival \{[^}]*justify-items: center;[^}]*padding-top: 19vh;/);
+    expect(rules).toMatch(/\.iw-arrival \{[^}]*justify-items: center;[^}]*padding-top: 16vh;/);
     expect(rules).toMatch(/\.iw\.iw-holding \.iw-arrival \{\s*visibility: hidden;/);
   });
 

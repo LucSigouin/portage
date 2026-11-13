@@ -59,11 +59,11 @@ export function brushStroke(placeId: string): string {
     const landing = Math.min(1, along / 0.1);
     const body = 1 - 0.55 * along;
     const tail = Math.min(1, (1 - along) / 0.16);
-    const half = (0.9 + 4.3 * landing * body) * (0.25 + 0.75 * tail);
+    const half = (1.3 + 6.2 * landing * body) * (0.22 + 0.78 * tail);
     const centre = middle + bow * Math.sin(along * Math.PI) + lean * (along - 0.5);
     const x = (6 + along * (STROKE_WIDTH - 12)).toFixed(1);
-    upper.push(`${x} ${(centre - half - random() * 0.9).toFixed(2)}`);
-    lower.push(`${x} ${(centre + half + random() * 0.9).toFixed(2)}`);
+    upper.push(`${x} ${Math.max(0.3, centre - half - random() * 0.9).toFixed(2)}`);
+    lower.push(`${x} ${Math.min(STROKE_HEIGHT - 0.3, centre + half + random() * 0.9).toFixed(2)}`);
   }
   const outline = `M${upper.join('L')}L${lower.reverse().join('L')}Z`;
   return `<svg class="iw-arrival-brush" viewBox="0 0 ${STROKE_WIDTH} ${STROKE_HEIGHT}" preserveAspectRatio="none" aria-hidden="true">`
@@ -96,8 +96,10 @@ export const sealStyle = (seal: number): string => (seal >= 1 ? '' : seal <= 0 ?
 export function arrivalView(arrival: ArrivalModel): ViewNode[] {
   return [h('div.iw-arrival-card.iw-paper', { key: arrival.placeId, role: 'status', 'data-place': arrival.placeId, 'data-motion': arrival.motion },
     h('small.iw-arrival-kicker', null, arrival.kicker),
-    h('b.iw-arrival-title', null, arrival.title),
-    h('i.iw-arrival-stroke', { html: brushStroke(arrival.placeId), style: strokeStyle(arrival.ink, arrival.lift), 'aria-hidden': 'true' }),
-    h('span.iw-arrival-line', null, arrival.line),
-    h('i.iw-arrival-seal', { html: SEAL, style: sealStyle(arrival.seal), 'aria-hidden': 'true' }))];
+    // The name, with its ink: the stroke runs under it and the seal sits beside it, both hung on the name's own box.
+    h('span.iw-arrival-name', null,
+      h('b.iw-arrival-title', null, arrival.title),
+      h('i.iw-arrival-stroke', { html: brushStroke(arrival.placeId), style: strokeStyle(arrival.ink, arrival.lift), 'aria-hidden': 'true' }),
+      h('i.iw-arrival-seal', { html: SEAL, style: sealStyle(arrival.seal), 'aria-hidden': 'true' })),
+    h('span.iw-arrival-line', null, arrival.line))];
 }
