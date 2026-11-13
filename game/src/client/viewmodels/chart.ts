@@ -6,8 +6,8 @@
  * (marching squares). It never changes during a game. The fog over it is the crew's chart in the state
  * (`state.seen`), handed to the interface unpacked one byte a cell (`seenCells`).
  */
-import { CREW_MARKS, REGIONS } from '../../data/index.ts';
-import { FOG, cellSeen, standingPings, terrainHeight, valleyHalfWidth } from '../../sim/index.ts';
+import { REGIONS } from '../../data/index.ts';
+import { FOG, cellSeen, pingColour, standingPings, terrainHeight, valleyHalfWidth } from '../../sim/index.ts';
 import type { GameState, PlayerId } from '../../sim/index.ts';
 
 /** The round chart: a circle over the valley, north up. It holds the whole lake but the far corners of the Shallows. */
@@ -197,7 +197,7 @@ export function chartPings(state: GameState): ChartPingModel[] {
   if (source === lastPings) return lastPingModels;
   lastPings = source;
   lastPingModels = standingPings(state).map((ping) => ({
-    playerId: ping.playerId, x: ping.x, z: ping.z, color: (CREW_MARKS[ping.playerId] ?? CREW_MARKS[0]!).toque,
+    playerId: ping.playerId, x: ping.x, z: ping.z, color: pingColour(ping.playerId),
   }));
   return lastPingModels;
 }

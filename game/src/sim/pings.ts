@@ -12,6 +12,7 @@
  * ones standing. The field is optional: it is absent until the first ping,
  * so a game nobody pings in, and every save from before, is unchanged.
  */
+import { CREW_MARKS } from '../data/crew.ts';
 import { connectedPlayers } from './inventory.ts';
 import type { CommandResult, GameState, PlayerId, PlayerState } from './types.ts';
 
@@ -44,6 +45,14 @@ export interface Ping {
    * there: a ping set where someone stands is not gone at once.
    */
   inside: PlayerId[];
+}
+
+/**
+ * The colour of a player's pings, `#rrggbb`: their toque's, the colour the crew list, the compass and the minimap
+ * already know them by. The beam in the world and the marks on the maps both ask here.
+ */
+export function pingColour(playerId: PlayerId): string {
+  return (CREW_MARKS[playerId] ?? CREW_MARKS[0]!).toque;
 }
 
 const refusal = (reason: 'off_the_map' | 'ping_too_soon'): CommandResult => ({ ok: false, reason, missing: null });
