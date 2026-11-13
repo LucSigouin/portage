@@ -17,3 +17,5 @@ export { BOTTLES, BOTTLE_IDS } from './bottles.ts';
 export { CREW_MARKS } from './crew.ts';
 export type { CrewMark } from './crew.ts';
 export { WEATHER, WEATHER_KINDS } from './weather.ts';
+export { FLORA_PRESETS, floraMixFor, floraPresetFor } from './flora.ts';
+export type { FloraMix, FloraPresetId } from './flora.ts';

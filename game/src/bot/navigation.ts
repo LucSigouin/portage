@@ -6,7 +6,7 @@
 import type { IslandId } from '../data/types.ts';
 import { TUNING } from '../data/tuning.ts';
 import { ISLANDS, ISLANDS_BY_ID, REGIONS, START } from '../data/world.ts';
-import { groundHeight, islandLanding, regionAt, terrainHeight } from '../sim/index.ts';
+import { approachTo, bodyBlocked, freeSpotNear, groundHeight, islandLanding, regionAt, terrainHeight } from '../sim/index.ts';
 
 export interface Point {
   x: number;
@@ -326,11 +326,18 @@ export function canReachIsland(islandId: IslandId, limits: Seaworthiness): boole
 
 // --- Land -------------------------------------------------------------------
 
-const LAND_CELL = 2;
+/** Metres per cell of the walking grid: fine enough to find a door a body fits through with its berth. */
+const LAND_CELL = 0.5;
 const LAND_STANDING_DEPTH = -0.45;
 const slopeLimit = TUNING.foot.slopeLimit * 0.92;
+/** How wide a berth the bot gives trees, rocks and landmarks: a walker's body and a little spare. */
+export const SOLID_CLEARANCE = TUNING.foot.bodyRadius + 0.15;
+/** Leaving a spot that is closer to a solid than the berth, this much of the way needs only room for the body. */
+const LEAVING = 1.2;
+/** Metres between the points a straight line is tried against solids at. */
+const SOLID_SAMPLE = 0.2;
 
-/** True when a walker can go straight from one point to another. */
+/** True when a walker can go straight from one point to another: ground to stand on, no climb too steep, nothing solid. */
 export function clearGround(from: Point, to: Point): boolean {
   const distance = Math.hypot(to.x - from.x, to.z - from.z);
   const steps = Math.max(1, Math.ceil(distance / 0.5));
@@ -342,41 +349,100 @@ export function clearGround(from: Point, to: Point): boolean {
     if (stepLength > 1e-6 && (height - previousHeight) / stepLength > slopeLimit) return false;
     previousHeight = height;
   }
+  // Solids, finer than the ground: a wall's corner is narrower than half a metre.
+  const tight = bodyBlocked(from.x, from.z, SOLID_CLEARANCE);
+  const solidSteps = Math.max(1, Math.ceil(distance / SOLID_SAMPLE));
+  for (let step = 1; step <= solidSteps; step += 1) {
+    const x = from.x + ((to.x - from.x) * step) / solidSteps;
+    const z = from.z + ((to.z - from.z) * step) / solidSteps;
+    // Near a start that is already tight, only the spare berth is let off: never the body itself.
+    if (bodyBlocked(x, z, SOLID_CLEARANCE) && !(tight && (distance * step) / solidSteps <= LEAVING && !bodyBlocked(x, z))) return false;
+  }
   return true;
 }
 
 /**
  * A walking route across one island, as waypoints ending at `to`. Tries the
- * straight line first, then searches a 2 m grid over the island.
+ * straight line first, then searches a half-metre grid over the island.
  */
-export function findFootPath(islandId: IslandId, from: Point, to: Point): Point[] | null {
-  if (clearGround(from, to)) return [to];
+/**
+ * Where a walker heads to use something at `goal`, and how close it must get. Something inside a landmark (an attic,
+ * the lamp at the tower's foot, a bed in its lean-to) is walked up to from the landmark's edge, where the rules let it
+ * be used. A goal tight against a tree or a rock, or in the fire: the clear ground beside it.
+ */
+export function walkGoal(goal: Point, reach: number): { target: Point; range: number } {
+  const approach = approachTo(goal.x, goal.z);
+  if (approach.depth > 0) return { target: approach, range: Math.min(reach, 0.6) };
+  const beside = bodyBlocked(goal.x, goal.z, SOLID_CLEARANCE) ? freeSpotNear(goal.x, goal.z, 3, SOLID_CLEARANCE) : null;
+  return beside ? { target: beside, range: Math.min(reach, 0.6) } : { target: goal, range: reach };
+}
+
+interface LandGrid {
+  originX: number;
+  originZ: number;
+  size: number;
+  /** The ground at each cell's middle, measured the first time the search reaches it (NaN until then). */
+  heightAt(index: number): number;
+  /** True where a walker with the bot's berth would touch a tree, a rock or a landmark. */
+  solidAt(index: number): boolean;
+}
+
+/** An island's ground and solids never change, so each island's grid is kept, and filled in as searches reach it. */
+const landGrids = new Map<IslandId, LandGrid>();
+
+function landGrid(islandId: IslandId): LandGrid {
+  const known = landGrids.get(islandId);
+  if (known) return known;
   const definition = ISLANDS_BY_ID[islandId];
   const reach = Math.max(definition.radiusX, definition.radiusZ) * 1.2 + 6;
   const originX = definition.center.x - reach;
   const originZ = definition.center.z - reach;
   const size = Math.ceil((reach * 2) / LAND_CELL);
+  const heights = new Float64Array(size * size).fill(Number.NaN);
+  // 0 not yet asked, 1 open, 2 solid.
+  const solids = new Uint8Array(size * size);
+  const middleX = (index: number): number => originX + ((index % size) + 0.5) * LAND_CELL;
+  const middleZ = (index: number): number => originZ + (Math.floor(index / size) + 0.5) * LAND_CELL;
+  const heightAt = (index: number): number => {
+    let height = heights[index];
+    if (Number.isNaN(height)) {
+      height = groundHeight(middleX(index), middleZ(index));
+      heights[index] = height;
+    }
+    return height;
+  };
+  const solidAt = (index: number): boolean => {
+    if (solids[index] === 0) solids[index] = bodyBlocked(middleX(index), middleZ(index), SOLID_CLEARANCE) ? 2 : 1;
+    return solids[index] === 2;
+  };
+  const grid = { originX, originZ, size, heightAt, solidAt };
+  landGrids.set(islandId, grid);
+  return grid;
+}
+
+export function findFootPath(islandId: IslandId, from: Point, to: Point): Point[] | null {
+  if (clearGround(from, to)) return [to];
+  const { originX, originZ, size, heightAt, solidAt } = landGrid(islandId);
   const centre = (index: number): Point => ({
     x: originX + ((index % size) + 0.5) * LAND_CELL,
     z: originZ + (Math.floor(index / size) + 0.5) * LAND_CELL,
   });
-  const heights = new Float64Array(size * size);
-  for (let index = 0; index < size * size; index += 1) {
-    const point = centre(index);
-    heights[index] = groundHeight(point.x, point.z);
-  }
   const cellAt = (point: Point): number => {
     const column = Math.max(0, Math.min(size - 1, Math.floor((point.x - originX) / LAND_CELL)));
     const row = Math.max(0, Math.min(size - 1, Math.floor((point.z - originZ) / LAND_CELL)));
     return row * size + column;
   };
+  const goal = cellAt(to);
   const canStep = (current: number, next: number): boolean => {
-    if (heights[next] < LAND_STANDING_DEPTH) return false;
+    const height = heightAt(next);
+    if (height < LAND_STANDING_DEPTH) return false;
+    // Round trees, rocks and landmarks. The goal itself is let through: the last step to it slides along whatever is there.
+    if (next !== goal && solidAt(next)) return false;
     const diagonal = current % size !== next % size && Math.floor(current / size) !== Math.floor(next / size);
     const run = diagonal ? LAND_CELL * Math.SQRT2 : LAND_CELL;
-    return (heights[next] - heights[current]) / run <= slopeLimit;
+    return (height - heightAt(current)) / run <= slopeLimit;
   };
-  const cells = searchGrid(size, size, cellAt(from), cellAt(to), canStep);
+  const cells = searchGrid(size, size, cellAt(from), goal, canStep);
   if (!cells) return null;
   const points = [...cells.slice(1).map(centre), to];
   const route: Point[] = [];

@@ -3,15 +3,18 @@ import { ISLANDS_BY_ID, TUNING } from '../src/data/index.ts';
 import { islandLanding, terrainHeight } from '../src/sim/index.ts';
 import { newGame, run, teleport } from './support.ts';
 
-function onHomeKnoll() {
+function onHomeKnoll(x = 0) {
   const state = newGame();
-  teleport(state, 'home_knoll', 0, 1150);
+  teleport(state, 'home_knoll', x, 1150);
   return state;
 }
 
+/** Where a straight walk north from z 1150 meets no tree, rock or landmark all the way into the lake (Luc's list, line 1). */
+const CLEAR_LANE_X = -2.5;
+
 describe('walking', () => {
   it('walks at 2.6 m/s and runs at 4.4 m/s, on the terrain', () => {
-    const state = onHomeKnoll();
+    const state = onHomeKnoll(CLEAR_LANE_X);
     run(state, { moveY: 1 }, 5);
     expect(state.players[0].position.z).toBeCloseTo(1150 - TUNING.foot.walkSpeed * 5, 1);
     expect(state.players[0].position.y).toBeCloseTo(terrainHeight(state.players[0].position.x, state.players[0].position.z), 9);
@@ -53,7 +56,7 @@ describe('walking', () => {
 
 describe('limits', () => {
   it('wades in to about 0.6 m and no deeper', () => {
-    const state = onHomeKnoll();
+    const state = onHomeKnoll(CLEAR_LANE_X);
     run(state, { moveY: 1 }, 40); // north, off the beach and into the lake
     const depth = -terrainHeight(state.players[0].position.x, state.players[0].position.z);
     expect(depth).toBeGreaterThan(0.45);

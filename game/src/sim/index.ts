@@ -217,3 +217,13 @@ export type { Landing } from './world.ts';
 export { WAVE_TABLE } from '../data/world.ts';
 export type { WaveComponent } from '../data/world.ts';
 export { attachmentTransformForHull, seatTransformForHull } from '../data/canoe.ts';
+
+// --- Solids on the islands (Luc's list, line 1) -------------------------------
+// What a walker cannot pass: trees, rocks, landmarks. The look draws its trees from the same placements.
+export { anchorSolids, approachTo, bodyBlocked, dressingAnchors, dressingSolids, freeSpotNear, solidIndex, TRUNK_RADIUS } from './solids.ts';
+export type { DressingAnchor, SolidCircle, PlacedFootprint } from './solids.ts';
+export {
+  LANDMARK_CLEARANCE, LANDMARK_FOOTPRINT, VARIANTS, hashText, islandHectares, keepOutCircles, scatterIsland, seededRandom,
+  shoreLength,
+} from './scatter.ts';
+export type { FloraKind, Placement } from './scatter.ts';

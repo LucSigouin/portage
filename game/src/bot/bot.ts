@@ -23,7 +23,7 @@ import {
   selectInventory, selectTimeOfDay, step, terrainHeight,
 } from '../sim/index.ts';
 import type { Command, CommandResult, GameState, StepInput } from '../sim/index.ts';
-import { canReachIsland, findFootPath, findWaterPath, routeLength } from './navigation.ts';
+import { canReachIsland, clearGround, findFootPath, findWaterPath, routeLength, walkGoal } from './navigation.ts';
 import type { Point, Seaworthiness } from './navigation.ts';
 
 /** Bot extras on top of the quest objectives: attachments a sensible player builds early. */
@@ -444,8 +444,9 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
     return best;
   };
 
-  function* walkTo(target: Point, range: number): Generator<StepInput> {
+  function* walkTo(goal: Point, reach: number): Generator<StepInput> {
     if (player.mode !== 'foot') throw new BotStuck('walkTo while aboard');
+    const { target, range } = walkGoal(goal, reach);
     let attempts = 0;
     for (;;) {
       if (distance(player.position, target) <= range) return;
@@ -462,7 +463,9 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
         if (remaining <= range) return;
         const waypoint = route[index];
         const toWaypoint = distance(player.position, waypoint);
-        if (toWaypoint < 0.6 && index < route.length - 1) {
+        // On to the next waypoint once near this one, but early only if the way on from here is open: from a corner
+        // of a wall, the line on from the waypoint is not the line on from here.
+        if (index < route.length - 1 && (toWaypoint < 0.15 || (toWaypoint < 0.6 && clearGround(player.position, route[index + 1])))) {
           index += 1;
           continue;
         }
@@ -483,7 +486,7 @@ export function createBotDriver(state: GameState, options: BotDriverOptions = {}
         }
       }
       attempts += 1;
-      if (attempts > 4) throw new BotStuck(`walking stuck on ${islandId} at ${player.position.x.toFixed(1)},${player.position.z.toFixed(1)}`);
+      if (attempts > 4) throw new BotStuck(`walking stuck on ${islandId} at ${player.position.x.toFixed(1)},${player.position.z.toFixed(1)} going to ${target.x.toFixed(1)},${target.z.toFixed(1)}`);
     }
   }
 

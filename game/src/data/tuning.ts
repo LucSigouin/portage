@@ -114,6 +114,8 @@ export const TUNING = {
   foot: {
     walkSpeed: 2.6,
     runSpeed: 4.4,
+    /** A walker's half-width: how close their middle comes to a trunk, a rock or a wall (Luc's list, line 1). */
+    bodyRadius: 0.3,
     /** Steepest climb, as rise over run (tan 40 degrees). */
     slopeLimit: 0.839,
     wadeDepth: 0.6,

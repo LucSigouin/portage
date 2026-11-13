@@ -142,6 +142,9 @@ describe('inputs are per player', () => {
 
   it('walks each player on foot where their own input points', () => {
     const state = crewAtCamp(3);
+    // Out on open ground west of the camp, one a metre behind the other: the lean-to, the fire and the trees are
+    // solid (Luc's list, line 1), and this is about whose keys move whom.
+    state.players.forEach((player, index) => putAshore(player, 'home_knoll', -9, 1150 + index));
     const before = state.players.map((player) => ({ ...player.position }));
     runCrew(state, [{ moveX: 1 }, {}, { moveX: -1, cameraYaw: 0 }], 1);
     expect(state.players[0].position.x).toBeGreaterThan(before[0].x + 2);

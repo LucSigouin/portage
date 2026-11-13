@@ -10,6 +10,7 @@ import {
 } from './inventory.ts';
 import { questGateOpen, updateQuests } from './quests.ts';
 import { nextRandom, randomInteger } from './random.ts';
+import { approachTo, bodyBlocked, freeSpotNear } from './solids.ts';
 import { findStandingSpot, terrainHeight } from './world.ts';
 import type { Command, GameState, Missing, NodeState, PlayerState } from './types.ts';
 
@@ -169,15 +170,20 @@ const ELBOW_ROOM = 0.6;
 export function clearSpot(state: GameState, player: PlayerState, spot: { x: number; z: number }): { x: number; z: number } {
   const crowded = (x: number, z: number): boolean => state.players.some((other) => other !== player && other.mode === 'foot'
     && Math.hypot(other.position.x - x, other.position.z - z) < ELBOW_ROOM);
-  if (!crowded(spot.x, spot.z)) return spot;
+  // Never inside a tree, a rock or a landmark: the nearest clear ground, where there is any.
+  const clear = bodyBlocked(spot.x, spot.z) ? freeSpotNear(spot.x, spot.z, CLEAR_REACH) ?? spot : spot;
+  if (!crowded(clear.x, clear.z)) return clear;
   for (let step = 0; step < 8; step += 1) {
     const angle = state.canoe.heading + (step / 8) * 2 * Math.PI;
-    const x = spot.x + Math.sin(angle) * 0.9;
-    const z = spot.z - Math.cos(angle) * 0.9;
-    if (terrainHeight(x, z) >= -TUNING.foot.disembarkDepth && !crowded(x, z)) return { x, z };
+    const x = clear.x + Math.sin(angle) * 0.9;
+    const z = clear.z - Math.cos(angle) * 0.9;
+    if (terrainHeight(x, z) >= -TUNING.foot.disembarkDepth && !crowded(x, z) && !bodyBlocked(x, z)) return { x, z };
   }
-  return spot;
+  return clear;
 }
+
+/** How far a landing or a waking looks for clear ground round a spot in a solid, metres. */
+const CLEAR_REACH = 4;
 
 /** The nearest thing the interact key would act on for this player, or null. */
 export function findInteractable(state: GameState, player: PlayerState): Interactable | null {
@@ -205,7 +211,9 @@ export function findInteractable(state: GameState, player: PlayerState): Interac
     for (const definition of NODES_BY_ISLAND[player.islandId]) {
       if (definition.reach !== 'foot') continue;
       const distance = Math.hypot(definition.position.x - player.position.x, definition.position.z - player.position.z);
-      if (distance <= TUNING.foot.nodeRange) consider(nodeInteractable(state, player, definition, distance));
+      // A spot inside a landmark (an attic in a roof, the lamp at the tower's foot) is reached from its edge.
+      const depth = approachTo(definition.position.x, definition.position.z).depth;
+      if (distance <= TUNING.foot.nodeRange + depth) consider(nodeInteractable(state, player, definition, distance - depth));
     }
     for (const npcId of NPC_IDS) {
       const npc = NPCS[npcId];
