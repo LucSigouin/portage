@@ -94,7 +94,8 @@ describe('the tool belt, in each player\'s own order', () => {
     for (const [name, text] of Object.entries(fixtures)) {
       const old = deserialize(text);
       if (!old.ok) throw new Error(`${name}: ${old.reason}`);
-      expect(old.migratedFrom, name).toBeNull();
+      // The belt's order needed no migration of its own. With the map's save version 4 these come through that one, from 3.
+      expect([null, 3], name).toContain(old.migratedFrom);
       for (const player of old.state.players) {
         expect('toolSlots' in player, name).toBe(false);
         expect(beltOf(old.state, player).filter(Boolean), name).toEqual(old.state.tools);
