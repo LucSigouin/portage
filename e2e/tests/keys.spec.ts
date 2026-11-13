@@ -223,10 +223,12 @@ test('every panel key opens its panel and pauses; Esc closes, then pauses', asyn
   await tap(page, 'Escape');
   expect(await read(page)).toMatchObject({ panels: [], paused: false });
 
-  // The builder needs the canoe beached: afloat it is refused, with a reason.
+  // The boat's menu opens afloat too (its stations work on the water). The builder in it says the canoe must be beached.
   await tap(page, 'KeyB');
-  expect((await read(page)).panels).toEqual([]);
-  await expect(page.locator('.iw-toasts')).toContainText('Beach the canoe to work on it.');
+  expect((await read(page)).panels).toEqual(['canoe_builder']);
+  await expect(page.locator('.iw-panel-canoe_builder .iw-blocked')).toContainText('Beach the canoe to work on it.');
+  await tap(page, 'KeyB');
+  expect(await read(page)).toMatchObject({ panels: [], paused: false });
 
   // Esc with nothing open is the pause menu; the game stops while it is up.
   await tap(page, 'Escape');

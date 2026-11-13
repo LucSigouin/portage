@@ -1,0 +1,122 @@
+/*
+ * The boat's menu: the row of icon cards across the top of the panel B opens, and the crafting panel's lines about
+ * stations that are not here. Nothing in this file moves: no transition, no animation, and a card pressed does not
+ * shift (the selected card is drawn in the same box as the others).
+ */
+.iw-boat-tabs {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.5rem;
+  margin: 0.9rem 0 0;
+  padding: 0 0.3rem 0.6rem;
+  border-bottom: 0.115rem solid var(--iw-ink);
+}
+.iw .iw-boat-tab {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto;
+  justify-items: center;
+  align-content: start;
+  gap: 0.1rem;
+  min-width: 6.4rem;
+  padding: 0.4rem 0.8rem 0.3rem;
+  font-size: 1rem;
+  line-height: 1.15;
+  color: var(--iw-ink-soft);
+  background: var(--iw-paper-deep);
+  border: 0.115rem solid var(--iw-ink-faint);
+  border-radius: 0.6rem 0.4rem 0.7rem 0.36rem;
+}
+.iw-boat-tab .iw-boat-ico .iw-ico {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+.iw .iw-boat-tab.iw-on {
+  color: var(--iw-ink);
+  background: var(--iw-paper);
+  border-color: var(--iw-ink);
+}
+/* The open menu's card is underlined in rust, as the settings tab is. */
+.iw-boat-tab.iw-on::after {
+  content: '';
+  position: absolute;
+  left: 0.9rem;
+  right: 0.9rem;
+  bottom: 0.14rem;
+  height: 0.14rem;
+  background: var(--iw-rust);
+  border-radius: 50%;
+}
+/* A station built but out of reach: still part of the picture of the boat, and not to be pressed. */
+.iw .iw-boat-tab:disabled {
+  border-style: dashed;
+  background: transparent;
+}
+.iw-boat-tab:disabled .iw-boat-ico,
+.iw-boat-tab:disabled .iw-label {
+  opacity: 0.45;
+}
+.iw-boat-tab .iw-note {
+  font-family: var(--iw-hand);
+  font-size: 0.78rem;
+  color: var(--iw-rust-deep);
+}
+.iw-boat-tab .iw-quest-mark {
+  position: absolute;
+  top: 0.1rem;
+  right: 0.4rem;
+  font-family: var(--iw-hand);
+  font-weight: 700;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--iw-rust-deep);
+}
+.iw-boat-hint {
+  flex: 1 1 14rem;
+  align-self: center;
+  margin: 0 0 0 0.6rem;
+  font-family: var(--iw-hand);
+  font-size: 0.92rem;
+  line-height: 1.3;
+  color: var(--iw-ink-soft);
+}
+/* What a station is for, under the row and over its recipes. */
+.iw-boat-about {
+  margin: 0 0 0.5rem;
+  font-family: var(--iw-hand);
+  font-size: 0.98rem;
+  color: var(--iw-ink-soft);
+}
+
+/* The crafting panel: what an open quest needs from a station that is not here. One line each. */
+.iw-elsewhere ul {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.iw-elsewhere li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--iw-hand);
+  font-size: 0.98rem;
+  line-height: 1.3;
+}
+.iw-elsewhere .iw-elsewhere-ico .iw-ico {
+  width: 1.7rem;
+  height: 1.7rem;
+}
+.iw-elsewhere .iw-quest-mark {
+  flex: none;
+  width: 0.9rem;
+  font-family: var(--iw-hand);
+  font-weight: 700;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--iw-rust-deep);
+  text-align: center;
+}

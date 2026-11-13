@@ -8,6 +8,7 @@ import type { InputAction } from '../../settings/index.ts';
 import type { PlayerId } from '../../sim/index.ts';
 import type { InterfaceIntent, SettingId, SettingValue } from '../intents.ts';
 import type { PanelId, ScreenId, SettingsTabId } from '../panels.ts';
+import type { BoatStationModel, BoatTabModel, CraftElsewhereModel } from './stations.ts';
 
 export type Tone = 'info' | 'good' | 'warning' | 'danger';
 
@@ -374,9 +375,21 @@ export type PanelModel = { title: string; close: ButtonModel } & (
     pendingRewards: { text: string; items: { itemId: ItemId; name: string; count: number }[]; claim: ButtonModel } | null;
     stationsText: string;
   }
-  | { id: 'crafting'; stations: { name: string; inReach: boolean; recipes: RecipeRowModel[] }[] }
+  | {
+    id: 'crafting';
+    /** The stations in reach, each with its recipes. A station out of reach is not listed, and neither are its recipes. */
+    stations: { name: string; recipes: RecipeRowModel[] }[];
+    /** One line for each station out of reach that an open quest needs: what to make there, and where one is. */
+    elsewhere: CraftElsewhereModel[];
+  }
   | {
     id: 'canoe_builder';
+    /** The icons across the top: the canoe builder, then each station built on the canoe (`stations.ts`). */
+    tabs: BoatTabModel[];
+    /** The station whose menu is shown, or null while the canoe builder is. */
+    station: BoatStationModel | null;
+    /** What to build to get a station's menu, while the canoe carries none. An empty string otherwise. */
+    stationsHint: string;
     /** Why nothing can be built right now, or an empty string. */
     blockedText: string;
     statLines: string[];

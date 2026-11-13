@@ -26,6 +26,7 @@ export * from './hud.ts';
 export * from './shore.ts';
 export * from './toasts.ts';
 export * from './gamepanels.ts';
+export * from './stations.ts';
 export * from './menus.ts';
 export * from './crew.ts';
 export * from './settings.ts';
@@ -99,7 +100,7 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
     case 'crafting':
       return game ? { ...frame, ...buildCraftingPanel(game, playerId, input.settings.controls.keyBindings) } : null;
     case 'canoe_builder':
-      return game ? { ...frame, ...buildCanoeBuilderPanel(game, playerId) } : null;
+      return game ? { ...frame, ...buildCanoeBuilderPanel(game, playerId, input.panels.boatTab, input.settings.controls.keyBindings) } : null;
     case 'quest_log':
       return game ? { ...frame, ...buildQuestLogPanel(game) } : null;
     case 'map':

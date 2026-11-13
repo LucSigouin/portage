@@ -144,7 +144,7 @@ export function buildHowToPlayPanel(settings: Settings): PanelBody<'how_to_play'
         controls: [
           control('Inventory', 'inventory'),
           control('Crafting', 'craft'),
-          control('Canoe builder (canoe beached)', 'canoeBuilder'),
+          control('The canoe: its builder (beached), and a menu for each station aboard', 'canoeBuilder'),
           control('Quest log', 'questLog'),
           control('Map', 'map'),
           control('Pause, or close a panel', 'pause'),

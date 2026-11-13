@@ -50,16 +50,17 @@ describe('the panel state machine', () => {
     expect(play(replaced.state, [{ type: 'toggle', panel: 'map' }]).state.stack).toEqual([]);
   });
 
-  it('needs the canoe beached for the canoe builder, and only for that', () => {
-    const refused = play(game(), [{ type: 'toggle', panel: 'canoe_builder' }], AFLOAT);
-    expect(refused.state.stack).toEqual([]);
-    expect(refused.effects).toEqual([{ type: 'refused', panel: 'canoe_builder', reason: 'canoe_not_beached' }]);
+  it('opens the boat\'s menu afloat as well as beached: no panel needs the canoe on the beach', () => {
+    // Luc's list, Round 3: the stations aboard are used on the water, from the menu B opens.
+    const afloat = play(game(), [{ type: 'toggle', panel: 'canoe_builder' }], AFLOAT);
+    expect(afloat.state.stack).toEqual(['canoe_builder']);
+    expect(afloat.effects).toEqual([{ type: 'opened', panel: 'canoe_builder' }]);
     expect(play(game(), [{ type: 'toggle', panel: 'canoe_builder' }], BEACHED).state.stack).toEqual(['canoe_builder']);
     for (const panel of ['inventory', 'crafting', 'quest_log', 'map'] as const) {
       expect(play(game(), [{ type: 'toggle', panel }], AFLOAT).state.stack, panel).toEqual([panel]);
     }
     const needing = (Object.keys(PANEL_RULES) as PanelId[]).filter((panel) => PANEL_RULES[panel].needsBeachedCanoe);
-    expect(needing).toEqual(['canoe_builder']);
+    expect(needing).toEqual([]);
   });
 
   it('stacks menus only on their parent: settings opens from the lobby or from pause, not over play', () => {
