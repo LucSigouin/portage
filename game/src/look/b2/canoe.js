@@ -830,9 +830,10 @@ export function createCrew(outfit) {
       const liftR = Math.max(0, -Math.cos(stride)) * 0.07 * moving;
       const carry = holding ? up : 0;
       // The arms swing against the legs; a hand with a tool in it swings less, and is thrown up less in a jump.
-      const armR = arms * (1 - 0.45 * carry);
-      handR.set(-0.27 + 0.01 * carry - 0.05 * armR, 0.74 + 0.08 * carry + 0.6 * armR - 0.17 * crouch, 0.06 * up + 0.12 * carry - 0.08 * lying + swing * (0.6 - 0.3 * carry) + 0.2 * armR + 0.16 * crouch);
-      handL.set(0.27 + 0.05 * arms, 0.74 + 0.6 * arms - 0.17 * crouch, 0.06 * up - 0.08 * lying - swing * 0.6 + 0.2 * arms + 0.16 * crouch);
+      // Up means to the chest and out ahead, the elbows bent: a swing for balance, not hands in the air.
+      const armR = arms * (1 - 0.6 * carry);
+      handR.set(-0.27 + 0.01 * carry - 0.03 * armR, 0.74 + 0.08 * carry + 0.4 * armR - 0.17 * crouch, 0.06 * up + 0.12 * carry - 0.08 * lying + swing * (0.6 - 0.3 * carry) + 0.3 * armR + 0.16 * crouch);
+      handL.set(0.27 + 0.03 * arms, 0.74 + 0.4 * arms - 0.17 * crouch, 0.06 * up - 0.08 * lying - swing * 0.6 + 0.3 * arms + 0.16 * crouch);
       // The legs: trailing behind from the push, drawn up under the body, or bent over planted feet.
       const kneeY = 0.03 * trail + 0.16 * tuck - 0.06 * crouch;
       const kneeZ = -0.07 * trail + 0.22 * tuck + 0.2 * crouch;

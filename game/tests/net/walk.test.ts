@@ -962,7 +962,7 @@ describe('a jump', () => {
     }
   });
 
-  it('against the shore and against a tree the jump is the host\'s to the centimetre: nothing eased, jumping all the way', () => {
+  it('against the shore the jump is the host\'s to the centimetre: nothing eased, jumping all the way into the lake', () => {
     const { rig, sam, host, shown, frame } = ashore(CLEAN);
     // Straight out past the canoe and into the lake, a jump every 0.6 s.
     const out = bearing(camp(), rig.game.canoe.position);

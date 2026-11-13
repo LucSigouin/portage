@@ -158,11 +158,14 @@ describe('the figure in a jump', () => {
     // The push: the feet trail behind the body (the model faces +z) and are off the ground under it.
     expect(push.boot.z).toBeLessThan(standing.boot.z - 0.18);
     expect(push.boot.y).toBeGreaterThan(standing.boot.y + 0.08);
-    // The top: the knees are drawn up and forward, the feet tucked under, the hands thrown up past the shoulders.
+    // The top: the knees are drawn up and forward, the feet tucked under, the hands swung up to the chest and out ahead.
     expect(top.knee.y).toBeGreaterThan(standing.knee.y + 0.12);
     expect(top.knee.z).toBeGreaterThan(standing.knee.z + 0.15);
     expect(top.boot.y).toBeGreaterThan(standing.boot.y + 0.18);
-    expect(top.hand.y).toBeGreaterThan(standing.hand.y + 0.4);
+    expect(top.hand.y).toBeGreaterThan(standing.hand.y + 0.3);
+    expect(top.hand.z).toBeGreaterThan(standing.hand.z + 0.2);
+    // To the chest, not over the head: the hands stay below the chin (the head's middle is 0.69 m above the hips).
+    expect(top.hand.y).toBeLessThan(0.8 + 0.5);
     // The last step of the fall: the legs are down again to meet the ground.
     expect(shots[LEAP_AIR_STEPS - 1].boot.y).toBeLessThan(standing.boot.y + 0.03);
     // The landing: the feet are planted where they stand, the knees forward, the hips (and so the hands) lower.
