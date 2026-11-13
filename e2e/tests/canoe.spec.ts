@@ -2,6 +2,7 @@
  * The canoe, checked in a real browser on the real graphics card:
  *
  * - the four hull tiers tell apart from the paddling camera;
+ * - the patched hull is told from the leaky one at a glance: pale bark and black pitch, from 9.5 m and from astern;
  * - each of the 19 attachments draws on the long hull, alone and all together;
  * - the pieces with a state follow it: sail, lantern, canopy;
  * - the fully fitted canoe with a crew of four is still: held, not one pixel changes;
@@ -43,6 +44,9 @@ type Clip = { x: number; y: number; width: number; height: number };
 /** The paddling camera's view of the canoe, and the staged three-quarter view of it. */
 const ASTERN: Clip = { x: 660, y: 330, width: 600, height: 560 };
 const QUARTER: Clip = { x: 360, y: 90, width: 1200, height: 900 };
+/** What the patched hull must show over the leaky one, in a whole 1920x1080 frame, from either view: pixels that differ, and pixels of bark. */
+const DIFFERENT_FLOOR = 8500;
+const BARK_FLOOR = 2000;
 
 function watchConsole(page: Page): string[] {
   const problems: string[] = [];
@@ -66,12 +70,14 @@ async function open(page: Page, query = 'shot=upgraded&hold=1'): Promise<void> {
 }
 
 /** Change the canoe the look is drawing, and wait for it to be drawn. */
-async function fit(page: Page, change: Partial<Canoe> & { astern?: boolean }): Promise<void> {
+async function fit(page: Page, change: Partial<Canoe> & { astern?: boolean; orbit?: { yaw: number; pitch: number; distance: number } }): Promise<void> {
   await page.evaluate((wanted) => {
     const { session, app } = (window as unknown as Hooks).portage;
-    const { astern, ...canoe } = wanted;
+    const { astern, orbit, ...canoe } = wanted;
     Object.assign(session.game.canoe, canoe);
     if (astern) app.camera.setOrbit({ yaw: session.game.canoe.heading, pitch: 0.36, distance: 8.5 });
+    // `orbit.yaw` is counted from the canoe's own heading.
+    if (orbit) app.camera.setOrbit({ ...orbit, yaw: session.game.canoe.heading + orbit.yaw });
   }, change);
   await page.waitForTimeout(500);
 }
@@ -133,6 +139,47 @@ test('the four hull tiers tell apart from the paddling camera', async ({ page })
     }
   }
   console.log(`pixels that differ between hull tiers, astern at 8.5 m: ${lines.join(', ')}`);
+  expect(problems).toEqual([]);
+});
+
+/** How many pixels of a capture are the pale, warm white of birch bark. The water's highlights are as light, but no warmer than they are blue. */
+async function barkPixels(page: Page, shot: Buffer): Promise<number> {
+  return page.evaluate(async (base64) => {
+    const bitmap = await createImageBitmap(await (await fetch(`data:image/png;base64,${base64}`)).blob());
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = canvas.getContext('2d')!;
+    context.drawImage(bitmap, 0, 0);
+    const { data } = context.getImageData(0, 0, bitmap.width, bitmap.height);
+    let bark = 0;
+    for (let at = 0; at < data.length; at += 4) {
+      if (data[at] > 205 && data[at + 1] > 195 && data[at + 2] > 160 && data[at] - data[at + 2] > 14) bark += 1;
+    }
+    return bark;
+  }, shot.toString('base64'));
+}
+
+test('the patched hull is told from the leaky one at a glance: pale bark and black pitch, from 9.5 m and from astern', async ({ page }) => {
+  const problems = watchConsole(page);
+  await open(page);
+  // Off the bow at 9.5 m (the view the reviews judged the hulls from), and the paddling camera.
+  const views = [{ name: 'off the bow at 9.5 m', orbit: { yaw: 2.45, pitch: 0.34, distance: 9.5 } }, { name: 'astern at 8.5 m', orbit: { yaw: 0, pitch: 0.36, distance: 8.5 } }];
+  const lines: string[] = [];
+  for (const view of views) {
+    const shots: Buffer[] = [];
+    for (const tier of [0, 1]) {
+      await fit(page, { hullTier: tier, attachments: [], waterLevel: 0, orbit: view.orbit });
+      shots.push(await page.screenshot());
+    }
+    const { different } = await compare(page, shots[0], shots[1]);
+    // The water is held still, so it is the same in both: what changes is the canoe.
+    const bark = await barkPixels(page, shots[1]) - await barkPixels(page, shots[0]);
+    lines.push(`${view.name}: ${different} pixels differ, ${bark} more are bark`);
+    // Before the sheets, 5 392 pixels differed off the bow and 7 168 astern: laps on the rails and a strip of floor.
+    expect(different, `${view.name}: pixels that differ between the leaky and the patched hull`).toBeGreaterThan(DIFFERENT_FLOOR);
+    // And the mend is bark, not just "something changed": 1 008 more pixels were bark off the bow before, now panels of it.
+    expect(bark, `${view.name}: pixels of bark the mend adds`).toBeGreaterThan(BARK_FLOOR);
+  }
+  console.log(`leaky against patched, whole 1920x1080 frame: ${lines.join('; ')}`);
   expect(problems).toEqual([]);
 });
 

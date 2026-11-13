@@ -5,6 +5,8 @@
  */
 import { FIXED_STEP, eventsFor, selectTrackedQuestTarget } from '../sim/index.ts';
 import type { GameState } from '../sim/index.ts';
+import { builtViewPose, builtWords } from './builtview.ts';
+import type { BuiltView } from './builtview.ts';
 import { ChaseCamera, lobbyCameraPose, subjectFromState, surfaceFromState } from './camera.ts';
 import type { CameraOptions, CameraPose } from './camera.ts';
 import type { AudioEngine, FrameInfo, GameInterface, StageName, WorldView } from './contracts.ts';
@@ -49,6 +51,9 @@ export class App {
   private audioScene: AudioScene | null = null;
   private stage: StageName | null = null;
   private snapCamera = true;
+  /** The built view on the screen, and the one pose it holds: worked out once, when it begins. */
+  private builtFor: BuiltView | null = null;
+  private builtPose: CameraPose | null = null;
 
   constructor(options: AppOptions) {
     this.worldView = options.worldView;
@@ -104,9 +109,11 @@ export class App {
    * this frame: the camera eases by that much, so a frame with no step moves neither the canoe nor
    * the camera, and a frame with two steps moves both by two.
    */
-  private updateCamera(state: GameState, frameSeconds: number, steppedSeconds: number): CameraPose {
+  private updateCamera(state: GameState, frameSeconds: number, steppedSeconds: number, still = false): CameraPose {
     const session = this.session;
-    const cameraInput = session.input.takeCameraInput();
+    // `still`: the built view holds the screen. What the mouse did meanwhile is dropped: it turns neither that view nor this camera.
+    const taken = session.input.takeCameraInput();
+    const cameraInput = still ? { yawDelta: 0, pitchDelta: 0, zoomDelta: 0, dragging: false } : taken;
     const surface = surfaceFromState(state);
     if (session.screen === 'lobby') {
       // The slow circle turns on the backdrop's own steps, not on the frames.
@@ -169,7 +176,13 @@ export class App {
     this.audio.handleEvents(ownEvents);
     this.audio.update(state, frameSeconds, session.localPlayerId);
     this.toasts.addAll(toastsForPlayer(events, state, session.localPlayerId));
-    this.toasts.update(frameSeconds);
+    // The built view holds the screen with the notes put away: their clocks wait, and they have their full time after it.
+    const built = session.builtView;
+    if (!built) this.toasts.update(frameSeconds);
+    if (built !== this.builtFor) {
+      this.builtFor = built;
+      this.builtPose = null;
+    }
 
     const frame: FrameInfo = {
       frameSeconds,
@@ -177,13 +190,19 @@ export class App {
       simulatedSeconds: session.simulatedSeconds,
       elapsedSeconds: this.elapsedSeconds,
       paused: session.paused,
-      panelOpen: coversPlayView(session.panels),
+      panelOpen: built === null && coversPlayView(session.panels),
       trackedQuestTarget: session.game ? selectTrackedQuestTarget(session.game)?.position ?? null : null,
     };
-    const pose = this.updateCamera(state, frameSeconds, steppedSeconds);
-    this.lastPose = pose;
+    // The chase camera is kept up either way, so the cut back from the built view lands where the view was left.
+    const chase = this.updateCamera(state, frameSeconds, steppedSeconds, built !== null);
     this.worldView.sync(state, frame);
     this.worldView.handleEvents(events);
+    // The built view is one still pose: a cut to it, a cut back. It is worked out after the look has the new piece.
+    if (built && !this.builtPose) {
+      this.builtPose = builtViewPose(state, built.piece, this.worldView.canoeBounds?.() ?? null, surfaceFromState(state), session.localPlayerId);
+    }
+    const pose = built && this.builtPose ? this.builtPose : chase;
+    this.lastPose = pose;
     this.worldView.render(pose);
 
     const showFrameRate = this.stats !== null && (this.forceFrameRate || session.settings.graphics.showFps);
@@ -207,6 +226,7 @@ export class App {
       bindingNotice: session.bindingNotice,
       progressText: session.progressText(),
       crew: session.crew?.view() ?? null,
+      built: built ? builtWords(built.piece) : null,
       debug: showFrameRate || debugLines.length > 0 ? {
         showFrameRate,
         framesPerSecond: Math.round(stats?.framesPerSecond ?? 0),

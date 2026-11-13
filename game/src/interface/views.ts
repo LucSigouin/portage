@@ -7,7 +7,7 @@
  * control carries the intent the model gave it.
  */
 import type {
-  BuildRowModel, ButtonModel, ConfirmModel, CostRowModel, CrewRowModel, DebugModel, HotbarSlotModel, HudModel, InterfaceIntent,
+  BuildRowModel, BuiltModel, ButtonModel, ConfirmModel, CostRowModel, CrewRowModel, DebugModel, HotbarSlotModel, HudModel, InterfaceIntent,
   ItemSlotModel, LobbyModel, MapMarkerModel, ObjectiveRowModel, PanelModel, PromptModel, QuestRowModel, RecipeRowModel,
   SaveSlotModel, SettingRowModel, TextFieldModel, ToastModel,
 } from '../client/contracts.ts';
@@ -145,6 +145,18 @@ export function notesView(hud: HudModel): ViewNode[] {
         tracker.kind === 'side' ? h('small.iw-kind', null, tracker.kind) : null,
         tracker.ready ? icon(ICON.check, 'iw-ready') : null),
       objectivesView(tracker.objectives)) : null)];
+}
+
+/**
+ * The built view's slip: what was built, under the canoe, while the screen holds it. It is written and taken
+ * away whole: nothing fades. The slip itself takes no click: the screen behind it does (interface.ts).
+ */
+export function builtView(built: BuiltModel): ViewNode[] {
+  return [h('div.iw-shown-slip.iw-paper', { key: 'built', role: 'status' },
+    h('small.iw-shown-kicker', null, built.kicker),
+    h('b.iw-shown-title', null, built.title),
+    h('span.iw-shown-text', null, built.text),
+    h('small.iw-shown-hint', null, built.hint))];
 }
 
 export function hintView(hint: string): ViewNode[] {

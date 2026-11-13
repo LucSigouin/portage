@@ -51,5 +51,7 @@ export type InterfaceIntent =
   | { type: 'crew_copied' }
   | { type: 'crew_join' }
   | { type: 'crew_cancel_join' }
+  // the built view (builtview.ts): a click gives the screen back before its two seconds are up
+  | { type: 'end_built_view' }
   // feedback only: the pointer moved onto a control
   | { type: 'hover' };

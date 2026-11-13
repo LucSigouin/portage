@@ -2219,6 +2219,57 @@ html.iw-document {
   visibility: hidden;
 }
 
+/* ---------- the built view: the screen holds the canoe with its new piece ----------
+   The panel, the HUD and the notes are put away while it lasts: hidden, so a long panel keeps its place and a
+   note keeps its words. The slip under the canoe names the piece. Nothing here moves: no transition, no
+   animation, nothing that fades. It is written whole and taken away whole. */
+.iw.iw-holding .iw-hud,
+.iw.iw-holding .iw-toasts,
+.iw.iw-holding .iw-veil,
+.iw.iw-holding .iw-confirm {
+  visibility: hidden;
+}
+.iw-shown {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: end center;
+  padding-bottom: 5.2rem;
+  /* The whole screen takes the press that ends the view. */
+  pointer-events: auto;
+}
+.iw-shown-slip {
+  --tilt: -0.4deg;
+  display: grid;
+  justify-items: center;
+  gap: 0.1rem;
+  max-width: min(40rem, 86vw);
+  padding: 0.7rem 1.9rem 0.6rem;
+  text-align: center;
+  pointer-events: none;
+}
+.iw-shown-kicker {
+  font-family: var(--iw-hand);
+  font-size: 0.95rem;
+  color: var(--iw-sage-deep);
+}
+.iw-shown-title {
+  font-weight: 400;
+  font-style: italic;
+  font-size: 2rem;
+  line-height: 1.15;
+}
+.iw-shown-text {
+  font-family: var(--iw-hand);
+  font-size: 1.05rem;
+}
+.iw-shown-hint {
+  margin-top: 0.25rem;
+  font-family: var(--iw-hand);
+  font-size: 0.86rem;
+  color: var(--iw-ink-soft);
+}
+
 /* For anyone who has asked their system for less motion: the few short transitions go too. */
 @media (prefers-reduced-motion: reduce) {
   .iw *,

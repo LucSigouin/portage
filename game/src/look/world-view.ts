@@ -16,7 +16,7 @@ import type { IslandDefinition, NodeDefinition, NodeTypeId } from '../data/index
 import type { Settings } from '../settings/index.ts';
 import { bearingBetween, regionAt, selectTimeOfDay, terrainHeight, waterRoughnessAt, waveHeight } from '../sim/index.ts';
 import type { GameEvent, GameState } from '../sim/index.ts';
-import type { CameraPose, FrameInfo, StageName, WorldView } from '../client/contracts.ts';
+import type { CameraPose, CanoeBounds, FrameInfo, StageName, WorldView } from '../client/contracts.ts';
 import { crewOf } from './crew.ts';
 import { KIND } from './b2/detail.js';
 import { Builder, THIN } from './b2/geo.js';
@@ -156,6 +156,8 @@ export interface LookProbe {
   waterDrawnAtCanoe: number;
   waterSimAtCanoe: number;
   islandsDrawn: number;
+  /** Puffs of smoke in the air, or about to rise: a gathering or a craft makes three. A build makes none. */
+  puffs: number;
 }
 
 /** What the chip test at load found. */
@@ -642,10 +644,9 @@ export class InkWashWorldView implements WorldView {
         case 'crafted':
           this.effects.puff(player.x, player.y + 1.2, player.z);
           break;
-        case 'hull_upgraded':
-        case 'attachment_built':
-          this.effects.puff(canoe.x, canoe.y + 1, canoe.z);
-          break;
+        // A build draws no puff. Whoever built it is shown the canoe, still, with the new piece on it (the client's
+        // built view), and a puff would move in that picture. The old one rose a metre over the hull, behind the
+        // builder panel, and played over the player's face when the panel closed.
         default:
           break;
       }
@@ -791,6 +792,19 @@ export class InkWashWorldView implements WorldView {
     console.info(`Portage look: ${climbed ? 'frames are quick again' : 'no room to climb yet'} (${timed.join(', ')}; ${fits.toFixed(1)} fits), rung ${this.ladder.rung}, ${shedNote(this.ceiling, this.quality)}`);
   }
 
+  /** How big the canoe is as drawn, with everything bolted onto it, and the frame's shape: what the built view frames. */
+  canoeBounds(): CanoeBounds | null {
+    if (!this.state) return null;
+    const box = this.canoe.bounds();
+    if (box.isEmpty()) return null;
+    // Which side of the hull the light falls on: the light's direction against the canoe's own starboard, in the world.
+    const elements = this.canoe.group.matrixWorld.elements;
+    const light = GU.uLightDir.value;
+    const toStarboard = light.x * elements[0] + light.y * elements[1] + light.z * elements[2];
+    const lit = Math.abs(toStarboard) < 0.15 ? null : toStarboard > 0 ? 'starboard' : 'port';
+    return { min: { x: box.min.x, y: box.min.y, z: box.min.z }, max: { x: box.max.x, y: box.max.y, z: box.max.z }, aspect: this.width / this.height, lit };
+  }
+
   /** Before each pass of the world (2 mirrored, 0 colour, 1 ink): the mirror sees less, and the ink buffer no washes of light. */
   private beforePass(pass: number): void {
     this.glows.mesh.visible = pass !== 1;
@@ -930,6 +944,7 @@ export class InkWashWorldView implements WorldView {
       waterDrawnAtCanoe: this.readWaterHeight(canoe.x, canoe.z),
       waterSimAtCanoe: state ? waveHeight(canoe.x, canoe.z, state.time, waterRoughnessAt(canoe.x, canoe.z, state.weather.stormLevel)) : 0,
       islandsDrawn: this.islands.filter((island) => island.group.visible).length,
+      puffs: this.effects.active,
     };
   }
 

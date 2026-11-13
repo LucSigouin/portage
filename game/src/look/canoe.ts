@@ -23,7 +23,7 @@ import type { AttachmentPiece } from './attachments.ts';
 import { buildBilge, buildHull, buildStarterKit, createCrew, makeHullShape } from './b2/canoe.js';
 import type { Crew as Figure, HullShape } from './b2/canoe.js';
 import { deckInner, deckSpan } from './canoe/deck-parts.ts';
-import { buildMends } from './canoe/mends.ts';
+import { buildMends, buildSheets } from './canoe/mends.ts';
 
 interface TierMeshes {
   shape: HullShape;
@@ -130,6 +130,9 @@ export class CanoeView {
   private lastHeading = 0;
   private localId = 0;
   private readonly shaft = new THREE.Vector3();
+  private readonly toCanoe = new THREE.Matrix4();
+  private readonly pieceMatrix = new THREE.Matrix4();
+  private readonly pieceBox = new THREE.Box3();
 
   constructor() {
     // B2's hull points +z with its keel at y = 0. Turn it to the game's bow.
@@ -162,8 +165,8 @@ export class CanoeView {
       const kit = buildStarterKit(shape);
       const bilge = buildBilge(shape);
       group.add(buildHull(shape, tier), kit, bilge);
-      // The patched hull is told from the leaky one by its bark, where the paddling camera sees it.
-      if (tier === PATCHED_TIER) group.add(buildMends(shape));
+      // The patched hull is told from the leaky one by its bark: sheets along its sides and inside, laps over its rails.
+      if (tier === PATCHED_TIER) group.add(buildMends(shape), buildSheets(shape));
       group.position.y = -HULL_TIERS[tier].dimensions.draft;
       meshes = { shape, group, kit, kitCrewed: null, bilge };
       this.tiers.set(tier, meshes);
@@ -382,6 +385,28 @@ export class CanoeView {
     const past = Math.min(1, Math.max(0, (Math.max(deckRuns.forward - tipZ, tipZ - deckRuns.aft) - 0.12) / 0.25));
     const beside = 1 - past * past * (3 - 2 * past);
     paddle.position.addScaledVector(shaft, -beside * Math.min(0.4, over / Math.max(0.3, Math.abs(shaft.x))));
+  }
+
+  /**
+   * How big the canoe is as drawn at the last `sync`: the hull that is shown and everything bolted onto it, as a
+   * box in canoe space. The crew are left out. The built view frames the canoe with it.
+   */
+  bounds(target = new THREE.Box3()): THREE.Box3 {
+    target.makeEmpty();
+    const shown = this.tiers.get(this.tier);
+    if (!shown) return target;
+    this.group.updateMatrixWorld(true);
+    this.toCanoe.copy(this.group.matrixWorld).invert();
+    for (const root of [shown.group, this.attachments]) {
+      root.traverseVisible((object) => {
+        if (!(object instanceof THREE.Mesh)) return;
+        // A sail's cloth is redrawn every frame: measure it as it is now.
+        object.geometry.computeBoundingBox();
+        if (!object.geometry.boundingBox) return;
+        target.union(this.pieceBox.copy(object.geometry.boundingBox).applyMatrix4(this.pieceMatrix.multiplyMatrices(this.toCanoe, object.matrixWorld)));
+      });
+    }
+    return target;
   }
 
   /** Every crew figure in the picture, by player id: where it is, what it is doing, what it wears. */

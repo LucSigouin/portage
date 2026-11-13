@@ -56,6 +56,8 @@ export interface InterfaceModelInput {
   progressText: string;
   /** The crew lobby's state. Null or absent in a game built without a relay: no crew entries, no crew panels. */
   crew?: CrewView | null;
+  /** The words of the built view while it holds the screen (`builtWords`). Null or absent the rest of the time. */
+  built?: { kicker: string; title: string; text: string } | null;
   debug: DebugModel | null;
 }
 
@@ -130,6 +132,7 @@ export function buildInterfaceModel(input: InterfaceModelInput): InterfaceModel 
     panel: beneath ? buildPanelModel(beneath, input) : null,
     openPanels: [...panels.stack],
     confirm: top === 'confirm' && panels.confirm ? buildConfirmModel(panels.confirm, isGuestScreen(input)) : null,
+    built: input.built ? { ...input.built, hint: 'Any key', dismiss: { type: 'end_built_view' } } : null,
     debug: input.debug,
   };
 }

@@ -16,7 +16,7 @@ import { makeHullShape } from '../../src/look/b2/canoe.js';
 import type { Crew as Figure } from '../../src/look/b2/canoe.js';
 import { CanoeView } from '../../src/look/canoe.ts';
 import { deckInner, deckSpan } from '../../src/look/canoe/deck-parts.ts';
-import { BARK_LAPS, buildMends } from '../../src/look/canoe/mends.ts';
+import { BARK_LAPS, INSIDE_SHEETS, PITCHED_SEAMS, SIDE_SHEETS, buildMends, buildSheets } from '../../src/look/canoe/mends.ts';
 import { crewOf } from '../../src/look/crew.ts';
 import { boxTouchesTriangle, slabsOf, trianglesOf } from './canoe-geometry.ts';
 import type { Triangles } from './canoe-geometry.ts';
@@ -469,8 +469,8 @@ describe('the patched hull', () => {
     return (view as unknown as { tiers: Map<number, { group: THREE.Group }> }).tiers.get(tier)!.group.children.length;
   };
 
-  it('is the only hull that wears bark over its rails: that is what tells it from the leaky one from astern', () => {
-    expect(extras(1)).toBe(extras(0) + 1);
+  it('is the only hull that wears the mends: laps of bark over its rails, and sheets of it along its sides and inside', () => {
+    expect(extras(1)).toBe(extras(0) + 2);
     expect(extras(2)).toBe(extras(0));
     expect(extras(3)).toBe(extras(0));
   });
@@ -500,5 +500,156 @@ describe('the patched hull', () => {
     // None lies where the lone paddler's blade crosses the rail: from 0.54 m astern of the stern seat to 0.78 m ahead of it.
     const seat = -0.3107 * HULL_TIERS[1].dimensions.length;
     for (const [, z, length] of BARK_LAPS) expect(z - length / 2, `lap at ${z}`).toBeGreaterThan(seat + 0.78);
+  });
+
+  describe('its sheets of bark, which tell it from the leaky hull at a glance', () => {
+    const dimensions = HULL_TIERS[1].dimensions;
+    const shape = makeHullShape(dimensions);
+    /** Every triangle of the sheets outside the planking, or inside it: its area, its middle, and whether it is bark (pale) or pitch (near black). */
+    const pieces = (part: 'outside' | 'inside'): { area: number; x: number; y: number; z: number; bark: boolean; pitch: boolean }[] => {
+      const geometry = buildSheets(shape, part).geometry;
+      const [position, colour] = [geometry.getAttribute('position'), geometry.getAttribute('aColor')];
+      const corner = (index: number): THREE.Vector3 => new THREE.Vector3().fromBufferAttribute(position, index);
+      const list = [];
+      for (let index = 0; index < position.count; index += 3) {
+        const [a, b, c] = [corner(index), corner(index + 1), corner(index + 2)];
+        const middle = a.clone().add(b).add(c).divideScalar(3);
+        const light = (colour.getX(index) + colour.getY(index) + colour.getZ(index)) / 3;
+        list.push({ area: b.clone().sub(a).cross(c.clone().sub(a)).length() / 2, x: middle.x, y: middle.y, z: middle.z, bark: light > 0.7, pitch: light < 0.25 });
+      }
+      return list;
+    };
+    const stationZ = (station: number): number => (-0.992 + (1.984 * station) / 36) * shape.HL;
+
+    it('is what the canoe wears: the outside and the inside together', () => {
+      const count = (part?: 'outside' | 'inside'): number => buildSheets(shape, part).geometry.getAttribute('position').count;
+      expect(count()).toBe(count('outside') + count('inside'));
+    });
+
+    it('shows over a third of a square metre of bark above the waterline on each side, and lines the inside on both', () => {
+      const area = (list: { area: number }[]): number => list.reduce((sum, piece) => sum + piece.area, 0);
+      for (const side of [-1, 1]) {
+        const outside = pieces('outside').filter((piece) => piece.bark && Math.sign(piece.x) === side && piece.y > dimensions.draft);
+        const inside = pieces('inside').filter((piece) => piece.bark && Math.sign(piece.x) === side);
+        // A side of this hull shows about 1.0 m2 above the water. The laps on the rails were 0.03 m2 of it.
+        expect(area(outside), `bark showing outside, side ${side}`).toBeGreaterThan(0.34);
+        expect(area(outside), `bark showing outside, side ${side}: the old paint still shows`).toBeLessThan(0.7);
+        expect(area(inside), `bark inside, side ${side}`).toBeGreaterThan(1.2);
+      }
+    });
+
+    it('lies on the planking: under the sheer strake, never proud of the hull, never under the floor inside', () => {
+      for (const part of ['outside', 'inside'] as const) {
+        for (const piece of pieces(part)) {
+          const where = `${part}: x ${piece.x.toFixed(2)} y ${piece.y.toFixed(2)} z ${piece.z.toFixed(2)}`;
+          // the sheer strake and the rail above it are left as they were
+          expect(piece.y, where).toBeLessThan(shape.sheerAt(piece.z) - 0.02);
+          // bark stands 6 mm off the planks; a line of pitch is at most 2.4 cm fat
+          expect(Math.abs(piece.x), where).toBeLessThan(shape.halfBeamAt(piece.z) + (part === 'inside' ? 0 : piece.bark ? 0.008 : 0.04));
+          if (part === 'inside') expect(piece.y, where).toBeGreaterThan(shape.HULL.floor - 0.02);
+        }
+      }
+    });
+
+    it('is run round with pitch: every sheet has a black line along each of its four edges', () => {
+      for (const [part, sheets, inset] of [['outside', SIDE_SHEETS, -0.006], ['inside', INSIDE_SHEETS, 0.03]] as const) {
+        const pitch = pieces(part).filter((piece) => piece.pitch);
+        const near = (point: THREE.Vector3): boolean => pitch.some((piece) => Math.hypot(piece.x - point.x, piece.y - point.y, piece.z - point.z) < 0.06);
+        for (const sheet of sheets) {
+          const at = (station: number, edge: number): THREE.Vector3 => {
+            const point = shape.hullPoint(-0.992 + (1.984 * station) / 36, sheet.side * [1, 0.93, 0.82, 0.68, 0.52, 0.36, 0.18, 0][edge], inset).clone();
+            if (inset > 0 && point.y < shape.HULL.floor) point.y = shape.HULL.floor;
+            return point;
+          };
+          const [middleStation, middleEdge] = [Math.round((sheet.from + sheet.to) / 2), Math.round((sheet.top + sheet.bottom) / 2)];
+          for (const [station, edge] of [[middleStation, sheet.top], [middleStation, sheet.bottom], [sheet.from, middleEdge], [sheet.to, middleEdge]]) {
+            expect(near(at(station, edge)), `pitch at station ${station}, edge ${edge} of the ${part} sheet from ${sheet.from} on side ${sheet.side}`).toBe(true);
+          }
+        }
+      }
+    });
+
+    it('has two old seams payed with pitch from end to end on both sides', () => {
+      expect(PITCHED_SEAMS.length).toBe(2);
+      const pitch = pieces('outside').filter((piece) => piece.pitch);
+      for (const side of [-1, 1]) {
+        const along = pitch.filter((piece) => Math.sign(piece.x) === side).map((piece) => piece.z);
+        expect(Math.max(...along) - Math.min(...along), `pitch runs along side ${side}`).toBeGreaterThan(0.85 * dimensions.length);
+      }
+    });
+
+    it('leaves her name showing on both bows, and its joins on one side are not opposite those on the other', () => {
+      // OTTER is stencilled from 0.54 to 0.69 of the half length on both bows (b2/canoe.js).
+      for (const sheet of SIDE_SHEETS) expect(stationZ(sheet.to), `sheet from station ${sheet.from}`).toBeLessThan(0.54 * shape.HL - 0.1);
+      // No line runs right round the hull, but for the two ends, where the run of sheets starts and stops.
+      const joins = (side: number): number[] => SIDE_SHEETS.filter((sheet) => sheet.side === side).flatMap((sheet) => [sheet.from, sheet.to]);
+      expect(joins(-1).filter((station) => joins(1).includes(station)).length).toBeLessThanOrEqual(2);
+    });
+  });
+});
+
+describe('the canoe says how big it is as drawn, for the built view to frame', () => {
+  const boundsOf = (tier: number, attachments: AttachmentId[], crew = 1, place?: (state: GameState) => void): THREE.Box3 => {
+    const state = fitted(tier, crew);
+    state.canoe.attachments = attachments;
+    place?.(state);
+    const view = new CanoeView();
+    view.sync(state, crewOf(state), 0, 0, true, true);
+    return view.bounds();
+  };
+  const sizeOf = (box: THREE.Box3): THREE.Vector3 => box.getSize(new THREE.Vector3());
+
+  it('the bare hull: its own length and beam, from under the waterline to the tips of its ends', () => {
+    for (const tier of [0, 1, 2, 3]) {
+      const { length, beam, depth, draft } = HULL_TIERS[tier].dimensions;
+      const box = boundsOf(tier, []);
+      const size = sizeOf(box);
+      expect(size.z, `tier ${tier} length`).toBeGreaterThan(length - 0.1);
+      expect(size.z, `tier ${tier} length`).toBeLessThan(length + 0.35);
+      expect(size.x, `tier ${tier} beam`).toBeGreaterThan(beam - 0.02);
+      expect(size.x, `tier ${tier} beam`).toBeLessThan(beam + 0.25);
+      expect(box.min.y, `tier ${tier} keel`).toBeCloseTo(-draft, 1);
+      // The sheer rises about 30 cm at the ends; the starter kit's bedroll stands no higher.
+      expect(box.max.y, `tier ${tier} top`).toBeGreaterThan(depth - draft);
+      expect(box.max.y, `tier ${tier} top`).toBeLessThan(depth - draft + 0.6);
+    }
+  });
+
+  it('grows with what is bolted on: a mast makes it taller, an outrigger wider on its own side', () => {
+    const bare = boundsOf(2, []);
+    const masted = boundsOf(2, ['mast_sail']);
+    expect(masted.max.y).toBeGreaterThan(bare.max.y + 1.5);
+    const port = boundsOf(2, ['outrigger_port']);
+    // Port is -x in canoe space.
+    expect(port.min.x).toBeLessThan(bare.min.x - 0.8);
+    // Its spars are lashed down on the far rail, a hand past it.
+    expect(port.max.x).toBeLessThan(bare.max.x + 0.1);
+    const all = boundsOf(3, ATTACHMENT_IDS.slice());
+    expect(sizeOf(all).x).toBeGreaterThan(3);
+    expect(all.max.y).toBeGreaterThan(2.5);
+  });
+
+  it('leaves the crew out: the same box with four aboard as with one', () => {
+    const [one, four] = [boundsOf(1, [], 1), boundsOf(1, [], 4)];
+    // Four aboard push the starter kit up to the thwart: the box is the hull's either way, never a paddler's head or a paddle's blade.
+    expect(four.max.y).toBeLessThan(HULL_TIERS[1].dimensions.depth + 0.5);
+    expect(sizeOf(four).x).toBeCloseTo(sizeOf(one).x, 2);
+    expect(sizeOf(four).z).toBeCloseTo(sizeOf(one).z, 2);
+  });
+
+  it('is in canoe space: the same box wherever the canoe lies and whichever way it points', () => {
+    const home = boundsOf(2, ['mast_sail', 'outrigger_port']);
+    const away = boundsOf(2, ['mast_sail', 'outrigger_port'], 1, (state) => {
+      state.canoe.position = { x: 412, y: 0.2, z: -377 };
+      state.canoe.heading = 2.1;
+    });
+    for (const axis of ['x', 'y', 'z'] as const) {
+      expect(away.min[axis], `min ${axis}`).toBeCloseTo(home.min[axis], 3);
+      expect(away.max[axis], `max ${axis}`).toBeCloseTo(home.max[axis], 3);
+    }
+  });
+
+  it('is empty before the canoe has been drawn', () => {
+    expect(new CanoeView().bounds().isEmpty()).toBe(true);
   });
 });
