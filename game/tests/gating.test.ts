@@ -57,16 +57,26 @@ describe('rough water gates the regions', () => {
     expect(entered).toMatchObject({ regionId: 'reach' });
   });
 
-  // Since the paddle speeds were doubled (2026-11-12) the nearest island of the Reach is inside a bare canoe's
-  // reach from the boundary: it lands with water aboard. Before, a power stroke got there at 85 of 100 and a plain
-  // paddle swamped 31 m short. The islands further in still swamp it. Whether the chop should rise to match is Luc's call.
-  it('lets a bare canoe just make the nearest island of the Reach, wet', () => {
-    const state = canoeAt(40, 520, 0); // Shallows, pointing north at Steeple Rock
-    const events = run(state, { paddle: 1 }, 60);
-    expect(events.some((event) => event.type === 'capsized')).toBe(false);
-    expect(regionAt(state.canoe.position.x, state.canoe.position.z).id).toBe('reach');
-    expect(state.canoe.waterLevel).toBeGreaterThan(30);
-    expect(state.statistics.fails).toBe(0);
+  // With the paddle speeds doubled (tried on 2026-11-12) a bare canoe on a plain paddle slipped through the chop
+  // to islands of the Reach. It must not: no island of the Reach or the Narrows is in reach of a canoe that
+  // lacks the outriggers for it, paddling plainly from the boundary.
+  it('stops a plain paddle short of every island behind rough water', () => {
+    const tries: [string, number, number, Parameters<typeof build>[1][]][] = [
+      ['steeple_rock', 40, 520, []], ['silo_twins', 40, 520, []], ['pylon_line', 40, 520, []],
+      ['quarry_face', 150, -300, ['outrigger_port']], ['fire_tower_ridge', 150, -300, ['outrigger_port']],
+      ['dam_crest', 150, -300, ['outrigger_port']],
+    ];
+    for (const [islandId, x, z, attachments] of tries) {
+      const target = islandLanding(islandId as Parameters<typeof islandLanding>[0]).approach;
+      const state = canoeAt(x, z, Math.atan2(target.x - x, -(target.z - z)), ...attachments);
+      let arrived = false;
+      for (let second = 0; second < 300 && state.statistics.fails === 0 && !arrived; second += 1) {
+        run(state, { paddle: 1 }, 1);
+        arrived = Math.hypot(state.canoe.position.x - target.x, state.canoe.position.z - target.z) < 15;
+      }
+      expect(arrived, `${islandId} reached without the outriggers for it`).toBe(false);
+      expect(state.statistics.fails, `${islandId}: the canoe was swamped on the way`).toBe(1);
+    }
   });
 
   it('cannot be bailed across: the can is slower than the chop', () => {
@@ -85,7 +95,7 @@ describe('rough water gates the regions', () => {
     expect(reach.statistics.fails).toBe(0);
 
     const narrows = canoeAt(150, -300, 0, 'outrigger_port', 'outrigger_starboard');
-    run(narrows, { paddle: 1 }, 100); // at the doubled speed 240 s would carry it into the fog and back
+    run(narrows, { paddle: 1 }, 100); // much longer and it reaches the fog, which turns it back
     expect(narrows.canoe.position.z).toBeLessThan(-600);
     expect(regionAt(narrows.canoe.position.x, narrows.canoe.position.z).id).toBe('narrows');
     expect(narrows.canoe.waterLevel).toBe(0);

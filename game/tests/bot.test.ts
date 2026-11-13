@@ -24,8 +24,8 @@ function expectCleanRun(report: BotReport): void {
 }
 
 describe('the headless bot', () => {
-  // The floor was 90 until the paddle speeds were doubled (2026-11-12, Luc's call): crossings are half as long,
-  // and a run that took 110 minutes takes about 80.
+  // The floor was 90 until the paddle speeds were raised (2026-11-12, Luc's call): crossings are shorter,
+  // and so is a run.
   it('plays the main line to the Beacon on Standard without a single fail, in 65 to 180 minutes', () => {
     const report = runBot({ seed: SEED, difficulty: 'standard' });
     console.log(`\n${formatReport(report)}\n`);

@@ -55,10 +55,15 @@ export const TUNING = {
   },
 
   canoe: {
-    /** Doubled on 2026-11-12 (from 2.2, 3.2 and 1.2): Luc's call, a friend found the crossings far too long. */
-    paddleSpeed: 4.4,
-    powerStrokeSpeed: 6.4,
-    backPaddleSpeed: 2.4,
+    /**
+     * Raised on 2026-11-12 from 2.2, 3.2 and 1.2: a friend of Luc's found the crossings far too long. Doubling
+     * was tried first and broke two things, so these stop short of it: a power stroke on the long hull must stay
+     * under `sailMaximumSpeed`, or the sail is worth nothing, and rough water must still stop a canoe that is
+     * not fitted for it. `tests/canoe.test.ts` and `tests/gating.test.ts` hold both.
+     */
+    paddleSpeed: 3.2,
+    powerStrokeSpeed: 4.2,
+    backPaddleSpeed: 1.7,
     /** Every paddler after the strongest adds this share of their own stroke. Four paddlers: 1.75x. */
     extraPaddlerShare: 0.25,
     sailMaximumSpeed: 5,
@@ -80,8 +85,12 @@ export const TUNING = {
     /** Leeway from wind on the bare hull, share of wind speed. */
     windDriftShare: 0.015,
     bailPerSecond: 3,
-    /** Water gained per second per point of (roughness - stability). */
-    floodPerSecondPerExcess: 3.5,
+    /**
+     * Water gained per second per point of (roughness - stability). Raised from 3.5 with the paddle speeds
+     * (2026-11-12), by the same share: rough water costs a paddler the same water for every metre as it did,
+     * so it still stops a canoe that is not fitted for it.
+     */
+    floodPerSecondPerExcess: 5,
     rainPerSecond: 0.05,
     swampWarningLevel: 70,
     capsizeLevel: 100,
