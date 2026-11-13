@@ -815,7 +815,8 @@ function itemIconProblems(): { problems: string[]; named: number; smallest: numb
     else if (value !== null && typeof value === 'object') {
       for (const [key, entry] of Object.entries(value)) {
         // An intent may carry an item id too: that is what a button does, not a row that names an item.
-        if (key === 'itemId') { if (entry !== null) named.push(entry as string); } else if (key !== 'intent') walk(entry);
+        // So may a tile's two quick presses (`shift` for Shift+click, `drop` for the drop key): they are intents as well.
+        if (key === 'itemId') { if (entry !== null) named.push(entry as string); } else if (key !== 'intent' && key !== 'shift' && key !== 'drop') walk(entry);
       }
     }
   };
