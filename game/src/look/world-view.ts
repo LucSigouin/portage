@@ -37,6 +37,7 @@ import { heroMargin, heroWindow, heroWindows } from './hero-windows.ts';
 import type { HeroWindow } from './hero-windows.ts';
 import { LANDMARK_HEIGHT, disposeLandmarks, landmarkGeometry } from './landmarks.ts';
 import { LAMP_SLOTS, LampGlows, lampsOf, poolLamps } from './lamps.ts';
+import { atTheShore } from '../client/viewmodels/shore.ts';
 import { Marks } from './marks.ts';
 import type { Anchor } from './marks.ts';
 import { NODE_MARK_HEIGHT, disposeNodes, nodeGeometry } from './nodes.ts';
@@ -712,7 +713,9 @@ export class InkWashWorldView implements WorldView {
     }
     sky.update(camera);
     water.follow(camera, subject.x, subject.z);
-    marks.update(camera, subject, crewOf(state).local.mode === 'canoe', this.ready, this.stage === 'game');
+    // Island names only aboard or at the water's edge (Luc's bugfix list, line 4): `client/viewmodels/shore.ts`.
+    const local = crewOf(state).local;
+    marks.update(camera, subject, local.mode === 'canoe', this.ready, this.stage === 'game', atTheShore(local));
 
     renderer.info.reset();
     water.renderWake(renderer);

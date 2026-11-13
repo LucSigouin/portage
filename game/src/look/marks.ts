@@ -183,16 +183,17 @@ export class Marks {
 
   /**
    * Place every mark. `subject` is the player, `afloat` whether they are in
-   * the canoe, `ready` the loot in reach of the eye, nearest first.
+   * the canoe, `ready` the loot in reach of the eye, nearest first. `names` is false inland: the island
+   * names are then not drawn (they are for the route ahead, aboard and at the water's edge).
    */
-  update(camera: THREE.PerspectiveCamera, subject: Anchor, afloat: boolean, ready: readonly Anchor[], show: boolean): void {
+  update(camera: THREE.PerspectiveCamera, subject: Anchor, afloat: boolean, ready: readonly Anchor[], show: boolean, names = true): void {
     // A sprite that ignores distance is sized as if one metre away: this turns a share of the view's height into that size.
     const unit = 2 * Math.tan((camera.fov * Math.PI) / 360);
     const from = camera.position;
     const distanceTo = (anchor: Anchor, origin: Anchor): number => Math.hypot(anchor.x - origin.x, anchor.y - origin.y, anchor.z - origin.z);
     for (const { mark, anchor } of this.islands) {
       const distance = distanceTo(anchor, from);
-      this.place(mark, anchor, NAME_HEIGHT * (1.1 - 0.35 * clamp01(distance / 1500)), show ? band(distance, 90, 1400, 40) : 0, unit);
+      this.place(mark, anchor, NAME_HEIGHT * (1.1 - 0.35 * clamp01(distance / 1500)), show && names ? band(distance, 90, 1400, 40) : 0, unit);
     }
     for (const { mark, anchor } of this.landings) {
       const distance = distanceTo(anchor, subject);
