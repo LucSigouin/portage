@@ -154,16 +154,58 @@ describe('the chase camera', () => {
     expect(yawAfter(true)).toBeGreaterThan(yawAfter(false) + 0.2);
   });
 
-  it('does not swing round on foot when the player walks toward the camera', () => {
+  it('never swings round on foot, whichever way the figure walks and for however long: only the mouse turns it', () => {
+    for (const autoCentre of [true, false]) {
+      const camera = new ChaseCamera();
+      const away: CameraSubject = { mode: 'foot', position: { x: 0, y: 3, z: 0 }, heading: 0, moving: true };
+      camera.update(away, STILL, { ...OPTIONS, autoCentre }, FLAT, FRAME);
+      for (const heading of [Math.PI, 1.2, -1.2, Math.PI / 2, 0.3]) {
+        run(camera, { ...away, heading }, 6, STILL, { ...OPTIONS, autoCentre });
+        expect(camera.yaw).toBe(0);
+      }
+      // The mouse turns it, and it stays where the mouse left it.
+      camera.update(away, { ...STILL, yawDelta: 0.7, dragging: true }, { ...OPTIONS, autoCentre }, FLAT, FRAME);
+      run(camera, { ...away, heading: -2 }, 6, STILL, { ...OPTIONS, autoCentre });
+      expect(camera.yaw).toBeCloseTo(0.7, 12);
+    }
+  });
+
+  it('on foot the view stops on the frame the figure stops: no glide after it, and no motion while it stands', () => {
     const camera = new ChaseCamera();
-    const away: CameraSubject = { mode: 'foot', position: { x: 0, y: 3, z: 0 }, heading: 0, moving: true };
-    camera.update(away, STILL, OPTIONS, FLAT, FRAME);
-    // The player turns and walks straight at the camera.
-    run(camera, { ...away, heading: Math.PI }, 6);
-    expect(camera.yaw).toBeCloseTo(0);
-    // Walking off to the side does bring the camera round.
-    run(camera, { ...away, heading: 1.2 }, 12);
-    expect(camera.yaw).toBeCloseTo(1.2, 1);
+    const subject: CameraSubject = { mode: 'foot', position: { x: 0, y: 3, z: 0 }, heading: 0, moving: false };
+    camera.update(subject, STILL, OPTIONS, FLAT, FRAME);
+    let pose = camera.update(subject, STILL, OPTIONS, FLAT, FRAME);
+    // Walk north at 2.6 m/s for a second, the ground rising under the figure.
+    for (let frame = 1; frame <= 60; frame += 1) {
+      const moved = { ...subject, moving: true, position: { x: 0, y: 3 + frame * 0.01, z: -frame * 2.6 * FRAME } };
+      pose = camera.update(moved, STILL, OPTIONS, FLAT, FRAME);
+      // The look-at point is on the figure every frame, not trailing it.
+      expect(pose.target).toEqual({ x: 0, y: 3 + frame * 0.01 + CAMERA_TUNING.foot.focusHeight, z: -frame * 2.6 * FRAME });
+    }
+    const stopped = { ...subject, position: { x: 0, y: 3.6, z: -2.6 } };
+    const first = JSON.stringify(camera.update(stopped, STILL, OPTIONS, FLAT, FRAME));
+    for (let frame = 0; frame < 60; frame += 1) expect(JSON.stringify(camera.update(stopped, STILL, OPTIONS, FLAT, FRAME))).toBe(first);
+  });
+
+  it('stepping ashore glides to the figure and then stays on it, even while the player runs off', () => {
+    const camera = new ChaseCamera();
+    camera.update(canoe(), STILL, OPTIONS, FLAT, FRAME);
+    run(camera, canoe(), 1);
+    let frames = 0;
+    let pose = camera.update(canoe(), STILL, OPTIONS, FLAT, FRAME);
+    for (; frames < 120; frames += 1) {
+      const position = { x: 103 + frames * 4.4 * FRAME, y: 1, z: 201 };
+      pose = camera.update({ mode: 'foot', position, heading: Math.PI / 2, moving: true }, STILL, OPTIONS, FLAT, FRAME);
+      if (pose.target.x === position.x && pose.target.z === position.z) break;
+    }
+    expect(frames).toBeGreaterThan(5);
+    expect(frames).toBeLessThan(60);
+    // From then on it is on the figure every frame.
+    for (let more = frames + 1; more < frames + 60; more += 1) {
+      const position = { x: 103 + more * 4.4 * FRAME, y: 1, z: 201 };
+      pose = camera.update({ mode: 'foot', position, heading: Math.PI / 2, moving: true }, STILL, OPTIONS, FLAT, FRAME);
+      expect(pose.target).toEqual({ x: position.x, y: 1 + CAMERA_TUNING.foot.focusHeight, z: 201 });
+    }
   });
 
   it('ignores the wave bob with reduced motion', () => {
