@@ -129,7 +129,8 @@ export function toastForEvent(event: GameEvent, state: GameState, readerId: Play
       const name = crewName(state, event.who);
       return toast({ joined: `${name} joined the crew`, away: `${name} is away`, back: `${name} is back` }[event.change]);
     }
-    // The HUD, the prompt or the dialogue panel already shows these.
+    // The HUD, the prompt, the dialogue panel or the arrival card (`arrival.ts`) already shows these.
+    case 'place_reached':
     case 'ate':
     case 'drank':
     case 'harvest_started':

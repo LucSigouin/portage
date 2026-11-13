@@ -22,6 +22,8 @@ function campGame(crew = 1): GameState {
   // The first quest is behind the crew, so nobody is paid for setting foot on Home Knoll.
   game.quests.bail_out.status = 'completed';
   game.quests.first_haul.status = 'active';
+  // And Home Knoll is no news: no arrival event joins the stream these tests count and time.
+  game.reachedPlaces = ['island:home_knoll'];
   game.weather.secondsRemaining = 99999;
   drainEvents(game);
   return game;

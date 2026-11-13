@@ -236,6 +236,11 @@ export interface GameState {
   keyItems: Partial<Record<ItemId, number>>;
   flags: Partial<Record<FlagId, boolean>>;
   discoveredIslands: IslandId[];
+  /**
+   * The places the crew has reached (`data/places.ts`): each gets its arrival card once. A save from before the
+   * cards has no such list: `sim/places.ts` then works out what that crew already knows.
+   */
+  reachedPlaces?: string[];
   bottlesFound: BottleId[];
   /** Island of the last camp slept at. */
   respawnCampIslandId: IslandId;
@@ -386,6 +391,8 @@ type GameEventBody =
   | { type: 'slept'; hours: number; islandId: IslandId | null }
   | { type: 'region_entered'; regionId: RegionId }
   | { type: 'island_discovered'; islandId: IslandId }
+  /** The crew got to a place for the first time (`sim/places.ts`). Crew-wide: it carries no `playerId`. */
+  | { type: 'place_reached'; placeId: string }
   | { type: 'fog_turned_back' }
   | { type: 'meter_low'; meter: 'hunger' | 'thirst' | 'energy' }
   | { type: 'dialogue_opened'; npcId: NpcId }
