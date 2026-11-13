@@ -546,7 +546,7 @@ describe('settings', () => {
     'graphics.fieldOfView', 'graphics.fpsCap', 'graphics.showFps',
     'controls.mouseSensitivity', 'controls.invertY', 'controls.cameraAutoCentre',
     'gameplay.difficulty', 'gameplay.autosaveIntervalSeconds', 'gameplay.hints',
-    'accessibility.uiScale', 'accessibility.reduceCameraMotion', 'accessibility.patternedMeters',
+    'accessibility.uiScale', 'accessibility.reduceCameraMotion', 'accessibility.patternedMeters', 'accessibility.arrivalCards',
   ];
 
   it('has a row for every setting across the five tabs, each under its own tab', () => {

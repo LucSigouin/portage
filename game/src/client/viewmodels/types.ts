@@ -12,6 +12,7 @@ import type { ChartGeometry } from './chart.ts';
 export type { ChartGeometry } from './chart.ts';
 import type { PanelId, ScreenId, SettingsTabId } from '../panels.ts';
 import type { BoatStationModel, BoatTabModel, CraftElsewhereModel } from './stations.ts';
+import type { ArrivalModel } from './arrival.ts';
 
 export type Tone = 'info' | 'good' | 'warning' | 'danger';
 
@@ -541,5 +542,7 @@ export interface InterfaceModel {
   built: BuiltModel | null;
   /** The chart under the map and the minimap. Null in the lobby. */
   chart: ChartModel | null;
+  /** The arrival card, while one is on the screen (`arrival.ts`). Null or absent: none. */
+  arrival?: ArrivalModel | null;
   debug: DebugModel | null;
 }

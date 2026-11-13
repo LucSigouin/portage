@@ -19,6 +19,7 @@ import {
   buildConfirmModel, buildCreditsPanel, buildHowToPlayPanel, buildLobbyModel, buildPausePanel, buildSaveSlotsPanel,
 } from './menus.ts';
 import { buildSettingsPanel } from './settings.ts';
+import type { ArrivalModel } from './arrival.ts';
 import type { DebugModel, InterfaceModel, PanelModel, ToastModel } from './types.ts';
 
 export * from './types.ts';
@@ -26,6 +27,7 @@ export * from './format.ts';
 export * from './hud.ts';
 export * from './shore.ts';
 export * from './toasts.ts';
+export * from './arrival.ts';
 export * from './gamepanels.ts';
 export * from './stations.ts';
 export * from './menus.ts';
@@ -62,6 +64,8 @@ export interface InterfaceModelInput {
   crew?: CrewView | null;
   /** The words of the built view while it holds the screen (`builtWords`). Null or absent the rest of the time. */
   built?: { kicker: string; title: string; text: string } | null;
+  /** The arrival card on the screen this frame (`ArrivalQueue.model`). Null or absent the rest of the time. */
+  arrival?: ArrivalModel | null;
   debug: DebugModel | null;
 }
 
@@ -140,6 +144,7 @@ export function buildInterfaceModel(input: InterfaceModelInput): InterfaceModel 
     chart: game ? {
       geometry: valleyChart(), seen: seenCells(game.seen), fullChart: game.canoe.attachments.includes('map_table'),
     } : null,
+    arrival: input.arrival ?? null,
     debug: input.debug,
   };
 }

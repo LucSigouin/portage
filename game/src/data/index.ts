@@ -10,6 +10,8 @@ export {
   CAMP_LANDMARK_KINDS, BED_LANDMARK_KINDS, CAMP_LAYOUTS,
 } from './world.ts';
 export type { CampLayout, WaveComponent } from './world.ts';
+export { PLACES, PLACES_BY_ID, ISLAND_ARRIVAL_METRES, LANDMARK_ARRIVAL_METRES, islandPlaceId, landmarkPlaceId, shoreDistance } from './places.ts';
+export type { PlaceDefinition, PlaceId } from './places.ts';
 export { NODES, NODES_BY_ID, NODES_BY_ISLAND, NODE_TYPES, NODE_IDS, LOOT_TABLES, WILD_KINDS } from './nodes.ts';
 export type { WildKind, WildKindDefinition } from './nodes.ts';
 export { QUESTS, QUEST_IDS, QUEST_LIST, MAIN_QUESTS, SIDE_QUESTS } from './quests.ts';

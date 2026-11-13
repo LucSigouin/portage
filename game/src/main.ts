@@ -96,6 +96,7 @@ function boot(): void {
     storage: parameters.sandbox || perf ? createMemoryStorage() : browserStorage(),
     stats: () => loop?.stats ?? { framesPerSecond: 0, frameMilliseconds: 0, workMilliseconds: 0 },
     forceFrameRate: parameters.showFrameRate,
+    reducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true,
   });
   const session = app.session;
   // The look draws its camera, prompts and marks for the player this screen plays. A guest learns who that is from the host.

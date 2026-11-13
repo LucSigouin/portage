@@ -211,7 +211,7 @@ describe('the hold-or-toggle setting is gone', () => {
     const rows = SETTINGS_TABS.flatMap((tab) => settingsRows(session.settings, tab));
     expect(rows.some((row) => /scaveng/i.test(row.label) || /scaveng/i.test(row.setting))).toBe(false);
     expect(settingsRows(session.settings, 'accessibility').map((row) => row.setting)).toEqual([
-      'accessibility.uiScale', 'accessibility.reduceCameraMotion', 'accessibility.patternedMeters',
+      'accessibility.uiScale', 'accessibility.reduceCameraMotion', 'accessibility.patternedMeters', 'accessibility.arrivalCards',
     ]);
     session.handleIntent({ type: 'change_setting', setting: 'accessibility.patternedMeters', value: true });
     expect(storage.getItem(SETTINGS_KEY)).not.toContain('scavengeMode');

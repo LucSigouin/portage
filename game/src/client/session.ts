@@ -44,6 +44,8 @@ export interface SessionOptions {
   now?: () => number;
   /** A fresh seed for each new game: same valley, different loot and weather. */
   randomSeed?: () => number;
+  /** The browser asks for less motion: the arrival cards start on Still (`loadSettings`). */
+  reducedMotion?: boolean;
 }
 
 /** Something that supplies player 0's input for each fixed step in place of the keyboard: the bot. */
@@ -169,7 +171,7 @@ export class Session {
     this.now = options.now ?? (() => Date.now());
     this.randomSeed = options.randomSeed ?? defaultRandomSeed;
     this.store = createSaveStore(options.storage, this.now);
-    this.settings = loadSettings(options.storage);
+    this.settings = loadSettings(options.storage, { reducedMotion: options.reducedMotion === true });
     this.input = new InputController({
       keyBindings: this.settings.controls.keyBindings,
       mouseSensitivity: this.settings.controls.mouseSensitivity,

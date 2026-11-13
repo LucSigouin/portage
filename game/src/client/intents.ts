@@ -17,7 +17,8 @@ export type SettingId =
   | 'graphics.fieldOfView' | 'graphics.fpsCap' | 'graphics.showFps'
   | 'controls.mouseSensitivity' | 'controls.invertY' | 'controls.cameraAutoCentre'
   | 'gameplay.difficulty' | 'gameplay.autosaveIntervalSeconds' | 'gameplay.hints'
-  | 'accessibility.uiScale' | 'accessibility.reduceCameraMotion' | 'accessibility.patternedMeters';
+  | 'accessibility.uiScale' | 'accessibility.reduceCameraMotion' | 'accessibility.patternedMeters'
+  | 'accessibility.arrivalCards';
 
 export type SettingValue = number | boolean | string;
 

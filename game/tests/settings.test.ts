@@ -13,7 +13,7 @@ describe('settings schema', () => {
     );
     expect(Object.keys(settings.controls).sort()).toEqual(['cameraAutoCentre', 'invertY', 'keyBindings', 'mouseSensitivity']);
     expect(Object.keys(settings.gameplay).sort()).toEqual(['autosaveIntervalSeconds', 'difficulty', 'hints']);
-    expect(Object.keys(settings.accessibility).sort()).toEqual(['patternedMeters', 'reduceCameraMotion', 'uiScale']);
+    expect(Object.keys(settings.accessibility).sort()).toEqual(['arrivalCards', 'patternedMeters', 'reduceCameraMotion', 'uiScale']);
     expect(settings.gameplay.difficulty).toBe('standard');
     expect(SETTINGS_LIMITS.difficulties).toEqual(['relaxed', 'standard']);
     // Scavenging takes one press: the hold-or-toggle option is gone.
@@ -90,7 +90,7 @@ describe('load and save', () => {
     expect(settings.controls.keyBindings.paddle).toEqual(defaults.controls.keyBindings.paddle);
     expect(Object.keys(settings.controls.keyBindings).sort()).toEqual([...INPUT_ACTIONS].sort());
     expect(settings.gameplay).toMatchObject({ difficulty: 'standard', autosaveIntervalSeconds: 300 });
-    expect(settings.accessibility).toEqual({ uiScale: 0.75, reduceCameraMotion: false, patternedMeters: true }); // the old scavenge option is dropped
+    expect(settings.accessibility).toEqual({ uiScale: 0.75, reduceCameraMotion: false, patternedMeters: true, arrivalCards: 'animated' }); // the old scavenge option is dropped
     expect(settings).not.toHaveProperty('somethingFromTheFuture');
     expect(sanitizeSettings(null)).toEqual(defaults);
   });
@@ -136,7 +136,7 @@ describe('settings stored by the build before F became the main key', () => {
     expect(settings.controls.keyBindings.bail).toEqual(['KeyQ']);
     expect(settings.controls.keyBindings.lantern).toEqual(['KeyL']); // was still the old default
     expect(settings.audio.music).toBe(0.25);
-    expect(settings.accessibility).toEqual({ uiScale: 1, reduceCameraMotion: false, patternedMeters: false });
+    expect(settings.accessibility).toEqual({ uiScale: 1, reduceCameraMotion: false, patternedMeters: false, arrivalCards: 'animated' });
   });
 
   it('leaves an old default alone when the player has given its new key to something else', () => {

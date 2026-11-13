@@ -1,0 +1,80 @@
+/* The arrival card: a chapter title in the upper middle of the screen, the first time the crew reaches a place.
+
+   It is the one card whose ink moves by itself (Luc asked for it: LOOK.md, "The arrival card"), and none of that
+   motion is in this file. There is no transition and no animation here, and there must never be: the stroke and the
+   seal are styled frame by frame from the model (arrival.ts), so the card stops when the game's frames do.
+
+   Where it stands: across the middle, with its top a sixth of the way down. The compass strip is above it, the
+   prompt and the tip are below the middle, and the canoe and the player are drawn from the middle down. */
+.iw-arrival {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  justify-items: center;
+  align-items: start;
+  padding-top: 16vh;
+  pointer-events: none;
+}
+/* Under the built view the screen is the canoe's alone. (The card also waits for it: app.ts.) */
+.iw.iw-holding .iw-arrival {
+  visibility: hidden;
+}
+.iw-arrival-card {
+  --tilt: 0deg;
+  display: grid;
+  justify-items: center;
+  max-width: min(34rem, 88vw);
+  padding: 0.75rem 2.2rem 0.85rem;
+  text-align: center;
+}
+.iw-arrival-kicker {
+  font-family: var(--iw-hand);
+  font-size: 1rem;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  color: var(--iw-sage-deep);
+}
+/* The name's own box: as wide as the name, with room each side for the stroke's ends and, on the right, the seal. */
+.iw-arrival-name {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  margin: 0 4.1rem;
+}
+.iw-arrival-title {
+  font-weight: 400;
+  font-style: italic;
+  font-size: 2.7rem;
+  line-height: 1.12;
+  white-space: nowrap;
+}
+/* The brush stroke runs under the name and a little past it each side. */
+.iw-arrival-stroke {
+  display: block;
+  justify-self: stretch;
+  height: 1.1rem;
+  margin: -0.22rem -1.1rem 0.15rem;
+}
+.iw-arrival-brush {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.iw-arrival-line {
+  max-width: 27rem;
+  font-family: var(--iw-hand);
+  font-size: 1.08rem;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+/* The seal: pressed beside the name, a little off square, as a chop sits on a painting. */
+.iw-arrival-seal {
+  position: absolute;
+  left: calc(100% + 1.5rem);
+  top: 0.3rem;
+  width: 2.3rem;
+  height: 2.3rem;
+  transform: rotate(-5deg);
+  filter: url(#iw-rough-small);
+}

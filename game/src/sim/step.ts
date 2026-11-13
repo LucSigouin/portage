@@ -5,6 +5,7 @@ import type { CrewMember } from './canoe.ts';
 import { stepOnFoot } from './foot.ts';
 import { connectedPlayers, emit, freeSeat, playerOf } from './inventory.ts';
 import { refillLostFinds } from './keepsakes.ts';
+import { updatePlaces } from './places.ts';
 import { createQuestStates, updateQuests } from './quests.ts';
 import { seedToRandomState } from './random.ts';
 import { applyCapsize, applyExhaustion, skipNightIfCrewAsleep, updatePassiveAttachments, updateSurvival } from './survival.ts';
@@ -147,6 +148,7 @@ export function createGame(seed: number, options: GameOptions = {}): GameState {
     keyItems: {},
     flags: {},
     discoveredIslands: [START.islandId],
+    reachedPlaces: [],
     bottlesFound: [],
     respawnCampIslandId: START.islandId,
     pendingRewards: [],
@@ -234,6 +236,7 @@ function fixedStep(state: GameState, inputs: readonly (StepInput | undefined)[])
   updatePassiveAttachments(state, deltaSeconds, timeBefore);
   if (state.tick % 10 === 0) {
     for (const player of state.players) updateSurroundings(state, player);
+    updatePlaces(state);
     refillLostFinds(state);
     updateQuests(state);
   }

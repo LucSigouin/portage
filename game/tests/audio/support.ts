@@ -76,6 +76,7 @@ export const SAMPLE_EVENTS: { [Type in GameEventType]: Extract<GameEvent, { type
   slept: { type: 'slept', hours: 8, islandId: 'home_knoll' },
   region_entered: { type: 'region_entered', regionId: 'reach' },
   island_discovered: { type: 'island_discovered', islandId: 'steeple_rock' },
+  place_reached: { type: 'place_reached', placeId: 'island:steeple_rock' },
   fog_turned_back: { type: 'fog_turned_back' },
   meter_low: { type: 'meter_low', meter: 'thirst' },
   dialogue_opened: { type: 'dialogue_opened', npcId: 'wren' },

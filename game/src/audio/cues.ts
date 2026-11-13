@@ -935,6 +935,8 @@ export const EVENT_CUES: { [Type in GameEventType]: CueName | CueResolver<Type> 
   slept: 'slept',
   region_entered: (event) => ({ cue: 'region_entered', regionId: event.regionId }),
   island_discovered: 'island_discovered',
+  // Silent: the arrival card is a thing to see. With the cards switched off, nothing at all marks the moment.
+  place_reached: null,
   fog_turned_back: 'fog_turned_back',
   meter_low: (event) => ({
     cue: event.meter === 'hunger' ? 'meter_hunger' : event.meter === 'thirst' ? 'meter_thirst' : 'meter_energy',
