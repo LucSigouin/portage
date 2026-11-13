@@ -10,7 +10,7 @@ import { birch } from '../b2/flora.js';
 import type { Builder, Triple } from '../b2/geo.js';
 import { PAL } from '../b2/palette.js';
 import { seededRandom } from '../scatter.ts';
-import { EMBER, PEN, TONE, gable, gableEnd, ladder, moved, pane, siteOf, smoke, turnY } from './kit.ts';
+import { EMBER, PEN, TONE, gable, gableEnd, ladder, moved, pane, siteOf, turnY } from './kit.ts';
 import type { LandmarkBuilder } from './kit.ts';
 
 /** A campfire's heart: a ring of stones, crossed logs, one ember. */
@@ -101,10 +101,9 @@ export const SHALLOWS: Partial<Record<LandmarkKind, LandmarkBuilder>> = {
     builder.cone(0.1, 0.07, PAL.iron, { pos: [0.55, 1.635, -1.1], kind: KIND.METAL }, 7);
   },
 
-  /** The fire: the ring, a pot on a tripod, split wood, a log to sit on, and a wisp of smoke. */
+  /** The fire: the ring, a pot on a tripod, split wood, a log to sit on. No smoke (Luc: "just remove it"). */
   campfire: (builder, detail) => {
     fireRing(builder);
-    smoke(builder, 0, 0.45, 0);
     if (!detail) return;
     for (let leg = 0; leg < 3; leg += 1) {
       const angle = (leg / 3) * Math.PI * 2 + 0.5;

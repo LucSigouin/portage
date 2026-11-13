@@ -1,6 +1,6 @@
 /**
  * The valley's drawing kit: the colours and the few shapes every landmark
- * shares (a gable roof, a window, a lattice mast, a ladder, a wisp of smoke),
+ * shares (a gable roof, a window, a lattice mast, a ladder),
  * and `siteOf`, which tells a one-of-a-kind landmark the rules' own ground
  * under it, so a dock can run down to the water and a dam can follow its crest.
  *
@@ -25,7 +25,7 @@ export const TONE = {
   steel: '#59656d', steelPale: '#8d9496', boatBlue: '#7f97a3', door: '#6f5a47',
   shingle: '#8f7d6b', shingleDark: '#7f6f62', board: '#8a6f55', boardDark: '#7c644d',
   brick: '#a9624d', craneYellow: '#c79a34', towerRed: '#a8503e', tyre: '#3a3b44',
-  reed: '#8c9c68', reedPale: '#a3a56c', cattail: '#6b4f3a', smoke: '#d6d7cf',
+  reed: '#8c9c68', reedPale: '#a3a56c', cattail: '#6b4f3a',
   cutStone: '#d6cdc0', cutStonePink: '#d3bcb0', cutStoneGrey: '#c4bdb4',
   apple: '#c64732', berry: '#d8402a', leaf: '#7d9a72', fog: '#cfd5d1',
 } as const;
@@ -135,20 +135,6 @@ export function ladder(builder: Builder, from: Triple, to: Triple, across: Tripl
     const point: Triple = [from[0] + (to[0] - from[0]) * share, from[1] + (to[1] - from[1]) * share, from[2] + (to[2] - from[2]) * share];
     builder.beam(shift(point, -1), shift(point, 1), radius * 0.8, tone, PEN, 4);
   }
-}
-
-/** A wisp of smoke: two pale strands rising and leaning downwind (-x), drawn still. No pen line round them. */
-export function smoke(builder: Builder, x: number, y: number, z: number, height = 3.2, size = 1): void {
-  const wash = { id: THIN, flat: true, kind: KIND.PLAIN, glow: 0.3 } as const;
-  for (const [strand, radius] of [[0, 0.075], [1, 0.05]] as const) {
-    const points: Triple[] = [];
-    for (let step = 0; step <= 5; step += 1) {
-      const share = step / 5;
-      points.push([x - (0.5 * share * share + 0.12 * Math.sin(share * 5 + strand * 2)) * height * 0.5, y + share * height * (1 - strand * 0.22), z + 0.1 * Math.sin(share * 4 + strand * 3) * size]);
-    }
-    builder.tube(points, radius * size, TONE.smoke, { ...wash, steps: 10 }, 5);
-  }
-  builder.sphere(0.2 * size, TONE.smoke, { pos: [x - 0.3 * height, y + height * 1.02, z], scale: [1.5, 0.6, 1], ...wash }, 6);
 }
 
 /** The ground under a landmark, as its builder sees it. */
