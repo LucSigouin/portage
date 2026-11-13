@@ -77,6 +77,12 @@ export class InputController {
   private zoomDelta = 0;
   /** Paddling forward on its own: Q starts it, Q again, a paddle key or leaving the canoe stops it. */
   private autoPaddling = false;
+  /**
+   * The jump key: `pressed` from the press until the next sample (so a tap between two frames still jumps), then
+   * `held` while it stays down. Only a press made on foot, with the keys driving the game, counts: a key already
+   * down when a panel closes is no jump.
+   */
+  private jumpKey: 'up' | 'pressed' | 'held' = 'up';
 
   constructor(options: InputOptions) {
     this.options = { ...options, keyBindings: cloneKeyBindings(options.keyBindings) };
@@ -146,6 +152,9 @@ export class InputController {
     if (autoPaddle) return [autoPaddle];
 
     switch (action) {
+      case 'jump':
+        if (snapshot.mode === 'foot') this.jumpKey = 'pressed';
+        return [];
       case 'interact':
         if (!snapshot.interactable) return [];
         // At a bench the key opens the crafting panel, as the crafting key does.
@@ -193,6 +202,7 @@ export class InputController {
   releaseAll(): void {
     this.held.clear();
     this.dragging = false;
+    this.jumpKey = 'up';
   }
 
   isHeld(action: InputAction): boolean {
@@ -201,6 +211,9 @@ export class InputController {
 
   /** The held keys as intent for this frame. `snapshot` null gives a neutral input. */
   sample(snapshot: InputSnapshot | null, cameraYaw: number): StepInput {
+    // The jump key counts once sampled on foot: a press is good for this frame, then only while the key stays down.
+    const jump = snapshot !== null && snapshot.mode === 'foot' && (this.jumpKey === 'pressed' || (this.jumpKey === 'held' && this.isHeld('jump')));
+    this.jumpKey = jump && this.isHeld('jump') ? 'held' : 'up';
     if (!snapshot) return { ...NEUTRAL_INPUT, cameraYaw };
     const axis = (positive: InputAction, negative: InputAction): number =>
       (this.isHeld(positive) ? 1 : 0) - (this.isHeld(negative) ? 1 : 0);
@@ -216,6 +229,7 @@ export class InputController {
       input.moveX = axis('moveRight', 'moveLeft');
       input.moveY = axis('moveForward', 'moveBack');
       input.run = this.isHeld('run');
+      if (jump) input.jump = true;
     }
     return input;
   }

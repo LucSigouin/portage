@@ -23,7 +23,7 @@ export type InputAction =
   // canoe
   | 'paddle' | 'backPaddle' | 'autoPaddle' | 'steerPort' | 'steerStarboard' | 'powerStroke' | 'bail' | 'lantern' | 'sail'
   // on foot
-  | 'moveForward' | 'moveBack' | 'moveLeft' | 'moveRight' | 'run'
+  | 'moveForward' | 'moveBack' | 'moveLeft' | 'moveRight' | 'run' | 'jump'
   // both
   | 'interact'
   // panels
@@ -33,7 +33,7 @@ export type InputAction =
 
 export const INPUT_ACTIONS: InputAction[] = [
   'paddle', 'backPaddle', 'autoPaddle', 'steerPort', 'steerStarboard', 'powerStroke', 'bail', 'lantern', 'sail',
-  'moveForward', 'moveBack', 'moveLeft', 'moveRight', 'run',
+  'moveForward', 'moveBack', 'moveLeft', 'moveRight', 'run', 'jump',
   'interact',
   'inventory', 'craft', 'canoeBuilder', 'questLog', 'map', 'pause',
   'tool1', 'tool2', 'tool3', 'tool4', 'tool5',
@@ -45,7 +45,7 @@ export type InputContext = 'canoe' | 'foot' | 'always';
 export const ACTION_CONTEXT: Record<InputAction, InputContext> = {
   paddle: 'canoe', backPaddle: 'canoe', autoPaddle: 'canoe', steerPort: 'canoe', steerStarboard: 'canoe', powerStroke: 'canoe',
   bail: 'canoe', lantern: 'canoe', sail: 'canoe',
-  moveForward: 'foot', moveBack: 'foot', moveLeft: 'foot', moveRight: 'foot', run: 'foot',
+  moveForward: 'foot', moveBack: 'foot', moveLeft: 'foot', moveRight: 'foot', run: 'foot', jump: 'foot',
   interact: 'always',
   inventory: 'always', craft: 'always', canoeBuilder: 'always', questLog: 'always', map: 'always', pause: 'always',
   tool1: 'always', tool2: 'always', tool3: 'always', tool4: 'always', tool5: 'always',
@@ -54,7 +54,7 @@ export const ACTION_CONTEXT: Record<InputAction, InputContext> = {
 export const ACTION_LABELS: Record<InputAction, string> = {
   paddle: 'Paddle', backPaddle: 'Back-paddle', autoPaddle: 'Auto-paddle (on and off)', steerPort: 'Steer to port', steerStarboard: 'Steer to starboard',
   powerStroke: 'Power stroke', bail: 'Bail (hold)', lantern: 'Lantern', sail: 'Raise or lower sail',
-  moveForward: 'Walk forward', moveBack: 'Walk back', moveLeft: 'Walk left', moveRight: 'Walk right', run: 'Run',
+  moveForward: 'Walk forward', moveBack: 'Walk back', moveLeft: 'Walk left', moveRight: 'Walk right', run: 'Run', jump: 'Jump',
   interact: 'Land / interact / scavenge / board',
   inventory: 'Inventory', craft: 'Crafting', canoeBuilder: 'Canoe builder', questLog: 'Quest log', map: 'Map',
   pause: 'Pause',
@@ -81,6 +81,7 @@ export const DEFAULT_KEY_BINDINGS: Readonly<KeyBindings> = Object.freeze({
   moveLeft: ['KeyA', 'ArrowLeft'],
   moveRight: ['KeyD', 'ArrowRight'],
   run: ['ShiftLeft', 'ShiftRight'],
+  jump: ['Space'],
   interact: ['KeyF'],
   inventory: ['Tab'],
   craft: ['KeyC'],

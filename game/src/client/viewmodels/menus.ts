@@ -134,6 +134,7 @@ export function buildHowToPlayPanel(settings: Settings): PanelBody<'how_to_play'
         controls: [
           control('Walk', 'moveForward', 'moveBack', 'moveLeft', 'moveRight'),
           control('Run (costs energy)', 'run'),
+          control('Jump', 'jump'),
           control('Interact, scavenge, board', 'interact'),
           control('Tools 1 to 5', 'tool1', 'tool2', 'tool3', 'tool4', 'tool5'),
         ],

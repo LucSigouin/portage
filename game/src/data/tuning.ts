@@ -134,6 +134,21 @@ export const TUNING = {
     /** Steepest climb, as rise over run (tan 40 degrees). */
     slopeLimit: 0.839,
     wadeDepth: 0.6,
+    /**
+     * The jump (Luc's list, Round 3: "character need to jump"). The feet leave the ground on the step the key
+     * arrives, top out at `jumpHeight` metres after `jumpRiseSeconds` and are down again `jumpFallSeconds` later:
+     * 16 steps up and 14 down, half a second in the air, the fall a little quicker than the rise. The height is for
+     * the eye alone: a jumper goes only where a walker may (see `stepOnFoot`).
+     */
+    jumpHeight: 0.9,
+    jumpRiseSeconds: 0.27,
+    jumpFallSeconds: 0.23,
+    /** After the feet touch down the knees give and straighten for this long. Drawn only: walking is not slowed. */
+    jumpLandSeconds: 0.15,
+    /** In the air: the share of the turn rate and of the acceleration that is left. The speed at take-off is kept. */
+    jumpAirControl: 0.2,
+    /** The key pressed again this late in a fall jumps again on landing, seconds. */
+    jumpBufferSeconds: 0.1,
     nodeRange: 2.5,
     canoeNodeRange: 7,
     npcRange: 3.5,

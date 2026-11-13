@@ -1,5 +1,5 @@
 import { TUNING } from '../data/tuning.ts';
-import type { GameState, PlayerState, StepInput } from './types.ts';
+import type { GameState, Leap, PlayerState, StepInput } from './types.ts';
 import { bodyBlocked } from './solids.ts';
 import { bearingDifference, groundHeight } from './world.ts';
 
@@ -47,10 +47,88 @@ function turningShare(offBy: number): number {
   return Math.max(0, Math.min(1, Math.cos(offBy) + 0.5));
 }
 
+const stepsIn = (seconds: number): number => Math.max(1, Math.round(seconds / TUNING.fixedStep));
+/** Steps a jump rises, steps it falls, and the two together: the steps the feet are off the ground. */
+export const LEAP_RISE_STEPS = stepsIn(TUNING.foot.jumpRiseSeconds);
+export const LEAP_FALL_STEPS = stepsIn(TUNING.foot.jumpFallSeconds);
+export const LEAP_AIR_STEPS = LEAP_RISE_STEPS + LEAP_FALL_STEPS;
+/** Steps the knees give and straighten after the landing. A `Leap` counts up to the air and these, then it is over. */
+export const LEAP_LAND_STEPS = stepsIn(TUNING.foot.jumpLandSeconds);
+const LEAP_DONE_STEPS = LEAP_AIR_STEPS + LEAP_LAND_STEPS;
+/** The key pressed again with this many steps of the fall left, or fewer, jumps again on landing. */
+const LEAP_BUFFER_STEPS = stepsIn(TUNING.foot.jumpBufferSeconds);
+/**
+ * The longest a jump goes on changing a player after every key is up: a press at the last moment of a fall, the
+ * landing, the jump it asked for and the knees after it. A guest's walk is followed this much longer (`net/walk.ts`).
+ */
+export const LEAP_COAST_STEPS = LEAP_BUFFER_STEPS + 1 + LEAP_DONE_STEPS;
+
+/** True while the feet are off the ground. */
+export function airborne(leap: Pick<Leap, 'steps'> | undefined): boolean {
+  return leap !== undefined && leap.steps > 0 && leap.steps < LEAP_AIR_STEPS;
+}
+
+/**
+ * How high the feet are above the ground, metres: up on one half of a parabola, down on a steeper one. `steps` may
+ * sit between two whole steps (a guest's view between two states).
+ */
+export function leapHeight(leap: Pick<Leap, 'steps'> | undefined): number {
+  if (!airborne(leap)) return 0;
+  const steps = leap!.steps;
+  const off = steps <= LEAP_RISE_STEPS ? 1 - steps / LEAP_RISE_STEPS : (steps - LEAP_RISE_STEPS) / LEAP_FALL_STEPS;
+  return TUNING.foot.jumpHeight * (1 - off * off);
+}
+
+/**
+ * A jump between two states, `share` of the way from the older to the newer, for a view placed between them. A jump
+ * that ended in between runs out to its end; one that began anew in between is shown as the newer state has it.
+ */
+export function blendLeap(before: Leap | undefined, after: Leap | undefined, share: number): Leap | undefined {
+  if (!before || before.steps <= 0 || before.steps >= LEAP_DONE_STEPS) {
+    return after && after.steps > 0 && after.steps < LEAP_DONE_STEPS ? { ...after, steps: after.steps * share } : after;
+  }
+  const to = after ? after.steps : LEAP_DONE_STEPS;
+  if (to < before.steps) return after;
+  const steps = before.steps + (to - before.steps) * share;
+  return after ? { ...after, steps } : steps < LEAP_DONE_STEPS ? { ...before, steps } : undefined;
+}
+
+/**
+ * One step of a player's jump. A press on the ground takes off on this very step; one press is one jump, and the key
+ * has to come up before the next. A press late in the fall (`jumpBufferSeconds`) is kept and jumps again on landing.
+ * A jump carries on only from where the last step left the player (`carried`), as a walk does: anyone put somewhere
+ * else is on the ground. Returns true when the feet are off the ground after this step. Never changes a `Leap` in
+ * place: a guest's guess shares the truth's.
+ */
+function stepLeap(player: PlayerState, pressed: boolean, carried: boolean): boolean {
+  const leap = player.leap;
+  if (leap === undefined && !pressed) return false;
+  let steps = carried ? leap?.steps ?? 0 : 0;
+  let again = carried && (leap?.again ?? false);
+  const fresh = pressed && !(leap?.held ?? false);
+  if (steps > 0 && steps < LEAP_AIR_STEPS) {
+    steps += 1;
+    if (fresh && LEAP_AIR_STEPS - steps <= LEAP_BUFFER_STEPS) again = true;
+  } else if (fresh || again) {
+    steps = 1;
+    again = false;
+  } else if (steps >= LEAP_AIR_STEPS && steps < LEAP_DONE_STEPS) {
+    steps += 1;
+  }
+  if (!pressed && (steps === 0 || steps >= LEAP_DONE_STEPS)) delete player.leap;
+  else player.leap = { steps, held: pressed, again };
+  return steps > 0 && steps < LEAP_AIR_STEPS;
+}
+
 /**
  * One fixed step of one player on foot. The keys are relative to their camera bearing: W goes the way the camera
  * looks. The figure turns toward the way the keys point at `TUNING.foot.turnRate` and always walks the way it faces;
  * its speed eases toward the walk or the run (`acceleration`, `braking`), and eases out when the keys come up.
+ *
+ * A jump (`input.jump`, `PlayerState.leap`) changes how the figure is carried, never where it may go: in the air it
+ * keeps the speed it took off with (it can gain a little, it cannot brake) and turns at a share of the turn rate, and
+ * every step is still a walker's step over the ground below: the same slopes, the same water, the same solids. So a
+ * jump clears no tree, rock, wall, ledge or shore. `position.y` stays the ground's height.
  */
 export function stepOnFoot(state: GameState, player: PlayerState, input: StepInput, deltaSeconds: number): void {
   const foot = TUNING.foot;
@@ -75,8 +153,10 @@ export function stepOnFoot(state: GameState, player: PlayerState, input: StepInp
   // A walk carries on only from where the last step left the player. Anyone put somewhere else (a landing, a fail,
   // a load, a teleport in a test) starts from a stand: no lurch from a speed they had before.
   const gait = player.gait;
-  let speed = gait !== undefined && gait.x === x && gait.z === z ? Math.max(0, Math.min(gait.speed, foot.runSpeed)) : 0;
-  if (!pressing && speed === 0) return;
+  const carried = gait !== undefined && gait.x === x && gait.z === z;
+  let speed = carried ? Math.max(0, Math.min(gait.speed, foot.runSpeed)) : 0;
+  const flying = stepLeap(player, input.jump === true, carried);
+  if (!pressing && speed === 0 && player.leap === undefined) return;
 
   // Turn toward the keys, at most the turn rate, then ease the speed toward what the keys ask at this heading.
   let heading = player.heading;
@@ -87,11 +167,13 @@ export function stepOnFoot(state: GameState, player: PlayerState, input: StepInp
     const cosine = Math.cos(input.cameraYaw);
     const wanted = Math.atan2(moveY * sine + moveX * cosine, moveY * cosine - moveX * sine);
     const offBy = bearingDifference(wanted, heading);
-    const turn = foot.turnRate * deltaSeconds;
+    const turn = foot.turnRate * (flying ? foot.jumpAirControl : 1) * deltaSeconds;
     heading = Math.abs(offBy) <= turn ? wanted : bearingDifference(heading + Math.sign(offBy) * turn, 0);
     target = (player.running ? foot.runSpeed : foot.walkSpeed) * Math.min(1, length) * turningShare(bearingDifference(wanted, heading));
   }
-  speed = speed < target ? Math.min(target, speed + foot.acceleration * deltaSeconds) : Math.max(target, speed - foot.braking * deltaSeconds);
+  // In the air the speed at take-off is kept: it can gain a little toward what the keys ask, it cannot brake.
+  if (flying) speed = Math.max(speed, Math.min(target, speed + foot.acceleration * foot.jumpAirControl * deltaSeconds));
+  else speed = speed < target ? Math.min(target, speed + foot.acceleration * deltaSeconds) : Math.max(target, speed - foot.braking * deltaSeconds);
   player.heading = heading;
   player.gait = { speed, x, z };
   if (speed === 0) return;

@@ -12,8 +12,11 @@ import {
   readClientMessage, readWalkRun,
 } from '../../src/net/index.ts';
 import type { GuestOptions, LoopbackConditions } from '../../src/net/index.ts';
-import { COAST_STEPS, HOLD_INPUT } from '../../src/net/walk.ts';
-import { FIXED_STEP, NEUTRAL_INPUT, drainEvents, groundHeight, hashState, selectInteractable, step, stepOnFoot, terrainHeight } from '../../src/sim/index.ts';
+import { COAST_STEPS, HOLD_INPUT, LEAP_TAIL_STEPS } from '../../src/net/walk.ts';
+import {
+  FIXED_STEP, LEAP_AIR_STEPS, LEAP_COAST_STEPS, LEAP_LAND_STEPS, NEUTRAL_INPUT, airborne, drainEvents, groundHeight, hashState, leapHeight,
+  selectInteractable, step, stepOnFoot, terrainHeight,
+} from '../../src/sim/index.ts';
 import type { GameState, PlayerState, StepInput } from '../../src/sim/index.ts';
 import { newGame, standOn } from '../support.ts';
 import { createRig, key } from './rig.ts';
@@ -418,12 +421,24 @@ describe('the host stays in charge', () => {
     expect(readWalkRun([3, 1, 0, 1, 0.5])).toEqual([3, 1, 0, 1, 0.5]);
     expect(readWalkRun([3, 9, -9, 0, 0.5])).toEqual([3, 1, -1, 0, 0.5]);
     expect(readWalkRun([3, 0, 0, 1, 0.5])).toEqual([3, 0, 0, 0, 0]);
-    for (const junk of [null, 5, {}, [], [1, 2, 3, 4], [1, 0, 0, 0, 0, 0], [-1, 0, 0, 0, 0], [1.5, 0, 0, 0, 0], [1, NaN, 0, 0, 0], [1, 0, 0, 2, 0], [1, 0, 0, true, 0],
+    // The keys of a stretch: 1 the run key, 2 the jump key, 3 both. A jump on the spot is kept; a run on the spot is standing.
+    expect(readWalkRun([3, 1, 0, 3, 0.5])).toEqual([3, 1, 0, 3, 0.5]);
+    expect(readWalkRun([3, 1, 0, 2, 0.5])).toEqual([3, 1, 0, 2, 0.5]);
+    expect(readWalkRun([3, 0, 0, 2, 0.5])).toEqual([3, 0, 0, 2, 0]);
+    expect(readWalkRun([3, 0, 0, 3, 0.5])).toEqual([3, 0, 0, 2, 0]);
+    for (const junk of [null, 5, {}, [], [1, 2, 3, 4], [1, 0, 0, 0, 0, 0], [-1, 0, 0, 0, 0], [1.5, 0, 0, 0, 0], [1, NaN, 0, 0, 0], [1, 0, 0, 4, 0], [1, 0, 0, -1, 0],
+      [1, 0, 0, 1.5, 0], [1, 0, 0, true, 0],
       [1, 0, 0, 0, Infinity], [1, 0, 0, 0, 1e9], ['1', 0, 0, 0, 0]]) {
       expect(readWalkRun(junk)).toBeNull();
     }
     const message = (walk: unknown, step: unknown = 10) => readClientMessage({ v, type: 'input', seq: 1, have: 0, events: 0, input: { ...NEUTRAL_INPUT }, step, walk });
     expect(message([[2, 1, 0, 0, 0], [5, 0, 0, 0, 0]])).not.toBeNull();
+    // The jump key in the input itself: true or false or left out, nothing else.
+    const keyed = (jump: unknown) => readClientMessage({ v, type: 'input', seq: 1, have: 0, events: 0, input: { ...NEUTRAL_INPUT, jump }, step: 10, walk: [] });
+    expect(keyed(true)).toMatchObject({ input: { jump: true } });
+    expect(keyed(false)).not.toBeNull();
+    expect('jump' in (keyed(false) as { input: object }).input).toBe(false);
+    for (const junk of [1, 'yes', null, {}]) expect(keyed(junk)).toBeNull();
     // Out of order, twice the same step, from the future, too many, or no count of steps at all.
     expect(message([[5, 1, 0, 0, 0], [2, 0, 0, 0, 0]])).toBeNull();
     expect(message([[2, 1, 0, 0, 0], [2, 0, 0, 0, 0]])).toBeNull();
@@ -489,8 +504,8 @@ describe('the host\'s count of a guest\'s walk', () => {
     expect(line.walked).toBe(100);
     // The count agrees: the slowing steps are owed, the rest are not.
     const stream = new WalkStream();
-    stream.add({ start: 0, moveX: 0, moveY: 1, run: false, yaw: 0 });
-    stream.add({ start: 10, moveX: 0, moveY: 0, run: false, yaw: 0 });
+    stream.add({ start: 0, moveX: 0, moveY: 1, run: false, yaw: 0, jump: false });
+    stream.add({ start: 10, moveX: 0, moveY: 0, run: false, yaw: 0, jump: false });
     expect(stream.movingSteps(0, 100)).toBe(10 + COAST_STEPS);
     expect(stream.movesBetween(10 + COAST_STEPS, 100)).toBe(false);
     expect(stream.movesBetween(10 + COAST_STEPS - 1, 100)).toBe(true);
@@ -515,9 +530,9 @@ describe('the host\'s count of a guest\'s walk', () => {
 
   it('keeps what was said first about a step', () => {
     const stream = new WalkStream();
-    stream.add({ start: 4, moveX: 0, moveY: 1, run: false, yaw: 0 });
-    stream.add({ start: 4, moveX: 1, moveY: 0, run: true, yaw: 2 });
-    stream.add({ start: 2, moveX: -1, moveY: 0, run: false, yaw: 0 });
+    stream.add({ start: 4, moveX: 0, moveY: 1, run: false, yaw: 0, jump: false });
+    stream.add({ start: 4, moveX: 1, moveY: 0, run: true, yaw: 2, jump: false });
+    stream.add({ start: 2, moveX: -1, moveY: 0, run: false, yaw: 0, jump: false });
     expect(stream.runs.map((run) => run.start)).toEqual([2, 4]);
     expect(stream.at(9)).toMatchObject({ moveY: 1, run: false });
     expect(stream.at(1)).toMatchObject({ moveX: 0, moveY: 0 });
@@ -788,5 +803,244 @@ describe('what it costs on the wire', () => {
     expect(standing).toBeLessThan(5000);
     expect(walking).toBeLessThan(9000);
     expect(turning).toBeLessThan(16000);
+  });
+});
+
+describe('a jump', () => {
+  /** Frames with these keys; the jump key down for the first three (a tap). Returns the height of the guest's own figure after each frame. */
+  function tap(sam: Seat, frame: () => void, keys: Partial<StepInput>, frames: number): number[] {
+    const tall: number[] = [];
+    for (let count = 0; count < frames; count += 1) {
+      sam.input = count < 3 ? { ...keys, jump: true } : { ...keys };
+      frame();
+      tall.push(leapHeight(sam.link.view()!.players[1]!.leap));
+    }
+    return tall;
+  }
+
+  it('is on the guest\'s own screen on the frame the key goes down, whatever the line, and it is the rules\' own jump', () => {
+    for (const delay of [0, 0.06, 0.12, 0.25]) {
+      const { sam, frame } = ashore({ delay });
+      const tall = tap(sam, frame, {}, 60);
+      // The first frame is the first step of a solo player's jump, and every frame after is the next.
+      const solo = { steps: 0 };
+      tall.forEach((height, index) => {
+        solo.steps = index + 1;
+        expect(height).toBe(leapHeight(solo));
+      });
+      expect(tall[0]).toBeGreaterThan(0.1);
+      expect(Math.max(...tall)).toBeCloseTo(0.9, 9);
+      expect(tall.filter((height) => height > 0)).toHaveLength(LEAP_AIR_STEPS - 1);
+      console.log(`JUMP first frame on a guest's own screen, ${delay * 1000} ms each way: ${tall[0].toFixed(3)} m up, top ${Math.max(...tall).toFixed(3)} m, down after ${tall.findIndex((height, index) => index > 0 && height === 0) + 1} frames`);
+    }
+  });
+
+  it('without the layer the same jump waits for the round trip and the view\'s beat', () => {
+    const { sam, frame } = ashore({ delay: 0.12 }, { predictWalk: false });
+    const tall = tap(sam, frame, {}, 90);
+    expect(tall.findIndex((height) => height > 0)).toBeGreaterThan(0.12 * 2 * 60 + 4);
+    expect(Math.max(...tall)).toBeGreaterThan(0.85);
+  });
+
+  /** Walk, run, stand and jump for a while. Returns what there was to put right, and whether everyone saw the jumps. */
+  function jumping(conditions: Partial<LoopbackConditions>, seconds: number) {
+    const { rig, sam, host, shown, frame } = ashore(conditions);
+    const random = seeded(41);
+    let worstSlip = 0;
+    let worstEase = 0;
+    let ownJumps = 0;
+    let hostJumps = 0;
+    let frames = 0;
+    /** One frame, counting each take-off: on the guest's own screen, and in the host's game. */
+    const counted = (): void => {
+      const ownBefore = airborne(sam.link.view()!.players[1]!.leap);
+      const hostBefore = airborne(rig.game.players[1]!.leap);
+      frame();
+      frames += 1;
+      if (!ownBefore && airborne(sam.link.view()!.players[1]!.leap)) ownJumps += 1;
+      if (!hostBefore && airborne(rig.game.players[1]!.leap)) hostJumps += 1;
+      worstSlip = Math.max(worstSlip, sam.link.walk.slip);
+      worstEase = Math.max(worstEase, sam.link.walk.eased);
+    };
+    while (frames < seconds * 60) {
+      const still = random() < 0.25;
+      const leg = wander(random, shown());
+      const keys: Partial<StepInput> = still ? {} : leg.input;
+      // A jump or two on every leg, some of them double taps and late taps, the key held for 2 to 12 frames.
+      const presses = Array.from({ length: 1 + Math.floor(random() * 3) }, () => ({ at: Math.floor(random() * leg.seconds * 60), frames: 2 + Math.floor(random() * 10) }));
+      for (let count = 0; count < Math.round(leg.seconds * 60); count += 1) {
+        const jump = presses.some((press) => count >= press.at && count < press.at + press.frames);
+        sam.input = jump ? { ...keys, jump: true } : { ...keys };
+        counted();
+      }
+      for (const player of rig.game.players) Object.assign(player, { hunger: 100, thirst: 100, energy: 100 });
+    }
+    // Keys up: the host is a beat behind, so the last jump is still to be run there.
+    sam.input = {};
+    for (let count = 0; count < 90; count += 1) counted();
+    const end = gap(host(), shown());
+    const settled = rig.settle();
+    return { rig, sam, worstSlip, worstEase, ownJumps, hostJumps, end, settled };
+  }
+
+  it('is predicted with nothing to put right on a clean line: two minutes of walking, running and jumping, slip 0, cuts 0', () => {
+    const result = jumping(CLEAN, 120);
+    console.log(`JUMP two minutes on a clean line: ${result.ownJumps} jumps on the guest's screen, ${result.hostJumps} on the host's, largest slip ${(result.worstSlip * 100).toFixed(3)} cm, `
+      + `largest one-frame correction ${(result.worstEase * 100).toFixed(3)} cm, cuts ${result.sam.link.walk.cuts}, end ${(result.end * 100).toFixed(3)} cm from the host`);
+    expect(result.ownJumps).toBeGreaterThan(60);
+    // Every jump the guest saw, the host ran: the same count, the same jumps.
+    expect(result.hostJumps).toBe(result.ownJumps);
+    expect(result.worstSlip).toBe(0);
+    expect(result.worstEase).toBe(0);
+    expect(result.sam.link.walk.cuts).toBe(0);
+    expect(result.end).toBe(0);
+    expect(result.settled).toBe(true);
+    expect(result.sam.link.mismatches).toBe(0);
+    // All down again, on both sides.
+    expect(result.rig.game.players[1]!.leap).toBeUndefined();
+    expect(result.sam.link.view()!.players[1]!.leap).toBeUndefined();
+    expect(hashState(result.sam.link.truth!)).toBe(result.rig.hostHash());
+  });
+
+  it('and on a bad line (120 ms each way, one message in five lost): never a cut, a few centimetres eased at most', () => {
+    for (const [name, line] of [['bad', BAD], ['rough', ROUGH]] as const) {
+      const result = jumping(line, 120);
+      console.log(`JUMP two minutes on the ${name} line: ${result.ownJumps} jumps on the guest's screen, ${result.hostJumps} on the host's, largest slip ${(result.worstSlip * 100).toFixed(3)} cm, `
+        + `largest one-frame correction ${(result.worstEase * 100).toFixed(3)} cm, cuts ${result.sam.link.walk.cuts}, end ${(result.end * 100).toFixed(3)} cm from the host`);
+      expect(result.ownJumps).toBeGreaterThan(60);
+      expect(result.hostJumps).toBe(result.ownJumps);
+      expect(result.sam.link.walk.cuts).toBe(0);
+      expect(result.worstEase).toBeLessThanOrEqual(0.03);
+      expect(result.end).toBeLessThan(0.01);
+      expect(result.settled).toBe(true);
+      expect(result.sam.link.mismatches).toBe(0);
+      expect(result.rig.game.players[1]!.leap).toBeUndefined();
+      expect(result.sam.link.view()!.players[1]!.leap).toBeUndefined();
+      expect(hashState(result.sam.link.truth!)).toBe(result.rig.hostHash());
+    }
+  });
+
+  it('everyone sees everyone jump: the host\'s jump on the guest\'s screen, the guest\'s on the host\'s, each rising and falling smoothly', () => {
+    for (const line of [CLEAN, BAD]) {
+      const { rig, sam, frame } = ashore(line);
+      // The host jumps: the guest's screen shows player 0 a beat behind, placed between the states it holds.
+      const seen: number[] = [];
+      for (let count = 0; count < 90; count += 1) {
+        rig.hostInput = count < 3 ? { jump: true } : {};
+        frame();
+        seen.push(leapHeight(sam.link.view()!.players[0]!.leap));
+      }
+      const top = Math.max(...seen);
+      const first = seen.findIndex((height) => height > 0);
+      const last = seen.length - 1 - [...seen].reverse().findIndex((height) => height > 0);
+      console.log(`JUMP the host's jump on a guest's screen: seen from frame ${first + 1} to ${last + 1}, top ${top.toFixed(3)} m, biggest change in one frame ${Math.max(...seen.map((height, index) => (index ? Math.abs(height - seen[index - 1]!) : 0))).toFixed(3)} m`);
+      expect(top).toBeGreaterThan(0.85);
+      expect(top).toBeLessThanOrEqual(0.9 + 1e-9);
+      // One jump, about half a second of it, and no frame where the figure pops: a step of the rules moves it 12 cm at most.
+      expect(last - first).toBeGreaterThanOrEqual(LEAP_AIR_STEPS - 8);
+      expect(last - first).toBeLessThanOrEqual(LEAP_AIR_STEPS + 8);
+      if (line === CLEAN) {
+        for (let index = 1; index < seen.length; index += 1) expect(Math.abs(seen[index]! - seen[index - 1]!)).toBeLessThan(0.2);
+      }
+      expect(seen.at(-1)).toBe(0);
+
+      // The guest jumps: the host runs it through the rules, the whole of it.
+      const hosted: number[] = [];
+      for (let count = 0; count < 120; count += 1) {
+        sam.input = count < 3 ? { jump: true } : {};
+        frame();
+        hosted.push(leapHeight(rig.game.players[1]!.leap));
+      }
+      expect(Math.max(...hosted)).toBeCloseTo(0.9, 9);
+      // In the air for the rules' 29 steps. The host walks a guest only as fast as its walk arrives, so on its screen
+      // the jump can stand still for a frame or two just after take-off, while the next message is on its way.
+      const inAir = hosted.filter((height) => height > 0).length;
+      console.log(`JUMP a guest's jump on the host's screen: in the air for ${inAir} frames (the rules' ${LEAP_AIR_STEPS - 1} steps and ${inAir - (LEAP_AIR_STEPS - 1)} of waiting)`);
+      expect(inAir).toBeGreaterThanOrEqual(LEAP_AIR_STEPS - 1);
+      if (line === CLEAN) expect(inAir).toBeLessThanOrEqual(LEAP_AIR_STEPS - 1 + 2);
+      expect(rig.settle()).toBe(true);
+    }
+  });
+
+  it('against the shore and against a tree the jump is the host\'s to the centimetre: nothing eased, jumping all the way', () => {
+    const { rig, sam, host, shown, frame } = ashore(CLEAN);
+    // Straight out past the canoe and into the lake, a jump every 0.6 s.
+    const out = bearing(camp(), rig.game.canoe.position);
+    let worstEase = 0;
+    let deepest = 0;
+    let jumps = 0;
+    for (let count = 0; count < 40 * 60; count += 1) {
+      sam.input = { moveY: 1, cameraYaw: out, ...(count % 36 < 4 ? { jump: true } : {}) };
+      const before = airborne(sam.link.view()!.players[1]!.leap);
+      frame();
+      if (!before && airborne(sam.link.view()!.players[1]!.leap)) jumps += 1;
+      worstEase = Math.max(worstEase, sam.link.walk.eased);
+      deepest = Math.min(deepest, groundHeight(shown().x, shown().z));
+    }
+    expect(jumps).toBeGreaterThan(60);
+    expect(deepest).toBeLessThan(-0.3);
+    expect(deepest).toBeGreaterThanOrEqual(-TUNING.foot.wadeDepth - 1e-9);
+    expect(worstEase).toBe(0);
+    expect(sam.link.walk.cuts).toBe(0);
+    sam.input = {};
+    rig.run(1.5);
+    expect(gap(host(), shown())).toBeLessThan(1e-9);
+    expect(rig.settle()).toBe(true);
+    expect(sam.link.mismatches).toBe(0);
+  });
+
+  it('no jump aboard: the key in a guest\'s input does nothing to the canoe or to anyone in it', () => {
+    const plain = createRig();
+    const keyed = createRig();
+    for (const [rig, jump] of [[plain, false], [keyed, true]] as const) {
+      const sam = rig.join('Sam', undefined, CLEAN);
+      rig.run(3);
+      expect(sam.link.status).toBe('playing');
+      sam.input = jump ? { paddle: 1, jump: true } : { paddle: 1 };
+      rig.hostInput = jump ? { paddle: 1, jump: true } : { paddle: 1 };
+      rig.run(3);
+      for (const player of rig.game.players) expect(player.leap).toBeUndefined();
+      expect(JSON.stringify(sam.link.view())).not.toContain('leap');
+    }
+    expect(keyed.hostHash()).toBe(plain.hostHash());
+  });
+
+  it('the host walks every step a jump plays out on after the key is up, and passes over only the ones after them', () => {
+    const line = new WalkTimeline(0);
+    // The jump key for two steps on the spot, then nothing: known up to step 200.
+    line.heard(200, [[0, 0, 0, 2, 0], [2, 0, 0, 0, 0]]);
+    const handed: string[] = [];
+    for (let tick = 0; tick < 100; tick += 1) {
+      line.account(tick);
+      const input = line.next(true);
+      handed.push(input === HOLD_INPUT ? 'hold' : input!.jump ? 'jump' : 'still');
+    }
+    expect(handed.slice(0, 2)).toEqual(['jump', 'jump']);
+    expect(handed.slice(2, 2 + LEAP_TAIL_STEPS)).toEqual(Array(LEAP_TAIL_STEPS).fill('still'));
+    expect(handed.slice(2 + LEAP_TAIL_STEPS)).toEqual(Array(100 - 2 - LEAP_TAIL_STEPS).fill('hold'));
+    expect(line.walked).toBe(200);
+    // Long enough for the air, the landing, a jump asked for at the last moment and the slowing after it.
+    expect(LEAP_TAIL_STEPS).toBe(LEAP_COAST_STEPS + COAST_STEPS);
+    expect(LEAP_COAST_STEPS).toBeGreaterThanOrEqual(LEAP_AIR_STEPS + LEAP_LAND_STEPS);
+
+    // The tail runs on over whatever is held after the key: a walk, and the stand after that walk.
+    const stream = new WalkStream();
+    stream.add({ start: 0, moveX: 0, moveY: 0, run: false, yaw: 0, jump: true });
+    stream.add({ start: 2, moveX: 0, moveY: 1, run: false, yaw: 0, jump: false });
+    stream.add({ start: 12, moveX: 0, moveY: 0, run: false, yaw: 0, jump: false });
+    expect(stream.movesAt(12 + COAST_STEPS)).toBe(true);
+    expect(stream.movesAt(2 + LEAP_TAIL_STEPS - 1)).toBe(true);
+    expect(stream.movesAt(2 + LEAP_TAIL_STEPS)).toBe(false);
+    expect(stream.movingSteps(0, 500)).toBe(2 + LEAP_TAIL_STEPS);
+    // A stand long before any jump is still passed over: a jump reaches forward only.
+    const later = new WalkStream();
+    later.add({ start: 0, moveX: 0, moveY: 0, run: false, yaw: 0, jump: false });
+    later.add({ start: 300, moveX: 0, moveY: 0, run: false, yaw: 0, jump: true });
+    later.add({ start: 303, moveX: 0, moveY: 0, run: false, yaw: 0, jump: false });
+    expect(later.movesBetween(0, 300)).toBe(false);
+    expect(later.movingSteps(0, 1000)).toBe(3 + LEAP_TAIL_STEPS);
+    // Once the host is past it, the tail is forgotten.
+    later.dropBefore(303 + LEAP_TAIL_STEPS);
+    expect(later.movesAt(303 + LEAP_TAIL_STEPS)).toBe(false);
   });
 });

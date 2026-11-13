@@ -16,7 +16,7 @@
 import * as THREE from 'three';
 import { HULL_TIERS } from '../data/index.ts';
 import type { ToolId } from '../data/index.ts';
-import { attachmentTransformForHull, seatTransformForHull } from '../sim/index.ts';
+import { airborne, attachmentTransformForHull, leapHeight, seatTransformForHull } from '../sim/index.ts';
 import { outfitOf } from './crew.ts';
 import type { Crew } from './crew.ts';
 import type { GameState } from '../sim/index.ts';
@@ -28,6 +28,7 @@ import type { Crew as Figure, HullShape, SeatedPose } from './b2/canoe.js';
 import { deckInner, deckSpan, sparsAlong } from './canoe/deck-parts.ts';
 import { buildMends, buildSheets } from './canoe/mends.ts';
 import { TOOL_CARRY, buildHandTool } from './hand-tools.ts';
+import { jumpPose } from './jump-pose.ts';
 
 interface TierMeshes {
   shape: HullShape;
@@ -99,6 +100,8 @@ interface Member {
   /** The tools this one has had in hand, each drawn the first time it is picked. One is shown at a time, ashore. */
   tools: Map<ToolId, THREE.Mesh>;
   holding: ToolId | null;
+  /** Metres the figure is drawn above the ground it is over: a jump. 0 aboard. */
+  lift: number;
 }
 
 /** What `figures()` says of one crew figure: what is drawn, not what the state asked for. */
@@ -125,6 +128,8 @@ export interface FigureReport {
   holding: ToolId | null;
   /** Where its paddle is drawn: in its hands aboard, left in the canoe while it is ashore, or nowhere (its seat is taken). */
   paddle: 'hands' | 'canoe' | null;
+  /** Metres its feet are drawn above the ground: a jump. 0 on the ground and aboard. */
+  lift: number;
 }
 
 const colourOf = (mesh: THREE.Mesh): string => {
@@ -183,7 +188,7 @@ export class CanoeView {
       figure.root.rotation.order = 'YXZ';
       member = {
         figure, seat: null, effort: 0, bailing: 0, asleep: 0, moving: 0, bailPhase: 0.6, side: 1, stride: 0, lastX: 0, lastZ: 0, afoot: false, seated: false,
-        lastSeat: null, restSide: 1, berth: new THREE.Group(), tools: new Map(), holding: null,
+        lastSeat: null, restSide: 1, berth: new THREE.Group(), tools: new Map(), holding: null, lift: 0,
       };
       member.berth.rotation.order = 'YXZ';
       this.members.set(playerId, member);
@@ -407,20 +412,24 @@ export class CanoeView {
         member.moving = 0;
         member.lastSeat = member.seat;
         member.restSide = across;
+        member.lift = 0;
         this.hold(member, null, player.id);
       } else {
         if (root.parent !== this.ashore) this.ashore.add(root);
         // The model faces +z; the game's forward is -z turned by the heading. A sleeper is laid on their back.
-        root.position.set(player.position.x, player.position.y + LYING_LIFT * member.asleep, player.position.z);
+        // A jump lifts the figure off the ground it is over; the state's own height stays the ground's (so does the camera).
+        member.lift = leapHeight(player.leap) * (1 - member.asleep);
+        root.position.set(player.position.x, player.position.y + LYING_LIFT * member.asleep + member.lift, player.position.z);
         root.rotation.set((-Math.PI / 2) * member.asleep, Math.PI - player.heading, 0);
         // The walk is this player's own change in position. Stepping out of the canoe, or a new state, is no stride.
         const walked = member.afoot && !snap ? Math.hypot(player.position.x - member.lastX, player.position.z - member.lastZ) : 0;
         if (snap) member.moving = 0;
         else if (seconds > 0) member.moving += ((walked > 0.002 ? 1 : 0) - member.moving) * Math.min(1, seconds * 8);
-        if (walked > 0 && walked < 5) member.stride += (walked / STRIDE_METRES) * Math.PI * 2;
+        // Off the ground the legs do not walk: the stride waits for the landing.
+        if (walked > 0 && walked < 5 && !airborne(player.leap)) member.stride += (walked / STRIDE_METRES) * Math.PI * 2;
         // The tool they picked is in the right hand; a sleeper has put it down.
         const tool = member.asleep < 0.5 ? player.selectedTool : null;
-        figure.stand(time, member.stride, member.moving, member.asleep, tool !== null);
+        figure.stand(time, member.stride, member.moving, member.asleep, tool !== null, jumpPose(player.leap?.steps ?? 0));
         this.hold(member, tool, player.id);
         member.afoot = true;
       }
@@ -540,6 +549,7 @@ export class CanoeView {
           legs: colourOf(member.figure.paddler.L.thigh),
           holding: member.holding,
           paddle: member.seat !== null ? 'hands' : member.berth.visible && member.berth.parent !== null ? 'canoe' : null,
+          lift: member.lift,
         };
       });
   }
