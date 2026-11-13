@@ -21,7 +21,7 @@ export interface SettingsStorage {
  */
 export type InputAction =
   // canoe
-  | 'paddle' | 'backPaddle' | 'steerPort' | 'steerStarboard' | 'powerStroke' | 'bail' | 'lantern' | 'sail'
+  | 'paddle' | 'backPaddle' | 'autoPaddle' | 'steerPort' | 'steerStarboard' | 'powerStroke' | 'bail' | 'lantern' | 'sail'
   // on foot
   | 'moveForward' | 'moveBack' | 'moveLeft' | 'moveRight' | 'run'
   // both
@@ -32,7 +32,7 @@ export type InputAction =
   | 'tool1' | 'tool2' | 'tool3' | 'tool4' | 'tool5';
 
 export const INPUT_ACTIONS: InputAction[] = [
-  'paddle', 'backPaddle', 'steerPort', 'steerStarboard', 'powerStroke', 'bail', 'lantern', 'sail',
+  'paddle', 'backPaddle', 'autoPaddle', 'steerPort', 'steerStarboard', 'powerStroke', 'bail', 'lantern', 'sail',
   'moveForward', 'moveBack', 'moveLeft', 'moveRight', 'run',
   'interact',
   'inventory', 'craft', 'canoeBuilder', 'questLog', 'map', 'pause',
@@ -43,7 +43,7 @@ export const INPUT_ACTIONS: InputAction[] = [
 export type InputContext = 'canoe' | 'foot' | 'always';
 
 export const ACTION_CONTEXT: Record<InputAction, InputContext> = {
-  paddle: 'canoe', backPaddle: 'canoe', steerPort: 'canoe', steerStarboard: 'canoe', powerStroke: 'canoe',
+  paddle: 'canoe', backPaddle: 'canoe', autoPaddle: 'canoe', steerPort: 'canoe', steerStarboard: 'canoe', powerStroke: 'canoe',
   bail: 'canoe', lantern: 'canoe', sail: 'canoe',
   moveForward: 'foot', moveBack: 'foot', moveLeft: 'foot', moveRight: 'foot', run: 'foot',
   interact: 'always',
@@ -52,7 +52,7 @@ export const ACTION_CONTEXT: Record<InputAction, InputContext> = {
 };
 
 export const ACTION_LABELS: Record<InputAction, string> = {
-  paddle: 'Paddle', backPaddle: 'Back-paddle', steerPort: 'Steer to port', steerStarboard: 'Steer to starboard',
+  paddle: 'Paddle', backPaddle: 'Back-paddle', autoPaddle: 'Auto-paddle (on and off)', steerPort: 'Steer to port', steerStarboard: 'Steer to starboard',
   powerStroke: 'Power stroke', bail: 'Bail (hold)', lantern: 'Lantern', sail: 'Raise or lower sail',
   moveForward: 'Walk forward', moveBack: 'Walk back', moveLeft: 'Walk left', moveRight: 'Walk right', run: 'Run',
   interact: 'Land / interact / scavenge / board',
@@ -69,6 +69,7 @@ export const MAXIMUM_KEYS_PER_ACTION = 2;
 export const DEFAULT_KEY_BINDINGS: Readonly<KeyBindings> = Object.freeze({
   paddle: ['KeyW', 'ArrowUp'],
   backPaddle: ['KeyS', 'ArrowDown'],
+  autoPaddle: ['KeyQ'],
   steerPort: ['KeyA', 'ArrowLeft'],
   steerStarboard: ['KeyD', 'ArrowRight'],
   powerStroke: ['ShiftLeft', 'ShiftRight'],
@@ -211,6 +212,19 @@ function sanitizeKeyBindings(value: unknown): KeyBindings {
     if (!Array.isArray(keys)) continue;
     const cleaned = keys.filter((key): key is string => typeof key === 'string' && key.length > 0);
     bindings[action] = [...new Set(cleaned)].slice(0, MAXIMUM_KEYS_PER_ACTION);
+  }
+  return giveNewActionsTheirKeys(source, bindings);
+}
+
+/**
+ * Bindings stored before an action existed have no keys for it, so it takes its default. A default key the player
+ * has already given to something it would clash with stays theirs: the new action is left for them to bind.
+ */
+function giveNewActionsTheirKeys(source: Record<string, unknown>, bindings: KeyBindings): KeyBindings {
+  if (Object.keys(source).length === 0) return bindings;
+  for (const action of INPUT_ACTIONS) {
+    if (Array.isArray(source[action])) continue;
+    bindings[action] = bindings[action].filter((keyCode) => findBindingConflicts(bindings, action, keyCode).length === 0);
   }
   return bindings;
 }

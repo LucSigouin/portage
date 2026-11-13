@@ -11,7 +11,7 @@ import {
   step, terrainHeight,
 } from '../src/sim/index.ts';
 import type { GameEvent, GameState, PlayerState, StepInput } from '../src/sim/index.ts';
-import { countIn, floatCanoeAt, newGame, standOn } from './support.ts';
+import { bedSide, countIn, floatCanoeAt, newGame, standOn } from './support.ts';
 
 const DAY = TUNING.time.daySeconds;
 const HOUR = TUNING.time.hourSeconds;
@@ -58,13 +58,13 @@ function putAtNode(player: PlayerState, nodeId: string): void {
   putAshore(player, node.islandId, node.position.x + 0.5, node.position.z);
 }
 
-/** The canoe beached at Home Knoll with the whole crew standing at the camp fire, fed and rested. */
+/** The canoe beached at Home Knoll with the whole crew in camp, in a row by the lean-to, fed and rested. */
 function crewAtCamp(crew: number): GameState {
   const state = newGame(7, { crew });
   standOn(state, 'home_knoll');
-  const camp = spotPosition(ISLANDS_BY_ID.home_knoll, ISLANDS_BY_ID.home_knoll.camp!.spot);
   state.players.forEach((player, index) => {
-    putAshore(player, 'home_knoll', camp.x + 1 + index * 0.8, camp.z);
+    const spot = bedSide('home_knoll', index);
+    putAshore(player, 'home_knoll', spot.x, spot.z);
     player.hunger = 100;
     player.thirst = 100;
     player.energy = 100;
@@ -142,6 +142,9 @@ describe('inputs are per player', () => {
 
   it('walks each player on foot where their own input points', () => {
     const state = crewAtCamp(3);
+    // Out on open ground west of the camp, one a metre behind the other: the lean-to, the fire and the trees are
+    // solid (Luc's list, line 1), and this is about whose keys move whom.
+    state.players.forEach((player, index) => putAshore(player, 'home_knoll', -9, 1150 + index));
     const before = state.players.map((player) => ({ ...player.position }));
     runCrew(state, [{ moveX: 1 }, {}, { moveX: -1, cameraYaw: 0 }], 1);
     expect(state.players[0].position.x).toBeGreaterThan(before[0].x + 2);

@@ -3,7 +3,7 @@
  * up. Solo is covered by the rest of the suite and by the six bot fingerprints.
  */
 import { describe, expect, it } from 'vitest';
-import { ISLANDS_BY_ID, TUNING, spotPosition } from '../src/data/index.ts';
+import { ISLANDS_BY_ID, TUNING } from '../src/data/index.ts';
 import type { IslandId } from '../src/data/index.ts';
 import { deserialize, serialize } from '../src/save/index.ts';
 import { countHeld } from '../src/sim/inventory.ts';
@@ -12,7 +12,7 @@ import {
   setConnected, setPlayerName, step, terrainHeight,
 } from '../src/sim/index.ts';
 import type { GameEvent, GameState, PlayerState, StepInput } from '../src/sim/index.ts';
-import { floatCanoeAt, newGame, standOn } from './support.ts';
+import { bedSide, floatCanoeAt, newGame, standOn } from './support.ts';
 
 const DAY = TUNING.time.daySeconds;
 const HOUR = TUNING.time.hourSeconds;
@@ -34,13 +34,13 @@ function putAshore(player: PlayerState, islandId: IslandId, x: number, z: number
   player.position = { x, y: terrainHeight(x, z), z };
 }
 
-/** The canoe beached at Home Knoll, everyone fed and rested in a row by the fire. */
+/** The canoe beached at Home Knoll, everyone fed and rested in a row by the lean-to. */
 function crewAtCamp(crew: number): GameState {
   const state = newGame(7, { crew });
   standOn(state, 'home_knoll');
-  const camp = spotPosition(ISLANDS_BY_ID.home_knoll, ISLANDS_BY_ID.home_knoll.camp!.spot);
   state.players.forEach((player, index) => {
-    putAshore(player, 'home_knoll', camp.x + 1 + index * 0.8, camp.z);
+    const spot = bedSide('home_knoll', index);
+    putAshore(player, 'home_knoll', spot.x, spot.z);
     Object.assign(player, { hunger: 100, thirst: 100, energy: 100 });
   });
   drainEvents(state);

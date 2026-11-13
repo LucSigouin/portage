@@ -112,14 +112,13 @@ export function questGateOpen(state: GameState, questId: QuestId, nodeId: NodeId
 const isOpen = (questState: QuestState): boolean => questState.status === 'active' || questState.status === 'ready';
 
 /**
- * Whether a step is remembered before its quest is given. Everything is, but
- * three kinds of step belong to the quest's own time: a hand-over (checked
- * live, when the quest asks), and the tutorial acts craft and sleep ("boil
- * water", "cook a meal", "sleep at the lean-to"). Those repeat from things
- * that grow back, so doing them again can never strand a quest.
+ * Whether a step is remembered before its quest is given. Everything is, a craft too: pitch cooked before "Stop
+ * the leak" opens counts toward "Cook pitch" (Luc's list, line 6; review finding 14). Two kinds of step belong to
+ * the quest's own time: a hand-over (checked live, when the quest asks) and sleep ("sleep at the lean-to"), which
+ * can be done again any night, so it can never strand a quest.
  */
 const countsBeforeGiven = (objective: ObjectiveDefinition): boolean =>
-  objective.type !== 'deliver' && objective.type !== 'craft' && objective.type !== 'sleep';
+  objective.type !== 'deliver' && objective.type !== 'sleep';
 
 function setProgress(state: GameState, questId: QuestId, index: number, value: number): void {
   const questState = state.quests[questId];

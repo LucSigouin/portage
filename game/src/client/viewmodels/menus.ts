@@ -120,6 +120,7 @@ export function buildHowToPlayPanel(settings: Settings): PanelBody<'how_to_play'
         lines: ['The leaky hull takes on water: bail it. Rough water floods any hull that is not steady enough for it.'],
         controls: [
           control('Paddle, back-paddle', 'paddle', 'backPaddle'),
+          control('Auto-paddle: press again, or paddle, to stop', 'autoPaddle'),
           control('Steer', 'steerPort', 'steerStarboard'),
           control('Power stroke (costs energy)', 'powerStroke'),
           control('Bail (hold)', 'bail'),

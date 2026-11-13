@@ -1,14 +1,16 @@
-import type { IslandId, ItemAmount, NodeDefinition, NodeId, NpcId } from '../data/types.ts';
+import type { ItemAmount, LandmarkKind, NodeDefinition, NodeId, NpcId } from '../data/types.ts';
+import { ATTACHMENTS, attachmentTransformForHull } from '../data/canoe.ts';
 import { NPCS, NPC_IDS } from '../data/dialogue.ts';
 import { ITEMS } from '../data/items.ts';
 import { LOOT_TABLES, NODES, NODES_BY_ISLAND } from '../data/nodes.ts';
 import { TUNING } from '../data/tuning.ts';
 import { CAMP_LAYOUTS, ISLANDS_BY_ID, spotPosition } from '../data/world.ts';
 import {
-  campInReach, emit, emptyMissing, grantItems, hasAttachment, hasMissing, hasTool,
+  distanceToBed, emit, emptyMissing, grantItems, hasAttachment, hasMissing, hasTool,
 } from './inventory.ts';
 import { questGateOpen, updateQuests } from './quests.ts';
 import { nextRandom, randomInteger } from './random.ts';
+import { approachTo, bodyBlocked, freeSpotNear } from './solids.ts';
 import { findStandingSpot, terrainHeight } from './world.ts';
 import type { Command, GameState, Missing, NodeState, PlayerState } from './types.ts';
 
@@ -38,7 +40,25 @@ export type Interactable =
   | { kind: 'npc'; npcId: NpcId; name: string; prompt: string; command: Command; distance: number }
   | { kind: 'board'; name: string; prompt: string; command: Command; distance: number }
   | { kind: 'land'; name: string; prompt: string; command: Command; distance: number }
-  | { kind: 'bed'; name: string; prompt: string; command: Command; distance: number };
+  | { kind: 'bed'; name: string; prompt: string; command: Command; distance: number }
+  /**
+   * A bench to work at: the stump bench in a camp, or the workbench on the canoe. No command: the interact key opens
+   * the crafting panel, as the crafting key does (Luc's list, line 21). The panel is the screen's, not the rules'.
+   */
+  | { kind: 'bench'; name: string; prompt: string; distance: number };
+
+/** The camp landmarks that are a bench to work at. */
+const BENCH_KINDS: readonly LandmarkKind[] = ['stump_bench'];
+
+/** Where the workbench stands on the canoe now, in world metres: its mount, turned with the hull. */
+export function workbenchPosition(state: GameState): { x: number; z: number } {
+  const canoe = state.canoe;
+  const [x, , z] = attachmentTransformForHull('workbench', Math.max(canoe.hullTier, ATTACHMENTS.workbench.minimumHullTier)).position;
+  // Canoe space: starboard is +x, the bow is -z.
+  const forwardX = Math.sin(canoe.heading);
+  const forwardZ = -Math.cos(canoe.heading);
+  return { x: canoe.position.x + forwardX * -z - forwardZ * x, z: canoe.position.z + forwardZ * -z + forwardX * x };
+}
 
 export function actionReady(state: GameState, nodeId: NodeId, actionIndex: number): boolean {
   const nodeState = state.nodes[nodeId];
@@ -150,33 +170,20 @@ const ELBOW_ROOM = 0.6;
 export function clearSpot(state: GameState, player: PlayerState, spot: { x: number; z: number }): { x: number; z: number } {
   const crowded = (x: number, z: number): boolean => state.players.some((other) => other !== player && other.mode === 'foot'
     && Math.hypot(other.position.x - x, other.position.z - z) < ELBOW_ROOM);
-  if (!crowded(spot.x, spot.z)) return spot;
+  // Never inside a tree, a rock or a landmark: the nearest clear ground, where there is any.
+  const clear = bodyBlocked(spot.x, spot.z) ? freeSpotNear(spot.x, spot.z, CLEAR_REACH) ?? spot : spot;
+  if (!crowded(clear.x, clear.z)) return clear;
   for (let step = 0; step < 8; step += 1) {
     const angle = state.canoe.heading + (step / 8) * 2 * Math.PI;
-    const x = spot.x + Math.sin(angle) * 0.9;
-    const z = spot.z - Math.cos(angle) * 0.9;
-    if (terrainHeight(x, z) >= -TUNING.foot.disembarkDepth && !crowded(x, z)) return { x, z };
+    const x = clear.x + Math.sin(angle) * 0.9;
+    const z = clear.z - Math.cos(angle) * 0.9;
+    if (terrainHeight(x, z) >= -TUNING.foot.disembarkDepth && !crowded(x, z) && !bodyBlocked(x, z)) return { x, z };
   }
-  return spot;
+  return clear;
 }
 
-/**
- * How far the player is from somewhere to lie down in this camp, or null when they are at none: beside the fire,
- * or at the camp's bed (the lean-to, a bedroll, the keeper's hut).
- */
-function distanceToBed(islandId: IslandId, player: PlayerState): number | null {
-  const layout = CAMP_LAYOUTS[islandId];
-  if (!layout) return null;
-  const { x, z } = player.position;
-  let nearest: number | null = null;
-  const fire = Math.hypot(layout.fire.x - x, layout.fire.z - z);
-  if (fire <= TUNING.foot.nodeRange) nearest = fire;
-  for (const bed of layout.beds) {
-    const distance = Math.hypot(bed.x - x, bed.z - z);
-    if (distance <= TUNING.foot.campLandmarkRange && (nearest === null || distance < nearest)) nearest = distance;
-  }
-  return nearest;
-}
+/** How far a landing or a waking looks for clear ground round a spot in a solid, metres. */
+const CLEAR_REACH = 4;
 
 /** The nearest thing the interact key would act on for this player, or null. */
 export function findInteractable(state: GameState, player: PlayerState): Interactable | null {
@@ -204,7 +211,9 @@ export function findInteractable(state: GameState, player: PlayerState): Interac
     for (const definition of NODES_BY_ISLAND[player.islandId]) {
       if (definition.reach !== 'foot') continue;
       const distance = Math.hypot(definition.position.x - player.position.x, definition.position.z - player.position.z);
-      if (distance <= TUNING.foot.nodeRange) consider(nodeInteractable(state, player, definition, distance));
+      // A spot inside a landmark (an attic in a roof, the lamp at the tower's foot) is reached from its edge.
+      const depth = approachTo(definition.position.x, definition.position.z).depth;
+      if (distance <= TUNING.foot.nodeRange + depth) consider(nodeInteractable(state, player, definition, distance - depth));
     }
     for (const npcId of NPC_IDS) {
       const npc = NPCS[npcId];
@@ -215,11 +224,22 @@ export function findInteractable(state: GameState, player: PlayerState): Interac
         consider({ kind: 'npc', npcId, name: npc.name, prompt: `Talk to ${npc.name}`, command: { type: 'talk', npcId }, distance });
       }
     }
-    const camp = campInReach(player);
-    if (camp?.camp?.sleep) {
-      const distance = distanceToBed(camp.id, player);
-      if (distance !== null) consider({ kind: 'bed', name: 'Camp', prompt: 'Sleep until morning', command: { type: 'sleep' }, distance });
+    // A bench: F opens the crafting panel. Only where the camp has the bench station.
+    if (ISLANDS_BY_ID[player.islandId].camp?.stations.includes('bench')) {
+      for (const landmark of CAMP_LAYOUTS[player.islandId]?.landmarks ?? []) {
+        if (!BENCH_KINDS.includes(landmark.kind)) continue;
+        const distance = Math.hypot(landmark.x - player.position.x, landmark.z - player.position.z);
+        if (distance <= TUNING.foot.benchRange) consider({ kind: 'bench', name: 'Stump bench', prompt: 'Use the bench', distance });
+      }
     }
+    // Only a bed sleeps: the lean-to, a bedroll, the keeper's hut. The fire warms and cooks.
+    const bed = distanceToBed(player);
+    if (bed !== null) consider({ kind: 'bed', name: 'Camp', prompt: 'Sleep until morning', command: { type: 'sleep' }, distance: bed });
+  }
+  if (hasAttachment(state, 'workbench')) {
+    const bench = workbenchPosition(state);
+    const distance = Math.hypot(bench.x - player.position.x, bench.z - player.position.z);
+    if (distance <= TUNING.foot.workbenchRange) consider({ kind: 'bench', name: 'Workbench', prompt: 'Use the bench', distance });
   }
   const hullDistance = distanceToHull(state, player.position.x, player.position.z);
   if (hullDistance <= TUNING.canoe.boardRange) {
@@ -285,9 +305,8 @@ export function completeHarvest(state: GameState, player: PlayerState, definitio
     nodeState.leftover.push(stack);
     emit(state, { type: 'item_left_behind', nodeId: definition.id, itemId: stack.itemId, count: stack.count }, player);
   }
-  nodeState.readyAt[actionIndex] = action.respawnDays === null
-    ? null
-    : state.time + action.respawnDays * TUNING.time.daySeconds;
+  // One wait for every action that refills (Luc, 2026-11-13: ten minutes); a never stays empty for good.
+  nodeState.readyAt[actionIndex] = action.respawnDays === null ? null : state.time + TUNING.nodes.refillSeconds;
   player.energy = Math.max(0, player.energy - action.energyCost);
   state.statistics.nodesHarvested += 1;
   emit(state, { type: 'node_depleted', nodeId: definition.id }, player);

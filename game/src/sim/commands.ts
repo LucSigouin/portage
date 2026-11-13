@@ -12,6 +12,7 @@ import {
   addToStacks, cargoAccessible, countAccessible, countInStacks, emit, emptyMissing, freeSeat, grantItems,
   hasAttachment, hasTool, playerOf, removeFromStacks, slotsOf, spendItems, stacksOf,
 } from './inventory.ts';
+import { returnLostGifts } from './keepsakes.ts';
 import { acceptQuest, notifyTalked, turnInQuest, updateQuests } from './quests.ts';
 import { sleep, sleepBlocked } from './survival.ts';
 import type { Command, CommandResult, Container, GameState, PlayerId, PlayerState } from './types.ts';
@@ -256,6 +257,8 @@ export function dispatch(state: GameState, command: Command, playerId: PlayerId 
       if (!entry) return failure('npc_out_of_reach');
       player.dialogue = { npcId: command.npcId, nodeId: entry.nodeId };
       emit(state, { type: 'dialogue_opened', npcId: command.npcId }, player);
+      // A one-time gift of theirs that is gone comes back with the word (sim/keepsakes.ts).
+      returnLostGifts(state, command.npcId, player);
       notifyTalked(state, command.npcId);
       updateQuests(state, player);
       return success();

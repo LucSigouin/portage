@@ -16,7 +16,7 @@ import { GAME_VERSION, versionLine } from '../../src/client/version.ts';
 import { dispatch, selectInteractable } from '../../src/sim/index.ts';
 import type { GameEvent, GameState, Missing } from '../../src/sim/index.ts';
 import { SETTINGS_TABS } from '../../src/client/panels.ts';
-import { floatCanoeAt, give, newGame, run, standOn, teleport, teleportToCamp, teleportToNode } from '../support.ts';
+import { floatCanoeAt, give, newGame, run, standOn, teleport, teleportToBed, teleportToCamp, teleportToNode } from '../support.ts';
 
 const settings = createDefaultSettings();
 /** Every source file of the game, as text. */
@@ -153,7 +153,7 @@ describe('the HUD', () => {
   it('offers a bed no key before the sleep hour, says the hour from the rules\' table, and offers the key from then on', () => {
     const state = newGame();
     standOn(state, 'home_knoll');
-    teleportToCamp(state, 'home_knoll');
+    teleportToBed(state, 'home_knoll');
     const hour = TUNING.time.hourSeconds;
     const from = TUNING.time.sleepFromHour;
     const clock = `${String(from).padStart(2, '0')}:00`;
@@ -425,8 +425,9 @@ describe('the panels', () => {
     expect(panel.stow.enabled).toBe(true);
     expect(panel.tools.map((tool) => tool.name)).toEqual(['Bailing can']);
 
-    // Out of reach of the canoe: the cargo is shown but nothing moves.
+    // Out of reach of the canoe (paddled off, so not landed here): the cargo is shown but nothing moves.
     teleport(state, 'home_knoll', 0, 1150);
+    state.canoe.beached = false;
     const away = buildInventoryPanel(state);
     expect(away.cargo.accessible).toBe(false);
     expect(away.cargo.label).toContain('out of reach');

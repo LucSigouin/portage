@@ -159,7 +159,8 @@ describe('discrete presses', () => {
     expect(input.handlesKey('Tab')).toBe(true);
     expect(input.handlesKey('KeyW')).toBe(true);
     expect(input.handlesKey('Escape')).toBe(true);
-    expect(input.handlesKey('KeyQ')).toBe(false);
+    expect(input.handlesKey('KeyQ')).toBe(true); // the auto-paddle
+    expect(input.handlesKey('KeyZ')).toBe(false);
   });
 });
 

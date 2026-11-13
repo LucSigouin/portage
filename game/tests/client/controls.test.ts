@@ -57,11 +57,13 @@ describe('F is the main action key', () => {
     expect(wood).toBeGreaterThanOrEqual(3);
     expect(game.statistics.nodesHarvested).toBe(1);
 
-    // Pick up: a full backpack leaves the next haul on the node; one press takes it once there is room.
+    // Pick up: a full backpack and a full cargo (the canoe is landed here, so it takes the overflow) leave the next
+    // haul on the node; one press takes it once there is room.
     const second = NODES_BY_ISLAND.home_knoll.filter((node) => node.typeId === 'driftwood_pile')[1].id;
     teleportToNode(game, second);
     const kept = player.backpack.splice(0);
     for (let slot = 0; slot < 8; slot += 1) give(game, 'stone', 20);
+    for (let slot = game.canoe.cargo.length; slot < 8; slot += 1) give(game, 'stone', 20, 'cargo');
     tap(session, 'KeyF');
     expect(game.nodes[second].leftover.length).toBeGreaterThan(0);
     player.backpack.splice(0);

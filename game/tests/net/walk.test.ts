@@ -626,12 +626,12 @@ describe('things done on foot', () => {
       const { rig, sam, view, host, shown, frame } = landed(line);
       // Up the beach until the canoe is out of reach, then back down to it.
       sam.input = { moveY: 1, cameraYaw: bearing(shown(), camp()) };
-      for (let count = 0; count < 600 && selectInteractable(view(), 1)?.command.type === 'board'; count += 1) frame();
-      expect(selectInteractable(view(), 1)?.command.type).not.toBe('board');
+      for (let count = 0; count < 600 && selectInteractable(view(), 1)?.kind === 'board'; count += 1) frame();
+      expect(selectInteractable(view(), 1)?.kind).not.toBe('board');
       rig.run(0.5);
       sam.input = { moveY: 1, cameraYaw: bearing(shown(), rig.game.canoe.position) };
-      for (let count = 0; count < 600 && selectInteractable(view(), 1)?.command.type !== 'board'; count += 1) frame();
-      expect(selectInteractable(view(), 1)?.command.type).toBe('board');
+      for (let count = 0; count < 600 && selectInteractable(view(), 1)?.kind !== 'board'; count += 1) frame();
+      expect(selectInteractable(view(), 1)?.kind).toBe('board');
       // The key stays down, as a player's would.
       const asked = { ...shown() };
       sam.link.sendCommand({ type: 'board' });

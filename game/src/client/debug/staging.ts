@@ -12,7 +12,7 @@ import {
 } from '../../data/index.ts';
 import type { IslandId, ItemId, QuestId, WeatherKind } from '../../data/index.ts';
 import {
-  FIXED_STEP, NEUTRAL_INPUT, addPlayer, createGame, dispatch, drainEvents, landingBerth, setConnected, step, terrainHeight,
+  FIXED_STEP, NEUTRAL_INPUT, addPlayer, bodyBlocked, createGame, dispatch, drainEvents, freeSpotNear, landingBerth, setConnected, step, terrainHeight,
 } from '../../sim/index.ts';
 import type { GameState, StepInput } from '../../sim/index.ts';
 import type { OpenablePanelId } from '../intents.ts';
@@ -52,12 +52,12 @@ export function addIdleCrew(state: GameState, crew: number): GameState {
     // Nobody plays a stand-in: they are away, so they never starve and never hold up the night.
     setConnected(state, extra.id, false, true);
     if (lead.mode !== 'foot') continue;
-    // A step to the lead's right for each one, wherever the ground allows.
+    // A step to the lead's right for each one, wherever the ground allows and nothing solid stands.
     const side = lead.heading + Math.PI / 2;
     const reach = 0.9 * (state.players.length - 1);
     const x = lead.position.x + Math.sin(side) * reach;
     const z = lead.position.z - Math.cos(side) * reach;
-    const dry = terrainHeight(x, z) >= 0;
+    const dry = terrainHeight(x, z) >= 0 && !bodyBlocked(x, z);
     extra.mode = 'foot';
     extra.seat = null;
     extra.islandId = lead.islandId;
@@ -182,7 +182,9 @@ export function stageShot(name: ShotName, seed: number = BOT_SEED): StagedShot {
       const state = gameAfterQuest(seed, 'a_proper_edge');
       beachAt(state, 'home_knoll');
       const camp = spotPosition(ISLANDS_BY_ID.home_knoll, ISLANDS_BY_ID.home_knoll.camp!.spot);
-      teleport(state, 'home_knoll', camp.x + 1.5, camp.z);
+      // The fire is solid (Luc's list, line 1): stand beside it, not in its ring.
+      const byFire = freeSpotNear(camp.x + 1.5, camp.z, 3) ?? { x: camp.x + 1.5, z: camp.z };
+      teleport(state, 'home_knoll', byFire.x, byFire.z);
       give(state, 'fiber', 6, 'backpack');
       give(state, 'driftwood', 6, 'backpack');
       give(state, 'dirty_water', 2, 'backpack');

@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { TUNING } from '../src/data/index.ts';
 import { dispatch, selectMeters, selectTimeOfDay } from '../src/sim/index.ts';
-import { build, countIn, floatCanoeAt, give, newGame, run, standOn, teleport, teleportToCamp } from './support.ts';
+import { build, countIn, floatCanoeAt, give, newGame, run, standOn, teleport, teleportToBed } from './support.ts';
 
 const DAY = TUNING.time.daySeconds;
 
-/** Standing idle at the Home Knoll camp at 08:00, meters full. */
+/** Standing idle at the Home Knoll camp, by the lean-to, at 08:00, meters full. */
 function atCamp(difficulty: 'relaxed' | 'standard' = 'standard') {
   const state = newGame(7, { difficulty });
   standOn(state, 'home_knoll');
-  teleportToCamp(state, 'home_knoll');
+  teleportToBed(state, 'home_knoll');
   state.players[0].hunger = 100;
   state.players[0].thirst = 100;
   state.players[0].energy = 100;
@@ -193,7 +193,7 @@ describe('sleep', () => {
     teleport(state, 'home_knoll', 30, 1170);
     state.time = 23 * 60;
     expect(dispatch(state, { type: 'sleep' })).toMatchObject({ ok: false, reason: 'no_bed_in_reach' });
-    teleportToCamp(state, 'home_knoll');
+    teleportToBed(state, 'home_knoll');
     state.time = 8 * 60;
     state.players[0].energy = 45;
     expect(dispatch(state, { type: 'sleep' }).ok).toBe(true);

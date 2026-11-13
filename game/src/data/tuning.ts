@@ -114,6 +114,8 @@ export const TUNING = {
   foot: {
     walkSpeed: 2.6,
     runSpeed: 4.4,
+    /** A walker's half-width: how close their middle comes to a trunk, a rock or a wall (Luc's list, line 1). */
+    bodyRadius: 0.3,
     /** Steepest climb, as rise over run (tan 40 degrees). */
     slopeLimit: 0.839,
     wadeDepth: 0.6,
@@ -126,6 +128,20 @@ export const TUNING = {
     campLandmarkRange: 4,
     /** Largest standing depth when stepping out of the canoe, metres. */
     disembarkDepth: 0.5,
+    /** The interact key offers "Use the bench" this close to a camp's stump bench, metres. */
+    benchRange: 2.5,
+    /** And this close to the workbench on the canoe's port deck, so the rest of the hull still offers boarding. */
+    workbenchRange: 1.8,
+  },
+
+  nodes: {
+    /**
+     * Every scavenge action that refills comes back this long after it was used, seconds of the world clock (a real
+     * second while playing; a night slept passes it too). Luc, 2026-11-13: "refills should be every 10 mins, for
+     * everything except the nevers". It was 0.5 to 4 game days, set spot by spot. The nevers (message bottles,
+     * caches, the sunken lockers, the Beacon lamp) are marked in `data/nodes.ts` and never come back.
+     */
+    refillSeconds: 10 * 60,
   },
 
   inventory: {

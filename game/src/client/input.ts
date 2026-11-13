@@ -32,7 +32,9 @@ export type InputOutcome =
   | { type: 'escape' }
   /** A rebind capture took a key. `unbound` lists the actions that lost it. */
   | { type: 'rebound'; action: InputAction; slot: number; keyCode: string; bindings: KeyBindings; unbound: InputAction[] }
-  | { type: 'rebind_cancelled' };
+  | { type: 'rebind_cancelled' }
+  /** The auto-paddle went on or off (Luc's list, line 14). */
+  | { type: 'auto_paddle'; on: boolean };
 
 export interface InputOptions {
   keyBindings: KeyBindings;
@@ -73,6 +75,8 @@ export class InputController {
   private yawDelta = 0;
   private pitchDelta = 0;
   private zoomDelta = 0;
+  /** Paddling forward on its own: Q starts it, Q again, a paddle key or leaving the canoe stops it. */
+  private autoPaddling = false;
 
   constructor(options: InputOptions) {
     this.options = { ...options, keyBindings: cloneKeyBindings(options.keyBindings) };
@@ -138,11 +142,16 @@ export class InputController {
     const panel = PANEL_FOR_ACTION[action];
     if (panel) return [{ type: 'toggle_panel', panel }];
     if (!snapshot) return [];
+    const autoPaddle = this.autoPaddleKey(action, snapshot);
+    if (autoPaddle) return [autoPaddle];
 
     switch (action) {
       case 'interact':
+        if (!snapshot.interactable) return [];
+        // At a bench the key opens the crafting panel, as the crafting key does.
+        if (snapshot.interactable.kind === 'bench') return [{ type: 'toggle_panel', panel: 'crafting' }];
         // Land, board, talk, sleep, scavenge, pick up: one press, one command.
-        return snapshot.interactable ? [{ type: 'command', command: snapshot.interactable.command }] : [];
+        return [{ type: 'command', command: snapshot.interactable.command }];
       case 'lantern':
         return [{ type: 'command', command: { type: 'toggle_lantern' } }];
       case 'sail':
@@ -155,6 +164,25 @@ export class InputController {
         return [{ type: 'command', command: { type: 'select_tool', toolId: snapshot.selectedTool === toolId ? null : toolId } }];
       }
     }
+  }
+
+  /** True while the canoe is paddled forward on its own. */
+  get autoPaddle(): boolean {
+    return this.autoPaddling;
+  }
+
+  /** Q toggles the auto-paddle aboard; a paddle key, forward or back, stops it. Null when the key is not about it. */
+  private autoPaddleKey(action: InputAction, snapshot: InputSnapshot): InputOutcome | null {
+    if (action === 'autoPaddle') {
+      if (snapshot.mode !== 'canoe') return null;
+      this.autoPaddling = !this.autoPaddling;
+      return { type: 'auto_paddle', on: this.autoPaddling };
+    }
+    if (this.autoPaddling && (action === 'paddle' || action === 'backPaddle')) {
+      this.autoPaddling = false;
+      return { type: 'auto_paddle', on: false };
+    }
+    return null;
   }
 
   keyUp(keyCode: string): void {
@@ -177,8 +205,10 @@ export class InputController {
     const axis = (positive: InputAction, negative: InputAction): number =>
       (this.isHeld(positive) ? 1 : 0) - (this.isHeld(negative) ? 1 : 0);
     const input: StepInput = { ...NEUTRAL_INPUT, cameraYaw };
+    // Ashore, the auto-paddle is over: it does not come back on at the next boarding.
+    if (snapshot.mode !== 'canoe') this.autoPaddling = false;
     if (snapshot.mode === 'canoe') {
-      input.paddle = axis('paddle', 'backPaddle');
+      input.paddle = axis('paddle', 'backPaddle') || (this.autoPaddling ? 1 : 0);
       input.steer = axis('steerStarboard', 'steerPort');
       input.powerStroke = this.isHeld('powerStroke');
       input.bail = this.isHeld('bail');

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ISLANDS, ISLANDS_BY_ID, NODES, NODE_IDS, NODES_BY_ID, NPCS, NPC_IDS, REGIONS, TUNING, WAVE_TABLE, spotPosition,
 } from '../src/data/index.ts';
-import { findFootPath } from '../src/bot/navigation.ts';
+import { findFootPath, walkGoal } from '../src/bot/navigation.ts';
 import {
   baseRoughnessAt, currentAt, hullGrounding, islandAt, islandLanding, landingBerth, regionAt, terrainHeight,
   valleyHalfWidth, waterRoughnessAt, waveGradient, waveHeight, waveNormal,
@@ -202,7 +202,8 @@ describe('node placement', () => {
         if (NPCS[npcId].islandId === island.id) targets.push({ label: npcId, ...spotPosition(island, NPCS[npcId].spot) });
       }
       for (const target of targets) {
-        expect(findFootPath(island.id, shore, target), target.label).not.toBeNull();
+        // Where the rules let you stand to use it: the fire and the landmarks are solid (Luc's list, line 1).
+        expect(findFootPath(island.id, shore, walkGoal(target, TUNING.foot.nodeRange).target), target.label).not.toBeNull();
       }
     }
   });

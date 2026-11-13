@@ -4,7 +4,7 @@ import { WEATHER } from '../data/weather.ts';
 import { beachCanoe, settleCanoe } from './canoe.ts';
 import { clearSpot, disembarkSpot, shoreSpotBeside } from './interact.ts';
 import {
-  addToStacks, atCanoe, campInReach, cargoSlots, connectedPlayers, emit, freeSeat, hasAttachment, playersAboard,
+  addToStacks, atCanoe, campInReach, cargoSlots, connectedPlayers, distanceToBed, emit, freeSeat, hasAttachment, playersAboard,
 } from './inventory.ts';
 import { notifySlept, updateQuests } from './quests.ts';
 import type { FailCause, GameState, ItemStack, PlayerState } from './types.ts';
@@ -144,8 +144,8 @@ export type SleepBlock = 'no_bed_in_reach' | 'not_tired';
 /** Why this player cannot sleep here and now, or null. */
 export function sleepBlocked(state: GameState, player: PlayerState): SleepBlock | null {
   const aboardBed = atCanoe(state, player) && state.canoe.beached && hasAttachment(state, 'canopy');
-  const camp = campInReach(player);
-  if (!aboardBed && !camp?.camp?.sleep) return 'no_bed_in_reach';
+  // A camp's bed, not its fire: the lean-to, a bedroll, the keeper's hut.
+  if (!aboardBed && distanceToBed(player) === null) return 'no_bed_in_reach';
   const hour = hourOfDay(state.time);
   const bedtime = hour >= TUNING.time.sleepFromHour || hour < TUNING.time.dawnHour;
   if (!bedtime && player.energy > TUNING.time.sleepWhenEnergyAtMost) return 'not_tired';

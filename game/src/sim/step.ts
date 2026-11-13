@@ -4,6 +4,7 @@ import { ISLANDS, START } from '../data/world.ts';
 import type { CrewMember } from './canoe.ts';
 import { stepOnFoot } from './foot.ts';
 import { connectedPlayers, emit, freeSeat, playerOf } from './inventory.ts';
+import { refillLostFinds } from './keepsakes.ts';
 import { createQuestStates, updateQuests } from './quests.ts';
 import { seedToRandomState } from './random.ts';
 import { applyCapsize, applyExhaustion, skipNightIfCrewAsleep, updatePassiveAttachments, updateSurvival } from './survival.ts';
@@ -229,6 +230,7 @@ function fixedStep(state: GameState, inputs: readonly (StepInput | undefined)[])
   updatePassiveAttachments(state, deltaSeconds, timeBefore);
   if (state.tick % 10 === 0) {
     for (const player of state.players) updateSurroundings(state, player);
+    refillLostFinds(state);
     updateQuests(state);
   }
 

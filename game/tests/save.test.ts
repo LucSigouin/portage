@@ -6,7 +6,7 @@ import type { SaveMigration, SaveStore } from '../src/save/index.ts';
 import { FIXED_STEP, NEUTRAL_INPUT, bearingDifference, dispatch, hashState, step } from '../src/sim/index.ts';
 import { MAIN_QUESTS, TUNING } from '../src/data/index.ts';
 import { createBotDriver } from '../src/bot/bot.ts';
-import { FakeStorage, give, newGame, run, standOn, teleportToCamp } from './support.ts';
+import { FakeStorage, give, newGame, run, standOn, teleportToBed } from './support.ts';
 
 /** A game with some history in it. */
 function playedGame() {
@@ -402,7 +402,7 @@ describe('autosave', () => {
     expect(landed.ok && landed.state.players[0].mode).toBe('foot');
 
     standOn(state, 'home_knoll');
-    teleportToCamp(state, 'home_knoll');
+    teleportToBed(state, 'home_knoll');
     state.time = 23 * 60;
     state.events = [];
     dispatch(state, { type: 'sleep' });
