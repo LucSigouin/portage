@@ -10,7 +10,7 @@ import type { AddressInfo } from 'node:net';
 import { after, before, describe, it } from 'node:test';
 import { DIALS_PER_MINUTE, DIAL_WINDOW_SECONDS, TOO_MANY_DIALS } from '../src/dial.ts';
 import { CLOSE, LIMITS, RELAY_PROTOCOL } from '../src/room.ts';
-import { awayFromTheMinuteTurn, dial, freshCode, knock, pause, startRelay } from './support.ts';
+import { awayFromTheMinuteTurn, dial, freshAddress, freshCode, freshLine, knock, pause, startRelay } from './support.ts';
 import type { Dialed, Knock, LocalRelay } from './support.ts';
 
 const PORT = 8793;
@@ -26,13 +26,15 @@ const NEW_BUILD = '2222222-20261113T111111Z';
 const DEPLOY_FOLDER = `${import.meta.dirname}/../../deploy`;
 
 /**
- * Addresses the dial limit's tests dial from, one per test so that no test's count leaks into another's.
- * They are from the ranges set aside for examples (203.0.113.0/24, 2001:db8::/32): nobody's real address.
+ * Addresses the dial limit's tests dial from: one per test, and new ones every run, so that no count leaks
+ * from one test into another or from the last run into this one (the local counter keeps its counts on disk).
+ * They are from ranges set aside for tests and examples (198.18.0.0/15, 2001:db8::/32): nobody's real address.
  * Every other test dials from this computer, which the relay never limits.
  */
+const LINE = freshLine();
 const ADDRESS = {
-  early: '203.0.113.200', script: '203.0.113.7', loud: '203.0.113.8', neighbour: '203.0.113.9', house: '203.0.113.44',
-  six: '2001:db8:0:51::1', sixSameLine: '2001:db8:0:51:ffff:ffff:ffff:9', sixNextLine: '2001:db8:0:52::1',
+  early: freshAddress(), script: freshAddress(), loud: freshAddress(), neighbour: freshAddress(), house: freshAddress(),
+  six: `${LINE}::1`, sixSameLine: `${LINE}:ffff:ffff:ffff:9`, sixNextLine: `${freshLine()}::1`,
 };
 
 /** Dial `dials` times from one address, one after the other and as fast as the relay answers, each to a code nobody opened. */

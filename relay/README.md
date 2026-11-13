@@ -138,8 +138,10 @@ npm --prefix relay run check
   refusal, IPv6 is counted by line, and an address stopped before the tests began is let in again a minute later.
   Three are the build's name: `/health`, `deploy/wait-relay.mjs` and `deploy/smoke-relay.mjs`, each run
   against two local relays with different names.
-- The limit's tests dial as addresses from the ranges set aside for examples (`203.0.113.x`, `2001:db8::`),
-  by sending `CF-Connecting-IP` themselves. Only the local Worker believes that header.
+- The limit's tests dial as addresses from ranges set aside for tests and examples (`198.18.x.x`,
+  `2001:db8::`), by sending `CF-Connecting-IP` themselves. Only the local Worker believes that header.
+  The addresses are new every run: wrangler's local stand-in for Cloudflare's counter keeps its counts on disk
+  (`.wrangler/`), and a fixed address would bring the last run's dials into the next one.
 - Wrangler's local stand-in for Cloudflare's counter starts a new count when the clock's minute turns. The tests
   that count dials wait for the turn when it is less than 15 s away. Cloudflare does not say where its own
   windows start.

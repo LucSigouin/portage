@@ -1,7 +1,7 @@
 /** Runs the real Worker locally (wrangler's local mode, workerd) and dials it with real WebSockets. */
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
 import { request } from 'node:http';
 import { RELAY_PROTOCOL } from '../src/room.ts';
 
@@ -121,6 +121,21 @@ export function knock(port: number, code: string, role: string, options: DialOpt
     dialing.on('error', reject);
     dialing.end();
   });
+}
+
+/**
+ * An address nobody dialled from before, in this run or in the last one. The local stand-in for Cloudflare's
+ * counter keeps its counts on disk between runs, so a fixed address would bring the last run's dials into
+ * this one whenever two runs fall in the same minute. From 198.18.0.0/15, set aside for tests: nobody's
+ * real address.
+ */
+export function freshAddress(): string {
+  return `198.${18 + randomInt(2)}.${randomInt(256)}.${1 + randomInt(254)}`;
+}
+
+/** The same for IPv6: the first four groups of a /64 of its own, under 2001:db8::/32 (set aside for examples). */
+export function freshLine(): string {
+  return `2001:db8:${randomInt(65_536).toString(16)}:${randomInt(65_536).toString(16)}`;
 }
 
 /**
