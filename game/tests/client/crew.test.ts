@@ -80,7 +80,8 @@ describe('the session plays one local player', () => {
     // The snapshot the keys resolve against is the local player's: on foot, with the crew's belt.
     session.game!.tools.push('hatchet');
     first.mode = 'canoe';
-    expect(session.inputSnapshot()).toMatchObject({ mode: 'foot', tools: ['bailing_can', 'hatchet'] });
+    // The keys read the local player's own belt: the crew's tools, slot by slot.
+    expect(session.inputSnapshot()).toMatchObject({ mode: 'foot', tools: ['bailing_can', 'hatchet', null, null, null, null, null, null] });
     session.keyDown('Digit2');
     expect(second.selectedTool).toBe('hatchet');
     expect(first.selectedTool).toBeNull();
@@ -142,12 +143,12 @@ describe('view-models are the local player\'s', () => {
     for (const playerId of [0, 1, 2]) {
       expect(buildHudModel(state, settings, 0, playerId).hotbar.map((slot) => slot.toolId), `hotbar ${playerId}`)
         .toEqual(['bailing_can', 'hatchet', null, null, null]);
-      expect(buildInventoryPanel(state, playerId).tools.map((tool) => tool.toolId), `belt ${playerId}`).toEqual(['bailing_can', 'hatchet']);
+      expect(buildInventoryPanel(state, playerId).belt.map((slot) => slot.toolId), `belt ${playerId}`).toEqual(['bailing_can', 'hatchet', null, null, null]);
     }
     expect(mine.hotbar[1]).toMatchObject({ toolId: 'hatchet', selected: false });
     expect(theirs.hotbar[1]).toMatchObject({ toolId: 'hatchet', selected: true });
-    expect(buildInventoryPanel(state, 0).tools.map((tool) => tool.selected)).toEqual([false, false]);
-    expect(buildInventoryPanel(state, 2).tools.map((tool) => tool.selected)).toEqual([false, true]);
+    expect(buildInventoryPanel(state, 0).belt.map((slot) => slot.selected)).toEqual([false, false, false, false, false]);
+    expect(buildInventoryPanel(state, 2).belt.map((slot) => slot.selected)).toEqual([false, true, false, false, false]);
     expect(buildInventoryPanel(state).backpack.label).toContain('Backpack 0 /');
     expect(buildInventoryPanel(state, 2).backpack.label).toContain('Backpack 1 /');
     const model = buildInterfaceModel({

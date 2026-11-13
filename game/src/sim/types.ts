@@ -114,6 +114,12 @@ export interface PlayerState {
   backpack: ItemStack[];
   /** The tool in this player's hand, picked from the crew's tools (`GameState.tools`). */
   selectedTool: ToolId | null;
+  /**
+   * This player's own order of the crew's tool belt: slot by slot, null for an empty slot. The first five slots
+   * answer the tool keys. Absent until the player moves a tool, and in saves from before it existed: then the belt
+   * is in the order the crew got its tools. Read it with `beltOf` (`inventory.ts`), never raw.
+   */
+  toolSlots?: (ToolId | null)[];
   /** Island the player stands on, when on foot. */
   islandId: IslandId | null;
   regionId: RegionId;
@@ -294,6 +300,8 @@ export type Command =
   | { type: 'track_quest'; questId: QuestId | null; tracked?: boolean }
   | { type: 'toggle_lantern' }
   | { type: 'select_tool'; toolId: ToolId | null }
+  /** Put a tool on a slot of this player's own belt (0 is the first). The tool that was there takes its old slot. */
+  | { type: 'move_tool'; toolId: ToolId; slot: number }
   | { type: 'set_sail'; raised: boolean }
   | { type: 'claim_rewards' }
   | { type: 'set_difficulty'; difficulty: Difficulty };
@@ -325,6 +333,10 @@ export type FailureReason =
   | 'quest_not_available'
   | 'quest_not_ready'
   | 'tool_not_owned'
+  /** A drop refused: a tool, a key item, or a stack an open quest of the crew's still asks for. */
+  | 'tool_kept'
+  | 'key_item_kept'
+  | 'quest_needs_item'
   | 'nothing_to_claim'
   /** The command was sent for a player who is away. */
   | 'player_away'

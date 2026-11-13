@@ -103,7 +103,8 @@ function itemIdsOf(model: InterfaceModel): ItemId[] {
     else if (value !== null && typeof value === 'object') {
       for (const [key, entry] of Object.entries(value)) {
         // An intent may carry an item id too: that is what a button does, not a row that names an item.
-        if (key === 'itemId') { if (entry !== null) ids.push(entry as ItemId); } else if (key !== 'intent') walk(entry);
+        // So do the two quick presses of an inventory tile (`shift`, `drop`).
+        if (key === 'itemId') { if (entry !== null) ids.push(entry as ItemId); } else if (key !== 'intent' && key !== 'shift' && key !== 'drop') walk(entry);
       }
     }
   };
@@ -149,7 +150,11 @@ describe('an item\'s icon is shown wherever the model names the item', () => {
       { id: 1, text: '+3 Driftwood', tone: 'info', itemId: 'driftwood', life: 1 },
       { id: 2, text: 'Saved', tone: 'good', itemId: null, life: 1 },
     ];
-    model.panel.keyItems = [{ itemId: 'lens', name: 'Lens', count: 1 }, { itemId: 'bellows', name: 'Bellows', count: 1 }];
+    const kept = model.panel.stow.intent;
+    model.panel.keyItems = [
+      { itemId: 'lens', name: 'Lens', count: 1, description: 'A lens.', drop: kept },
+      { itemId: 'bellows', name: 'Bellows', count: 1, description: 'Bellows.', drop: kept },
+    ];
     model.panel.pendingRewards = {
       text: 'Waiting for room: 2 x Plank, 1 x Rope',
       items: [{ itemId: 'plank', name: 'Plank', count: 2 }, { itemId: 'rope', name: 'Rope', count: 1 }],

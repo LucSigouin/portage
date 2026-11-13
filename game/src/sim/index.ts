@@ -187,6 +187,7 @@ export { dispatch } from './commands.ts';
 export { stepOnFoot } from './foot.ts';
 export { updatePlaces, placesKnownFromTraces, isAtPlace } from './places.ts';
 export { playerOf, playersAboard, connectedPlayers, eventsFor } from './inventory.ts';
+export { BELT_SLOTS, NUMBERED_BELT_SLOTS, beltOf, discardRefusal, questHolding, roomFor } from './inventory.ts';
 
 // --- State, input, commands, events -----------------------------------------
 export { STATE_VERSION, MAXIMUM_PLAYERS, MAXIMUM_NAME_LENGTH } from './types.ts';

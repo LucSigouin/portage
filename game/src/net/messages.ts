@@ -182,6 +182,8 @@ const COMMAND_READERS: { [Type in Command['type']]: (raw: Raw) => Command | null
   toggle_lantern: bare('toggle_lantern'),
   select_tool: (raw) => (hasOnly(raw, ['type', 'toolId']) && (raw.toolId === null || (TOOL_IDS as unknown[]).includes(raw.toolId))
     ? { type: 'select_tool', toolId: raw.toolId } as Command : null),
+  move_tool: (raw) => (hasOnly(raw, ['type', 'toolId', 'slot']) && (TOOL_IDS as unknown[]).includes(raw.toolId) && isWhole(raw.slot, 0, TOOL_IDS.length - 1)
+    ? { type: 'move_tool', toolId: raw.toolId, slot: raw.slot } as Command : null),
   set_sail: (raw) => (hasOnly(raw, ['type', 'raised']) && typeof raw.raised === 'boolean' ? { type: 'set_sail', raised: raw.raised } : null),
   claim_rewards: bare('claim_rewards'),
   set_difficulty: (raw) => (hasOnly(raw, ['type', 'difficulty']) && (raw.difficulty === 'relaxed' || raw.difficulty === 'standard')

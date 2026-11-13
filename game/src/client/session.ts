@@ -14,7 +14,7 @@ import {
 } from '../settings/index.ts';
 import type { InputAction, Settings, SettingsStorage } from '../settings/index.ts';
 import {
-  FIXED_STEP, NEUTRAL_INPUT, connectedPlayers, createGame, dispatch, drainEvents, playerOf, selectInteractable,
+  FIXED_STEP, NEUTRAL_INPUT, beltOf, connectedPlayers, createGame, dispatch, drainEvents, playerOf, selectInteractable,
   setConnected, setPlayerName, step,
 } from '../sim/index.ts';
 import type { Command, CommandResult, GameEvent, GameState, PlayerId, StepInput } from '../sim/index.ts';
@@ -28,6 +28,7 @@ import {
 } from './panels.ts';
 import type { ConfirmAction, PanelAction, PanelEffect, PanelId, PanelState, ScreenId } from './panels.ts';
 import { failureText, keyLabel, refusalText } from './viewmodels/format.ts';
+import { partMovedText } from './viewmodels/inventory.ts';
 import { GuestLink, HostLink } from '../net/index.ts';
 import type { Transport } from '../net/index.ts';
 import type { CrewLobby } from './crewlobby.ts';
@@ -538,6 +539,8 @@ export class Session {
       // The host would not build it: there is nothing to show.
       if (!result.ok && isBuildCommand(outcome.command)) this.builtWanted = null;
       const toldByEvent = outcome.command.type === 'scavenge' && !result.ok && result.reason === 'missing_requirements';
+      const partMoved = outcome.quiet ? null : partMovedText(outcome.command, result);
+      if (partMoved) this.notice(partMoved, 'warning');
       if (!result.ok && !outcome.quiet && !toldByEvent) {
         this.notice(failureText(result.reason, result.missing), 'warning');
         this.sound('error');
@@ -614,6 +617,8 @@ export class Session {
     if (result.ok && !quiet) this.wantBuiltView(command, true);
     // A node that needs a tool says so itself, with a `harvest_blocked` event: no second notice.
     const toldByEvent = command.type === 'scavenge' && !result.ok && result.reason === 'missing_requirements';
+    const partMoved = quiet ? null : partMovedText(command, result);
+    if (partMoved) this.notice(partMoved, 'warning');
     if (!result.ok && !quiet && !toldByEvent) {
       this.notice(failureText(result.reason, result.missing), 'warning');
       this.sound('error');
@@ -678,7 +683,7 @@ export class Session {
       mode: player.mode,
       interactable: selectInteractable(game, this.localPlayerId),
       sailRaised: game.canoe.sailRaised,
-      tools: game.tools,
+      tools: beltOf(game, player),
       selectedTool: player.selectedTool,
     };
   }

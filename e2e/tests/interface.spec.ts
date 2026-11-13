@@ -86,11 +86,11 @@ const MENUS: View[] = [
     steps: [open('crew_join'), { intent: { type: 'crew_field', field: 'code', value: 'HELLO' } },
       { intent: { type: 'crew_field', field: 'name', value: 'Bartholomew W' } }, { intent: { type: 'crew_join' } }],
   },
-  // An inventory row pressed open: what the item is and what can be done with it. And two open, in both columns.
+  // An inventory tile pressed open: what the item is and what can be done with it. And two open, in the bag and the boat.
   { name: 'inventory, a row opened', query: '?shot=inventory', steps: [{ click: '.iw-item-pick' }], shows: '.iw-item-detail' },
   {
     name: 'inventory, a row opened in each column', query: '?shot=inventory', shows: '.iw-item-detail',
-    steps: [{ click: '.iw-columns > section:first-child .iw-item-pick >> nth=-1' }, { click: '.iw-columns > section:last-child .iw-item-pick' }],
+    steps: [{ click: '.iw-inv-pack .iw-item-pick >> nth=-1' }, { click: '.iw-inv-boat .iw-item-pick' }],
   },
   // The room card with its code and its link. This one dials the relay: set PORTAGE_RELAY_UP=1 when it is running (relay/, npm run dev).
   ...(process.env.PORTAGE_RELAY_UP ? [{
@@ -876,7 +876,8 @@ function itemIconProblems(): { problems: string[]; named: number; smallest: numb
     const texts = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
     for (let node = texts.nextNode(); node; node = texts.nextNode()) {
       // A slot's number and the red ! before what a quest asks for stand to the left of the drawing on purpose.
-      if (!(node.textContent ?? '').trim() || node.parentElement!.closest('.iw-n, .iw-nm, .iw-tool-name, .iw-quest-mark, svg')) continue;
+      // An inventory tile's count (x12) stands under its drawing on purpose.
+      if (!(node.textContent ?? '').trim() || node.parentElement!.closest('.iw-n, .iw-nm, .iw-tool-name, .iw-tile-count, .iw-quest-mark, svg')) continue;
       range.selectNodeContents(node);
       const first = range.getClientRects()[0];
       if (first && first.left < box.right - 1 && first.top < box.bottom && first.bottom > box.top) problems.push(`${id}: its words run under the icon`);
@@ -916,7 +917,8 @@ test('every row that names an item shows its icon: hotbar, inventory, crafting, 
   await send({ type: 'open_panel', panel: 'inventory' });
   await frames(page, 3);
   const dropped = await session<{ itemId: string; intent: unknown }>(page, `(() => {
-    const slot = portage.app.lastModel.panel.backpack.slots.find((entry) => entry.itemId !== null);
+    // A stack that may be dropped: not one an open quest still asks for (the rules refuse that, and say why).
+    const slot = portage.app.lastModel.panel.backpack.slots.find((entry) => entry.itemId !== null && entry.buttons.find((button) => button.label === 'Drop').enabled);
     return { itemId: slot.itemId, intent: slot.buttons.find((button) => button.label === 'Drop').intent };
   })()`);
   await send(dropped.intent);

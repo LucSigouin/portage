@@ -231,7 +231,7 @@ describe('the Ink & Wash views', () => {
     const text = collectText(viewsOf(inventory));
     for (const meter of inventory.hud!.meters) expect(text).toContain(String(meter.value));
     if (inventory.panel?.id !== 'inventory') throw new Error('expected the inventory panel');
-    for (const slot of inventory.panel.backpack.slots) if (slot.itemId) expect(text).toContain(`× ${slot.count}`);
+    for (const slot of inventory.panel.backpack.slots) if (slot.itemId) expect(text).toContain(`x${slot.count}`);
     const crafting = models.find(({ name }) => name === 'shot crafting')!.model;
     if (crafting.panel?.id !== 'crafting') throw new Error('expected the crafting panel');
     const craftingText = collectText(panelView(crafting.panel));
@@ -288,48 +288,55 @@ describe('the Ink & Wash views', () => {
     expect(collectText(panelView(crafting.panel))).toContain('Scoop it at the water, from the inventory (Tab).');
   });
 
-  it('lists the inventory by drawing, name and count: what an item is and what it does show only once its row is pressed', () => {
+  it('draws the inventory as tiles, a drawing and a count each: what an item is and what it does show only once its tile is pressed', () => {
     const model = models.find(({ name }) => name === 'shot inventory')!.model;
     if (model.panel?.id !== 'inventory') throw new Error('expected the inventory panel');
     const panel = model.panel;
     const filled = [...panel.backpack.slots, ...panel.cargo.slots].filter((slot) => slot.itemId !== null);
+    const tools = panel.belt.filter((slot) => slot.itemId !== null);
     expect(filled.length).toBeGreaterThan(2);
     const find = (nodes: ViewNode[], test: (node: ViewNode) => boolean): ViewNode[] =>
       nodes.flatMap((node) => [...(test(node) ? [node] : []), ...find(node.children, test)]);
-    const rowsOf = (nodes: ViewNode[]): ViewNode[] => find(nodes, (node) => node.classes.split(' ').includes('iw-item') && !node.classes.includes('iw-blank'));
+    const tilesOf = (nodes: ViewNode[]): ViewNode[] => find(nodes, (node) => node.classes.split(' ').includes('iw-tile') && !node.classes.includes('iw-blank'));
 
-    // Closed: each row is one button with the drawing, the name and the count. No description, no action.
+    // Closed: each tile is one button with the drawing and the count. No name, no description, no action.
     const closed = panelView(panel);
     const closedText = collectText(closed);
     for (const slot of filled) {
-      expect(closedText).toContain(slot.name);
-      expect(closedText).toContain(`× ${slot.count}`);
+      expect(closedText).toContain(`x${slot.count}`);
+      expect(closedText, `${slot.name}: its name is not on the tile`).not.toContain(slot.name);
       expect(closedText, `${slot.name}: its description is shut away`).not.toContain(slot.description);
     }
-    const rows = rowsOf(closed);
-    expect(rows.length).toBe(filled.length);
-    for (const row of rows) {
-      const picks = find([row], (node) => node.tag === 'button');
+    const tiles = tilesOf(closed);
+    expect(tiles.length).toBe(filled.length + tools.length + panel.keyItems.length);
+    for (const tile of tiles) {
+      const picks = find([tile], (node) => node.tag === 'button');
       expect(picks.length).toBe(1);
       expect(picks[0]!.attributes['aria-expanded']).toBe('false');
-      expect(picks[0]!.intent, 'opening a row tells the game nothing').toBeNull();
-      expect(find([row], (node) => node.attributes['data-item'] !== undefined).length).toBe(1);
+      expect(picks[0]!.intent, 'opening a tile tells the game nothing').toBeNull();
+      expect(String(picks[0]!.attributes['aria-label']).length, 'a tile says what it is to a screen reader').toBeGreaterThan(2);
+      expect(find([tile], (node) => node.attributes['data-item'] !== undefined).length).toBe(1);
     }
     const itemIntents = filled.flatMap((slot) => slot.buttons.map((button) => JSON.stringify(button.intent)));
     const closedIntents = collectIntents(closed).map((intent) => JSON.stringify(intent));
     for (const intent of itemIntents) expect(closedIntents).not.toContain(intent);
 
-    // One row pressed: its description and its actions, under it, and nobody else's.
+    // One tile pressed: its name, its description and its actions on a strip right after it, and nobody else's.
     const first = filled[0]!;
     const second = filled.find((slot) => slot.description !== first.description)!;
     const opened = panelView(panel, new Set([itemDetailKey('backpack', first.itemId!, 0)]));
     const openedText = collectText(opened);
+    expect(openedText).toContain(first.name);
     expect(openedText).toContain(first.description);
     expect(openedText).not.toContain(second.description);
-    const openRows = rowsOf(opened).filter((row) => row.classes.includes('iw-open'));
-    expect(openRows.length).toBe(1);
-    expect(find(openRows, (node) => node.tag === 'button' && node.attributes['data-detail'] !== undefined)[0]!.attributes['aria-expanded']).toBe('true');
-    expect(collectIntents(openRows).map((intent) => JSON.stringify(intent)).sort())
+    const openTiles = tilesOf(opened).filter((tile) => tile.classes.includes('iw-open'));
+    expect(openTiles.length).toBe(1);
+    expect(find(openTiles, (node) => node.tag === 'button' && node.attributes['data-detail'] !== undefined)[0]!.attributes['aria-expanded']).toBe('true');
+    const strips = find(opened, (node) => node.classes.split(' ').includes('iw-item-detail'));
+    expect(strips.length).toBe(1);
+    const list = find(opened, (node) => node.children.includes(openTiles[0]!))[0]!;
+    expect(list.children.indexOf(strips[0]!), 'the strip is the next thing after its tile').toBe(list.children.indexOf(openTiles[0]!) + 1);
+    expect(collectIntents(strips).map((intent) => JSON.stringify(intent)).sort())
       .toEqual(first.buttons.map((button) => JSON.stringify(button.intent)).sort());
   });
 

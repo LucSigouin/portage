@@ -423,7 +423,7 @@ describe('the panels', () => {
     expect(panel.cargo.slots).toHaveLength(8);
     expect(panel.cargo.slots[0].buttons.map((button) => button.label)).toEqual(['To backpack', 'Drop']);
     expect(panel.stow.enabled).toBe(true);
-    expect(panel.tools.map((tool) => tool.name)).toEqual(['Bailing can']);
+    expect(panel.belt.map((slot) => slot.name)).toEqual(['Bailing can', '', '', '', '']);
 
     // Out of reach of the canoe (paddled off, so not landed here): the cargo is shown but nothing moves.
     teleport(state, 'home_knoll', 0, 1150);

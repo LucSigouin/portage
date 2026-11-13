@@ -1,10 +1,11 @@
-import type { IslandDefinition, ItemAmount, ItemId, ToolId } from '../data/types.ts';
+import type { IslandDefinition, ItemAmount, ItemId, QuestId, ToolId } from '../data/types.ts';
 import { ATTACHMENTS, HULL_TIERS } from '../data/canoe.ts';
-import { ITEMS, isStackable } from '../data/items.ts';
+import { ITEMS, STOCK_FOOD_IDS, TOOL_IDS, isStackable } from '../data/items.ts';
+import { QUEST_LIST } from '../data/quests.ts';
 import { TUNING } from '../data/tuning.ts';
 import { CAMP_LAYOUTS, ISLANDS_BY_ID, spotPosition } from '../data/world.ts';
 import { MAXIMUM_PLAYERS } from './types.ts';
-import type { Container, GameEvent, GameState, ItemStack, Missing, PlayerId, PlayerState } from './types.ts';
+import type { Container, FailureReason, GameEvent, GameState, ItemStack, Missing, PlayerId, PlayerState } from './types.ts';
 
 /**
  * Queue an event for the client. Pass the player who caused or suffered it,
@@ -284,4 +285,108 @@ export function exchangeItems(state: GameState, player: PlayerState, spend: Item
   state.keyItems = keyItemsBefore;
   state.events.length = eventsBefore;
   return false;
+}
+
+/** How many of an item still fit in stacks: what is left of its own stacks, and every free slot. */
+export function roomFor(stacks: readonly ItemStack[], slots: number, itemId: ItemId): number {
+  const stackSize = TUNING.inventory.stackSize;
+  let room = Math.max(0, slots - stacks.length) * stackSize;
+  for (const stack of stacks) if (stack.itemId === itemId) room += Math.max(0, stackSize - stack.count);
+  return room;
+}
+
+// --- The tool belt, in each player's own order ---------------------------------------
+
+/** Slots on a belt: one a tool, so every tool the game has always has a place. */
+export const BELT_SLOTS = TOOL_IDS.length;
+
+/** The slots at the front of the belt that the tool keys answer (`tool1` to `tool5`). The rest are spare. */
+export const NUMBERED_BELT_SLOTS = 5;
+
+/**
+ * The crew's tools as this player has laid them out: `BELT_SLOTS` long, null for an empty slot. The tools are the
+ * crew's (`state.tools`), the order is the player's own (`toolSlots`). A tool the player never placed, and so every
+ * tool of a player who never moved one, takes the first free slot in the order the crew got them. A saved slot that
+ * names a tool the crew does not have, or the same tool twice, reads as empty. Reading never changes the state.
+ */
+export function beltOf(state: GameState, player: PlayerState): (ToolId | null)[] {
+  const belt: (ToolId | null)[] = Array.from({ length: BELT_SLOTS }, () => null);
+  const placed = new Set<ToolId>();
+  const saved = Array.isArray(player.toolSlots) ? player.toolSlots : [];
+  for (let slot = 0; slot < BELT_SLOTS && slot < saved.length; slot += 1) {
+    const toolId = saved[slot];
+    if (toolId === null || toolId === undefined || placed.has(toolId) || !hasTool(state, toolId)) continue;
+    belt[slot] = toolId;
+    placed.add(toolId);
+  }
+  for (const toolId of state.tools) {
+    if (placed.has(toolId)) continue;
+    const free = belt.indexOf(null);
+    if (free < 0) break;
+    belt[free] = toolId;
+    placed.add(toolId);
+  }
+  return belt;
+}
+
+/**
+ * Put a tool on a slot of this player's belt. The tool that was there takes the slot the moved one left, so no
+ * tool is ever off the belt. False when the crew does not have the tool or there is no such slot.
+ */
+export function moveTool(state: GameState, player: PlayerState, toolId: ToolId, slot: number): boolean {
+  if (!hasTool(state, toolId) || !Number.isInteger(slot) || slot < 0 || slot >= BELT_SLOTS) return false;
+  const belt = beltOf(state, player);
+  const from = belt.indexOf(toolId);
+  if (from < 0) return false;
+  belt[from] = belt[slot];
+  belt[slot] = toolId;
+  player.toolSlots = belt;
+  return true;
+}
+
+// --- What may not be dropped -----------------------------------------------------------
+
+/**
+ * The open quest that losing `count` of an item would set back, or null. Open is given and not handed in. A quest
+ * asks for an item by a "have", a "hand over" or a "stock the canoe" step: when the crew would be left holding
+ * fewer than the step asks for, the quest holds the stack. What the crew holds beyond that is free to go.
+ */
+export function questHolding(state: GameState, itemId: ItemId, count: number): QuestId | null {
+  if (!isStackable(itemId)) return null;
+  const left = countHeld(state, itemId) - count;
+  for (const definition of QUEST_LIST) {
+    const status = state.quests[definition.id]?.status;
+    if (status !== 'active' && status !== 'ready') continue;
+    for (const objective of definition.objectives) {
+      if (objective.type === 'have_item' || objective.type === 'deliver') {
+        if (objective.itemId !== itemId) continue;
+        // Made into the thing it was for: the step is done for good and the rest is spare.
+        if (objective.type === 'have_item' && objective.madeInto) {
+          const made = 'toolId' in objective.madeInto
+            ? hasTool(state, objective.madeInto.toolId) : state.canoe.attachments.includes(objective.madeInto.attachmentId);
+          if (made) continue;
+        }
+        if (left < objective.count) return definition.id;
+      } else if (objective.type === 'stock') {
+        if (itemId === 'clean_water') {
+          if (objective.cleanWater > 0 && left < objective.cleanWater) return definition.id;
+        } else if (STOCK_FOOD_IDS.includes(itemId)) {
+          let others = 0;
+          for (const foodId of STOCK_FOOD_IDS) if (foodId !== itemId) others += countHeld(state, foodId);
+          if (objective.stockFood > 0 && others + left < objective.stockFood) return definition.id;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Why `count` of an item may not be dropped, or null when it may. Never a tool, never a key item, never what an
+ * open quest of the crew's still asks for (`questHolding`). The interface greys its Drop button by the same rule.
+ */
+export function discardRefusal(state: GameState, itemId: ItemId, count: number): FailureReason | null {
+  if (ITEMS[itemId].category === 'tool') return 'tool_kept';
+  if (!isStackable(itemId)) return 'key_item_kept';
+  return questHolding(state, itemId, count) !== null ? 'quest_needs_item' : null;
 }

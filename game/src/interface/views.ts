@@ -8,7 +8,7 @@
  */
 import type {
   BuildRowModel, BuiltModel, ButtonModel, ConfirmModel, CostRowModel, CrewRowModel, DebugModel, HotbarSlotModel, HudModel, InterfaceIntent,
-  ItemSlotModel, LobbyModel, MapMarkerModel, NeedChipModel, ObjectiveRowModel, PanelModel, PromptModel, QuestRowModel, QuestTrackerModel,
+  LobbyModel, MapMarkerModel, NeedChipModel, ObjectiveRowModel, PanelModel, PromptModel, QuestRowModel, QuestTrackerModel,
   RecipeRowModel,
   SaveSlotModel, SettingRowModel, TextFieldModel, ToastModel,
 } from '../client/contracts.ts';
@@ -17,6 +17,7 @@ import type { ViewChild, ViewNode } from './dom.ts';
 import type { ItemId } from '../data/index.ts';
 import { ICON, SEAL, itemIcon, logotype, toqueIcon, waterGauge } from './icons.ts';
 import { boatTabsView, elsewhereView } from './stations.ts';
+import { inventoryBodyView, inventoryHintView } from './inventoryview.ts';
 
 const icon = (markup: string, className = ''): ViewNode => h('i.iw-i', { class: className, html: markup, 'aria-hidden': 'true' });
 
@@ -334,81 +335,11 @@ function saveSlotView(slot: SaveSlotModel): ViewNode {
     h('div.iw-actions', null, slot.buttons.map((button, index) => buttonView(button, 'button.iw-btn', true, index))));
 }
 
-/** The name of one row of a pack or the hold, for the rows the player has opened. Two stacks of one item are told apart by which comes first. */
-export const itemDetailKey = (container: 'backpack' | 'cargo', itemId: ItemId, occurrence: number): string =>
-  `${container}:${itemId}:${occurrence}`;
+// The inventory has its own module (`inventoryview.ts`): the tiles, their keys, and the two quick presses.
+export { itemDetailKey, itemDetailKeys } from './inventoryview.ts';
 
-/** Every row key in an inventory panel: what `open` holds when every row is open. For tests and the interface. */
-export function itemDetailKeys(panel: Extract<PanelModel, { id: 'inventory' }>): string[] {
-  const keys: string[] = [];
-  for (const container of ['backpack', 'cargo'] as const) {
-    const seen = new Map<string, number>();
-    for (const slot of panel[container].slots) {
-      if (slot.itemId === null) continue;
-      const occurrence = seen.get(slot.itemId) ?? 0;
-      seen.set(slot.itemId, occurrence + 1);
-      keys.push(itemDetailKey(container, slot.itemId, occurrence));
-    }
-  }
-  return keys;
-}
-
-/**
- * Rows of a pack or the hold: the item's drawing, its name and how many, and nothing else (Luc's bugfix list,
- * line 12). The row is a button. Pressed, by click or by Enter or Space, it opens under itself what the item is
- * and what can be done with it; pressed again it closes. Several rows may be open. Nothing opens or closes by
- * itself, and nothing moves but what the press asked for.
- */
-function itemRowsView(slots: ItemSlotModel[], container: 'backpack' | 'cargo', open: ReadonlySet<string>): ViewNode[] {
-  const seen = new Map<string, number>();
-  return slots.map((slot, index) => {
-    if (slot.itemId === null) return h('li.iw-item.iw-blank', { key: `empty-${index}` }, 'empty');
-    const occurrence = seen.get(slot.itemId) ?? 0;
-    seen.set(slot.itemId, occurrence + 1);
-    const detailKey = itemDetailKey(container, slot.itemId, occurrence);
-    const shown = open.has(detailKey);
-    return h('li.iw-item', { key: `${slot.itemId}-${occurrence}`, class: shown ? 'iw-open' : '' },
-      h('button.iw-item-pick', { key: 'pick', type: 'button', 'data-detail': detailKey, 'aria-expanded': String(shown) },
-        itemIconView(slot.itemId),
-        h('span.iw-entry-text', null, h('b', null, slot.name), ' ', h('span.iw-count', null, `× ${slot.count}`)),
-        icon(ICON.caret, 'iw-more')),
-      shown ? h('div.iw-item-detail', { key: 'detail' },
-        h('small.iw-item-about', null, slot.description),
-        h('div.iw-actions', null, slot.buttons.map((button, buttonIndex) => buttonView(button, 'button.iw-btn.iw-small', true, buttonIndex))))
-        : null);
-  });
-}
-
-function inventoryView(panel: Extract<PanelModel, { id: 'inventory' }>, open: ReadonlySet<string>): ViewNode[] {
-  return sheet(panel, 'wide', panel.stationsText, h('div.iw-body', { key: 'body' },
-    panel.pendingRewards ? h('div.iw-reward', { key: 'reward' },
-      h('div.iw-reward-text', null,
-        h('span', null, panel.pendingRewards.text),
-        h('div.iw-costs', null, panel.pendingRewards.items.map((item, index) =>
-          h('span.iw-cost', { key: index }, itemIconView(item.itemId), item.name, ' ', h('b', null, `× ${item.count}`))))),
-      buttonView(panel.pendingRewards.claim, 'button.iw-btn.iw-go')) : null,
-    h('div.iw-columns', { key: 'columns' },
-      h('section', null,
-        h('h3', null, panel.backpack.label),
-        h('ul.iw-items', null, itemRowsView(panel.backpack.slots, 'backpack', open))),
-      h('section', { class: panel.cargo.accessible ? '' : 'iw-out-of-reach' },
-        h('h3', null, panel.cargo.label),
-        h('ul.iw-items', null, itemRowsView(panel.cargo.slots, 'cargo', open)))),
-    h('div.iw-belt-row', { key: 'belt' },
-      h('section', null,
-        h('h3', null, 'Tool belt'),
-        panel.tools.length > 0 ? h('div.iw-belt', null, panel.tools.map((tool) => control(h('button.iw-slot.iw-paper.iw-tool', {
-          key: tool.toolId, type: 'button', class: tool.selected ? 'iw-selected' : '', 'aria-pressed': String(tool.selected),
-        }, itemIconView(tool.itemId), h('span.iw-tool-name', null, tool.name), tool.selected ? h('i.iw-underline') : null), tool.intent)))
-          : h('p.iw-soft', null, 'No tools')),
-      h('section', null,
-        h('div.iw-pack-actions', null, buttonView(panel.stow, 'button.iw-btn'), buttonView(panel.fillWater, 'button.iw-btn')),
-        panel.keyItems.length > 0 ? [
-          h('h3.iw-next', { key: 'key-items-heading' }, 'Key items'),
-          h('ul.iw-key-items', { key: 'key-items' }, panel.keyItems.map((item, index) =>
-            h('li', { key: index }, itemIconView(item.itemId), item.name, ' ', h('span.iw-count', null, `× ${item.count}`)))),
-        ] : null))));
-}
+const inventoryView = (panel: Extract<PanelModel, { id: 'inventory' }>, open: ReadonlySet<string>): ViewNode[] =>
+  sheet(panel, 'wide', panel.stationsText, inventoryBodyView(panel, open), inventoryHintView());
 
 /**
  * The red ! before a recipe or a part an open quest still asks for (Luc's bugfix list, line 19). It is a mark, not a

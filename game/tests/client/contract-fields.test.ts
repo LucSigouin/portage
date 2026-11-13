@@ -192,8 +192,8 @@ describe('an item id on every row that names an item', () => {
     expect(panel.backpack.slots[0]).toMatchObject({ itemId: 'driftwood', name: ITEMS.driftwood.name });
     expect(panel.cargo.slots[0]).toMatchObject({ itemId: 'berries' });
     expect(panel.backpack.slots.at(-1)).toMatchObject({ itemId: null }); // an empty slot names nothing
-    expect(panel.tools.map((tool) => tool.itemId)).toEqual(['bailing_can', 'stone_knife']);
-    expect(panel.keyItems).toEqual([{ itemId: 'lens', name: ITEMS.lens.name, count: 1 }]);
+    expect(panel.belt.map((slot) => slot.itemId)).toEqual(['bailing_can', 'stone_knife', null, null, null]);
+    expect(panel.keyItems).toMatchObject([{ itemId: 'lens', name: ITEMS.lens.name, count: 1 }]);
     expect(panel.pendingRewards!.items).toEqual([{ itemId: 'rope', name: ITEMS.rope.name, count: 2 }]);
   });
 
