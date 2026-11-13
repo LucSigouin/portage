@@ -1,0 +1,100 @@
+/*
+ * The Feedback card (feedback.ts). It sits on the crew cards' paper and uses their lines to type on,
+ * their buttons and their status line. Only what is its own is here. Nothing moves: no transition,
+ * no animation.
+ */
+.iw-panel-feedback .iw-fb-kinds {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.2rem 0 0.9rem;
+}
+.iw .iw-fb-kind {
+  min-width: 5.2rem;
+  color: var(--iw-ink-soft);
+  background: var(--iw-paper-deep);
+  border-color: var(--iw-ink-faint);
+}
+/* The one picked: inked in, with the rust stroke the open tab of Settings has. */
+.iw .iw-fb-kind.iw-on {
+  color: var(--iw-ink);
+  background: var(--iw-paper-bright);
+  border-color: var(--iw-ink);
+  box-shadow: inset 0 -0.22rem 0 -0.06rem var(--iw-rust);
+}
+.iw-panel-feedback .iw-fb-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.iw-panel-feedback .iw-fb-count {
+  flex: none;
+  font-family: var(--iw-hand);
+  font-size: 0.92rem;
+  color: var(--iw-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.iw .iw-fb-box {
+  display: block;
+  width: 100%;
+  min-height: 7.6rem;
+  max-height: 34vh;
+  margin-top: 0.3rem;
+  padding: 0.4rem 0.75rem 0.3rem;
+  line-height: 1.45;
+  resize: vertical;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.iw-panel-feedback .iw-fb-name {
+  margin-top: 0.7rem;
+}
+.iw-panel-feedback .iw-fb-sent {
+  margin-top: 0.9rem;
+  padding-top: 0.6rem;
+  border-top: 0.09rem dashed var(--iw-ink-faint);
+}
+.iw-panel-feedback .iw-fb-heading {
+  margin: 0;
+  font-family: var(--iw-serif);
+  font-size: 0.78rem;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--iw-ink-soft);
+}
+.iw-panel-feedback .iw-fb-sent ul {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.05rem 1.6rem;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--iw-hand);
+  font-size: 0.98rem;
+  line-height: 1.4;
+}
+.iw-panel-feedback .iw-fb-sent li {
+  overflow-wrap: anywhere;
+}
+.iw-panel-feedback .iw-fb-what {
+  color: var(--iw-ink-soft);
+}
+.iw-panel-feedback .iw-fb-nothing {
+  margin: 0.45rem 0 0;
+  font-family: var(--iw-hand);
+  font-size: 0.98rem;
+  line-height: 1.4;
+  color: var(--iw-ink-soft);
+}
+/* The status line stands beside the buttons, so the card is the same height whatever it says. */
+.iw-panel-feedback .iw-fb-foot {
+  align-items: center;
+  gap: 1rem;
+}
+.iw-panel-feedback .iw-fb-status {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  text-align: left;
+}

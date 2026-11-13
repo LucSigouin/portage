@@ -31,6 +31,7 @@ import { failureText, keyLabel, refusalText } from './viewmodels/format.ts';
 import { GuestLink, HostLink } from '../net/index.ts';
 import type { Transport } from '../net/index.ts';
 import type { CrewLobby } from './crewlobby.ts';
+import type { FeedbackDesk } from './feedback.ts';
 import { HOST_BACK_TEXT, JOIN_PROBLEM_TEXT, LEAVE_TEXT } from './viewmodels/crew.ts';
 import { applySettingChange } from './viewmodels/settings.ts';
 import type { Tone } from './viewmodels/types.ts';
@@ -123,6 +124,8 @@ export class Session {
    * built without a relay address: then the lobby has no crew entries and none of it runs.
    */
   crew: CrewLobby | null = null;
+  /** The feedback desk: a play tester's note for Luc (`feedback.ts`). Null until `main.ts` makes one: then the panel does not open. */
+  feedback: FeedbackDesk | null = null;
   /** The slot the game autosaves into. Null for a staged game that never saves. */
   slot: number | null = null;
   /** The scene behind the lobby: a game nobody plays. */
@@ -812,6 +815,7 @@ export class Session {
       case 'open_panel':
         // The crew panels belong to the crew lobby: without one they do not open.
         if ((intent.panel === 'crew_host' || intent.panel === 'crew_join') && !this.crew) break;
+        if (intent.panel === 'feedback' && !this.feedback) break;
         this.applyPanels({ type: 'open', panel: intent.panel });
         break;
       case 'close_panel':
@@ -867,6 +871,18 @@ export class Session {
         break;
       case 'end_built_view':
         this.endBuiltView();
+        break;
+      case 'feedback_field':
+        this.feedback?.setField(intent.field, intent.value);
+        break;
+      case 'feedback_kind':
+        this.feedback?.setKind(intent.kind);
+        this.sound('tab');
+        break;
+      case 'feedback_send':
+        if (!this.feedback?.canSend) break;
+        void this.feedback.send();
+        this.sound('click');
         break;
       case 'crew_field':
         this.crew?.setField(intent.field, intent.value);

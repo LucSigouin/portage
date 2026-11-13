@@ -28,6 +28,9 @@ import { CLOSE, RELAY_PROTOCOL, ROOM_CODE_PATTERN, RoomLogic, originAllowed } fr
 import type { IdleCount, SeatRecord, Wire } from './room.ts';
 
 export interface Env extends NotesEnv {
+  /** The feedback store and its counter, as Cloudflare hands them over (`feedback.ts` asks less of them). */
+  NOTES_DB?: D1Database;
+  NOTES?: RateLimit;
   ROOMS: DurableObjectNamespace<Room>;
   /** Counts dials per address (`dial.ts`). Cloudflare's rate limiting binding: its two numbers are in `wrangler.jsonc`. */
   DIALS?: RateLimit;

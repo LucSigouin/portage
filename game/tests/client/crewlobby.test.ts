@@ -114,7 +114,7 @@ async function joining(relay: FakeRelay, code: string, name: string, others: Cli
 describe('a game built without a relay', () => {
   it('has the lobby it always had: no crew entries, no crew panels, nothing dialled', () => {
     const solo = client(null);
-    expect(lobbyLabels(solo)).toEqual(['Continue', 'New Game', 'Settings', 'How to Play', 'Credits']);
+    expect(lobbyLabels(solo)).toEqual(['Continue', 'New Game', 'Settings', 'How to Play', 'Feedback', 'Credits']);
     for (const panel of ['crew_host', 'crew_join'] as const) {
       solo.send({ type: 'open_panel', panel });
       expect(solo.model().panel).toBeNull();
@@ -127,13 +127,13 @@ describe('a game built without a relay', () => {
     solo.send({ type: 'new_game', slot: 0 });
     expect(solo.app.session.host).toBeNull();
     solo.send({ type: 'open_panel', panel: 'pause' });
-    expect(solo.panel('pause').buttons.map((button) => button.label)).toEqual(['Resume', 'Settings', 'How to Play', 'Save and quit to the lobby']);
+    expect(solo.panel('pause').buttons.map((button) => button.label)).toEqual(['Resume', 'Settings', 'How to Play', 'Feedback', 'Save and quit to the lobby']);
   });
 
   it('with a relay, has two more entries, after New Game', () => {
     const relay = new FakeRelay();
     const player = client(relay);
-    expect(lobbyLabels(player)).toEqual(['Continue', 'New Game', 'Host a crew', 'Join a crew', 'Settings', 'How to Play', 'Credits']);
+    expect(lobbyLabels(player)).toEqual(['Continue', 'New Game', 'Host a crew', 'Join a crew', 'Settings', 'How to Play', 'Feedback', 'Credits']);
     expect(lobbyButton(player, 'Host a crew').note).toBe('Friends join by a link');
     expect(lobbyButton(player, 'Join a crew').note).toBe('With a code from a friend');
     // Looking at the lobby dials nothing.

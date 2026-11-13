@@ -226,6 +226,7 @@ export class App {
       bindingNotice: session.bindingNotice,
       progressText: session.progressText(),
       crew: session.crew?.view() ?? null,
+      feedback: session.feedback,
       built: built ? builtWords(built.piece) : null,
       debug: showFrameRate || debugLines.length > 0 ? {
         showFrameRate,

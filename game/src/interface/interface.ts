@@ -17,6 +17,7 @@ import './theme.css';
 import type { CompassModel, GameInterface, InterfaceIntent, InterfaceModel, PanelModel, SettingId } from '../client/contracts.ts';
 import { intentOf, reconcile } from './dom.ts';
 import type { ViewNode } from './dom.ts';
+import { feedbackInputIntent, focusFeedbackNote } from './feedback.ts';
 import { FILTER_DEFINITIONS, ICON, toqueIcon } from './icons.ts';
 import { paperTexture, tornPageOutline } from './paper.ts';
 import {
@@ -321,6 +322,9 @@ export class InkInterface implements GameInterface {
   /** A slider's wash follows the bead while it is dragged. The value is sent when it is let go. */
   private onInput(event: Event): void {
     const target = event.target;
+    // The Feedback card's box and its name line (feedback.ts).
+    const feedback = feedbackInputIntent(target);
+    if (feedback) return void this.emit(feedback);
     if (!(target instanceof HTMLInputElement)) return;
     if (target.type === 'range') this.fillSlider(target);
     // What is typed on a line goes to the model at once, and the model's wording of it comes back next frame.
@@ -360,7 +364,7 @@ export class InkInterface implements GameInterface {
   private focusableControls(): HTMLElement[] {
     const surface = this.topSurface();
     if (!surface) return [];
-    return Array.from(surface.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled])'))
+    return Array.from(surface.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])'))
       .filter((control) => control.tabIndex >= 0 && control.getClientRects().length > 0);
   }
 
@@ -396,7 +400,8 @@ export class InkInterface implements GameInterface {
     const surface = this.topSurface();
     if (!surface) return;
     const target = event.target instanceof Element ? event.target : null;
-    const inField = target instanceof HTMLInputElement || target instanceof HTMLSelectElement;
+    // A box of several lines (the Feedback card's) keeps its arrows, its Enter and its Space, as a line does.
+    const inField = target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement;
     const onControl = target !== null && surface.contains(target) && (inField || target instanceof HTMLButtonElement);
     switch (event.code) {
       case 'Tab':
@@ -582,6 +587,7 @@ export class InkInterface implements GameInterface {
       if (!surface) this.setKeyboardNavigation(false);
       // A card with a line to type on opens with the caret on the first empty one.
       else if (surface.startsWith('panel:crew_')) this.focusEmptyField();
+      else if (surface === 'panel:feedback') focusFeedbackNote(this.topSurface());
       else if (this.keyboardNavigation) this.focusableControls()[0]?.focus();
     } else if (this.pendingTab && this.pendingTab.stack === stack) {
       this.setKeyboardNavigation(true);

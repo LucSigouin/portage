@@ -142,12 +142,28 @@ export function parseNote(body: string): ParsedNote {
 
 // --- The door ------------------------------------------------------------------------
 
+/**
+ * The little this file asks of the store and of the counter. Cloudflare's D1 database and its rate limiting
+ * binding both fit. Spelled out here so that the file names nothing of Cloudflare's, and the game's own tests
+ * can run this door (`game/tests/client/feedback.test.ts`).
+ */
+export interface NoteStatement {
+  bind(...values: unknown[]): NoteStatement;
+  run(): Promise<{ meta: { changes?: number } }>;
+}
+export interface NoteStore {
+  prepare(query: string): NoteStatement;
+}
+export interface NoteCounter {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
+}
+
 /** What of the Worker's settings the feedback door reads. */
 export interface NotesEnv {
-  /** The store. Missing: feedback is off. */
-  NOTES_DB?: D1Database;
+  /** The store, a D1 database. Missing: feedback is off. */
+  NOTES_DB?: NoteStore;
   /** Counts notes per address. Cloudflare's rate limiting binding: its two numbers are in `wrangler.jsonc`. Missing: feedback is off. */
-  NOTES?: RateLimit;
+  NOTES?: NoteCounter;
   /** `off` turns feedback off and keeps what is stored. Anything else, or nothing, leaves it on. */
   FEEDBACK?: string;
   ALLOWED_ORIGINS: string;
@@ -196,8 +212,8 @@ async function readCapped(request: Request, cap: number): Promise<{ text: string
 }
 
 /** Put the note in the store. True when it is in, false when the box is full. Throws when the store fails. */
-async function keep(store: D1Database, note: Note, at: string): Promise<boolean> {
-  const statement = (): D1PreparedStatement =>
+async function keep(store: NoteStore, note: Note, at: string): Promise<boolean> {
+  const statement = (): NoteStatement =>
     store.prepare(KEEP).bind(at, note.kind, note.note, note.name, note.version, JSON.stringify(note.context), NOTE_LIMITS.stored);
   try {
     return (await statement().run()).meta.changes === 1;
