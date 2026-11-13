@@ -161,7 +161,7 @@ describe('in a crew, the card is each player\'s own', () => {
   });
 
   it('the wire reads `tracked` when it is true or false, and refuses anything else', () => {
-    expect(PROTOCOL_VERSION).toBe(3);
+    expect(PROTOCOL_VERSION).toBe(4); // 3 was this change. The jump key made it 4.
     expect(readCommand({ type: 'track_quest', questId: 'bail_out', tracked: false })).toEqual({ type: 'track_quest', questId: 'bail_out', tracked: false });
     expect(readCommand({ type: 'track_quest', questId: 'bail_out' })).toEqual({ type: 'track_quest', questId: 'bail_out' });
     expect(readCommand({ type: 'track_quest', questId: null })).toEqual({ type: 'track_quest', questId: null });
