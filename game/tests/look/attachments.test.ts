@@ -639,6 +639,36 @@ describe('the canoe says how big it is as drawn, for the built view to frame', (
     expect(sizeOf(four).z).toBeCloseTo(sizeOf(one).z, 2);
   });
 
+  it('counts a paddle left across the gunwales: with the crew ashore the box holds all the canoe draws', () => {
+    for (const crew of [1, 4]) {
+      const state = fitted(2, crew);
+      state.canoe.attachments = [];
+      const view = new CanoeView();
+      // Aboard first, so each one has a seat to leave their paddle at. Then everyone steps ashore.
+      view.sync(state, crewOf(state), 0, 0, true, true);
+      const aboard = view.bounds().clone();
+      for (const player of state.players) Object.assign(player, { mode: 'foot', seat: null, position: { x: 30 + player.id, y: 1, z: 30 } });
+      view.sync(state, crewOf(state), 0, 0, true, true);
+      const box = view.bounds();
+      // Everything the canoe's own group draws now: the hull, its kit and the paddles left in it. The figures are ashore.
+      view.group.updateMatrixWorld(true);
+      const toCanoe = view.group.matrixWorld.clone().invert();
+      const drawn = new THREE.Box3();
+      view.group.traverseVisible((object) => {
+        const mesh = object as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        mesh.geometry.computeBoundingBox();
+        drawn.union(mesh.geometry.boundingBox!.clone().applyMatrix4(toCanoe.clone().multiply(mesh.matrixWorld)));
+      });
+      for (const axis of ['x', 'y', 'z'] as const) {
+        expect(box.min[axis], `crew of ${crew}: min ${axis}`).toBeLessThanOrEqual(drawn.min[axis] + 1e-6);
+        expect(box.max[axis], `crew of ${crew}: max ${axis}`).toBeGreaterThanOrEqual(drawn.max[axis] - 1e-6);
+      }
+      // A paddle lies across the hull and stands out past its side: the box is wider than the hull's own.
+      expect(sizeOf(box).x, `crew of ${crew}: width with a paddle left aboard`).toBeGreaterThan(sizeOf(aboard).x + 0.2);
+    }
+  });
+
   it('is in canoe space: the same box wherever the canoe lies and whichever way it points', () => {
     const home = boundsOf(2, ['mast_sail', 'outrigger_port']);
     const away = boundsOf(2, ['mast_sail', 'outrigger_port'], 1, (state) => {
