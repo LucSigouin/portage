@@ -84,7 +84,9 @@ describe('one-time items', () => {
     for (const itemId of ONE_TIME_ITEMS) {
       const state = newGame(7);
       give(state, itemId);
-      expect(dispatch(state, { type: 'discard', from: 'backpack', itemId, count: 1 }), itemId).toMatchObject({ ok: false, reason: 'unknown_id' });
+      // Refused, and told why: a tool stays on the belt, a key item with the crew.
+      expect(dispatch(state, { type: 'discard', from: 'backpack', itemId, count: 1 }), itemId)
+        .toMatchObject({ ok: false, reason: ITEMS[itemId].category === 'tool' ? 'tool_kept' : 'key_item_kept' });
       // A capsize: half of every cargo stack goes, the crew's tools and key items do not.
       state.canoe.waterLevel = 100;
       run(state, {}, 0.2);

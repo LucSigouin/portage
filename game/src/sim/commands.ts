@@ -12,6 +12,7 @@ import {
   addToStacks, cargoAccessible, countAccessible, countInStacks, emit, emptyMissing, freeSeat, grantItems,
   hasAttachment, hasTool, playerOf, removeFromStacks, slotsOf, spendItems, stacksOf,
 } from './inventory.ts';
+import { discardRefusal, moveTool } from './inventory.ts';
 import { returnLostGifts } from './keepsakes.ts';
 import { acceptQuest, notifyTalked, turnInQuest, updateQuests } from './quests.ts';
 import { sleep, sleepBlocked } from './survival.ts';
@@ -157,6 +158,9 @@ export function dispatch(state: GameState, command: Command, playerId: PlayerId 
       return success([{ itemId: command.itemId, count }]);
     }
     case 'discard': {
+      // A tool, a key item and what an open quest still asks for are never dropped: each says why.
+      const kept = ITEMS[command.itemId] ? discardRefusal(state, command.itemId, command.count) : null;
+      if (kept) return failure(kept);
       if (!ITEMS[command.itemId] || !isStackable(command.itemId)) return failure('unknown_id');
       if (!Number.isInteger(command.count) || command.count < 1) return failure('invalid_amount');
       if (command.from === 'cargo' && !cargoAccessible(state, player)) return failure('not_at_canoe');
@@ -311,6 +315,8 @@ export function dispatch(state: GameState, command: Command, playerId: PlayerId 
       if (command.toolId !== null && !hasTool(state, command.toolId)) return failure('tool_not_owned');
       player.selectedTool = command.toolId;
       return success();
+    case 'move_tool':
+      return moveTool(state, player, command.toolId, command.slot) ? success() : failure(hasTool(state, command.toolId) ? 'invalid_amount' : 'tool_not_owned');
     case 'set_sail': {
       if (!hasAttachment(state, 'mast_sail')) {
         const missing = emptyMissing();

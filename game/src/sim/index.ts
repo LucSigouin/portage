@@ -185,6 +185,7 @@ export { dispatch } from './commands.ts';
 // The on-foot step by itself, for a guest's screen to walk its own player ahead of the host's answer (`src/net/walk.ts`).
 export { stepOnFoot } from './foot.ts';
 export { playerOf, playersAboard, connectedPlayers, eventsFor } from './inventory.ts';
+export { BELT_SLOTS, NUMBERED_BELT_SLOTS, beltOf, discardRefusal, questHolding, roomFor } from './inventory.ts';
 
 // --- State, input, commands, events -----------------------------------------
 export { STATE_VERSION, MAXIMUM_PLAYERS, MAXIMUM_NAME_LENGTH } from './types.ts';
