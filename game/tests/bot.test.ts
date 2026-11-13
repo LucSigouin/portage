@@ -24,12 +24,14 @@ function expectCleanRun(report: BotReport): void {
 }
 
 describe('the headless bot', () => {
-  it('plays the main line to the Beacon on Standard without a single fail, in 90 to 180 minutes', () => {
+  // The floor was 90 until the paddle speeds were doubled (2026-11-12, Luc's call): crossings are half as long,
+  // and a run that took 110 minutes takes about 80.
+  it('plays the main line to the Beacon on Standard without a single fail, in 65 to 180 minutes', () => {
     const report = runBot({ seed: SEED, difficulty: 'standard' });
     console.log(`\n${formatReport(report)}\n`);
     expectCleanRun(report);
     const minutes = report.totalSeconds / 60;
-    expect(minutes).toBeGreaterThanOrEqual(90);
+    expect(minutes).toBeGreaterThanOrEqual(65);
     expect(minutes).toBeLessThanOrEqual(180);
     // It really built the canoe up: both outriggers, sail, rudder, radio, lantern, long hull.
     expect(report.state.canoe.hullTier).toBe(3);
@@ -50,10 +52,10 @@ describe('the headless bot', () => {
     console.log(`other seeds, minutes of play: ${minutes.map((value) => value.toFixed(1)).join(', ')}`);
     // Weather moves a single run by a quarter of an hour either way; the average holds the target.
     const mean = minutes.reduce((sum, value) => sum + value, 0) / minutes.length;
-    expect(mean).toBeGreaterThanOrEqual(90);
+    expect(mean).toBeGreaterThanOrEqual(65);
     expect(mean).toBeLessThanOrEqual(180);
     for (const value of minutes) {
-      expect(value).toBeGreaterThan(80);
+      expect(value).toBeGreaterThan(55);
       expect(value).toBeLessThan(180);
     }
   });
@@ -104,7 +106,7 @@ describe('a careless player', () => {
       // It pays in time, not in a wall: under five hours, and a fail is an accident, not a habit.
       // Its runs swing with the weather it blunders into. Over thirty seeds it failed 0.6 to 0.8
       // times a run, 4 at the very worst, so the lines below are drawn well clear of that.
-      expect(minutes, `seed ${seed} minutes`).toBeGreaterThan(100);
+      expect(minutes, `seed ${seed} minutes`).toBeGreaterThan(70);
       expect(minutes, `seed ${seed} minutes`).toBeLessThan(300);
       expect(report.fails, `seed ${seed} fails`).toBeLessThanOrEqual(6);
       fails += report.fails;

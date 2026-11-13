@@ -55,9 +55,10 @@ export const TUNING = {
   },
 
   canoe: {
-    paddleSpeed: 2.2,
-    powerStrokeSpeed: 3.2,
-    backPaddleSpeed: 1.2,
+    /** Doubled on 2026-11-12 (from 2.2, 3.2 and 1.2): Luc's call, a friend found the crossings far too long. */
+    paddleSpeed: 4.4,
+    powerStrokeSpeed: 6.4,
+    backPaddleSpeed: 2.4,
     /** Every paddler after the strongest adds this share of their own stroke. Four paddlers: 1.75x. */
     extraPaddlerShare: 0.25,
     sailMaximumSpeed: 5,
