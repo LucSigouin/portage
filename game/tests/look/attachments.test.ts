@@ -12,7 +12,7 @@ import { attachmentTransformForHull, createGame } from '../../src/sim/index.ts';
 import type { GameState } from '../../src/sim/index.ts';
 import { PLACEHOLDER_ATTACHMENTS, buildAttachment } from '../../src/look/attachments.ts';
 import type { AttachmentPiece } from '../../src/look/attachments.ts';
-import { makeHullShape } from '../../src/look/b2/canoe.js';
+import { STROKE_PULL, makeHullShape } from '../../src/look/b2/canoe.js';
 import type { Crew as Figure } from '../../src/look/b2/canoe.js';
 import { CanoeView } from '../../src/look/canoe.ts';
 import { deckInner, deckSpan } from '../../src/look/canoe/deck-parts.ts';
@@ -348,11 +348,12 @@ describe('the fully fitted long canoe with a crew of four', () => {
     expect(told(inTheWay), inTheWay.map((hit) => `${hit.part} ${hit.limb}`).join('; ')).toEqual([]);
   });
 
-  it('knows what the drawing cannot solve on the ribbed hull: with three or four aboard, the aft kneeler is inside six pieces', () => {
+  it('knows what the drawing cannot solve on the ribbed hull: with three or four aboard, the aft kneeler is inside five pieces', () => {
     // The rules spread the seats with the hull's length and leave the mounts amidships where they are. On the long
     // hull the aft kneeler has 32 cm between their back and the stern paddler's knees, for the map table, the
     // canopy's hoop and the outriggers' aft spar. On the ribbed hull they have 4 cm. In the report, with the numbers.
-    const kneeler = ['seat 2 in canopy', 'seat 2 in cargo_rack', 'seat 2 in fishing_rig', 'seat 2 in map_table', 'seat 2 in outrigger_port', 'seat 2 in outrigger_starboard'];
+    // The fishing rig is clear since the stroke in an outrigger's well keeps the hands ahead of the shoulders.
+    const kneeler = ['seat 2 in canopy', 'seat 2 in cargo_rack', 'seat 2 in map_table', 'seat 2 in outrigger_port', 'seat 2 in outrigger_starboard'];
     for (const crew of [3, 4]) {
       const found = hits(2, ['rest', 'paddle', 'stopstart', 'bail', 'sleep'], false, crew);
       // The fourth, kneeling forward, has the mast's foot at their back as well.
@@ -450,9 +451,10 @@ describe('changing sides', () => {
     }
     // Every third stroke, and the two turns.
     expect(changes.length).toBeGreaterThanOrEqual(4);
+    // The recovery starts where the pull ends (STROKE_PULL); the change is made in its first 0.08 of the stroke.
     for (const phase of changes) {
-      expect(phase).toBeGreaterThanOrEqual(0.46);
-      expect(phase).toBeLessThanOrEqual(0.6 + 0.78 / 30);
+      expect(phase).toBeGreaterThanOrEqual(STROKE_PULL);
+      expect(phase).toBeLessThanOrEqual(STROKE_PULL + 0.08 + 0.78 / 30);
     }
     // Neighbours along the hull still work opposite sides.
     const side = (seat: number): number => view.figures().find((figure) => figure.seat === seat)!.side;

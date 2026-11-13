@@ -20,9 +20,9 @@ import type { Crew } from './crew.ts';
 import type { GameState } from '../sim/index.ts';
 import { buildAttachment } from './attachments.ts';
 import type { AttachmentPiece } from './attachments.ts';
-import { buildBilge, buildHull, buildStarterKit, createCrew, makeHullShape } from './b2/canoe.js';
-import type { Crew as Figure, HullShape } from './b2/canoe.js';
-import { deckInner, deckSpan } from './canoe/deck-parts.ts';
+import { STROKE_PULL, buildBilge, buildHull, buildStarterKit, createCrew, makeHullShape } from './b2/canoe.js';
+import type { Crew as Figure, HullShape, SeatedPose } from './b2/canoe.js';
+import { deckInner, deckSpan, sparsAlong } from './canoe/deck-parts.ts';
 import { buildMends, buildSheets } from './canoe/mends.ts';
 
 interface TierMeshes {
@@ -45,13 +45,23 @@ const LYING_LIFT = 0.16;
 /** The hull tier that is the leaky boat mended. */
 const PATCHED_TIER = 1;
 /** The share of a stroke that is the pull; the rest is the recovery. The figure's own split (`paddle` in b2/canoe.js). */
-const PULL_SHARE = 0.46;
+const PULL_SHARE = STROKE_PULL;
 /** A paddle from grip to blade tip, as the figure's is built. */
 const PADDLE_LENGTH = 1.485;
-/** A paddler changes sides early in the recovery, with the hands drawn back: this share of the stroke clock. */
-const SIDE_CHANGE = [PULL_SHARE, 0.6] as const;
+/** A paddler changes sides early in the recovery, with the hands drawn back: this share of the stroke. */
+const SIDE_CHANGE = [PULL_SHARE, PULL_SHARE + 0.08] as const;
+/** Where in the stroke the blade marks the water: the catch and the exit firmly, the middle of the pull lightly. */
+const DIPS = { catch: 0.03, middle: 0.3, exit: PULL_SHARE - 0.04 } as const;
+/** The canoe going astern faster than this shows back strokes; ahead faster than this, forward ones. Between, as it was. */
+const ASTERN_SPEED = 0.05;
 /** A paddle's tip stays this far inside the inner edge of an outrigger's deck (the planks' ends are ragged by 5 cm). */
 const DECK_CLEARANCE = 0.08;
+/** A bow or stern paddler's blade stops this far short of a deck's end: the tip past the blade, and a margin. */
+const DECK_END_CLEARANCE = 0.26;
+/** A kneeler's blade keeps this far from an outrigger's spar ahead or behind: the tip past the blade, its width, a margin. */
+const SPAR_CLEARANCE = 0.3;
+/** However hemmed in, a stroke reaches at least this far ahead and behind the paddler. */
+const MINIMUM_REACH = 0.08;
 
 export interface StrokeEvent { x: number; z: number; strength: number; size: number }
 
@@ -126,6 +136,11 @@ export class CanoeView {
   private phase = 0.2;
   /** The side the stern paddler works on. The others alternate from it along the hull. */
   private side = 1;
+  /**
+   * True while the crew back-paddles: the stroke runs in reverse, the blade going in behind and pushed forward.
+   * The rules keep no paddling direction per player, so the look reads it from the canoe going astern.
+   */
+  private astern = false;
   private strokes = 0;
   private lastHeading = 0;
   private localId = 0;
@@ -283,6 +298,8 @@ export class CanoeView {
     }
 
     // One stroke clock for the crew. It runs while anyone paddles.
+    if (canoe.speed < -ASTERN_SPEED) this.astern = true;
+    else if (canoe.speed > ASTERN_SPEED) this.astern = false;
     const previous = this.phase;
     if (working > 0.3) this.phase += seconds * STROKE_RATE;
     if (this.phase >= 1) {
@@ -305,10 +322,16 @@ export class CanoeView {
     const anyDeck = decks.port || decks.starboard;
     const wellEdge = deckInner(this.halfBeam(state)) - DECK_CLEARANCE;
     const deckRuns = deckSpan(this.tier);
-    const changing = this.phase >= SIDE_CHANGE[0] && this.phase <= SIDE_CHANGE[1];
+    // Back-paddling is the stroke played backwards: the clock runs on, the figure takes the stroke from its end.
+    const stroke = this.astern ? (1 - this.phase) % 1 : this.phase;
+    const changing = stroke >= SIDE_CHANGE[0] && stroke <= SIDE_CHANGE[1];
 
     const events: StrokeEvent[] = [];
-    const crossed = (mark: number): boolean => previous < mark && this.phase >= mark;
+    // A mark in the stroke, passed this frame. Astern, the stroke's marks come in the clock's reverse order.
+    const crossed = (mark: number): boolean => {
+      const clock = this.astern ? 1 - mark : mark;
+      return previous < clock && this.phase >= clock;
+    };
     for (const player of players) {
       const member = this.member(player.id);
       const { figure } = member;
@@ -326,21 +349,39 @@ export class CanoeView {
         // own lap. Never across the catch: there the leading hand is furthest forward, over whatever is ahead.
         if (!member.seated || member.effort < 0.05 || changing) member.side = this.side * across;
         const kneel = member.seat >= 2 ? 1 : 0;
-        const more = kneel || across < 0 || member.bailing > 0 || member.asleep > 0
-          ? { kneel, floor: seat.position[1] + SEAT_LIFT + shape.HULL.draft, bail: member.bailing, bailPhase: member.bailPhase, sleep: member.asleep, restSide: across }
-          : null;
+        // The hull's widest half beam along the stroke, from the hip back to the catch ahead: the blade works outside it.
+        const station = root.position.z;
+        const along = [-0.3, 0, 0.35, 0.75].map((ahead) => station + ahead);
+        const beam = Math.max(...along.map((z) => shape.halfBeamAt(z)));
+        // And its gunwale at the highest, above the seat: the lower hand rides over it.
+        const gunwale = Math.max(...along.map((z) => shape.sheerAt(z))) - shape.HULL.draft - root.position.y;
+        const more: SeatedPose = { kneel, floor: seat.position[1] + SEAT_LIFT + shape.HULL.draft, bail: member.bailing, bailPhase: member.bailPhase, sleep: member.asleep, restSide: across, beam, gunwale };
         // A kneeler beside a deck brings the blade back through the water the way it went: the pull run backwards,
         // the blade turned edge on. The figure's own recovery swings the blade out wide, under the deck.
         const hemmed = kneel === 1 && anyDeck;
-        const back = hemmed && this.phase > PULL_SHARE ? (this.phase - PULL_SHARE) / (1 - PULL_SHARE) : 0;
+        // Its blade works in the well: the tip stays inside the deck's inner edge, out from the figure's centre, and
+        // the stroke stays between the spars ahead and behind.
+        if (hemmed) {
+          more.well = wellEdge - Math.abs(root.position.x);
+          const gaps = sparsAlong(this.tier).map((spar) => seat.position[2] - spar);
+          const ahead = Math.min(Infinity, ...gaps.filter((gap) => gap > 0)) - SPAR_CLEARANCE;
+          const behind = Math.max(-Infinity, ...gaps.filter((gap) => gap < 0)) + SPAR_CLEARANCE;
+          more.span = [Math.min(-MINIMUM_REACH, behind), Math.max(MINIMUM_REACH, ahead)];
+        } else if (anyDeck) {
+          // Seated past a deck's end, the stroke stops short of it: the blade never reaches over the planks.
+          const ahead = seat.position[2] - deckRuns.aft - DECK_END_CLEARANCE;
+          const behind = seat.position[2] - deckRuns.forward + DECK_END_CLEARANCE;
+          more.span = [behind < 0 ? Math.min(-MINIMUM_REACH, behind) : -Infinity, ahead > 0 ? Math.max(MINIMUM_REACH, ahead) : Infinity];
+        }
+        const back = hemmed && stroke > PULL_SHARE ? (stroke - PULL_SHARE) / (1 - PULL_SHARE) : 0;
         // The side eases over a fifth of a second. A figure seated for the first time takes its side at once.
-        const stroke = figure.paddle(member.seated ? seconds : 1, back > 0 ? PULL_SHARE * (1 - back) : this.phase, member.effort, member.side, more);
+        const dip = figure.paddle(member.seated ? seconds : 1, back > 0 ? PULL_SHARE * (1 - back) : stroke, member.effort, member.side, more);
         member.seated = true;
         if (back > 0) figure.paddler.paddle.rotateY(Math.sin(back * Math.PI) * member.effort * (Math.PI / 2));
         if (anyDeck) this.clearOfDecks(figure, decks, wellEdge, deckRuns);
         if (member.effort > 0.6 && seconds > 0) {
-          if (crossed(0.03) || crossed(0.44)) events.push({ x: stroke.blade.x, z: stroke.blade.z, strength: 0.95, size: 0.9 });
-          if (crossed(0.2)) events.push({ x: stroke.blade.x, z: stroke.blade.z, strength: 0.7, size: 0.6 });
+          if (crossed(DIPS.catch) || crossed(DIPS.exit)) events.push({ x: dip.blade.x, z: dip.blade.z, strength: 0.95, size: 0.9 });
+          if (crossed(DIPS.middle)) events.push({ x: dip.blade.x, z: dip.blade.z, strength: 0.7, size: 0.6 });
         }
         member.afoot = false;
         member.moving = 0;

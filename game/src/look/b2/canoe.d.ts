@@ -20,7 +20,7 @@ export function buildBilge(shape: HullShape): Mesh;
 export function buildStarterKit(shape: HullShape, crewed?: boolean): Mesh;
 
 /** One side of a figure: the arm and leg meshes, and the hand's place. */
-export interface Limbs { upper: Mesh; thigh: Mesh; shin: Mesh; knee: Mesh; boot: Mesh; H: Vector3 }
+export interface Limbs { upper: Mesh; thigh: Mesh; shin: Mesh; knee: Mesh; boot: Mesh; H: Vector3; /** The shoulder and the elbow, in the figure's space. */ S: Vector3; E: Vector3 }
 
 /** What a seated figure does besides paddle. */
 export interface SeatedPose {
@@ -35,7 +35,17 @@ export interface SeatedPose {
   sleep?: number;
   /** -1 lays the resting paddle with its blade out to the figure's right. Left out, to its left. */
   restSide?: number;
+  /** The hull's half beam along the stroke, metres. A wider hull takes the blade further out. Left out, 0.38. */
+  beam?: number;
+  /** The gunwale's highest above the figure's origin along the stroke, metres. Higher takes the lower hand up the shaft. Left out, 0.1. */
+  gunwale?: number;
+  /** Beside an outrigger's deck: how far out from the figure's centre the paddle's tip may reach. Left out, no limit. */
+  well?: number;
+  /** How far behind (negative) and ahead the blade may reach, metres from the figure. Left out, the full stroke. */
+  span?: [number, number];
 }
+/** The share of a stroke the blade is pulled through the water, from the catch; the rest is the recovery. */
+export const STROKE_PULL: number;
 
 export interface Crew {
   /** The paddler and paddle. The model faces +z. */
