@@ -200,6 +200,12 @@ const COMMAND_READERS: { [Type in Command['type']]: (raw: Raw) => Command | null
   clear_ping: (raw) => (hasOnly(raw, ['type', 'playerId']) && isWhole(raw.playerId, 0, 3) ? { type: 'clear_ping', playerId: raw.playerId } : null),
 };
 
+/**
+ * Every command a guest may send: the keys of the reader table itself. A test reads its list of commands from
+ * here, so a new command with no example on the wire fails it (the master review of round 3, finding 9).
+ */
+export const COMMAND_TYPES = Object.keys(COMMAND_READERS) as Command['type'][];
+
 function readMove(raw: Raw, type: 'transfer' | 'discard'): Command | null {
   if (!hasOnly(raw, ['type', 'from', 'itemId', 'count'])) return null;
   if (raw.from !== 'backpack' && raw.from !== 'cargo') return null;
