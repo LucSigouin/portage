@@ -26,7 +26,7 @@ export const LAKE_WATER: { tool: ToolId; itemId: ItemId } = { tool: 'bailing_can
 /** Attachments that add to the cargo by themselves (`updatePassiveAttachments` in `src/sim/survival.ts`). */
 export const ABOARD: readonly { attachmentId: AttachmentId; itemId: ItemId; count: number; when: string }[] = [
   { attachmentId: 'rain_catcher', itemId: 'clean_water', count: 1, when: `every ${TUNING.canoe.rainCatcherSecondsPerWater} s of rain` },
-  { attachmentId: 'fishing_rig', itemId: 'raw_fish', count: 1, when: `every ${TUNING.canoe.fishingRigSecondsPerFish} s while beached or asleep` },
+  { attachmentId: 'fishing_rig', itemId: 'raw_fish', count: 1, when: `every ${TUNING.canoe.fishingRigSecondsPerFish} s while the canoe is beached` },
   { attachmentId: 'planter', itemId: 'berries', count: TUNING.canoe.planterBerries, when: 'each dawn' },
   { attachmentId: 'planter', itemId: 'cattail_root', count: TUNING.canoe.planterRoots, when: 'each dawn' },
 ];
