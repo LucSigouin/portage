@@ -18,6 +18,9 @@ import type { Crew as Figure } from '../../src/look/b2/canoe.js';
 import { CanoeView } from '../../src/look/canoe.ts';
 import { crewOf } from '../../src/look/crew.ts';
 
+/** The pen's shared switches, as the passes set them. */
+const PEN = GU as unknown as Record<'uHero' | 'uPass', THREE.IUniform<number>>;
+
 const figureOf = (view: CanoeView, playerId: number): Figure =>
   (view as unknown as { members: Map<number, { figure: Figure }> }).members.get(playerId)!.figure;
 
@@ -29,20 +32,20 @@ function run(view: CanoeView, state: GameState, seconds: number): void {
 interface Draw { what: THREE.Object3D; target: unknown; layers: number; hero: number; pass: number }
 
 /** A renderer that draws nothing and remembers every draw. */
-function standIn(): { renderer: unknown; draws: Draw[] } {
+function standIn(): { renderer: THREE.WebGLRenderer; draws: Draw[] } {
   const draws: Draw[] = [];
   let target: unknown = null;
   const renderer = {
     clear: () => {},
     setRenderTarget: (next: unknown) => { target = next; },
     render: (what: THREE.Object3D, camera: THREE.Camera) => {
-      draws.push({ what, target, layers: camera.layers.mask, hero: GU.uHero.value as number, pass: GU.uPass.value as number });
+      draws.push({ what, target, layers: camera.layers.mask, hero: PEN.uHero.value, pass: PEN.uPass.value });
     },
     getClearColor: (colour: THREE.Color) => colour.set(0xffffff),
     getClearAlpha: () => 1,
     setClearColor: () => {},
   };
-  return { renderer, draws };
+  return { renderer: renderer as unknown as THREE.WebGLRenderer, draws };
 }
 
 /** The world and the heroes as the world view hands them over: a canoe with a crew of four, one of them ashore. */
@@ -114,7 +117,7 @@ describe('the hero pass marks the crew in its ink buffer', () => {
     // Both into the same buffer: the hero ink buffer.
     expect(inkDraws[1].target).toBe(inkDraws[0].target);
     expect(camera.layers.mask).toBe(1);
-    expect(GU.uHero.value).toBe(0);
+    expect(PEN.uHero.value).toBe(0);
   });
 
   it('the ink shader marks a texel 2 higher per step of the mark, and the hero pen reads 4 higher as the crew\'s', () => {
