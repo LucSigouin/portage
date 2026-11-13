@@ -56,7 +56,7 @@ export const ACTION_LABELS: Record<InputAction, string> = {
   powerStroke: 'Power stroke', bail: 'Bail (hold)', lantern: 'Lantern', sail: 'Raise or lower sail',
   moveForward: 'Walk forward', moveBack: 'Walk back', moveLeft: 'Walk left', moveRight: 'Walk right', run: 'Run', jump: 'Jump',
   interact: 'Land / interact / scavenge / board',
-  inventory: 'Inventory', craft: 'Crafting', canoeBuilder: 'Canoe builder', questLog: 'Quest log', map: 'Map',
+  inventory: 'Inventory', craft: 'Crafting', canoeBuilder: 'Canoe: builder and stations', questLog: 'Quest log', map: 'Map',
   pause: 'Pause',
   tool1: 'Tool 1', tool2: 'Tool 2', tool3: 'Tool 3', tool4: 'Tool 4', tool5: 'Tool 5',
 };

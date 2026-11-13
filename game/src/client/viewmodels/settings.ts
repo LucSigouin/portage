@@ -65,7 +65,8 @@ export function settingsRows(settings: Settings, tab: SettingsTabId): SettingRow
       return [
         slider('controls.mouseSensitivity', 'Mouse sensitivity', settings.controls.mouseSensitivity, limits.mouseSensitivity, 0.1, `${settings.controls.mouseSensitivity.toFixed(1)}x`),
         toggle('controls.invertY', 'Invert vertical look', settings.controls.invertY),
-        toggle('controls.cameraAutoCentre', 'Camera swings back behind the heading', settings.controls.cameraAutoCentre),
+        // It acts aboard only: on foot the camera never turns by itself (`recentreRate` 0 in `camera.ts`).
+        toggle('controls.cameraAutoCentre', 'Aboard: camera swings back behind the heading', settings.controls.cameraAutoCentre),
       ];
     case 'gameplay':
       return [
