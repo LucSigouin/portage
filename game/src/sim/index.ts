@@ -109,7 +109,7 @@
  * |---|---|
  * | `selectInteractable` | What the interact key would act on, its prompt, the command to send, what it is missing |
  * | `selectCraftableRecipes` | Every recipe: known, craftable, how many, missing inputs, tools and station |
- * | `selectBuildOptions` | The next hull tier and all 19 attachments: built, buildable, missing, transform |
+ * | `selectBuildOptions` | The next hull tier and all 22 attachments: built, buildable, missing, transform |
  * | `selectCanoeStats` | Stability, roughness here, cargo, speeds, leak, flood rate, sail factor, fog gear |
  * | `selectActiveQuests` / `selectQuestLog` | Quests with objective text, progress and required count |
  * | `selectCurrentMainQuest` | Id of the main quest in progress, null once the Beacon is lit |

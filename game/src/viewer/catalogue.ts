@@ -43,7 +43,10 @@ const ATTACHMENT_FILE: Record<string, string> = {
   outrigger_port: 'deck-parts', outrigger_starboard: 'deck-parts', workbench: 'deck-parts', smoker: 'deck-parts', planter: 'deck-parts', forge: 'deck-parts',
   cargo_rack: 'hull-parts', firebox: 'hull-parts', fishing_rig: 'hull-parts', canopy: 'hull-parts', map_table: 'hull-parts',
   mast_sail: 'rig-parts', rudder: 'rig-parts', lantern_mast: 'rig-parts', rain_catcher: 'rig-parts', winch: 'rig-parts', radio: 'rig-parts', flag: 'rig-parts', figurehead: 'rig-parts',
+  plank_chest: 'chest-parts', tin_trunk: 'chest-parts', sea_chest: 'chest-parts',
 };
+/** The outrigger whose deck a chest stands on: "Mounted on a hull" shows the two together. */
+const DECK_UNDER: Record<string, AttachmentId | undefined> = { plank_chest: 'outrigger_port', tin_trunk: 'outrigger_starboard' };
 const landmarkFile = (kind: LandmarkKind): string => {
   if (kind in SHALLOWS) return 'src/look/world/shallows.ts';
   if (kind in REACH) return 'src/look/world/reach.ts';
@@ -125,7 +128,9 @@ function attachments(): Entry[] {
         const tier = Number(answer(options, controls, 'tier'));
         const flags = flagsFrom(attachmentId, answer(options, controls, 'state'));
         if (answer(options, controls, 'mount') === 'alone') return attachmentAlone(attachmentId, tier, flags);
-        return canoeSubject({ tier, attachments: [attachmentId], ...flags, aboard: [], shown: [] });
+        // A deck chest is shown on the deck it stands on.
+        const deck = DECK_UNDER[attachmentId];
+        return canoeSubject({ tier, attachments: deck ? [deck, attachmentId] : [attachmentId], ...flags, aboard: [], shown: [] });
       },
     };
   });

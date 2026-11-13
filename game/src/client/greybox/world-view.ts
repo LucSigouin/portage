@@ -108,6 +108,9 @@ const ATTACHMENT_SIZES: Record<AttachmentId, [number, number, number]> = {
   radio: [0.6, 0.7, 0.6],
   flag: [0.05, 0.9, 0.4],
   figurehead: [0.2, 0.4, 0.3],
+  plank_chest: [0.56, 0.3, 0.36],
+  tin_trunk: [0.36, 0.3, 0.4],
+  sea_chest: [0.72, 0.25, 0.28],
 };
 
 const HULL_COLOURS = [0x8f8674, 0x6f5236, 0xa9743f, 0xa84f2f];

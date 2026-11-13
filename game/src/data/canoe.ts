@@ -10,7 +10,7 @@ const RIBBED_MOUNTS: MountId[] = [
   'mid_aft_hull', 'stern_quarter_frame', 'mid_forward_slab', 'starboard_gunwale', 'port_float',
   'starboard_float', 'port_deck_forward', 'port_deck_aft', 'starboard_deck_forward',
   'starboard_deck_aft', 'mast_step', 'stern_post', 'bow_pole', 'cockpit_hoops', 'cockpit_table',
-  'stern_rail', 'bow_stem',
+  'stern_rail', 'bow_stem', 'port_deck_mid', 'starboard_deck_mid',
 ];
 
 /** Hull tiers in order. Index = tier. */
@@ -48,7 +48,7 @@ export const HULL_TIERS: HullTierDefinition[] = [
     tools: ['hammer', 'saw'],
     cargoSlots: 16, leakPerSecond: 0, speedMultiplier: 1.15,
     dimensions: { length: 6.4, beam: 1.05, depth: 0.46, draft: 0.18 },
-    mountIds: [...RIBBED_MOUNTS, 'bow_crane', 'stern_shack'],
+    mountIds: [...RIBBED_MOUNTS, 'bow_crane', 'stern_shack', 'midship_thwart'],
   },
 ];
 
@@ -154,6 +154,20 @@ const ATTACHMENT_LIST: AttachmentDefinition[] = [
   attachment('figurehead', 'Figurehead', 'bow_stem', 'bow', [0, 0.38, -2.5], NO_ROTATION,
     [amount('carved_figurehead', 1)], [],
     'Tink’s cedar loon, leading the way.', { cosmetic: true }),
+  // The three chests: the cargo rack three more times, each dearer than the last and each built on the one before.
+  // To change what a chest holds, change its `cargoSlotsBonus`.
+  attachment('plank_chest', 'Plank chest', 'port_deck_mid', 'centre', [-1.2, 0.35, 0.04], NO_ROTATION,
+    [amount('plank', 8), amount('nails', 6), amount('rope', 3)], ['hammer', 'saw'],
+    'A rough chest lashed down on the port deck. Six more stacks.',
+    { requiresAttachments: ['cargo_rack', 'outrigger_port'], cargoSlotsBonus: 6 }),
+  attachment('tin_trunk', 'Tin trunk', 'starboard_deck_mid', 'centre', [1.36, 0.35, 0.01], NO_ROTATION,
+    [amount('plank', 10), amount('nails', 8), amount('metal_sheet', 3), amount('rope', 2)], ['hammer', 'saw'],
+    'A trunk sheathed in tin on the starboard deck. Six more stacks, dry in any weather.',
+    { requiresAttachments: ['plank_chest', 'outrigger_starboard'], cargoSlotsBonus: 6 }),
+  attachment('sea_chest', 'Sea chest', 'midship_thwart', 'centre', [0, 0.28, 0.01], NO_ROTATION,
+    [amount('plank', 14), amount('hardware', 6), amount('metal_sheet', 4), amount('pitch', 3)], ['hammer', 'saw', 'wrench'],
+    'An iron-bound chest across the thwart, where only the long hull has room. Six more stacks.',
+    { minimumHullTier: 3, requiresAttachments: ['tin_trunk'], cargoSlotsBonus: 6 }),
 ];
 
 export const ATTACHMENTS: Record<AttachmentId, AttachmentDefinition> = Object.fromEntries(
