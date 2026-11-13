@@ -29,8 +29,9 @@ import type { WireRun } from './walk.ts';
  * Bump when a message changes shape. Host and guest must match.
  * 2: a guest's walking is numbered by step (`input.step`, `input.walk`, `command.at`, `state.walked`, `welcome.walked`).
  * 3: the state is save version 4 (the crew's chart, each player's quest card), and `track_quest` may say `tracked`.
+ * 4: a guest may send `ping` and `clear_ping` (an older host would drop them unanswered, and the guest's next commands with them).
  */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 export interface JoinMessage { v: number; type: 'join'; name: string; key: string }
 export interface InputMessage {
@@ -186,6 +187,9 @@ const COMMAND_READERS: { [Type in Command['type']]: (raw: Raw) => Command | null
   claim_rewards: bare('claim_rewards'),
   set_difficulty: (raw) => (hasOnly(raw, ['type', 'difficulty']) && (raw.difficulty === 'relaxed' || raw.difficulty === 'standard')
     ? { type: 'set_difficulty', difficulty: raw.difficulty } : null),
+  // Any finite spot may be asked for: the rules say whether it is on the chart (`src/sim/pings.ts`).
+  ping: (raw) => (hasOnly(raw, ['type', 'x', 'z']) && isAxis(raw.x) && isAxis(raw.z) ? { type: 'ping', x: raw.x, z: raw.z } : null),
+  clear_ping: (raw) => (hasOnly(raw, ['type', 'playerId']) && isWhole(raw.playerId, 0, 3) ? { type: 'clear_ping', playerId: raw.playerId } : null),
 };
 
 function readMove(raw: Raw, type: 'transfer' | 'discard'): Command | null {
