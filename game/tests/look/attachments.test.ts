@@ -6,7 +6,7 @@
  */
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ATTACHMENT_IDS, HULL_TIERS } from '../../src/data/index.ts';
+import { ATTACHMENTS, ATTACHMENT_IDS, HULL_TIERS } from '../../src/data/index.ts';
 import type { AttachmentId } from '../../src/data/index.ts';
 import { attachmentTransformForHull, createGame } from '../../src/sim/index.ts';
 import type { GameState } from '../../src/sim/index.ts';
@@ -42,7 +42,7 @@ const meshesOf = (object: THREE.Object3D): THREE.Mesh[] => {
 function fitted(tier = 3, crew = 4): GameState {
   const state = createGame(7, { crew });
   state.canoe.hullTier = tier;
-  state.canoe.attachments = ATTACHMENT_IDS.filter((attachmentId) => tier >= 3 || (attachmentId !== 'winch' && attachmentId !== 'radio'));
+  state.canoe.attachments = ATTACHMENT_IDS.filter((attachmentId) => ATTACHMENTS[attachmentId].minimumHullTier <= tier);
   state.canoe.position = { x: 0, y: 0, z: 0 };
   state.canoe.heading = 0;
   state.canoe.pitch = 0;
@@ -58,7 +58,7 @@ const figureOf = (view: CanoeView, playerId: number): Figure =>
 
 describe('every attachment', () => {
   it('has its own drawing: many pieces, many colours, no stand-in box', () => {
-    expect(ATTACHMENT_IDS).toHaveLength(19);
+    expect(ATTACHMENT_IDS).toHaveLength(22);
     expect(PLACEHOLDER_ATTACHMENTS).toEqual([]);
     for (const attachmentId of ATTACHMENT_IDS) {
       const ids = new Set<number>();

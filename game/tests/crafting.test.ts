@@ -150,7 +150,7 @@ describe('the canoe builder', () => {
     const options = selectBuildOptions(state);
     expect(options.attachments.find((entry) => entry.attachmentId === 'workbench')).toMatchObject({ built: true, buildable: false });
     expect(options.attachments.find((entry) => entry.attachmentId === 'cargo_rack')).toMatchObject({ built: false, buildable: true });
-    expect(options.attachments).toHaveLength(19);
+    expect(options.attachments).toHaveLength(22);
   });
 
   it('builds cosmetic rewards from their key item, and cannot build afloat', () => {

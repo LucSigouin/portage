@@ -3,10 +3,11 @@
  * mount's own space: the origin is the rules engine's mount point
  * (`attachmentTransformForHull`), +y up, and canoe.ts places and turns it.
  *
- * All nineteen are drawn for this game's hulls, in `canoe/`: see
+ * All twenty-two are drawn for this game's hulls, in `canoe/`: see
  * LOOK-canoe.md. `registerAttachment(id, build)` swaps one out.
  */
 import type { AttachmentId } from '../data/index.ts';
+import { plankChestPart, seaChestPart, tinTrunkPart } from './canoe/chest-parts.ts';
 import { forgePart, outriggerPart, planterPart, smokerPart, workbenchPart } from './canoe/deck-parts.ts';
 import { canopyPart, cargoRackPart, fireboxPart, fishingRigPart, mapTablePart } from './canoe/hull-parts.ts';
 import type { AttachmentBuilder, AttachmentContext, AttachmentPiece } from './canoe/kit.ts';
@@ -34,6 +35,9 @@ const BUILDERS: Record<AttachmentId, AttachmentBuilder> = {
   radio: radioPart,
   flag: flagPart,
   figurehead: figureheadPart,
+  plank_chest: plankChestPart,
+  tin_trunk: tinTrunkPart,
+  sea_chest: seaChestPart,
 };
 
 /** Replace how an attachment is drawn. */

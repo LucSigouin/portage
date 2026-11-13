@@ -91,7 +91,8 @@ describe('the canoe', () => {
     expect(HULL_TIERS.map((hull) => hull.leakPerSecond > 0)).toEqual([true, false, false, false]);
     expect(HULL_TIERS[3].speedMultiplier).toBeGreaterThan(HULL_TIERS[2].speedMultiplier);
     expect(HULL_TIERS[3].dimensions.length).toBeGreaterThan(HULL_TIERS[2].dimensions.length);
-    expect(HULL_TIERS[3].mountIds.length - HULL_TIERS[2].mountIds.length).toBe(2);
+    // The long hull alone offers the winch's crane, the radio's shack and the sea chest's thwart.
+    expect(HULL_TIERS[3].mountIds.length - HULL_TIERS[2].mountIds.length).toBe(3);
     expect(HULL_TIERS[2].tools).toContain('hammer');
     for (const hull of HULL_TIERS) {
       const { length, beam, depth, draft } = hull.dimensions;
@@ -101,10 +102,10 @@ describe('the canoe', () => {
     }
   });
 
-  it('gives each of the 19 attachments its own mount on a hull that offers it', () => {
-    expect(ATTACHMENT_IDS).toHaveLength(19);
+  it('gives each of the 22 attachments its own mount on a hull that offers it', () => {
+    expect(ATTACHMENT_IDS).toHaveLength(22);
     const mounts = ATTACHMENT_IDS.map((id) => ATTACHMENTS[id].mountId);
-    expect(new Set(mounts).size).toBe(19);
+    expect(new Set(mounts).size).toBe(22);
     for (const attachmentId of ATTACHMENT_IDS) {
       const attachment = ATTACHMENTS[attachmentId];
       expect(HULL_TIERS[attachment.minimumHullTier].mountIds, attachmentId).toContain(attachment.mountId);

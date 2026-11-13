@@ -143,13 +143,15 @@ export type MountId =
   | 'port_float' | 'starboard_float' | 'port_deck_forward' | 'port_deck_aft'
   | 'starboard_deck_forward' | 'starboard_deck_aft' | 'mast_step' | 'stern_post'
   | 'bow_pole' | 'cockpit_hoops' | 'cockpit_table' | 'bow_crane' | 'stern_shack'
-  | 'stern_rail' | 'bow_stem';
+  | 'stern_rail' | 'bow_stem'
+  | 'port_deck_mid' | 'starboard_deck_mid' | 'midship_thwart';
 
 export type AttachmentId =
   | 'cargo_rack' | 'rain_catcher' | 'firebox' | 'fishing_rig' | 'outrigger_port'
   | 'outrigger_starboard' | 'workbench' | 'smoker' | 'planter' | 'forge' | 'mast_sail'
   | 'rudder' | 'lantern_mast' | 'canopy' | 'map_table' | 'winch' | 'radio' | 'flag'
-  | 'figurehead';
+  | 'figurehead'
+  | 'plank_chest' | 'tin_trunk' | 'sea_chest';
 
 /** Which end of the hull a mount follows when the hull gets longer. */
 export type MountAnchor = 'bow' | 'centre' | 'stern';
