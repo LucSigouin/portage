@@ -208,8 +208,12 @@ export type {
 export type { Interactable } from './interact.ts';
 export type { SleepBlock } from './survival.ts';
 
-// --- Each player's quest card ----------------------------------------------
+// --- The crew's chart and each player's quest card --------------------------
+// `state.seen` is the fog of war: every cell anyone in the crew has seen, shared, saved, never fogged again.
 // `player.trackedQuestIds` is the quests on one player's card, their own pick.
+export {
+  FOG, SEEN_CELLS, SEEN_LENGTH, emptySeen, fullSeen, cellSeen, cellOf, seenAt, seenCount, revealCircle, chartKnownWaters,
+} from './fog.ts';
 export { MAXIMUM_TRACKED, defaultTracking } from './tracking.ts';
 
 // --- World functions shared with rendering ----------------------------------

@@ -11,8 +11,8 @@ import { HOST_QUIET_TEXT } from './crew.ts';
 import { atTheShore } from './shore.ts';
 import { SLEEP_FROM_TEXT, bearingDegrees, cardinalName, distanceText, durationText, primaryKey } from './format.ts';
 import type {
-  CompassMarkModel, CompassModel, CrewRowModel, HotbarSlotModel, HudModel, MeterModel, ObjectiveRowModel, PromptModel,
-  QuestTrackerModel, Tone, WaterGaugeModel,
+  CompassMarkModel, CompassModel, CrewRowModel, HotbarSlotModel, HudModel, MeterModel, MinimapMarkModel, MinimapModel,
+  ObjectiveRowModel, PromptModel, QuestTrackerModel, Tone, WaterGaugeModel,
 } from './types.ts';
 
 export const HOTBAR_SLOTS = 5;
@@ -161,6 +161,34 @@ function buildTrackers(state: GameState, playerId: PlayerId): QuestTrackerModel[
   }));
 }
 
+/** Metres from the minimap's middle to its rim: the next island over is on it. */
+export const MINIMAP_RADIUS_METRES = 360;
+
+/**
+ * The minimap of one player: their place and heading, the crewmates and the canoe, and a flag for each quest
+ * on their card that points somewhere charted. The interface draws it north up, and pins a mark past the rim to
+ * the rim at its bearing.
+ */
+function buildMinimap(state: GameState, playerId: PlayerId, followed: readonly string[]): MinimapModel {
+  const player = playerOf(state, playerId);
+  const marks: MinimapMarkModel[] = [];
+  for (const marker of selectMap(state, playerId).markers) {
+    if (marker.kind === 'canoe') marks.push({ kind: 'canoe', label: 'Canoe', ...marker.position, color: '' });
+    if (marker.kind === 'quest' && marker.questId !== null && followed.includes(marker.questId)) {
+      marks.push({ kind: 'quest', label: marker.label, ...marker.position, color: '' });
+    }
+  }
+  for (const { player: mate } of crewElsewhere(state, playerId)) {
+    const { label, color } = crewTag(mate);
+    marks.push({ kind: 'crew', label, x: mate.position.x, z: mate.position.z, color });
+  }
+  const degrees = Math.round((player.heading * 180) / Math.PI) % 360;
+  return {
+    x: player.position.x, z: player.position.z, headingDegrees: degrees < 0 ? degrees + 360 : degrees,
+    radiusMetres: MINIMAP_RADIUS_METRES, marks,
+  };
+}
+
 function buildCompass(state: GameState, cameraYaw: number, trackedQuestId: string | null, playerId: PlayerId): CompassModel {
   const { x, z } = playerOf(state, playerId).position;
   const mark = (id: string, kind: CompassMarkModel['kind'], label: string, bearing: number, distance: number | null): CompassMarkModel => ({
@@ -276,6 +304,7 @@ export function buildHudModel(
     tracker,
     trackers,
     compass: buildCompass(state, cameraYaw, tracker?.questId ?? null, playerId),
+    minimap: buildMinimap(state, playerId, trackers.map((quest) => quest.questId)),
     prompt: buildPrompt(state, settings, playerId, time),
     clockText: `Day ${time.day}, ${time.clock}`,
     night: time.isNight,

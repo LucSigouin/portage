@@ -524,6 +524,39 @@ html.iw-document {
   padding: 0.06rem 0;
 }
 
+/* The minimap, top right (Luc's bugfix list, line 13): the valley's chart round the player, north up, under the
+   same fog as the map. A round card that stands still. Its picture changes only when the player moves a pixel or
+   turns a degree: no spin, no pulse, no transition. It keeps inside the 16 rem square the layout leaves it. */
+.iw-minimap {
+  position: absolute;
+  top: 1.6rem;
+  right: 1.6rem;
+  width: 12rem;
+  height: 12rem;
+  padding: 0.32rem;
+  border-radius: 50%;
+}
+.iw-minimap-chart {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+.iw-minimap-north {
+  position: absolute;
+  top: -0.62rem;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 1.3rem;
+  padding: 0.02rem 0.3rem 0;
+  font-family: var(--iw-serif);
+  font-size: 0.95rem;
+  line-height: 1.15;
+  text-align: center;
+  background: var(--iw-paper);
+  border: 0.09rem solid var(--iw-ink);
+  border-radius: 0.4rem 0.3rem 0.45rem 0.3rem;
+}
 .iw-tracker h3 {
   display: flex;
   align-items: baseline;
@@ -2014,53 +2047,83 @@ html.iw-document {
   color: var(--iw-ink-soft);
 }
 
-/* the map: a chart pinned in the notebook */
+/* the map: the valley's round chart pinned in the notebook, north up. The canvas holds the washes, the shores and
+   the fog (chart.ts); the names and the marks are written over it in ink. */
 .iw-map-body {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 1.6rem;
+  gap: 2.4rem;
   align-items: start;
+  padding: 1.15rem 1.3rem;
 }
 .iw-chart {
   position: relative;
-  height: min(35rem, 90vh - 12.5rem);
-  aspect-ratio: 5 / 6;
-  overflow: hidden;
-  background-color: var(--iw-chart);
+  height: min(35rem, 90vh - 15rem);
+  aspect-ratio: 1;
+  background-color: var(--iw-paper-bright);
   background-image: var(--iw-tex);
   border: 0.115rem solid var(--iw-ink);
-  border-radius: 0.3rem 0.5rem 0.25rem 0.45rem;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0.3rem var(--iw-paper), 0 0 0 0.4rem var(--iw-ink);
 }
 .iw-chart.iw-full-chart {
-  box-shadow: inset 0 0 0 0.3rem var(--iw-chart), inset 0 0 0 0.38rem var(--iw-ink-faint);
+  box-shadow: 0 0 0 0.3rem var(--iw-paper), 0 0 0 0.4rem var(--iw-ink), 0 0 0 0.62rem var(--iw-paper), 0 0 0 0.7rem var(--iw-ink-soft);
 }
-.iw-water-band {
+.iw-chart-canvas {
   position: absolute;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  padding: 0.25rem 0.6rem;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+.iw-rim-letter {
+  position: absolute;
+  z-index: 1;
+  min-width: 1.5rem;
+  padding: 0.05rem 0.25rem 0;
+  font-family: var(--iw-serif);
+  font-size: 1.05rem;
+  line-height: 1.1;
+  text-align: center;
+  background: var(--iw-paper);
+  border: 0.09rem solid var(--iw-ink);
+  border-radius: 0.4rem 0.3rem 0.45rem 0.3rem;
+}
+.iw-rim-n {
+  top: -0.95rem;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.iw-rim-s {
+  bottom: -0.95rem;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.iw-rim-e {
+  right: -1.1rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.iw-rim-w {
+  left: -1.1rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.iw-water-name {
+  position: absolute;
+  transform: translateY(-50%);
   font-size: 0.72rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  border-top: 0.09rem dashed var(--iw-ink-soft);
+  white-space: nowrap;
+  color: var(--iw-ink-soft);
 }
-.iw-water-band small {
+.iw-water-name small {
+  display: block;
   font-family: var(--iw-hand);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   letter-spacing: 0;
   text-transform: none;
-}
-.iw-island {
-  position: absolute;
-  min-width: 0.7rem;
-  min-height: 0.6rem;
-  transform: translate(-50%, -50%) rotate(var(--turn));
-  background: var(--iw-sage);
-  border: 0.1rem solid var(--iw-ink);
-  border-radius: 58% 42% 55% 45% / 48% 60% 40% 52%;
 }
 .iw-island-name {
   position: absolute;

@@ -5,7 +5,7 @@ import type {
 
 /**
  * Bump when the shape of GameState changes; add a migration in `src/save/`.
- * 4: each player follows their own quests (`trackedQuestIds`).
+ * 4: the crew's chart (`seen`), and each player follows their own quests (`trackedQuestIds`).
  */
 export const STATE_VERSION = 4;
 
@@ -219,6 +219,11 @@ export interface GameState {
   /** Sparse: only nodes that have been touched. */
   nodes: Record<NodeId, NodeState>;
   quests: Record<QuestId, QuestState>;
+  /**
+   * The crew's chart: every cell of the valley anyone in the crew has seen, packed six to a character
+   * (`src/sim/fog.ts`). Once seen, always seen. The map and the minimap leave the rest in the fog.
+   */
+  seen: string;
   /** The crew's tool belt: a tool anyone finds, makes or is given is everyone's at once. Takes no slot, never lost. */
   tools: ToolId[];
   /** Unique finds and quest items, held by the crew as one. Take no slot, never lost. */

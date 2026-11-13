@@ -63,7 +63,7 @@ const vitals = (player: PlayerState) => ({ hunger: player.hunger, thirst: player
 describe('a player who is away', () => {
   it('starts connected, with no name, and the state version says so', () => {
     const state = newGame(7, { crew: 3 });
-    // Version 3 brought names and who is away; version 4 each player's quest card.
+    // Version 3 brought names and who is away; version 4 the crew's chart and each player's quest card.
     expect(STATE_VERSION).toBe(4);
     expect(state.players.map((player) => [player.connected, player.name])).toEqual([[true, ''], [true, ''], [true, '']]);
     expect(connectedPlayers(state)).toHaveLength(3);
@@ -322,7 +322,7 @@ describe('saves', () => {
     expect(loaded).toMatchObject({ ok: true, migratedFrom: 2 });
     if (!loaded.ok) return;
     expect(loaded.state.players.map((player) => [player.name, player.connected])).toEqual([['', true], ['', true]]);
-    // Migrated all the way: 2 to 3 here, then 3 to 4 (the quest cards).
+    // Migrated all the way: 2 to 3 here, then 3 to 4 (the chart and the cards).
     expect(loaded.state.version).toBe(4);
   });
 

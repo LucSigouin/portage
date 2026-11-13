@@ -28,7 +28,7 @@ import type { WireRun } from './walk.ts';
 /**
  * Bump when a message changes shape. Host and guest must match.
  * 2: a guest's walking is numbered by step (`input.step`, `input.walk`, `command.at`, `state.walked`, `welcome.walked`).
- * 3: the state is save version 4 (each player's quest card), and `track_quest` may say `tracked`.
+ * 3: the state is save version 4 (the crew's chart, each player's quest card), and `track_quest` may say `tracked`.
  */
 export const PROTOCOL_VERSION = 3;
 

@@ -448,7 +448,7 @@ describe('a save that is already stuck', () => {
     const loaded = deserialize(stuckSave);
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
-    expect(loaded.migratedFrom).toBe(3); // the quest card of version 4, nothing else
+    expect(loaded.migratedFrom).toBe(3); // the chart and the quest card of version 4, nothing else
     const state = loaded.state;
     const events: GameEvent[] = [];
     for (let tick = 0; tick < 12; tick += 1) {

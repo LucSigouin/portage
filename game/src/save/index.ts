@@ -6,7 +6,8 @@
  */
 import { MAIN_QUESTS } from '../data/quests.ts';
 import { TUNING } from '../data/tuning.ts';
-import { STATE_VERSION } from '../sim/index.ts';
+import { STATE_VERSION, chartKnownWaters } from '../sim/index.ts';
+import type { IslandId } from '../data/types.ts';
 import type { GameEvent, GameState } from '../sim/index.ts';
 
 /** Version of the save envelope and of the GameState inside it. */
@@ -74,13 +75,28 @@ function migrateCrewToComeAndGo(envelope: { version: number; savedAt: number; st
   return { version: 3, savedAt: envelope.savedAt, state };
 }
 
+/** A place `{ x, z }` read from an old save, or null when it is not one. */
+function placeOf(value: unknown): { x: number; z: number } | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const { x, z } = value as Record<string, unknown>;
+  return typeof x === 'number' && typeof z === 'number' && Number.isFinite(x) && Number.isFinite(z) ? { x, z } : null;
+}
+
 /**
- * Version 4 gives each player their own quest card (`trackedQuestIds`). The one quest an older save tracked goes
- * on every player's card, so nobody's card changes.
+ * Version 4 keeps the crew's chart (`seen`, the fog of war) and gives each player their own quest card
+ * (`trackedQuestIds`). An older save has no chart: it starts with the islands it knew and the waters round them
+ * and between them, in the order they were found (`chartKnownWaters`), and the sight from where everyone and the
+ * canoe stand. Never a blank map. The one quest it tracked goes on every player's card, so nobody's card changes.
  */
-function migrateToCards(envelope: { version: number; savedAt: number; state: unknown }): { version: number; savedAt: number; state: unknown } {
+function migrateToChartAndCards(envelope: { version: number; savedAt: number; state: unknown }): { version: number; savedAt: number; state: unknown } {
   const state = { ...(envelope.state as Record<string, unknown>) };
   const players = Array.isArray(state.players) ? state.players as Record<string, unknown>[] : [];
+  const canoe = typeof state.canoe === 'object' && state.canoe !== null ? state.canoe as Record<string, unknown> : {};
+  const discovered = Array.isArray(state.discoveredIslands)
+    ? state.discoveredIslands.filter((islandId): islandId is IslandId => typeof islandId === 'string') : [];
+  const places = [...players.map((player) => placeOf(player.position)), placeOf(canoe.position), placeOf(canoe.lastBeached)]
+    .filter((place) => place !== null);
+  state.seen = chartKnownWaters(discovered, places);
   const tracked = typeof state.trackedQuestId === 'string' ? [state.trackedQuestId] : [];
   state.players = players.map((player) => ({ ...player, trackedQuestIds: [...tracked] }));
   delete state.trackedQuestId;
@@ -88,7 +104,7 @@ function migrateToCards(envelope: { version: number; savedAt: number; state: unk
 }
 
 export const SAVE_MIGRATIONS: Record<number, SaveMigration> = {
-  1: migrateSoloToCrew, 2: migrateCrewToComeAndGo, 3: migrateToCards,
+  1: migrateSoloToCrew, 2: migrateCrewToComeAndGo, 3: migrateToChartAndCards,
 };
 
 export type LoadFailure = 'empty' | 'corrupt' | 'from_newer_version' | 'no_migration';

@@ -493,16 +493,21 @@ const MARKER_ICON: Record<MapMarkerModel['kind'], string> = {
 const markerIcon = (marker: MapMarkerModel): ViewNode =>
   icon(marker.kind === 'crew' && marker.color ? toqueIcon(marker.color) : MARKER_ICON[marker.kind]);
 
+/** The four points of the compass round the chart's rim. */
+const RIM_LETTERS = [['n', 'N'], ['e', 'E'], ['s', 'S'], ['w', 'W']] as const;
+
+/**
+ * The map: the valley's round chart, north up (painted on the canvas by `MapChart`, with the crew's fog over it),
+ * and on it in ink the names of the waters the crew has been on and of the islands it has found, and the marks.
+ */
 function mapView(panel: Extract<PanelModel, { id: 'map' }>): ViewNode[] {
   const chart = h('div.iw-chart', { class: panel.fullChart ? 'iw-full-chart' : '' },
-    panel.regions.map((region) => h('div.iw-water-band', { key: region.name, style: `top:${percent(region.top)};height:${percent(region.height)}` },
-      h('span', null, region.name), h('small', null, `roughness ${region.roughness}`))),
+    h('canvas.iw-chart-canvas', { key: 'canvas', 'aria-hidden': 'true' }),
+    RIM_LETTERS.map(([side, letter]) => h('b.iw-rim-letter', { key: `rim-${side}`, class: `iw-rim-${side}`, 'aria-hidden': 'true' }, letter)),
+    panel.regions.filter((region) => region.seen).map((region) => h('span.iw-water-name', {
+      key: region.name, style: `left:${percent(region.labelLeft)};top:${percent(region.labelTop)}`,
+    }, region.name, h('small', null, `rough ${region.roughness}`))),
     panel.islands.map((island) => [
-      h('i.iw-island', {
-        key: island.islandId,
-        style: `left:${percent(island.left)};top:${percent(island.top)};width:${percent(island.width)};height:${percent(island.height)};`
-          + `--turn:${island.rotationDegrees}deg`,
-      }),
       // A name near the edge of the chart is nudged inward, so it is never cut off.
       h('span.iw-island-name', {
         key: `${island.islandId}-name`,
@@ -517,7 +522,7 @@ function mapView(panel: Extract<PanelModel, { id: 'map' }>): ViewNode[] {
     }, markerIcon(marker))));
   const legend = h('ul.iw-legend', null, panel.markers.map((marker, index) =>
     h('li', { key: index, class: marker.kind === 'crew' ? 'iw-legend-crew' : '' }, markerIcon(marker), h('span', null, marker.label))));
-  return sheet(panel, 'mid', panel.summary, h('div.iw-body.iw-map-body', { key: 'body' }, chart, legend));
+  return sheet(panel, 'wide', panel.summary, h('div.iw-body.iw-map-body', { key: 'body' }, chart, legend));
 }
 
 function dialogueView(panel: Extract<PanelModel, { id: 'dialogue' }>): ViewNode[] {

@@ -1,11 +1,12 @@
 /** The in-game panels: inventory, crafting, canoe builder, quest log, map and dialogue. */
 import {
-  ATTACHMENTS, HULL_TIERS, ISLANDS, ITEMS, NPCS, QUESTS, RECIPE_IDS, RECIPES, REGIONS, STATIONS, STOCK_FOOD_IDS, TUNING, isStackable,
+  ATTACHMENTS, HULL_TIERS, ISLANDS, ITEMS, NPCS, QUESTS, RECIPE_IDS, RECIPES, REGIONS, STATIONS, STOCK_FOOD_IDS,
+  VALLEY_NORTH_SHORE_Z, VALLEY_SOUTH_SHORE_Z, isStackable,
 } from '../../data/index.ts';
 import type { AttachmentId, ItemAmount, ItemId, StationId } from '../../data/index.ts';
 import {
   MAXIMUM_TRACKED, selectActiveQuests, selectBuildOptions, selectCanoeStats, selectCraftableRecipes, selectDialogue,
-  selectInventory, selectMap, selectQuestLog,
+  selectInventory, selectMap, selectQuestLog, valleyHalfWidth,
 } from '../../sim/index.ts';
 import type { Command, Container, GameState, InventoryView, ItemStack, Missing, PlayerId, QuestView } from '../../sim/index.ts';
 import type { InterfaceIntent } from '../intents.ts';
@@ -13,6 +14,7 @@ import { DEFAULT_KEY_BINDINGS } from '../../settings/index.ts';
 import type { KeyBindings } from '../../settings/index.ts';
 import { FLAG_SOURCES, capitalise, cardinalName, countedName, distanceText, itemName, needsText, primaryKey } from './format.ts';
 import { crewElsewhere, crewTag, objectiveRows } from './hud.ts';
+import { CHART, lakeSeenShare, seenCells, valleyChart } from './chart.ts';
 import type {
   BuildRowModel, ButtonModel, CostRowModel, ItemSlotModel, MapIslandModel, MapMarkerModel, NeedChipModel, PanelModel,
   QuestRowModel, RecipeRowModel,
@@ -345,25 +347,46 @@ export function buildQuestLogPanel(state: GameState, playerId: PlayerId = 0): Pa
 
 // --- Map -------------------------------------------------------------------------
 
-/** The chart's frame in world metres: the whole lake with a margin. North is up. */
+/** The chart's square in world metres, north up: the round chart (`CHART`) is drawn inside it, touching its sides. */
 export const MAP_BOUNDS = {
-  minimumX: -1250, maximumX: 1250, minimumZ: -TUNING.world.halfExtent, maximumZ: TUNING.world.halfExtent,
+  minimumX: CHART.centerX - CHART.radius, maximumX: CHART.centerX + CHART.radius,
+  minimumZ: CHART.centerZ - CHART.radius, maximumZ: CHART.centerZ + CHART.radius,
 } as const;
 
 const mapLeft = (x: number): number => (x - MAP_BOUNDS.minimumX) / (MAP_BOUNDS.maximumX - MAP_BOUNDS.minimumX);
 const mapTop = (z: number): number => (z - MAP_BOUNDS.minimumZ) / (MAP_BOUNDS.maximumZ - MAP_BOUNDS.minimumZ);
 
+/** True once anyone in the crew has seen a cell of the lake between these two edges (north, south). */
+function waterSeen(cells: Uint8Array, northZ: number, southZ: number): boolean {
+  const { fog, lakeCells } = valleyChart();
+  for (let row = 0; row < fog.rows; row += 1) {
+    const z = fog.minimumZ + (row + 0.5) * fog.cellMetres;
+    if (z < northZ || z >= southZ) continue;
+    for (let column = 0; column < fog.columns; column += 1) {
+      const cell = row * fog.columns + column;
+      if (lakeCells[cell] && cells[cell]) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The map of one player: the round chart with the crew's fog over it (drawn by the interface from the
+ * `chart` beside the model), the names of the islands found, the waters, and the marks: the player, the canoe,
+ * the camp, the survivors, the open quests' places, the crewmates.
+ */
 export function buildMapPanel(state: GameState, playerId: PlayerId = 0): PanelBody<'map'> {
   const map = selectMap(state, playerId);
   const width = MAP_BOUNDS.maximumX - MAP_BOUNDS.minimumX;
   const height = MAP_BOUNDS.maximumZ - MAP_BOUNDS.minimumZ;
+  const cells = seenCells(map.seen);
   const islands: MapIslandModel[] = map.islands.filter((island) => island.discovered).map((island) => ({
     islandId: island.islandId,
     name: island.name,
     left: mapLeft(island.position.x),
     top: mapTop(island.position.z),
-    width: (island.radiusX * 2) / width,
-    height: (island.radiusZ * 2) / height,
+    width: (Math.max(island.radiusX, island.radiusZ) * 2) / width,
+    height: (Math.max(island.radiusX, island.radiusZ) * 2) / height,
     rotationDegrees: Math.round((island.rotation * 180) / Math.PI),
     bearingText: island.bearing !== null && island.distance !== null
       ? `${cardinalName(island.bearing)}, ${distanceText(island.distance)}`
@@ -384,13 +407,26 @@ export function buildMapPanel(state: GameState, playerId: PlayerId = 0): PanelBo
     fullChart: map.fullChart,
     summary: map.fullChart
       ? 'Full chart from the map table, with bearings'
-      : `${islands.length} of ${ISLANDS.length} islands charted`,
-    regions: REGIONS.map((region) => ({
-      name: region.name,
-      top: mapTop(Math.max(region.northEdgeZ, MAP_BOUNDS.minimumZ)),
-      height: (Math.min(region.southEdgeZ, MAP_BOUNDS.maximumZ) - Math.max(region.northEdgeZ, MAP_BOUNDS.minimumZ)) / height,
-      roughness: region.roughness,
-    })),
+      : `${islands.length} of ${ISLANDS.length} islands charted, ${Math.floor(lakeSeenShare(cells) * 100)}% of the lake seen`,
+    regions: REGIONS.map((region) => {
+      // The band, inside the lake: the valley ends at its north and south shores.
+      const northZ = Math.max(region.northEdgeZ, VALLEY_NORTH_SHORE_Z);
+      const southZ = Math.min(region.southEdgeZ, VALLEY_SOUTH_SHORE_Z);
+      // The name is written in the west margin, a third of the way down the band: on the valley's side where it
+      // is wide, clear of the islands, and inside the round chart where it narrows.
+      const labelZ = northZ + (southZ - northZ) / 3;
+      const rimX = CHART.centerX - Math.sqrt(Math.max(0, CHART.radius ** 2 - (labelZ - CHART.centerZ) ** 2)) + 50;
+      const labelX = Math.max(rimX, Math.min(-valleyHalfWidth(labelZ) - 150, CHART.centerX - 1380));
+      return {
+        name: region.name,
+        top: mapTop(northZ),
+        height: (southZ - northZ) / height,
+        roughness: region.roughness,
+        labelLeft: mapLeft(labelX),
+        labelTop: mapTop(labelZ),
+        seen: map.fullChart || waterSeen(cells, northZ, southZ),
+      };
+    }),
     islands,
     markers,
   };

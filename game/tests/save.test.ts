@@ -25,11 +25,11 @@ function playedGame() {
 const MAIN_QUEST_ORDER = MAIN_QUESTS.map((quest) => quest.id);
 
 /**
- * A version 4 state put back in the shape of version 3: the first player's card as the crew's one tracked
- * quest. What the migration from 3 must leave exactly as it was saved.
+ * A version 4 state put back in the shape of version 3: no chart, the first player's card as the crew's one
+ * tracked quest. What the migration from 3 must leave exactly as it was saved.
  */
 function asSavedBefore4(state: GameState): Record<string, unknown> {
-  const { ...rest } = state;
+  const { seen: _seen, ...rest } = state;
   return {
     ...rest,
     trackedQuestId: state.players[0]!.trackedQuestIds[0] ?? null,
@@ -120,9 +120,10 @@ describe('old saves', () => {
       if (!loaded.ok) return;
       expect(loaded.migratedFrom).toBe(1);
       expect(loaded.savedAt).toBe(1762819200000);
-      // Through version 4 as well: its one tracked quest is on the player's card.
+      // Through version 4 as well: its one tracked quest is on the player's card, and its islands are charted.
       expect(loaded.state.players[0].trackedQuestIds).toEqual(old.trackedQuestId ? [old.trackedQuestId] : []);
       expect('trackedQuestId' in loaded.state).toBe(false);
+      expect(typeof loaded.state.seen).toBe('string');
       const state = loaded.state;
       expect(state.version).toBe(SAVE_VERSION);
       expect(state.players).toHaveLength(1);
@@ -199,7 +200,7 @@ describe('saves from before the wind swung', () => {
     expect('windTurn' in old.state.weather).toBe(false);
   });
 
-  it('loads it as it was saved: only the quest card is new (version 4)', () => {
+  it('loads it as it was saved: only the chart and the quest card are new (version 4)', () => {
     const loaded = deserialize(text);
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
@@ -255,7 +256,7 @@ describe('saves made on the live site', () => {
     for (const save of saved) expect(save.state.flags.beacon_lit ?? false).toBe(false);
   });
 
-  it.each(NAMES)('%s loads with no error, as it was saved, with the quest card of version 4', (name) => {
+  it.each(NAMES)('%s loads with no error, as it was saved, with the chart and the quest card of version 4', (name) => {
     const loaded = deserialize(fixture(name));
     expect(loaded.ok, loaded.ok ? '' : loaded.reason).toBe(true);
     if (!loaded.ok) return;

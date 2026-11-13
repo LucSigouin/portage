@@ -237,8 +237,10 @@ export interface MapMarker {
 }
 
 export interface MapData {
-  /** True with the map table: every island is charted, with bearings. */
+  /** True with the map table: every island is charted, with bearings, and the fog is lifted. */
   fullChart: boolean;
+  /** The crew's chart: what anyone in the crew has seen (`src/sim/fog.ts`). */
+  seen: string;
   islands: {
     islandId: IslandId;
     name: string;
@@ -341,6 +343,7 @@ export function selectMap(state: GameState, playerId: PlayerId = 0): MapData {
   }
   return {
     fullChart,
+    seen: state.seen,
     islands: ISLANDS.map((definition) => ({
       islandId: definition.id,
       name: definition.name,
