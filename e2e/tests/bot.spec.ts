@@ -99,7 +99,9 @@ test('the bot plays the live session to the Beacon', async ({ page }) => {
   expect(end.fails).toBe(0);
   expect(end.hullTier).toBe(3);
   expect(end.panels).toEqual(['credits']); // the credits came up when the Beacon was lit
-  expect(end.playedMinutes).toBeGreaterThan(80);
+  // The same floor as the unit test (game/tests/bot.test.ts): the main quest is more than an hour of play.
+  // It was 80 when the canoe paddled at 2.2 m/s and this run took 110 minutes. At 3.2 m/s it takes 75.
+  expect(end.playedMinutes).toBeGreaterThan(65);
   // Other pages share this Mac's graphics chip while the test runs, so one slow sample proves nothing.
   // The slowest 5% may dip below 50. Nothing may fall below 30.
   const slowestFirst = [...rates].sort((first, second) => first - second);
