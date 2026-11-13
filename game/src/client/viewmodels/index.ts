@@ -14,6 +14,7 @@ import {
   buildQuestLogPanel,
 } from './gamepanels.ts';
 import { buildCrewHostPanel, buildCrewJoinPanel } from './crew.ts';
+import { buildFeedbackPanel, withFeedbackEntry } from './feedback.ts';
 import { buildHudModel } from './hud.ts';
 import {
   buildConfirmModel, buildCreditsPanel, buildHowToPlayPanel, buildLobbyModel, buildPausePanel, buildSaveSlotsPanel,
@@ -32,6 +33,7 @@ export * from './gamepanels.ts';
 export * from './stations.ts';
 export * from './menus.ts';
 export * from './crew.ts';
+export * from './feedback.ts';
 export * from './settings.ts';
 export * from './chart.ts';
 
@@ -62,6 +64,8 @@ export interface InterfaceModelInput {
   progressText: string;
   /** The crew lobby's state. Null or absent in a game built without a relay: no crew entries, no crew panels. */
   crew?: CrewView | null;
+  /** The feedback desk (`client/feedback.ts`). Asked for its state only while its panel is the one open. */
+  feedback?: { view(): import('../feedback.ts').FeedbackView } | null;
   /** The words of the built view while it holds the screen (`builtWords`). Null or absent the rest of the time. */
   built?: { kicker: string; title: string; text: string } | null;
   /** The arrival card on the screen this frame (`ArrivalQueue.model`). Null or absent the rest of the time. */
@@ -77,6 +81,7 @@ const PANEL_TITLES: Readonly<Record<PanelId, string>> = {
   settings: 'Settings', how_to_play: 'How to Play', credits: 'Credits', pause: 'Paused', save_slots: 'Save slots',
   inventory: 'Inventory', crafting: 'Crafting', canoe_builder: 'Canoe builder', quest_log: 'Quest log', map: 'Map',
   dialogue: 'Conversation', confirm: 'Confirm', crew_host: 'Host a crew', crew_join: 'Join a crew',
+  feedback: 'Feedback',
 };
 
 /** The model of one open panel, or null when it has nothing to show. */
@@ -97,8 +102,12 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
       return { ...frame, ...buildHowToPlayPanel(input.settings) };
     case 'credits':
       return { ...frame, ...buildCreditsPanel(game?.flags.beacon_lit === true) };
-    case 'pause':
-      return { ...frame, ...buildPausePanel(input.progressText, input.crew ?? null, isGuestScreen(input)) };
+    case 'pause': {
+      const pause = buildPausePanel(input.progressText, input.crew ?? null, isGuestScreen(input));
+      return { ...frame, ...pause, buttons: withFeedbackEntry(pause.buttons) };
+    }
+    case 'feedback':
+      return input.feedback ? { ...frame, ...buildFeedbackPanel(input.feedback.view()) } : null;
     case 'save_slots':
       return { ...frame, ...buildSaveSlotsPanel(input.slots, input.now, input.currentSlot) };
     case 'inventory':
@@ -124,6 +133,9 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
   }
 }
 
+/** The lobby with its Feedback entry (`feedback.ts`). */
+const withLobbyFeedback = (lobby: InterfaceModel['lobby'] & object): InterfaceModel['lobby'] => ({ ...lobby, buttons: withFeedbackEntry(lobby.buttons, 'A bug, an idea, anything') });
+
 /** One frame of UI. Only the panel on top (under any confirm dialog) is built. */
 export function buildInterfaceModel(input: InterfaceModelInput): InterfaceModel {
   const { panels, settings, game } = input;
@@ -134,7 +146,7 @@ export function buildInterfaceModel(input: InterfaceModelInput): InterfaceModel 
     uiScale: settings.accessibility.uiScale,
     patternedMeters: settings.accessibility.patternedMeters,
     paused: input.paused,
-    lobby: panels.screen === 'lobby' ? buildLobbyModel(input.slots, input.latestSlot, input.crew ?? null) : null,
+    lobby: panels.screen === 'lobby' ? withLobbyFeedback(buildLobbyModel(input.slots, input.latestSlot, input.crew ?? null)) : null,
     hud: game ? buildHudModel(game, settings, input.cameraYaw, input.playerId ?? 0, input.hostId ?? null, input.hostQuiet ?? false) : null,
     toasts: input.toasts,
     panel: beneath ? buildPanelModel(beneath, input) : null,

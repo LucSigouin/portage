@@ -509,6 +509,7 @@ export type PanelModel = { title: string; close: ButtonModel } & (
     join: ButtonModel;
     cancel: ButtonModel | null;
   }
+  | import('./feedback.ts').FeedbackPanelBody
 );
 
 export interface ConfirmModel {

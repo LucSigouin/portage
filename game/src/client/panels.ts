@@ -12,7 +12,9 @@ export type PanelId =
   | 'settings' | 'how_to_play' | 'credits' | 'pause' | 'inventory' | 'crafting' | 'canoe_builder'
   | 'quest_log' | 'map' | 'dialogue' | 'save_slots' | 'confirm'
   /** Hosting a room on the relay, and joining one. Only reachable in a game built with a relay address. */
-  | 'crew_host' | 'crew_join';
+  | 'crew_host' | 'crew_join'
+  /** A note for Luc from a play tester (`feedback.ts`). In every build: without a relay the panel says feedback is off. */
+  | 'feedback';
 
 export type SettingsTabId = 'audio' | 'graphics' | 'controls' | 'gameplay' | 'accessibility';
 
@@ -76,6 +78,7 @@ export const PANEL_RULES: Readonly<Record<PanelId, PanelRule>> = {
   // The host's room card is also on the pause menu: the place to copy the link again mid-game.
   crew_host: { group: 'menu', parents: { lobby: ['root'], game: ['pause'] }, pausesSimulation: true, needsBeachedCanoe: false },
   crew_join: { group: 'menu', parents: { lobby: ['root'] }, pausesSimulation: true, needsBeachedCanoe: false },
+  feedback: { group: 'menu', parents: { lobby: ['root'], game: ['pause'] }, pausesSimulation: true, needsBeachedCanoe: false },
   pause: { group: 'menu', parents: GAME_ROOT, pausesSimulation: true, needsBeachedCanoe: false },
   inventory: { group: 'gameplay', parents: GAME_ROOT, pausesSimulation: true, needsBeachedCanoe: false },
   crafting: { group: 'gameplay', parents: GAME_ROOT, pausesSimulation: true, needsBeachedCanoe: false },

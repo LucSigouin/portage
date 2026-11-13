@@ -14,6 +14,11 @@
 # never against the one that was there before. The last check dials in a loop until the relay's dial limit
 # stops it (at most 150 dials), then waits up to 90 s for the limit to let this address in again.
 #
+# Feedback (relay/src/feedback.ts): play testers' notes are kept in the D1 database `portage-feedback` on
+# Luc's account. This script looks the database up by its name and gives its id to the upload. When the account
+# has no such database the relay is uploaded without a store, and answers every note with "feedback is off".
+# FEEDBACK=off below does the same and keeps what is stored. Read the notes: deploy/read-feedback.sh.
+#
 # Undo: from an empty folder, `<portage>/relay/node_modules/.bin/wrangler delete --name portage-relay`.
 # Then take PORTAGE_RELAY out of deploy/deploy.sh and deploy the game: the lobby goes back to five entries.
 set -euo pipefail
@@ -25,6 +30,9 @@ RELAY=wss://sigouin.net/portage/relay
 HEALTH=https://sigouin.net/portage/relay/health
 ORIGIN=https://sigouin.net
 GAME_LIVE=https://sigouin.net/portage/
+# `on`: the relay keeps play testers' notes. `off`: it refuses every note, and what is stored stays.
+FEEDBACK=on
+FEEDBACK_STORE=portage-feedback
 WRANGLER="$ROOT/relay/node_modules/.bin/wrangler"
 WORK="${TMPDIR:-/private/tmp/claude-501}/portage-deploy"
 LOG="$WORK/deploy-relay.log"
@@ -62,9 +70,31 @@ export WRANGLER_SEND_METRICS=false
 # one for this computer (no route, localhost allowed), and the live relay answers the site alone.
 # This upload's name: the commit, and the time, so that a second upload of the same commit is told apart too.
 BUILD="$(git -C "$ROOT" rev-parse --short HEAD)-$(date -u +%Y%m%dT%H%M%SZ)"
-(cd "$STAGE" && "$WRANGLER" deploy --route "$ROUTE" --var "ALLOWED_ORIGINS:$ORIGIN" --var "BUILD:$BUILD") >> "$LOG" 2>&1 \
+
+# The feedback store. Its id is not in wrangler.jsonc either: the file holds a stand-in for this computer.
+# FEEDBACK_DATABASE_ID=<id> in front of this script gives the id by hand and skips the look-up.
+store_id="${FEEDBACK_DATABASE_ID:-}"
+if [ -z "$store_id" ]; then
+  (cd "$STAGE" && "$WRANGLER" d1 list --json) > "$WORK/d1-list.json" 2>> "$LOG" \
+    || fail "Could not list the account's databases. If it asks for a token, the browser login has expired: run deploy/login.sh."
+  look=0
+  store_id="$(node "$ROOT/deploy/feedback-store.mjs" id "$FEEDBACK_STORE" < "$WORK/d1-list.json" 2>> "$LOG")" || look=$?
+  # 3: the account has no such database, which is a fair state. Anything else is a list that could not be read.
+  [ "$look" = 0 ] || [ "$look" = 3 ] || fail "The list of databases could not be read. To go on without it: FEEDBACK_DATABASE_ID=<id> bash deploy/deploy-relay.sh --yes"
+fi
+if [ -n "$store_id" ]; then
+  node "$ROOT/deploy/feedback-store.mjs" bind "$STAGE/wrangler.jsonc" "$store_id" >> "$LOG" 2>&1 || fail 'The feedback store could not be put into the upload.'
+  feedback_check="$FEEDBACK"
+  feedback_words="feedback store $FEEDBACK_STORE ${store_id:0:8}, feedback $FEEDBACK"
+else
+  node "$ROOT/deploy/feedback-store.mjs" cut "$STAGE/wrangler.jsonc" >> "$LOG" 2>&1 || fail 'The feedback store could not be taken out of the upload.'
+  feedback_check=off
+  feedback_words="no database called $FEEDBACK_STORE on the account, so feedback is off (relay/README.md says how to make it)"
+fi
+
+(cd "$STAGE" && "$WRANGLER" deploy --route "$ROUTE" --var "ALLOWED_ORIGINS:$ORIGIN" --var "BUILD:$BUILD" --var "FEEDBACK:$FEEDBACK") >> "$LOG" 2>&1 \
   || fail "The upload to Cloudflare failed. If it asks for a token, the browser login has expired: run deploy/login.sh. To see which relay answers now: curl $HEALTH"
-printf '2/4 uploaded build %s (%s)\n' "$BUILD" "$(grep -E 'Current Version ID' "$LOG" | tail -n 1 | sed 's/^ *//')"
+printf '2/4 uploaded build %s (%s; %s)\n' "$BUILD" "$(grep -E 'Current Version ID' "$LOG" | tail -n 1 | sed 's/^ *//')" "$feedback_words"
 
 # The route sits in front of the site. Until it answers, the site's own "not found" page does. And on every
 # deploy but the first, the relay from before answers "ok" as well: only the build's name tells the two apart.
@@ -72,7 +102,7 @@ node "$ROOT/deploy/wait-relay.mjs" "$HEALTH" "$BUILD" 120 >> "$LOG" 2>&1 \
   || fail "$HEALTH never answered as build $BUILD. The upload went through, so look at what it says now: curl $HEALTH"
 printf '3/4 the new relay answers on the site (%s)\n' "$(grep -E '^relay build:' "$LOG" | tail -n 1)"
 
-node "$ROOT/deploy/smoke-relay.mjs" "$RELAY" "$ORIGIN" --build "$BUILD" --limit >> "$LOG" 2>&1 \
+node "$ROOT/deploy/smoke-relay.mjs" "$RELAY" "$ORIGIN" --build "$BUILD" --limit --feedback "$feedback_check" >> "$LOG" 2>&1 \
   || fail 'The live relay failed its smoke test. It is live all the same: the upload was not undone.'
 game_after="$(curl -s "${GAME_LIVE}?fresh=$(date +%s)" | shasum -a 256 | cut -d' ' -f1)"
 [ "$game_before" = "$game_after" ] || fail "The live game page changed (${game_before:0:16} to ${game_after:0:16}). It must not."

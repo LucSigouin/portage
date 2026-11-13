@@ -13,6 +13,7 @@ import type {
   SaveSlotModel, SettingRowModel, TextFieldModel, ToastModel,
 } from '../client/contracts.ts';
 import { control, h } from './dom.ts';
+import { feedbackView } from './feedback.ts';
 import type { ViewChild, ViewNode } from './dom.ts';
 import type { ItemId } from '../data/index.ts';
 import { ICON, SEAL, itemIcon, logotype, toqueIcon, waterGauge } from './icons.ts';
@@ -558,6 +559,7 @@ export function panelView(panel: PanelModel, open: ReadonlySet<string> = NONE_OP
     case 'dialogue': return dialogueView(panel);
     case 'crew_host': return crewHostView(panel);
     case 'crew_join': return crewJoinView(panel);
+    case 'feedback': return feedbackView(panel);
   }
 }
 

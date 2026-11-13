@@ -19,14 +19,24 @@
   // the Worker asks it before any room is woken. A window is 10 or 60 seconds, nothing else.
   // namespace_id only names the counters. It must be a whole number no other Worker on the account uses
   // (the music site has 1001 and 1002). Changing it starts the counts again.
-  "ratelimits": [{ "name": "DIALS", "namespace_id": "2201", "simple": { "limit": 30, "period": 60 } }],
+  // NOTES is the same kind of count for feedback: one address may send 5 notes a minute (src/feedback.ts).
+  "ratelimits": [{ "name": "DIALS", "namespace_id": "2201", "simple": { "limit": 30, "period": 60 } },
+    { "name": "NOTES", "namespace_id": "2202", "simple": { "limit": 5, "period": 60 } }],
+  // Feedback (src/feedback.ts): play testers' notes, one table in a D1 database. On this computer the database
+  // is a file under .wrangler/ and the id below is only a name for it. deploy/deploy-relay.sh puts the real
+  // id in its place, or takes these lines out when Luc's account has no database called portage-feedback.
+  // feedback-store:begin
+  "d1_databases": [{ "binding": "NOTES_DB", "database_name": "portage-feedback", "database_id": "local-only-portage-feedback" }],
+  // feedback-store:end
   "vars": {
     // Where a connection may come from. `*` stands for any port.
     "ALLOWED_ORIGINS": "https://sigouin.net,http://localhost:*,http://127.0.0.1:*",
     // A room is looked at this often. Three looks in a row with no message through it and it is closed (about half an hour).
     "IDLE_SWEEP_SECONDS": "600",
     // Which build answers at /health. deploy/deploy-relay.sh gives the commit and the upload time instead.
-    "BUILD": "local"
+    "BUILD": "local",
+    // `off` refuses every note and keeps what is stored. deploy/deploy-relay.sh has the switch (FEEDBACK).
+    "FEEDBACK": "on"
   },
   // Nothing is logged, and nothing is kept by Cloudflare's log store either.
   "observability": { "enabled": false }

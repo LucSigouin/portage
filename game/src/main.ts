@@ -16,10 +16,14 @@ import { createGameInterface } from './interface/index.ts';
 import { createWorldView } from './look/index.ts';
 import { setLocalPlayerId } from './look/crew.ts';
 import { CrewLobby } from './client/crewlobby.ts';
+import { FeedbackDesk } from './client/feedback.ts';
+import { buildFeedbackContext } from './client/viewmodels/feedback.ts';
+import { GAME_VERSION } from './client/version.ts';
 import { createFrameLoop } from './client/loop.ts';
 import type { FrameLoop } from './client/loop.ts';
 import type { SessionStorage } from './client/session.ts';
 import { hostTabRoom, joinTabRoom } from './net/index.ts';
+import { resolveFeedbackAddress } from './net/feedback.ts';
 import { resolveRelayAddress } from './net/relay.ts';
 import type { SocketLike } from './net/relay.ts';
 
@@ -127,6 +131,13 @@ function boot(): void {
     // An invite link lands on the join card, with its code filled in.
     if (parameters.invite !== null && !parameters.sandbox) session.handleIntent({ type: 'open_panel', panel: 'crew_join' });
   }
+
+  // Feedback: a note for Luc, sent to the relay's store. In every build: with no relay the panel says it is off.
+  session.feedback = new FeedbackDesk({
+    address: resolveFeedbackAddress(__PORTAGE_RELAY__, window.location.origin), version: GAME_VERSION,
+    fetch: (address, request) => window.fetch(address, request), storage: browserStorage(),
+    context: () => buildFeedbackContext(session.game, session.settings, session.localPlayerId),
+  });
 
   worldView.mount(worldElement);
   gameInterface.mount(interfaceElement, (intent) => session.handleIntent(intent));

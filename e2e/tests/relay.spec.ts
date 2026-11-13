@@ -528,8 +528,8 @@ test('a build made with no relay has no crew entries, opens no socket, and ignor
   const player = await arrive(context, `${BARE}/?invite=FHJK3M`, problems, 'player');
   // It is a built game being looked at, not a dev server that happens to sit on that port.
   expect(await player.page.locator('script[src*="/assets/"]').count(), 'a built page').toBeGreaterThan(0);
-  await expect(player.page.locator('.iw-lobby-col .iw-mi')).toHaveCount(5);
-  expect(await player.page.locator('.iw-lobby-col .iw-mi .iw-label').allInnerTexts()).toEqual(['Continue', 'New Game', 'Settings', 'How to Play', 'Credits']);
+  await expect(player.page.locator('.iw-lobby-col .iw-mi')).toHaveCount(6);
+  expect(await player.page.locator('.iw-lobby-col .iw-mi .iw-label').allInnerTexts()).toEqual(['Continue', 'New Game', 'Settings', 'How to Play', 'Feedback', 'Credits']);
   await expect(player.page.locator('.iw-panel')).toHaveCount(0);
   // (The build drops the crew lobby whole: the session does not even keep a place for one.)
   expect(await player.page.evaluate(() => (window as unknown as { portage: { session: any } }).portage.session.crew ?? null)).toBeNull();
@@ -548,7 +548,7 @@ test('a build made with no relay has no crew entries, opens no socket, and ignor
   await inGame(player.page);
   await player.page.keyboard.press('Escape');
   // (The menu is drawn on the frame after the key: look until it is there.)
-  await expect(player.page.locator('.iw-panel-pause .iw-mi .iw-label')).toHaveText(['Resume', 'Settings', 'How to Play', 'Save and quit to the lobby']);
+  await expect(player.page.locator('.iw-panel-pause .iw-mi .iw-label')).toHaveText(['Resume', 'Settings', 'How to Play', 'Feedback', 'Save and quit to the lobby']);
   expect(await player.page.evaluate(() => (window as unknown as { socketsMade: string[] }).socketsMade), 'sockets the page made').toEqual([]);
   expect(player.sockets).toEqual([]);
   expect(problems).toEqual([]);

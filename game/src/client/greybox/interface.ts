@@ -195,6 +195,9 @@ function panelBodyHtml(panel: PanelModel): string {
     case 'crew_join':
       return `<p>${escapeHtml(panel.status)}</p>${panel.lines.map((line) => `<p>${escapeHtml(line)}</p>`).join('')}`
         + `<nav class="gb-column">${[panel.join, ...(panel.cancel ? [panel.cancel] : [])].map((button) => buttonHtml(button)).join('')}</nav>`;
+    // The Feedback card is the Ink & Wash interface's too. What a player typed is never built into markup: not drawn here at all.
+    case 'feedback':
+      return `<p>${escapeHtml(panel.status)}</p>`;
   }
 }
 
