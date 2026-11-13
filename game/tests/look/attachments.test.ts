@@ -587,3 +587,69 @@ describe('the patched hull', () => {
     });
   });
 });
+
+describe('the canoe says how big it is as drawn, for the built view to frame', () => {
+  const boundsOf = (tier: number, attachments: AttachmentId[], crew = 1, place?: (state: GameState) => void): THREE.Box3 => {
+    const state = fitted(tier, crew);
+    state.canoe.attachments = attachments;
+    place?.(state);
+    const view = new CanoeView();
+    view.sync(state, crewOf(state), 0, 0, true, true);
+    return view.bounds();
+  };
+  const sizeOf = (box: THREE.Box3): THREE.Vector3 => box.getSize(new THREE.Vector3());
+
+  it('the bare hull: its own length and beam, from under the waterline to the tips of its ends', () => {
+    for (const tier of [0, 1, 2, 3]) {
+      const { length, beam, depth, draft } = HULL_TIERS[tier].dimensions;
+      const box = boundsOf(tier, []);
+      const size = sizeOf(box);
+      expect(size.z, `tier ${tier} length`).toBeGreaterThan(length - 0.1);
+      expect(size.z, `tier ${tier} length`).toBeLessThan(length + 0.35);
+      expect(size.x, `tier ${tier} beam`).toBeGreaterThan(beam - 0.02);
+      expect(size.x, `tier ${tier} beam`).toBeLessThan(beam + 0.25);
+      expect(box.min.y, `tier ${tier} keel`).toBeCloseTo(-draft, 1);
+      // The sheer rises about 30 cm at the ends; the starter kit's bedroll stands no higher.
+      expect(box.max.y, `tier ${tier} top`).toBeGreaterThan(depth - draft);
+      expect(box.max.y, `tier ${tier} top`).toBeLessThan(depth - draft + 0.6);
+    }
+  });
+
+  it('grows with what is bolted on: a mast makes it taller, an outrigger wider on its own side', () => {
+    const bare = boundsOf(2, []);
+    const masted = boundsOf(2, ['mast_sail']);
+    expect(masted.max.y).toBeGreaterThan(bare.max.y + 1.5);
+    const port = boundsOf(2, ['outrigger_port']);
+    // Port is -x in canoe space.
+    expect(port.min.x).toBeLessThan(bare.min.x - 0.8);
+    // Its spars are lashed down on the far rail, a hand past it.
+    expect(port.max.x).toBeLessThan(bare.max.x + 0.1);
+    const all = boundsOf(3, ATTACHMENT_IDS.slice());
+    expect(sizeOf(all).x).toBeGreaterThan(3);
+    expect(all.max.y).toBeGreaterThan(2.5);
+  });
+
+  it('leaves the crew out: the same box with four aboard as with one', () => {
+    const [one, four] = [boundsOf(1, [], 1), boundsOf(1, [], 4)];
+    // Four aboard push the starter kit up to the thwart: the box is the hull's either way, never a paddler's head or a paddle's blade.
+    expect(four.max.y).toBeLessThan(HULL_TIERS[1].dimensions.depth + 0.5);
+    expect(sizeOf(four).x).toBeCloseTo(sizeOf(one).x, 2);
+    expect(sizeOf(four).z).toBeCloseTo(sizeOf(one).z, 2);
+  });
+
+  it('is in canoe space: the same box wherever the canoe lies and whichever way it points', () => {
+    const home = boundsOf(2, ['mast_sail', 'outrigger_port']);
+    const away = boundsOf(2, ['mast_sail', 'outrigger_port'], 1, (state) => {
+      state.canoe.position = { x: 412, y: 0.2, z: -377 };
+      state.canoe.heading = 2.1;
+    });
+    for (const axis of ['x', 'y', 'z'] as const) {
+      expect(away.min[axis], `min ${axis}`).toBeCloseTo(home.min[axis], 3);
+      expect(away.max[axis], `max ${axis}`).toBeCloseTo(home.max[axis], 3);
+    }
+  });
+
+  it('is empty before the canoe has been drawn', () => {
+    expect(new CanoeView().bounds().isEmpty()).toBe(true);
+  });
+});

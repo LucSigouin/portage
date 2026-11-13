@@ -40,6 +40,11 @@ export class Effects {
     }
   }
 
+  /** How many puffs are in the air, or about to rise. */
+  get active(): number {
+    return this.puffs.filter((puff) => puff.age < PUFF_SECONDS).length;
+  }
+
   update(seconds: number): void {
     for (const puff of this.puffs) {
       if (puff.age >= PUFF_SECONDS) continue;

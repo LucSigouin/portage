@@ -32,7 +32,8 @@
  * 1. The session steps the simulation (unless paused) and drains its events once.
  * 2. `audio.handleEvents(ownEvents)`, then `audio.update(state, frameSeconds, localPlayerId)`.
  * 3. `worldView.sync(state, frame)`, then `worldView.handleEvents(events)`.
- * 4. `worldView.render(cameraPose)`.
+ * 4. `worldView.render(cameraPose)`. While the built view holds the screen (`builtview.ts`), the pose is its one
+ *    still pose, worked out once from `worldView.canoeBounds()`.
  * 5. `gameInterface.update(model)`.
  *
  * ## Conventions (from the rules engine)
@@ -45,11 +46,13 @@
 import type { AudioEngine } from '../audio/index.ts';
 import type { Settings } from '../settings/index.ts';
 import type { GameEvent, GameState, Vector3 } from '../sim/index.ts';
+import type { CanoeBounds } from './builtview.ts';
 import type { CameraPose } from './camera.ts';
 import type { InterfaceIntent } from './intents.ts';
 import type { InterfaceModel } from './viewmodels/types.ts';
 
 export type { CameraPose } from './camera.ts';
+export type { CanoeBounds } from './builtview.ts';
 export type { InterfaceIntent, InterfaceSound, OpenablePanelId, SettingId, SettingValue } from './intents.ts';
 export type { PanelId, ScreenId, SettingsTabId } from './panels.ts';
 export type * from './viewmodels/types.ts';
@@ -120,6 +123,11 @@ export interface WorldView {
   handleEvents(events: readonly GameEvent[]): void;
   /** Once per frame, last: draw through this camera. */
   render(camera: CameraPose): void;
+  /**
+   * How big the canoe is as drawn at the last `sync`, with everything bolted onto it: a box in canoe space, and
+   * the frame's shape. The built view frames the canoe with it. Optional: without it the bare hull is framed.
+   */
+  canoeBounds?(): CanoeBounds | null;
   dispose(): void;
 }
 

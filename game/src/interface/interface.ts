@@ -19,10 +19,10 @@ import type { ViewNode } from './dom.ts';
 import { FILTER_DEFINITIONS, ICON, toqueIcon } from './icons.ts';
 import { paperTexture, tornPageOutline } from './paper.ts';
 import {
-  confirmView, debugView, hintView, hotbarView, lineNoteView, lobbyView, notesView, panelView, promptView, toastsView, vitalsView,
+  builtView, confirmView, debugView, hintView, hotbarView, lineNoteView, lobbyView, notesView, panelView, promptView, toastsView, vitalsView,
 } from './views.ts';
 
-type PartName = 'lobby' | 'vitals' | 'notes' | 'hint' | 'prompt' | 'hotbar' | 'toasts' | 'panel' | 'confirm' | 'debug';
+type PartName = 'lobby' | 'vitals' | 'notes' | 'hint' | 'prompt' | 'hotbar' | 'toasts' | 'panel' | 'confirm' | 'built' | 'debug';
 
 interface Part {
   element: HTMLElement;
@@ -167,6 +167,10 @@ export class InkInterface implements GameInterface {
   private confirming: boolean | null = null;
   private hudShown: boolean | null = null;
   private dialogue: boolean | null = null;
+  /** The built view holds the screen: what a click anywhere sends, or null the rest of the time. */
+  private builtDismiss: InterfaceIntent | null = null;
+  /** The control that had the keyboard when the built view began: it gets it back. */
+  private heldBeforeBuilt: HTMLElement | null = null;
 
   // The keyboard.
   /** The top thing with controls on it: `confirm`, `panel:<id>`, `lobby`, or nothing. */
@@ -204,8 +208,9 @@ export class InkInterface implements GameInterface {
     part('toasts', 'iw-toasts', root);
     part('panel', 'iw-veil', root);
     part('confirm', 'iw-confirm', root);
+    part('built', 'iw-shown', root);
     part('debug', 'iw-debug', root);
-    for (const name of ['lobby', 'panel', 'confirm', 'debug'] as const) this.parts.get(name)!.element.hidden = true;
+    for (const name of ['lobby', 'panel', 'confirm', 'built', 'debug'] as const) this.parts.get(name)!.element.hidden = true;
     this.hud.hidden = true;
 
     const options = { signal: this.abort.signal };
@@ -214,6 +219,10 @@ export class InkInterface implements GameInterface {
     root.addEventListener('input', (event) => this.onInput(event), options);
     root.addEventListener('pointerover', (event) => this.onPointerOver(event), options);
     root.addEventListener('pointerdown', () => this.setKeyboardNavigation(false), options);
+    // The built view covers the screen, and a press anywhere on it gives the screen back.
+    this.parts.get('built')!.element.addEventListener('pointerdown', () => {
+      if (this.builtDismiss) this.emit(this.builtDismiss);
+    }, options);
     // A panel's body was scrolled (scroll does not bubble: it is caught on the way down), or the window changed size:
     // the cut mark under it may be due, or done.
     root.addEventListener('scroll', () => this.markCut(), { capture: true, passive: true, signal: this.abort.signal });
@@ -368,7 +377,8 @@ export class InkInterface implements GameInterface {
    * - Page Up and Page Down scroll a long panel.
    */
   private onKeyDown(event: KeyboardEvent): void {
-    if (event.ctrlKey || event.metaKey || event.altKey || this.capturing) return;
+    // While the built view holds the screen every key is the game's: any one of them ends it.
+    if (event.ctrlKey || event.metaKey || event.altKey || this.capturing || this.builtDismiss) return;
     const surface = this.topSurface();
     if (!surface) return;
     const target = event.target instanceof Element ? event.target : null;
@@ -503,6 +513,7 @@ export class InkInterface implements GameInterface {
       part('panel').classList.toggle('iw-veil-clear', this.dialogue);
     }
     if (this.draw('confirm', confirm ? JSON.stringify(confirm) : '', () => confirmView(confirm!))) part('confirm').hidden = !confirm;
+    this.followBuilt(model, root);
     if (this.draw('debug', debug ? JSON.stringify(debug) : '', () => debugView(debug!))) {
       part('debug').hidden = this.parts.get('debug')!.nodes.length === 0;
     }
@@ -550,6 +561,32 @@ export class InkInterface implements GameInterface {
     this.stack = stack;
   }
 
+  /**
+   * The built view: while the model carries it, the panel, the HUD and the notes are put away (hidden, not taken
+   * down: a long panel keeps its place) and the slip that names the piece is written. All at once, both ways.
+   */
+  private followBuilt(model: InterfaceModel, root: HTMLElement): void {
+    const built = model.built;
+    this.draw('built', built ? JSON.stringify([built.kicker, built.title, built.text, built.hint]) : '', () => builtView(built!));
+    const holding = built !== null;
+    if (holding === (this.builtDismiss !== null)) return;
+    this.builtDismiss = built ? built.dismiss : null;
+    if (holding) {
+      const held = document.activeElement;
+      this.heldBeforeBuilt = held instanceof HTMLElement && root.contains(held) ? held : null;
+      // Before the controls are hidden: a hidden control that kept the keyboard would press itself on Enter.
+      this.heldBeforeBuilt?.blur();
+    }
+    root.classList.toggle('iw-holding', holding);
+    this.parts.get('built')!.element.hidden = !holding;
+    if (!holding) {
+      // A player steering by key is back on the button they pressed, if it can still be pressed.
+      const back = this.heldBeforeBuilt;
+      this.heldBeforeBuilt = null;
+      if (this.keyboardNavigation && back && back.isConnected && (back as HTMLButtonElement).disabled !== true) back.focus();
+    }
+  }
+
   dispose(): void {
     this.abort.abort();
     if (this.faceTimer !== null) clearTimeout(this.faceTimer);
@@ -557,7 +594,7 @@ export class InkInterface implements GameInterface {
     document.documentElement.classList.remove('iw-document');
     document.documentElement.style.removeProperty('--iw-scale');
     if (this.root) {
-      this.root.classList.remove('iw', 'iw-by-keys', 'iw-paused', 'iw-faces-pending');
+      this.root.classList.remove('iw', 'iw-by-keys', 'iw-paused', 'iw-faces-pending', 'iw-holding');
       this.root.textContent = '';
     }
     this.parts.clear();

@@ -409,6 +409,22 @@ export interface DebugModel {
   lines: string[];
 }
 
+/**
+ * The built view's slip (`builtview.ts`): what the screen says under the canoe while it holds the new piece.
+ * While this is set the panel, the HUD and the notes are put away, and a click anywhere sends `dismiss`.
+ */
+export interface BuiltModel {
+  /** "Built", or "Hull rebuilt". */
+  kicker: string;
+  /** The piece's name. */
+  title: string;
+  /** The builder's own line about it. */
+  text: string;
+  /** How to get the screen back sooner. */
+  hint: string;
+  dismiss: InterfaceIntent;
+}
+
 /** One frame of UI. `update` gets a fresh one every frame. */
 export interface InterfaceModel {
   screen: ScreenId;
@@ -425,5 +441,7 @@ export interface InterfaceModel {
   /** Ids of every open panel, bottom to top. */
   openPanels: PanelId[];
   confirm: ConfirmModel | null;
+  /** Set while the built view holds the screen. */
+  built: BuiltModel | null;
   debug: DebugModel | null;
 }

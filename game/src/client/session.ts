@@ -18,11 +18,13 @@ import {
   setConnected, setPlayerName, step,
 } from '../sim/index.ts';
 import type { Command, CommandResult, GameEvent, GameState, PlayerId, StepInput } from '../sim/index.ts';
+import { BUILT_VIEW_FRAME_CAP, BUILT_VIEW_SECONDS, BUILT_VIEW_WAIT_SECONDS, builtPieceOf, isBuildCommand, showsPiece } from './builtview.ts';
+import type { BuiltPiece, BuiltView } from './builtview.ts';
 import { InputController } from './input.ts';
 import type { InputOutcome, InputSnapshot } from './input.ts';
 import type { InterfaceIntent, InterfaceSound } from './intents.ts';
 import {
-  allowsGameplayInput, createPanelState, isPanelOpen, pausesSimulation, reducePanels,
+  allowsGameplayInput, createPanelState, isPanelOpen, pausesSimulation, reducePanels, topPanel,
 } from './panels.ts';
 import type { ConfirmAction, PanelAction, PanelEffect, PanelId, PanelState, ScreenId } from './panels.ts';
 import { failureText, keyLabel, refusalText } from './viewmodels/format.ts';
@@ -138,6 +140,11 @@ export class Session {
   lastInput: StepInput = { ...NEUTRAL_INPUT };
   /** What the last rebind did, for the controls tab. */
   bindingNotice = '';
+  /**
+   * The built view, while it holds the screen: the player just built this piece from the canoe builder, the panel
+   * has stepped aside and the canoe is shown still, framed, for two seconds (`builtview.ts`). Null the rest of the time.
+   */
+  builtView: BuiltView | null = null;
 
   private readonly store: SaveStore;
   private readonly storage: SessionStorage;
@@ -151,6 +158,8 @@ export class Session {
   private saveRefused = false;
   private driver: StepDriver | null = null;
   private driverCarry = 0;
+  /** A piece the player has asked to build from the panel, until the state shows it: then the built view begins. */
+  private builtWanted: { piece: BuiltPiece; seconds: number } | null = null;
   private summaries: SlotSummary[] | null = null;
   private readonly listeners = new Set<(signal: SessionSignal) => void>();
 
@@ -289,6 +298,7 @@ export class Session {
     this.driver = null;
     this.driverCarry = 0;
     this.frozen = false;
+    this.endBuiltView();
     this.autosaver = slot === null ? null : createAutosaver(this.store, slot, this.settings.gameplay.autosaveIntervalSeconds);
     this.saveRefused = false;
     // The difficulty setting is global: it follows the player into every save.
@@ -400,6 +410,8 @@ export class Session {
     if (hidden === this.hidden) return;
     this.hidden = hidden;
     if (hidden) {
+      // Nobody is looking: the built view is over.
+      this.endBuiltView();
       this.input.releaseAll();
       if (this.game && this.slot !== null) this.saveNow();
     } else {
@@ -424,6 +436,7 @@ export class Session {
    */
   advance(frameSeconds: number, cameraYaw: number): GameEvent[] {
     this.simulatedSeconds = 0;
+    this.followBuiltView(frameSeconds);
     if (this.guest) return this.advanceAsGuest(this.guest, frameSeconds, cameraYaw);
     if (!this.game) {
       this.driftBackdrop(frameSeconds);
@@ -519,6 +532,8 @@ export class Session {
 
     for (const outcome of guest.takeResults()) {
       const result = outcome.result;
+      // The host would not build it: there is nothing to show.
+      if (!result.ok && isBuildCommand(outcome.command)) this.builtWanted = null;
       const toldByEvent = outcome.command.type === 'scavenge' && !result.ok && result.reason === 'missing_requirements';
       if (!result.ok && !outcome.quiet && !toldByEvent) {
         this.notice(failureText(result.reason, result.missing), 'warning');
@@ -589,9 +604,11 @@ export class Session {
     if (this.guest) {
       // The host runs it. Its answer comes back in a later frame; a refusal is told then.
       this.guest.sendCommand(command, quiet);
+      if (!quiet) this.wantBuiltView(command, false);
       return { ok: true, gained: [], spent: [] };
     }
     const result = dispatch(this.game, command, this.localPlayerId);
+    if (result.ok && !quiet) this.wantBuiltView(command, true);
     // A node that needs a tool says so itself, with a `harvest_blocked` event: no second notice.
     const toldByEvent = command.type === 'scavenge' && !result.ok && result.reason === 'missing_requirements';
     if (!result.ok && !quiet && !toldByEvent) {
@@ -599,6 +616,52 @@ export class Session {
       this.sound('error');
     }
     return result;
+  }
+
+  // --- The built view ---------------------------------------------------------
+
+  /**
+   * The player asked to build something. If it came from the canoe builder, and by their own hand, the built view
+   * is due as soon as the state shows the piece: at once here, a beat later on a guest (`done` false: the host has
+   * yet to run it). The bot's builds, a staged game's and a crewmate's take nobody's screen.
+   */
+  private wantBuiltView(command: Command, done: boolean): void {
+    const game = this.game;
+    if (!game || this.driver) return;
+    const piece = builtPieceOf(command, game, done);
+    if (!piece) return;
+    this.builtWanted = { piece, seconds: BUILT_VIEW_WAIT_SECONDS };
+    // Dropped again at once unless the canoe builder is the panel on top.
+    this.followBuiltView(0);
+  }
+
+  /** Once a frame: begin the built view when its piece shows, run its clock, and end it when its time or its panel is gone. */
+  private followBuiltView(frameSeconds: number): void {
+    const atBuilder = this.game !== null && this.screen === 'game' && topPanel(this.panels) === 'canoe_builder' && !this.hidden;
+    if (!atBuilder) {
+      this.builtWanted = null;
+      this.endBuiltView();
+      return;
+    }
+    const wanted = this.builtWanted;
+    if (wanted && this.game) {
+      if (showsPiece(this.game, wanted.piece)) {
+        this.builtWanted = null;
+        this.builtView = { piece: wanted.piece, secondsLeft: BUILT_VIEW_SECONDS };
+        this.input.releaseAll();
+        return;
+      }
+      wanted.seconds -= frameSeconds;
+      if (wanted.seconds <= 0) this.builtWanted = null;
+    }
+    if (!this.builtView) return;
+    this.builtView.secondsLeft -= Math.min(frameSeconds, BUILT_VIEW_FRAME_CAP);
+    if (this.builtView.secondsLeft <= 0) this.endBuiltView();
+  }
+
+  /** Give the screen back: the panel, the HUD and the camera are as they were. */
+  endBuiltView(): void {
+    this.builtView = null;
   }
 
   // --- Keys -------------------------------------------------------------------
@@ -618,6 +681,11 @@ export class Session {
   }
 
   keyDown(keyCode: string, repeat = false): void {
+    if (this.builtView) {
+      // Any key gives the screen back at once, and does nothing else. A key still held down from before does not count.
+      if (!repeat) this.endBuiltView();
+      return;
+    }
     for (const outcome of this.input.keyDown(keyCode, repeat, this.inputSnapshot())) this.applyOutcome(outcome);
   }
 
@@ -785,6 +853,9 @@ export class Session {
         break;
       case 'quit_to_lobby':
         this.applyPanels({ type: 'ask_confirm', action: { type: 'quit_to_lobby' } });
+        break;
+      case 'end_built_view':
+        this.endBuiltView();
         break;
       case 'crew_field':
         this.crew?.setField(intent.field, intent.value);
