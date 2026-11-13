@@ -8,8 +8,10 @@ import {
   MAXIMUM_TRACKED, selectActiveQuests, selectBuildOptions, selectCanoeStats, selectCraftableRecipes, selectDialogue,
   selectInventory, selectMap, selectQuestLog, valleyHalfWidth,
 } from '../../sim/index.ts';
-import type { Command, Container, GameState, InventoryView, ItemStack, Missing, PlayerId, QuestView } from '../../sim/index.ts';
+import type { Command, Container, GameState, InventoryView, ItemStack, Missing, PlayerId, QuestView, RecipeAvailability } from '../../sim/index.ts';
 import type { InterfaceIntent } from '../intents.ts';
+import type { BoatTabId } from '../panels.ts';
+import { boatStationOf, boatStationsHint, buildBoatTabs, buildCraftElsewhere, stationAbout } from './stations.ts';
 import { DEFAULT_KEY_BINDINGS } from '../../settings/index.ts';
 import type { KeyBindings } from '../../settings/index.ts';
 import { FLAG_SOURCES, capitalise, cardinalName, countedName, distanceText, itemName, needsText, primaryKey } from './format.ts';
@@ -187,46 +189,56 @@ const STATION_ORDER: readonly StationId[] = ['hands', 'fire', 'bench', 'smoker',
  */
 const scoopText = (bindings: KeyBindings): string => `Scoop it at the water, from the inventory (${primaryKey(bindings, 'inventory')}).`;
 
-/** `bindings` are the keys as they are bound now, for the words that name one. */
+/** One recipe's row, for the crafting panel and for a station's menu on the boat. */
+function recipeRow(
+  entry: RecipeAvailability, inventory: InventoryView, state: GameState, wants: QuestWants, bindings: KeyBindings,
+): RecipeRowModel {
+  const recipe = RECIPES[entry.recipeId];
+  const missingText = entry.known ? needsText(entry.missing) : 'A survivor teaches this';
+  return {
+    recipeId: recipe.id,
+    itemId: entry.known ? recipe.output.itemId : null,
+    name: entry.known ? recipe.name : 'Unknown recipe',
+    description: entry.known ? recipe.description : '',
+    outputText: entry.known ? countedName(recipe.output.itemId, recipe.output.count) : '',
+    known: entry.known,
+    inputs: entry.known ? [
+      ...costRows(recipe.inputs, inventory, state),
+      ...recipe.tools.map((toolId) => ({
+        itemId: toolId, name: `${itemName(toolId)} (tool)`, have: inventory.tools.includes(toolId) ? 1 : 0, need: 1,
+        enough: inventory.tools.includes(toolId),
+      })),
+    ] : [],
+    missingText,
+    needs: entry.known ? needChips(entry.missing, false) : [],
+    questText: entry.known ? wants.items.get(recipe.output.itemId) ?? '' : '',
+    sourceText: entry.known && entry.missing.items.some((item) => item.itemId === 'dirty_water') ? scoopText(bindings) : '',
+    craft: button('Make', command({ type: 'craft', recipeId: recipe.id, count: 1 }), entry.craftable, missingText || null),
+    craftAll: entry.maximumCount > 1
+      ? button(`Make ${entry.maximumCount}`, command({ type: 'craft', recipeId: recipe.id, count: entry.maximumCount }))
+      : null,
+  };
+}
+
+/**
+ * The crafting panel lists what can be made here and nothing else (Luc's list, Round 3: "dont show the items that
+ * need workbench, fire forge"). A station out of reach has no section and its recipes no rows. A recipe that only
+ * lacks materials stays. What an open quest needs from a station that is not here gets one line (`elsewhere`).
+ * `bindings` are the keys as they are bound now, for the words that name one.
+ */
 export function buildCraftingPanel(state: GameState, playerId: PlayerId = 0, bindings: KeyBindings = DEFAULT_KEY_BINDINGS): PanelBody<'crafting'> {
   const inventory = selectInventory(state, playerId);
   const availability = selectCraftableRecipes(state, playerId);
   const wants = questWants(state);
   return {
     id: 'crafting',
-    stations: STATION_ORDER.map((stationId) => ({
+    stations: STATION_ORDER.filter((stationId) => inventory.stations.includes(stationId)).map((stationId) => ({
       name: STATIONS[stationId].name,
-      inReach: inventory.stations.includes(stationId),
       recipes: availability
         .filter((entry) => RECIPES[entry.recipeId].station === stationId)
-        .map((entry): RecipeRowModel => {
-          const recipe = RECIPES[entry.recipeId];
-          const missingText = entry.known ? needsText(entry.missing) : 'A survivor teaches this';
-          return {
-            recipeId: recipe.id,
-            itemId: entry.known ? recipe.output.itemId : null,
-            name: entry.known ? recipe.name : 'Unknown recipe',
-            description: entry.known ? recipe.description : '',
-            outputText: entry.known ? countedName(recipe.output.itemId, recipe.output.count) : '',
-            known: entry.known,
-            inputs: entry.known ? [
-              ...costRows(recipe.inputs, inventory, state),
-              ...recipe.tools.map((toolId) => ({
-                itemId: toolId, name: `${itemName(toolId)} (tool)`, have: inventory.tools.includes(toolId) ? 1 : 0, need: 1,
-                enough: inventory.tools.includes(toolId),
-              })),
-            ] : [],
-            missingText,
-            needs: entry.known ? needChips(entry.missing, false) : [],
-            questText: entry.known ? wants.items.get(recipe.output.itemId) ?? '' : '',
-            sourceText: entry.known && entry.missing.items.some((item) => item.itemId === 'dirty_water') ? scoopText(bindings) : '',
-            craft: button('Make', command({ type: 'craft', recipeId: recipe.id, count: 1 }), entry.craftable, missingText || null),
-            craftAll: entry.maximumCount > 1
-              ? button(`Make ${entry.maximumCount}`, command({ type: 'craft', recipeId: recipe.id, count: entry.maximumCount }))
-              : null,
-          };
-        }),
+        .map((entry) => recipeRow(entry, inventory, state, wants, bindings)),
     })),
+    elsewhere: buildCraftElsewhere(state, inventory.stations, STATION_ORDER, wants),
   };
 }
 
@@ -262,15 +274,47 @@ function buildRow(
   };
 }
 
-export function buildCanoeBuilderPanel(state: GameState, playerId: PlayerId = 0): PanelBody<'canoe_builder'> {
+/** The menu of the station a boat tab stands for: its recipes and nothing else. Null for the canoe builder's own tab. */
+function boatStation(
+  state: GameState, playerId: PlayerId, tab: BoatTabId, inventory: InventoryView, wants: QuestWants, bindings: KeyBindings,
+): PanelBody<'canoe_builder'>['station'] {
+  const entry = boatStationOf(state, playerId, tab);
+  if (!entry) return null;
+  const name = ATTACHMENTS[entry.attachmentId].name;
+  return {
+    attachmentId: entry.attachmentId,
+    name,
+    about: stationAbout(entry.station),
+    // The canoe left, or the player walked off, with this menu open: it says so and lists nothing it cannot make.
+    blockedText: entry.inReach ? '' : `Walk to the canoe to use the ${name.toLowerCase()}.`,
+    recipes: entry.inReach
+      ? selectCraftableRecipes(state, playerId).filter((recipe) => RECIPES[recipe.recipeId].station === entry.station)
+        .map((recipe) => recipeRow(recipe, inventory, state, wants, bindings))
+      : [],
+  };
+}
+
+/**
+ * The boat's panel (key B). `tab` is the menu it shows: the canoe builder, or a station built on the canoe (then
+ * `station` carries that station's recipes, and the panel takes the station's name). A tab that is no station built
+ * on this canoe shows the canoe builder.
+ */
+export function buildCanoeBuilderPanel(
+  state: GameState, playerId: PlayerId = 0, tab: BoatTabId = 'builder', bindings: KeyBindings = DEFAULT_KEY_BINDINGS,
+): PanelBody<'canoe_builder'> & { title?: string } {
   const options = selectBuildOptions(state, playerId);
   const inventory = selectInventory(state, playerId);
   const stats = selectCanoeStats(state);
   const blockedText = options.blockedReason ? BUILD_BLOCKED_TEXT[options.blockedReason] : '';
   const nextHull = options.hull ? HULL_TIERS[options.hull.tier] : null;
   const wants = questWants(state);
+  const station = boatStation(state, playerId, tab, inventory, wants, bindings);
   return {
     id: 'canoe_builder',
+    ...(station ? { title: station.name } : {}),
+    tabs: buildBoatTabs(state, playerId, station ? station.attachmentId : 'builder', wants),
+    station,
+    stationsHint: boatStationsHint(state, playerId),
     blockedText,
     statLines: [
       `${stats.hullName} (hull ${stats.hullTier} of ${HULL_TIERS.length - 1})`,

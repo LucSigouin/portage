@@ -1,5 +1,5 @@
 import type { AttachmentId, ItemAmount, RecipeId, StationId, ToolId } from '../data/types.ts';
-import { ATTACHMENTS, HULL_TIERS } from '../data/canoe.ts';
+import { ATTACHMENTS, ATTACHMENT_IDS, HULL_TIERS } from '../data/canoe.ts';
 import { RECIPES } from '../data/recipes.ts';
 import {
   atCanoe, campInReach, emit, emptyMissing, exchangeItems, hasMissing, hasTool, itemsShort, spendItems,
@@ -24,6 +24,29 @@ export function accessibleStations(state: GameState, player: PlayerState): Stati
       const station = ATTACHMENTS[attachmentId].station;
       if (station && !stations.includes(station)) stations.push(station);
     }
+  }
+  return stations;
+}
+
+/** A crafting attachment built on the canoe, and whether one player can use it right now. */
+export interface CanoeStation {
+  attachmentId: AttachmentId;
+  station: StationId;
+  /** True aboard, afloat or beached, and on foot beside the canoe. */
+  inReach: boolean;
+}
+
+/**
+ * The crafting attachments built on the canoe, in the builder's order: the firebox, the workbench, the smoker, the
+ * forge. The boat's menu shows one icon each (Luc's list, Round 3). They follow the canoe: a player aboard uses them
+ * anywhere on the water.
+ */
+export function canoeStations(state: GameState, player: PlayerState): CanoeStation[] {
+  const inReach = atCanoe(state, player);
+  const stations: CanoeStation[] = [];
+  for (const attachmentId of ATTACHMENT_IDS) {
+    const station = ATTACHMENTS[attachmentId].station;
+    if (station && state.canoe.attachments.includes(attachmentId)) stations.push({ attachmentId, station, inReach });
   }
   return stations;
 }

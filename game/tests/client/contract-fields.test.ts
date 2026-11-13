@@ -317,14 +317,18 @@ describe('panel keys under a menu', () => {
     expect(signals).toContainEqual({ type: 'interface_sound', sound: 'close' });
   });
 
-  it('still work in play, and still say why when the canoe builder cannot open', () => {
+  it('still work in play: the boat\'s menu opens afloat, and a build refused afloat still says why', () => {
     const { session, signals } = playing();
     session.keyDown('Tab');
     expect(session.isOpen('inventory')).toBe(true);
     session.keyDown('Tab');
     expect(session.panels.stack).toEqual([]);
     signals.length = 0;
-    session.keyDown('KeyB'); // afloat: the builder needs the canoe beached
+    session.keyDown('KeyB'); // afloat: the boat's menu opens (its stations work on the water)
+    expect(session.panels.stack).toEqual(['canoe_builder']);
+    expect(signals.some((signal) => signal.type === 'notice')).toBe(false);
+    signals.length = 0;
+    session.handleIntent({ type: 'command', command: { type: 'upgrade_hull' } }); // building still needs the beach
     expect(signals.some((signal) => signal.type === 'notice')).toBe(true);
     expect(signals).toContainEqual({ type: 'interface_sound', sound: 'error' });
     drainEvents(session.game!);

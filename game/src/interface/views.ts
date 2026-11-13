@@ -16,6 +16,7 @@ import { control, h } from './dom.ts';
 import type { ViewChild, ViewNode } from './dom.ts';
 import type { ItemId } from '../data/index.ts';
 import { ICON, SEAL, itemIcon, logotype, toqueIcon, waterGauge } from './icons.ts';
+import { boatTabsView, elsewhereView } from './stations.ts';
 
 const icon = (markup: string, className = ''): ViewNode => h('i.iw-i', { class: className, html: markup, 'aria-hidden': 'true' });
 
@@ -432,11 +433,13 @@ function recipeView(recipe: RecipeRowModel): ViewNode {
       recipe.craftAll ? buttonView(recipe.craftAll, 'button.iw-btn.iw-small', true, 'all') : null));
 }
 
+/** What can be made here, a section a station in reach. A station that is not here is not listed (`stations.ts`). */
 function craftingView(panel: Extract<PanelModel, { id: 'crafting' }>): ViewNode[] {
   return sheet(panel, 'wide', '', h('div.iw-body', { key: 'body' }, panel.stations.map((station) =>
-    h('section', { key: station.name, class: station.inReach ? '' : 'iw-out-of-reach' },
-      h('h3', null, station.name, station.inReach ? null : h('small.iw-kind', null, 'not in reach')),
-      h('ul.iw-grid', null, station.recipes.map(recipeView))))));
+    h('section', { key: station.name },
+      h('h3', null, station.name),
+      h('ul.iw-grid', null, station.recipes.map(recipeView)))),
+  elsewhereView(panel.elsewhere)));
 }
 
 function buildRowView(row: BuildRowModel): ViewNode {
@@ -450,8 +453,20 @@ function buildRowView(row: BuildRowModel): ViewNode {
     row.build ? h('div.iw-actions', null, buttonView(row.build, 'button.iw-btn.iw-small', false)) : null);
 }
 
+/**
+ * The boat's panel (key B). Across its top, the row of icons: the canoe builder, and each station built on the
+ * canoe. Under it, the one menu that is open: the builder's stats, hull and parts, or a station's recipes and
+ * nothing else. Each menu's body has its own key, so a swap writes a fresh body from its top: nothing slides.
+ */
 function canoeBuilderView(panel: Extract<PanelModel, { id: 'canoe_builder' }>): ViewNode[] {
-  return sheet(panel, 'wide', '', h('div.iw-body', { key: 'body' },
+  const tabs = boatTabsView(panel.tabs, panel.stationsHint);
+  const station = panel.station;
+  if (station) {
+    return sheet(panel, 'wide', station.about, [tabs, h('div.iw-body.iw-boat-station', { key: `body-${station.attachmentId}`, 'data-station': station.attachmentId },
+      station.blockedText ? h('p.iw-blocked', { key: 'blocked' }, station.blockedText) : null,
+      h('ul.iw-grid', { key: 'recipes' }, station.recipes.map(recipeView)))]);
+  }
+  return sheet(panel, 'wide', '', [tabs, h('div.iw-body', { key: 'body' },
     panel.blockedText ? h('p.iw-blocked', { key: 'blocked' }, panel.blockedText) : null,
     h('ul.iw-stats', { key: 'stats' }, panel.statLines.map((line, index) => h('li', { key: index }, line))),
     h('section', { key: 'hull' },
@@ -460,7 +475,7 @@ function canoeBuilderView(panel: Extract<PanelModel, { id: 'canoe_builder' }>): 
         : h('li.iw-entry.iw-built', null, h('div.iw-entry-text', null, 'The hull is as good as it gets.')))),
     h('section', { key: 'attachments' },
       h('h3', null, 'Attachments'),
-      h('ul.iw-grid', null, panel.attachments.map(buildRowView)))));
+      h('ul.iw-grid', null, panel.attachments.map(buildRowView))))]);
 }
 
 function questView(quest: QuestRowModel): ViewNode {

@@ -11,6 +11,8 @@ import type { ViewNode } from '../../src/interface/dom.ts';
 import type { GameState } from '../../src/sim/index.ts';
 import { QUEST_LIST } from '../../src/data/index.ts';
 import type { QuestId } from '../../src/data/index.ts';
+import { CAMP_LAYOUTS } from '../../src/data/index.ts';
+import { terrainHeight } from '../../src/sim/index.ts';
 import { give, newGame, standOn } from '../support.ts';
 
 /** A game where every quest before `questId` is done and `questId` has been given. */
@@ -28,6 +30,14 @@ function atQuest(questId: QuestId, crew = 1): GameState {
   // "Stop the leak" patched the hull: by "Ribs and rails" it is the patched canoe.
   if (state.quests.stop_the_leak.status === 'completed') state.canoe.hullTier = 1;
   standOn(state, 'home_knoll');
+  // The whole crew stands in the camp, by the stump: its fire and its bench are in reach, so their recipes are listed.
+  const stump = CAMP_LAYOUTS.home_knoll!.landmarks.find((landmark) => landmark.kind === 'stump_bench') ?? CAMP_LAYOUTS.home_knoll!.fire;
+  for (const player of state.players) {
+    player.mode = 'foot';
+    player.seat = null;
+    player.islandId = 'home_knoll';
+    player.position = { x: stump.x + 1, y: terrainHeight(stump.x + 1, stump.z), z: stump.z };
+  }
   return state;
 }
 
@@ -101,7 +111,8 @@ describe('the red ! on what an open quest asks for', () => {
       expect(collectText([mark])).toBe('!');
       expect(mark.attributes.title).toBe('For Ribs and rails');
     }
+    // One on the hull's row, and one on the canoe builder's own card in the row of icons.
     const builder = panelView({ ...buildCanoeBuilderPanel(state), title: 'Canoe builder', close: CLOSE });
-    expect(marks(builder).length).toBe(1);
+    expect(marks(builder).length).toBe(2);
   });
 });

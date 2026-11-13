@@ -158,7 +158,7 @@ function panelBodyHtml(panel: PanelModel): string {
         + `<p>${escapeHtml(panel.stationsText)}</p>`;
     case 'crafting':
       return panel.stations.map((station) =>
-        `<h3>${escapeHtml(station.name)} ${station.inReach ? '' : '<small>(not in reach)</small>'}</h3><ul class="gb-list">${station.recipes.map((recipe) =>
+        `<h3>${escapeHtml(station.name)}</h3><ul class="gb-list">${station.recipes.map((recipe) =>
           `<li class="gb-entry ${recipe.known ? '' : 'gb-dim'}"><div><b>${escapeHtml(recipe.name)}</b> ${escapeHtml(recipe.outputText)}`
           + `<p>${escapeHtml(recipe.description)}</p>${costsHtml(recipe.inputs)}`
           + `${recipe.missingText ? `<p class="gb-warning">${escapeHtml(recipe.missingText)}</p>` : ''}`

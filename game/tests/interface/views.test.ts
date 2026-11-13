@@ -76,7 +76,7 @@ function everyModel(): { name: string; model: InterfaceModel }[] {
   models.push({ name: 'confirm dialog', model: modelOf(confirming) });
   const playing = newApp();
   playing.session.newGame(0);
-  playing.session.handleIntent({ type: 'open_panel', panel: 'canoe_builder' }); // refused afloat: leaves a toast
+  playing.session.handleIntent({ type: 'command', command: { type: 'upgrade_hull' } }); // refused afloat: leaves a toast
   models.push({ name: 'new game with a toast', model: modelOf(playing) });
   return models;
 }

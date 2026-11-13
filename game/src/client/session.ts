@@ -34,6 +34,7 @@ import type { CrewLobby } from './crewlobby.ts';
 import { HOST_BACK_TEXT, JOIN_PROBLEM_TEXT, LEAVE_TEXT } from './viewmodels/crew.ts';
 import { applySettingChange } from './viewmodels/settings.ts';
 import type { Tone } from './viewmodels/types.ts';
+import { boatOpensOn } from './viewmodels/stations.ts';
 
 export type SessionStorage = StorageLike & SettingsStorage;
 
@@ -737,8 +738,8 @@ export class Session {
 
   // --- Panels -----------------------------------------------------------------
 
-  private panelContext(): { canoeBeached: boolean } {
-    return { canoeBeached: this.game?.canoe.beached ?? false };
+  private panelContext(): Parameters<typeof reducePanels>[2] {
+    return { canoeBeached: this.game?.canoe.beached ?? false, boatOpensOn: this.game ? boatOpensOn(this.game, this.localPlayerId) : 'builder' };
   }
 
   private applyPanels(action: PanelAction, quiet = false): void {
@@ -822,6 +823,10 @@ export class Session {
         break;
       case 'select_settings_tab':
         this.applyPanels({ type: 'select_settings_tab', tab: intent.tab });
+        break;
+      case 'select_boat_tab':
+        if (this.panels.boatTab !== intent.tab) this.sound('tab');
+        this.applyPanels({ type: 'select_boat_tab', tab: intent.tab });
         break;
       case 'answer_confirm':
         this.applyPanels({ type: 'answer_confirm', accepted: intent.accepted });

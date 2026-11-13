@@ -74,7 +74,7 @@ const MENUS: View[] = [
   { name: 'settings: gameplay', query: '', steps: settingsTab('gameplay'), shows: '[data-setting="gameplay.hints"]' },
   { name: 'settings: accessibility', query: '', steps: settingsTab('accessibility'), shows: '[data-setting="accessibility.uiScale"]' },
   { name: 'confirm dialog', query: '', steps: [...settingsTab('controls'), { intent: { type: 'reset_key_bindings' } }], shows: '.iw-confirm-box' },
-  { name: 'a toast in play', query: '?at=quest1', steps: [{ key: 'KeyB' }], shows: '.iw-toast' },
+  { name: 'a toast in play', query: '?at=quest1', steps: [{ key: 'KeyL' }], shows: '.iw-toast' },
   { name: 'the whole chart', query: '?shot=beacon', steps: [open('map')], shows: '.iw-chart' },
   { name: 'pause over the settings', query: '?shot=pause', steps: settingsTab('controls'), shows: '.iw-bindings' },
   { name: 'settings: waiting for a key', query: '', steps: [...settingsTab('controls'), { intent: { type: 'begin_rebind', action: 'paddle', slot: 0 } }], shows: '.iw-listen' },

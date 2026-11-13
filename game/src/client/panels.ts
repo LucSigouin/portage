@@ -4,6 +4,7 @@
  * beached. Pure: `reducePanels` takes a state and an action and returns the
  * next state plus effects for the session to carry out.
  */
+import type { AttachmentId } from '../data/index.ts';
 
 export type ScreenId = 'lobby' | 'game';
 
@@ -17,6 +18,9 @@ export type SettingsTabId = 'audio' | 'graphics' | 'controls' | 'gameplay' | 'ac
 
 export const SETTINGS_TABS: readonly SettingsTabId[] = ['audio', 'graphics', 'controls', 'gameplay', 'accessibility'];
 
+/** A menu of the boat's panel (key B): the canoe builder, or a crafting attachment built on the canoe. */
+export type BoatTabId = 'builder' | AttachmentId;
+
 /** Something that needs a yes before it happens. */
 export type ConfirmAction =
   | { type: 'delete_save'; slot: number }
@@ -29,6 +33,8 @@ export interface PanelState {
   /** Open panels, bottom to top. The last one has the keyboard. */
   stack: PanelId[];
   settingsTab: SettingsTabId;
+  /** The menu the boat's panel shows. Set when the panel opens, and after that only by the player's own click. */
+  boatTab: BoatTabId;
   /** What the confirm dialog on the stack is asking about. */
   confirm: ConfirmAction | null;
 }
@@ -36,6 +42,8 @@ export interface PanelState {
 /** The bits of the game the machine needs to rule on an action. */
 export interface PanelContext {
   canoeBeached: boolean;
+  /** The menu the boat's panel opens on (`boatOpensOn`). The canoe builder when left out. */
+  boatOpensOn?: BoatTabId;
 }
 
 type PanelGroup =
@@ -71,7 +79,8 @@ export const PANEL_RULES: Readonly<Record<PanelId, PanelRule>> = {
   pause: { group: 'menu', parents: GAME_ROOT, pausesSimulation: true, needsBeachedCanoe: false },
   inventory: { group: 'gameplay', parents: GAME_ROOT, pausesSimulation: true, needsBeachedCanoe: false },
   crafting: { group: 'gameplay', parents: GAME_ROOT, pausesSimulation: true, needsBeachedCanoe: false },
-  canoe_builder: { group: 'gameplay', parents: GAME_ROOT, pausesSimulation: true, needsBeachedCanoe: true },
+  // The boat's menu opens afloat too: its stations craft on the water. Building still needs the canoe beached, and says so.
+  canoe_builder: { group: 'gameplay', parents: GAME_ROOT, pausesSimulation: true, needsBeachedCanoe: false },
   quest_log: { group: 'gameplay', parents: GAME_ROOT, pausesSimulation: true, needsBeachedCanoe: false },
   map: { group: 'gameplay', parents: GAME_ROOT, pausesSimulation: true, needsBeachedCanoe: false },
   // A conversation holds the player still inside the rules engine; the world keeps moving.
@@ -97,6 +106,7 @@ export type PanelAction =
   | { type: 'close_all' }
   | { type: 'escape' }
   | { type: 'select_settings_tab'; tab: SettingsTabId }
+  | { type: 'select_boat_tab'; tab: BoatTabId }
   | { type: 'ask_confirm'; action: ConfirmAction }
   | { type: 'answer_confirm'; accepted: boolean }
   | { type: 'show_screen'; screen: ScreenId }
@@ -118,7 +128,7 @@ export interface PanelResult {
 }
 
 export function createPanelState(screen: ScreenId = 'lobby'): PanelState {
-  return { screen, stack: [], settingsTab: 'audio', confirm: null };
+  return { screen, stack: [], settingsTab: 'audio', boatTab: 'builder', confirm: null };
 }
 
 export function topPanel(state: PanelState): PanelId | null {
@@ -156,14 +166,16 @@ function open(state: PanelState, panel: PanelId, context: PanelContext): PanelRe
   if (top === panel) return unchanged(state);
   if (top === 'dialogue') return refuse('in_dialogue');
   if (rule.needsBeachedCanoe && !context.canoeBeached) return refuse('canoe_not_beached');
+  // The boat's panel opens on the menu the context names, and holds it: nothing swaps under the player.
+  const from = panel === 'canoe_builder' ? { ...state, boatTab: context.boatOpensOn ?? 'builder' } : state;
   if (rule.group === 'gameplay' && top !== null && PANEL_RULES[top].group === 'gameplay') {
     return {
-      state: { ...state, stack: [...state.stack.slice(0, -1), panel] },
+      state: { ...from, stack: [...state.stack.slice(0, -1), panel] },
       effects: [{ type: 'closed', panel: top }, { type: 'opened', panel }],
     };
   }
   if (!parents.includes(top ?? 'root')) return refuse('menu_open');
-  return { state: { ...state, stack: [...state.stack, panel] }, effects: [{ type: 'opened', panel }] };
+  return { state: { ...from, stack: [...state.stack, panel] }, effects: [{ type: 'opened', panel }] };
 }
 
 function close(state: PanelState): PanelResult {
@@ -206,6 +218,8 @@ export function reducePanels(state: PanelState, action: PanelAction, context: Pa
     case 'select_settings_tab':
       if (state.settingsTab === action.tab) return unchanged(state);
       return { state: { ...state, settingsTab: action.tab }, effects: [{ type: 'tab_changed', tab: action.tab }] };
+    case 'select_boat_tab':
+      return state.boatTab === action.tab ? unchanged(state) : { state: { ...state, boatTab: action.tab }, effects: [] };
     case 'ask_confirm':
       if (topPanel(state) === 'confirm') return unchanged(state);
       return {

@@ -320,12 +320,11 @@ describe('the panels', () => {
     expect(knife()).toMatchObject({ missingText: '', craft: { enabled: true, intent: { type: 'command', command: { type: 'craft', recipeId: 'stone_knife', count: 1 } } } });
     expect(knife().inputs.every((input) => input.enough)).toBe(true);
 
-    // The fire is at the camp, not at the beach: its recipes say so.
-    const fire = buildCraftingPanel(state).stations.find((station) => station.name === 'Fire')!;
-    expect(fire.inReach).toBe(false);
-    expect(fire.recipes.find((recipe) => recipe.recipeId === 'pitch')!.missingText).toContain('the fire');
+    // The fire is at the camp, not at the beach: at the beach its recipes are not listed at all (Luc's list, Round 3).
+    expect(buildCraftingPanel(state).stations.map((station) => station.name)).toEqual(['Hands']);
     teleportToCamp(state, 'home_knoll');
-    expect(buildCraftingPanel(state).stations.find((station) => station.name === 'Fire')!.inReach).toBe(true);
+    const fire = buildCraftingPanel(state).stations.find((station) => station.name === 'Fire')!;
+    expect(fire.recipes.find((recipe) => recipe.recipeId === 'pitch')!.missingText).not.toContain('the fire');
   });
 
   it('says where dirty water comes from on the recipe that is short of it, with the inventory key as it is bound', () => {
@@ -363,6 +362,7 @@ describe('the panels', () => {
     give(state, 'fiber', 9);
     const rope = buildCraftingPanel(state).stations[0].recipes.find((recipe) => recipe.recipeId === 'rope')!;
     expect(rope.craftAll).toMatchObject({ label: 'Make 3', intent: { type: 'command', command: { type: 'craft', recipeId: 'rope', count: 3 } } });
+    teleportToCamp(state, 'home_knoll'); // the stump bench is in the camp
     const bench = buildCraftingPanel(state).stations.find((station) => station.name === 'Bench')!;
     const sailcloth = bench.recipes.find((recipe) => recipe.recipeId === 'sailcloth')!;
     expect(sailcloth).toMatchObject({ known: false, name: 'Unknown recipe', inputs: [], craft: { enabled: false } });

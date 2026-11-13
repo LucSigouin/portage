@@ -615,14 +615,16 @@ describe('keys and commands', () => {
     expect(session.game!.events).toEqual([]);
   });
 
-  it('refuses the canoe builder afloat, with a reason, and opens it once beached', () => {
+  it('opens the boat\'s menu on B afloat and beached, and says nothing about it', () => {
     const h = harness();
     const { session } = h;
     session.newGame(0);
     session.keyDown('KeyB');
+    expect(session.isOpen('canoe_builder')).toBe(true);
+    expect(h.notices()).toEqual([]);
+    expect(h.sounds().at(-1)).toBe('open');
+    session.keyDown('KeyB');
     expect(session.isOpen('canoe_builder')).toBe(false);
-    expect(h.notices()).toEqual(['Beach the canoe to work on it.']);
-    expect(h.sounds()).toContain('error');
     standOn(session.game!, 'home_knoll');
     session.keyDown('KeyB');
     expect(session.isOpen('canoe_builder')).toBe(true);

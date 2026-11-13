@@ -205,6 +205,8 @@ export type {
   RecipeAvailability, BuildOptions, CanoeStats, ObjectiveView, QuestView, MapMarker, MapData,
   RespawnPoint, TimeOfDay, WeatherView, DialogueView, InventoryView, Meters, QuestTarget,
 } from './selectors.ts';
+export { canoeStations } from './crafting.ts';
+export type { CanoeStation } from './crafting.ts';
 export type { Interactable } from './interact.ts';
 export type { SleepBlock } from './survival.ts';
 
