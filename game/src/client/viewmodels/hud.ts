@@ -3,8 +3,8 @@ import { ISLANDS_BY_ID, ITEMS, QUEST_LIST, REGIONS_BY_ID, WEATHER } from '../../
 import { CREW_MARKS } from '../../data/crew.ts';
 import type { Settings } from '../../settings/index.ts';
 import {
-  bearingBetween, bearingDifference, playerOf, selectActiveQuests, selectCanoeStats, selectInteractable, selectMap,
-  selectMeters, selectTimeOfDay, selectWeather,
+  MAXIMUM_TRACKED, bearingBetween, bearingDifference, playerOf, selectActiveQuests, selectCanoeStats, selectInteractable,
+  selectMap, selectMeters, selectTimeOfDay, selectWeather,
 } from '../../sim/index.ts';
 import type { GameState, PlayerId, PlayerState, QuestView, TimeOfDay } from '../../sim/index.ts';
 import { HOST_QUIET_TEXT } from './crew.ts';
@@ -148,14 +148,17 @@ function buildHotbar(state: GameState, settings: Settings, playerId: PlayerId): 
   });
 }
 
-function buildTracker(state: GameState): QuestTrackerModel | null {
-  // `selectActiveQuests` puts the tracked quest first; with nothing tracked, show the first active one.
-  const quest = selectActiveQuests(state)[0];
-  if (!quest) return null;
-  return {
+/**
+ * The quests on this player's card: every one they follow, in the order they picked them (three at most), or,
+ * following none, the first active one.
+ */
+function buildTrackers(state: GameState, playerId: PlayerId): QuestTrackerModel[] {
+  const quests = selectActiveQuests(state, playerId);
+  const followed = quests.filter((quest) => quest.tracked).slice(0, MAXIMUM_TRACKED);
+  return (followed.length > 0 ? followed : quests.slice(0, 1)).map((quest) => ({
     questId: quest.questId, name: quest.name, kind: quest.kind, ready: quest.status === 'ready',
     objectives: objectiveRows(quest),
-  };
+  }));
 }
 
 function buildCompass(state: GameState, cameraYaw: number, trackedQuestId: string | null, playerId: PlayerId): CompassModel {
@@ -261,7 +264,8 @@ export function buildHudModel(
   const player = playerOf(state, playerId);
   const time = selectTimeOfDay(state, playerId);
   const weather = selectWeather(state);
-  const tracker = buildTracker(state);
+  const trackers = buildTrackers(state, playerId);
+  const tracker = trackers[0] ?? null;
   const island = player.mode === 'foot' && player.islandId ? ISLANDS_BY_ID[player.islandId].name : null;
   const nextName = WEATHER[weather.nextKind].name.toLowerCase();
   return {
@@ -270,6 +274,7 @@ export function buildHudModel(
     water: buildWaterGauge(state, playerId),
     hotbar: buildHotbar(state, settings, playerId),
     tracker,
+    trackers,
     compass: buildCompass(state, cameraYaw, tracker?.questId ?? null, playerId),
     prompt: buildPrompt(state, settings, playerId, time),
     clockText: `Day ${time.day}, ${time.clock}`,

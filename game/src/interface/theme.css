@@ -509,6 +509,21 @@ html.iw-document {
   padding-top: 0.35rem;
   border-top: 0.09rem dashed var(--iw-ink-faint);
 }
+/* The second and third quest on the card: a size down, and only the steps still to do (views.ts). */
+.iw-tracker.iw-tracker-more {
+  margin-top: 0.3rem;
+  padding-top: 0.25rem;
+}
+.iw-tracker.iw-tracker-more h3 {
+  margin: 0.04rem 0 0.12rem;
+  font-size: 1.1rem;
+}
+.iw-tracker.iw-tracker-more .iw-objectives li {
+  font-size: 0.9rem;
+  line-height: 1.2;
+  padding: 0.06rem 0;
+}
+
 .iw-tracker h3 {
   display: flex;
   align-items: baseline;

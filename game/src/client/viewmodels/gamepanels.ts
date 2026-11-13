@@ -4,8 +4,8 @@ import {
 } from '../../data/index.ts';
 import type { AttachmentId, ItemAmount, ItemId, StationId } from '../../data/index.ts';
 import {
-  selectActiveQuests, selectBuildOptions, selectCanoeStats, selectCraftableRecipes, selectDialogue, selectInventory, selectMap,
-  selectQuestLog,
+  MAXIMUM_TRACKED, selectActiveQuests, selectBuildOptions, selectCanoeStats, selectCraftableRecipes, selectDialogue,
+  selectInventory, selectMap, selectQuestLog,
 } from '../../sim/index.ts';
 import type { Command, Container, GameState, InventoryView, ItemStack, Missing, PlayerId, QuestView } from '../../sim/index.ts';
 import type { InterfaceIntent } from '../intents.ts';
@@ -301,7 +301,10 @@ const STATUS_TEXT: Record<QuestView['status'], string> = {
   locked: 'Locked', available: 'On offer', active: 'Active', ready: 'Ready to hand in', completed: 'Done',
 };
 
-function questRow(quest: QuestView): QuestRowModel {
+/** The note on a Track button the card has no room for. */
+export const TRACKING_FULL_NOTE = `${MAXIMUM_TRACKED} on the card`;
+
+function questRow(quest: QuestView, cardFull: boolean): QuestRowModel {
   const giver = quest.giver ? NPCS[quest.giver].name : null;
   const trackable = quest.status === 'active' || quest.status === 'ready';
   return {
@@ -317,14 +320,18 @@ function questRow(quest: QuestView): QuestRowModel {
     // What is still to come. A finished quest has paid out, so its row lists nothing.
     rewards: quest.status === 'completed' ? []
       : QUESTS[quest.questId].rewards.items.map(({ itemId, count }) => ({ itemId, name: itemName(itemId), count })),
-    track: trackable
-      ? button(quest.tracked ? 'Tracked' : 'Track', command({ type: 'track_quest', questId: quest.questId }), !quest.tracked)
-      : null,
+    // On the card: a press takes it off. Off it: a press puts it on, while the card has room.
+    track: !trackable ? null
+      : quest.tracked ? button('Untrack', command({ type: 'track_quest', questId: quest.questId, tracked: false }))
+      : button('Track', command({ type: 'track_quest', questId: quest.questId }), !cardFull, cardFull ? TRACKING_FULL_NOTE : null),
   };
 }
 
-export function buildQuestLogPanel(state: GameState): PanelBody<'quest_log'> {
-  const rows = selectQuestLog(state).map(questRow);
+/** The quest log of one player: the quests are the crew's, the Track buttons this player's own. */
+export function buildQuestLogPanel(state: GameState, playerId: PlayerId = 0): PanelBody<'quest_log'> {
+  const log = selectQuestLog(state, playerId);
+  const cardFull = log.filter((quest) => quest.tracked && (quest.status === 'active' || quest.status === 'ready')).length >= MAXIMUM_TRACKED;
+  const rows = log.map((quest) => questRow(quest, cardFull));
   const open = (row: QuestRowModel): boolean => !row.done;
   return {
     id: 'quest_log',

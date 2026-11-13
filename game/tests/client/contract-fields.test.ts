@@ -72,7 +72,7 @@ describe('where the tracked quest points', () => {
     // A step with no place (gather, craft) has no target.
     state.quests.bail_out.status = 'completed';
     state.quests.first_haul.status = 'active';
-    state.trackedQuestId = 'first_haul';
+    state.players[0].trackedQuestIds = ['first_haul'];
     expect(selectTrackedQuestTarget(state)).toBeNull();
   });
 
@@ -82,7 +82,7 @@ describe('where the tracked quest points', () => {
     // The Beacon: its last step is the lamp, a node on an island far to the north.
     state.quests.the_beacon.status = 'active';
     state.quests.the_beacon.progress = [12, 1, 0];
-    state.trackedQuestId = 'the_beacon';
+    state.players[0].trackedQuestIds = ['the_beacon'];
     const lamp = Object.values(NODES_BY_ID).find((node) => node.typeId === 'beacon_lamp')!;
     expect(state.discoveredIslands).not.toContain(lamp.islandId);
     expect(selectTrackedQuestTarget(state)).toBeNull(); // not charted, no radio: no mark
@@ -103,7 +103,7 @@ describe('where the tracked quest points', () => {
     const bellkeeper = state.quests.the_bellkeeper;
     bellkeeper.status = 'active';
     bellkeeper.progress = [1, 0, 2];
-    state.trackedQuestId = 'the_bellkeeper';
+    state.players[0].trackedQuestIds = ['the_bellkeeper'];
     state.discoveredIslands.push(NPCS.wren.islandId);
     expect(selectTrackedQuestTarget(state)).toMatchObject({
       questId: 'the_bellkeeper', islandId: NPCS.wren.islandId, position: { x: spotOf('wren').x, z: spotOf('wren').z },
@@ -112,7 +112,7 @@ describe('where the tracked quest points', () => {
     bellkeeper.status = 'completed';
     state.quests.odile_windfall.status = 'ready';
     state.quests.odile_windfall.progress = state.quests.odile_windfall.progress.map(() => 99);
-    state.trackedQuestId = 'odile_windfall';
+    state.players[0].trackedQuestIds = ['odile_windfall'];
     state.discoveredIslands.push(NPCS.odile.islandId);
     expect(selectTrackedQuestTarget(state)).toMatchObject({
       questId: 'odile_windfall', islandId: NPCS.odile.islandId, position: { x: spotOf('odile').x, z: spotOf('odile').z },
@@ -167,7 +167,7 @@ describe('the frame the world view is given', () => {
     const game = app.session.game!;
     game.quests.bail_out.status = 'completed';
     game.quests.first_haul.status = 'active';
-    game.trackedQuestId = 'first_haul';
+    game.players[0].trackedQuestIds = ['first_haul'];
     expect(frameOf(app, frames).trackedQuestTarget).toBeNull();
   });
 });

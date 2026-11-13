@@ -14,6 +14,7 @@ import {
 } from './inventory.ts';
 import { acceptQuest, notifyTalked, turnInQuest, updateQuests } from './quests.ts';
 import { sleep, sleepBlocked } from './survival.ts';
+import { setTracked } from './tracking.ts';
 import type { Command, CommandResult, Container, GameState, PlayerId, PlayerState } from './types.ts';
 import { groundHeight, islandAt, regionAt, terrainHeight } from './world.ts';
 
@@ -289,10 +290,10 @@ export function dispatch(state: GameState, command: Command, playerId: PlayerId 
       if (definition.giver && !npcInReach(player, definition.giver)) return failure('npc_out_of_reach');
       return turnInQuest(state, command.questId, player) ? success(definition.rewards.items) : failure('quest_not_ready');
     }
-    case 'track_quest':
-      if (command.questId !== null && !QUESTS[command.questId]) return failure('unknown_id');
-      state.trackedQuestId = command.questId;
-      return success();
+    case 'track_quest': {
+      const refused = setTracked(state, player, command.questId, command.tracked ?? true);
+      return refused ? failure(refused) : success();
+    }
 
     case 'toggle_lantern': {
       if (!hasAttachment(state, 'lantern_mast')) {

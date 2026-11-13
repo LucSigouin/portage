@@ -101,7 +101,7 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
     case 'canoe_builder':
       return game ? { ...frame, ...buildCanoeBuilderPanel(game, playerId) } : null;
     case 'quest_log':
-      return game ? { ...frame, ...buildQuestLogPanel(game) } : null;
+      return game ? { ...frame, ...buildQuestLogPanel(game, playerId) } : null;
     case 'map':
       return game ? { ...frame, ...buildMapPanel(game, playerId) } : null;
     case 'dialogue': {

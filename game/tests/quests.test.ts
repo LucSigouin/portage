@@ -31,7 +31,7 @@ describe('the main line', () => {
     expect(events).toContainEqual({ type: 'quest_started', questId: 'first_haul' });
     expect(state.quests.bail_out.status).toBe('completed');
     expect(state.quests.first_haul.status).toBe('active');
-    expect(state.trackedQuestId).toBe('first_haul');
+    expect(state.players[0].trackedQuestIds).toEqual(['first_haul']);
     expect(countIn(state.players[0].backpack, 'berries')).toBe(4);
     expect(countIn(state.players[0].backpack, 'clean_water')).toBe(2);
     expect(state.quests.stop_the_leak.status).toBe('locked');
@@ -166,7 +166,10 @@ describe('side quests', () => {
     state.players[0].position.x = -250 + 0.18 * 72;
     state.players[0].position.z = 705 + 0.22 * 56 + 1;
     dispatch(state, { type: 'accept_quest', questId: 'odile_windfall' });
+    // Taking a quest puts it on the card, after the main line (the card holds three).
+    expect(state.players[0].trackedQuestIds).toEqual(['bail_out', 'odile_windfall']);
     expect(dispatch(state, { type: 'track_quest', questId: 'odile_windfall' }).ok).toBe(true);
+    expect(dispatch(state, { type: 'track_quest', questId: 'bail_out', tracked: false }).ok).toBe(true);
     expect(tracked(state).questId).toBe('odile_windfall');
     expect(dispatch(state, { type: 'track_quest', questId: null }).ok).toBe(true);
     expect(selectActiveQuests(state).every((quest) => !quest.tracked)).toBe(true);

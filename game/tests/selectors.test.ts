@@ -54,7 +54,7 @@ describe('map', () => {
     const state = newGame();
     state.quests.bail_out.status = 'completed';
     state.quests.the_bellkeeper.status = 'active';
-    state.trackedQuestId = 'the_bellkeeper';
+    state.players[0].trackedQuestIds = ['the_bellkeeper'];
     const questMarkers = () => selectMap(state).markers.filter((marker) => marker.kind === 'quest').map((marker) => marker.islandId);
     expect(questMarkers()).not.toContain('steeple_rock');
     build(state, 'radio');

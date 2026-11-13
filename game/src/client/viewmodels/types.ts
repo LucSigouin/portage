@@ -134,7 +134,10 @@ export interface HudModel {
   meters: MeterModel[];
   water: WaterGaugeModel;
   hotbar: HotbarSlotModel[];
+  /** The first quest on the card: the one the compass and the world's mark point to. Null when there is none. */
   tracker: QuestTrackerModel | null;
+  /** Every quest on this player's card, the first one first: the ones they follow, or the first active one. Three at most. */
+  trackers: QuestTrackerModel[];
   compass: CompassModel;
   prompt: PromptModel | null;
   /** "Day 2, 14:05". */
@@ -312,11 +315,13 @@ export interface QuestRowModel {
   /** "Active", "Ready to hand in", "On offer", "Done". */
   statusText: string;
   done: boolean;
+  /** True while it is on this player's card. */
   tracked: boolean;
   giverText: string;
   objectives: ObjectiveRowModel[];
   /** The items handing it in will give, for their icons. Empty when the reward is not an item, and once the quest is done. */
   rewards: { itemId: ItemId; name: string; count: number }[];
+  /** "Track" puts it on this player's card, "Untrack" takes it off. Null for a quest that is not open. */
   track: ButtonModel | null;
 }
 

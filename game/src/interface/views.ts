@@ -8,7 +8,8 @@
  */
 import type {
   BuildRowModel, BuiltModel, ButtonModel, ConfirmModel, CostRowModel, CrewRowModel, DebugModel, HotbarSlotModel, HudModel, InterfaceIntent,
-  ItemSlotModel, LobbyModel, MapMarkerModel, NeedChipModel, ObjectiveRowModel, PanelModel, PromptModel, QuestRowModel, RecipeRowModel,
+  ItemSlotModel, LobbyModel, MapMarkerModel, NeedChipModel, ObjectiveRowModel, PanelModel, PromptModel, QuestRowModel, QuestTrackerModel,
+  RecipeRowModel,
   SaveSlotModel, SettingRowModel, TextFieldModel, ToastModel,
 } from '../client/contracts.ts';
 import { control, h } from './dom.ts';
@@ -146,18 +147,25 @@ export function vitalsView(hud: HudModel, patterned: boolean): ViewNode[] {
     hud.crew.length > 1 ? crewView(hud.crew, patterned) : null)];
 }
 
-/** Top left: the field notes. The day, the place, the weather and the tracked quest. */
+/**
+ * One quest on the card. The first is written large with every step, the done ones struck through. The others
+ * (a player may follow three) are written smaller, with only the steps still to do, so three fit above the meters.
+ */
+function trackerView(tracker: QuestTrackerModel, first: boolean): ViewNode {
+  return h('div.iw-tracker', { key: tracker.questId, class: first ? '' : 'iw-tracker-more' },
+    h('h3', null, tracker.name,
+      tracker.kind === 'side' ? h('small.iw-kind', null, tracker.kind) : null,
+      tracker.ready ? icon(ICON.check, 'iw-ready') : null),
+    objectivesView(first ? tracker.objectives : tracker.objectives.filter((objective) => !objective.done)));
+}
+
+/** Top left: the field notes. The day, the place, the weather and the quests on this player's card. */
 export function notesView(hud: HudModel): ViewNode[] {
-  const tracker = hud.tracker;
   return [h('div.iw-notes.iw-paper', { key: 'notes' },
     h('i.iw-tape'),
     h('div.iw-over', null, icon(hud.night ? ICON.moon : ICON.sun, 'iw-sky'), h('span', null, hud.clockText), h('span', null, hud.placeText)),
     h('div.iw-weather', { class: hud.stormWarning ? 'iw-tone-danger' : '' }, hud.weatherText),
-    tracker ? h('div.iw-tracker', { key: 'tracker' },
-      h('h3', null, tracker.name,
-        tracker.kind === 'side' ? h('small.iw-kind', null, tracker.kind) : null,
-        tracker.ready ? icon(ICON.check, 'iw-ready') : null),
-      objectivesView(tracker.objectives)) : null)];
+    hud.trackers.map((tracker, index) => trackerView(tracker, index === 0)))];
 }
 
 /**

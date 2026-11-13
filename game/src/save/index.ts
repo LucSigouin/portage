@@ -74,7 +74,22 @@ function migrateCrewToComeAndGo(envelope: { version: number; savedAt: number; st
   return { version: 3, savedAt: envelope.savedAt, state };
 }
 
-export const SAVE_MIGRATIONS: Record<number, SaveMigration> = { 1: migrateSoloToCrew, 2: migrateCrewToComeAndGo };
+/**
+ * Version 4 gives each player their own quest card (`trackedQuestIds`). The one quest an older save tracked goes
+ * on every player's card, so nobody's card changes.
+ */
+function migrateToCards(envelope: { version: number; savedAt: number; state: unknown }): { version: number; savedAt: number; state: unknown } {
+  const state = { ...(envelope.state as Record<string, unknown>) };
+  const players = Array.isArray(state.players) ? state.players as Record<string, unknown>[] : [];
+  const tracked = typeof state.trackedQuestId === 'string' ? [state.trackedQuestId] : [];
+  state.players = players.map((player) => ({ ...player, trackedQuestIds: [...tracked] }));
+  delete state.trackedQuestId;
+  return { version: 4, savedAt: envelope.savedAt, state };
+}
+
+export const SAVE_MIGRATIONS: Record<number, SaveMigration> = {
+  1: migrateSoloToCrew, 2: migrateCrewToComeAndGo, 3: migrateToCards,
+};
 
 export type LoadFailure = 'empty' | 'corrupt' | 'from_newer_version' | 'no_migration';
 

@@ -441,8 +441,10 @@ describe('the panels', () => {
     expect(log.groups[0].heading).toBe('Main line');
     const bailOut = log.groups[0].quests[0];
     expect(bailOut).toMatchObject({ questId: 'bail_out', statusText: 'Active', tracked: true, done: false });
-    expect(bailOut.track).toMatchObject({ label: 'Tracked', enabled: false });
-    state.trackedQuestId = null;
+    expect(bailOut.track).toMatchObject({
+      label: 'Untrack', enabled: true, intent: { type: 'command', command: { type: 'track_quest', questId: 'bail_out', tracked: false } },
+    });
+    state.players[0].trackedQuestIds = [];
     expect(buildQuestLogPanel(state).groups[0].quests[0].track).toMatchObject({
       label: 'Track', enabled: true, intent: { type: 'command', command: { type: 'track_quest', questId: 'bail_out' } },
     });

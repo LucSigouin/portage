@@ -129,6 +129,8 @@ function wordsOf(model: InterfaceModel): string[] {
   if (pruned.hud) {
     // The compass is drawn straight to the page (`CompassStrip`), not by a view: the browser spec covers it.
     delete pruned.hud.compass;
+    // The second and third quests on the card list only the steps still to do.
+    for (const tracker of pruned.hud.trackers.slice(1)) tracker.objectives = tracker.objectives.filter((objective: { done: boolean }) => !objective.done);
     // On foot with a dry canoe there is no water gauge to label.
     if (!pruned.hud.water.visible) delete pruned.hud.water;
     // The trend draws as an arrow as well as its word; the mode word shows only while holding.

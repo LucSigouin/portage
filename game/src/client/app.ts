@@ -191,7 +191,7 @@ export class App {
       elapsedSeconds: this.elapsedSeconds,
       paused: session.paused,
       panelOpen: built === null && coversPlayView(session.panels),
-      trackedQuestTarget: session.game ? selectTrackedQuestTarget(session.game)?.position ?? null : null,
+      trackedQuestTarget: session.game ? selectTrackedQuestTarget(session.game, session.localPlayerId)?.position ?? null : null,
     };
     // The chase camera is kept up either way, so the cut back from the built view lands where the view was left.
     const chase = this.updateCamera(state, frameSeconds, steppedSeconds, built !== null);

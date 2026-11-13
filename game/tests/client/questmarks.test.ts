@@ -24,7 +24,7 @@ function atQuest(questId: QuestId, crew = 1): GameState {
     }
     state.quests[quest.id].status = 'completed';
   }
-  state.trackedQuestId = questId;
+  state.players[0].trackedQuestIds = [questId];
   // "Stop the leak" patched the hull: by "Ribs and rails" it is the patched canoe.
   if (state.quests.stop_the_leak.status === 'completed') state.canoe.hullTier = 1;
   standOn(state, 'home_knoll');

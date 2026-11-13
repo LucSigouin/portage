@@ -3,8 +3,11 @@ import type {
   QuestStatus, RecipeId, RegionId, StationId, ToolId, WeatherKind,
 } from '../data/types.ts';
 
-/** Bump when the shape of GameState changes; add a migration in `src/save/`. */
-export const STATE_VERSION = 3;
+/**
+ * Bump when the shape of GameState changes; add a migration in `src/save/`.
+ * 4: each player follows their own quests (`trackedQuestIds`).
+ */
+export const STATE_VERSION = 4;
 
 /** The crew: one to four players share the canoe. */
 export const MAXIMUM_PLAYERS = 4;
@@ -107,6 +110,11 @@ export interface PlayerState {
   asleep: boolean;
   /** The conversation this player is in. It holds them still, nobody else. */
   dialogue: DialogueState | null;
+  /**
+   * The quests on this player's own card, in the order they were picked, up to three (`src/sim/tracking.ts`).
+   * The first is the one the world's quest mark points to. Each player's own: the quests themselves are the crew's.
+   */
+  trackedQuestIds: QuestId[];
 }
 
 export interface CanoeState {
@@ -211,7 +219,6 @@ export interface GameState {
   /** Sparse: only nodes that have been touched. */
   nodes: Record<NodeId, NodeState>;
   quests: Record<QuestId, QuestState>;
-  trackedQuestId: QuestId | null;
   /** The crew's tool belt: a tool anyone finds, makes or is given is everyone's at once. Takes no slot, never lost. */
   tools: ToolId[];
   /** Unique finds and quest items, held by the crew as one. Take no slot, never lost. */
@@ -255,7 +262,8 @@ export type Command =
   | { type: 'end_dialogue' }
   | { type: 'accept_quest'; questId: QuestId }
   | { type: 'turn_in_quest'; questId: QuestId }
-  | { type: 'track_quest'; questId: QuestId | null }
+  /** Follow a quest on this player's card (`tracked` true, the default) or stop. `questId` null stops following all. */
+  | { type: 'track_quest'; questId: QuestId | null; tracked?: boolean }
   | { type: 'toggle_lantern' }
   | { type: 'select_tool'; toolId: ToolId | null }
   | { type: 'set_sail'; raised: boolean }
@@ -292,7 +300,9 @@ export type FailureReason =
   | 'nothing_to_claim'
   /** The command was sent for a player who is away. */
   | 'player_away'
-  | 'invalid_amount';
+  | 'invalid_amount'
+  /** A player's card already follows three quests. */
+  | 'tracking_full';
 
 /**
  * What a failed command still needs. The UI turns this into

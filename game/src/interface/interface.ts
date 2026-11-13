@@ -524,7 +524,7 @@ export class InkInterface implements GameInterface {
     }
     this.draw('vitals', hud ? JSON.stringify([hud.meters, hud.water, hud.canoeLines, model.patternedMeters, hud.crew]) : '',
       () => vitalsView(hud!, model.patternedMeters));
-    this.draw('notes', hud ? JSON.stringify([hud.clockText, hud.night, hud.weatherText, hud.stormWarning, hud.placeText, hud.tracker]) : '',
+    this.draw('notes', hud ? JSON.stringify([hud.clockText, hud.night, hud.weatherText, hud.stormWarning, hud.placeText, hud.trackers]) : '',
       () => notesView(hud!));
     // One standing slip under the prompt: the line's trouble when there is any, the tip otherwise.
     const lineNote = hud?.lineNote ?? null;
