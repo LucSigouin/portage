@@ -192,6 +192,7 @@ export { playerOf, playersAboard, connectedPlayers, eventsFor } from './inventor
 export { BELT_SLOTS, NUMBERED_BELT_SLOTS, beltOf, discardRefusal, questHolding, roomFor } from './inventory.ts';
 // A dropped stack's way back.
 export { TAKE_BACK, standingDrop } from './takeback.ts';
+export { crewInGiveReach, giveRoom, withinGiveReach } from './give.ts';
 export type { DropLedger, DropRecord } from './takeback.ts';
 
 // --- State, input, commands, events -----------------------------------------

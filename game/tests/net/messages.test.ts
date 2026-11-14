@@ -87,6 +87,7 @@ describe('a command from the wire', () => {
     { type: 'move_tool', toolId: 'hatchet', slot: 0 }, { type: 'move_tool', toolId: 'bailing_can', slot: 7 },
     { type: 'set_sail', raised: true }, { type: 'claim_rewards' }, { type: 'set_difficulty', difficulty: 'relaxed' },
     { type: 'take_back', drop: 1 }, { type: 'ping', x: 120.5, z: -900 }, { type: 'clear_ping', playerId: 3 },
+    { type: 'give', to: 1, itemId: 'plank', count: 5 },
   ];
 
   it('reads every command the game has, unchanged', () => {
@@ -97,6 +98,23 @@ describe('a command from the wire', () => {
     expect(COMMAND_TYPES.length).toBeGreaterThanOrEqual(29);
     // And the table has no reader the list above does not try: each type is read back as itself.
     for (const type of COMMAND_TYPES) expect(good.some((command) => command.type === type && readCommand({ ...command })?.type === type), type).toBe(true);
+  });
+
+  it('reads a give: a seat number, an item and a count, and nothing that says who it is from', () => {
+    expect(readCommand({ type: 'give', to: 0, itemId: 'clay', count: 12 })).toEqual({ type: 'give', to: 0, itemId: 'clay', count: 12 });
+    expect(readClientMessage({ v, type: 'command', id: 3, command: { type: 'give', to: 3, itemId: 'plank', count: 1 }, at: 40 }))
+      .toEqual({ v, type: 'command', id: 3, command: { type: 'give', to: 3, itemId: 'plank', count: 1 }, at: 40 });
+    const bad: unknown[] = [
+      { type: 'give' }, { type: 'give', to: 1 }, { type: 'give', to: 1, itemId: 'plank' }, { type: 'give', itemId: 'plank', count: 5 },
+      { type: 'give', to: 4, itemId: 'plank', count: 5 }, { type: 'give', to: -1, itemId: 'plank', count: 5 }, { type: 'give', to: 0.5, itemId: 'plank', count: 5 },
+      { type: 'give', to: '1', itemId: 'plank', count: 5 }, { type: 'give', to: null, itemId: 'plank', count: 5 },
+      { type: 'give', to: 1, itemId: 'gold_bar', count: 5 }, { type: 'give', to: 1, itemId: 'constructor', count: 5 },
+      { type: 'give', to: 1, itemId: 'plank', count: 0 }, { type: 'give', to: 1, itemId: 'plank', count: -5 }, { type: 'give', to: 1, itemId: 'plank', count: 2.5 },
+      { type: 'give', to: 1, itemId: 'plank', count: 1e9 }, { type: 'give', to: 1, itemId: 'plank', count: '5' },
+      // Who gives is the wire's own player, never a field: a guest cannot give out of somebody else's backpack.
+      { type: 'give', to: 1, itemId: 'plank', count: 5, from: 2 }, { type: 'give', to: 1, itemId: 'plank', count: 5, playerId: 2 },
+    ];
+    for (const command of bad) expect(readCommand(command), JSON.stringify(command)).toBeNull();
   });
 
   it('reads a tool moved on the belt, and refuses a tool or a slot the game does not have', () => {

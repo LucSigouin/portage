@@ -169,6 +169,9 @@ const COMMAND_READERS: { [Type in Command['type']]: (raw: Raw) => Command | null
   discard: (raw) => readMove(raw, 'discard'),
   // Only the drop's number: what comes back, and how many, is the host's own record (`src/sim/takeback.ts`).
   take_back: (raw) => (hasOnly(raw, ['type', 'drop']) && isWhole(raw.drop, 1, Number.MAX_SAFE_INTEGER) ? { type: 'take_back', drop: raw.drop } : null),
+  // A crewmate by number, an item and a count: who is close, what is held and what fits is the host's to say (`src/sim/give.ts`).
+  give: (raw) => (hasOnly(raw, ['type', 'to', 'itemId', 'count']) && isWhole(raw.to, 0, 3) && isIdOf(ITEMS, raw.itemId) && isWhole(raw.count, 1, COUNT_LIMIT)
+    ? { type: 'give', to: raw.to, itemId: raw.itemId, count: raw.count } as Command : null),
   eat: (raw) => (hasOnly(raw, ['type', 'itemId']) && isIdOf(ITEMS, raw.itemId) ? { type: 'eat', itemId: raw.itemId } as Command : null),
   drink: (raw) => (hasOnly(raw, ['type', 'itemId']) && isIdOf(ITEMS, raw.itemId) ? { type: 'drink', itemId: raw.itemId } as Command : null),
   fill_water: (raw) => (hasOnly(raw, ['type', 'count']) && isWhole(raw.count, 1, COUNT_LIMIT) ? { type: 'fill_water', count: raw.count } : null),

@@ -313,6 +313,8 @@ export type Command =
   | { type: 'discard'; from: Container; itemId: ItemId; count: number }
   /** Take back this player's own drop numbered `drop`, for a few seconds after it (`src/sim/takeback.ts`). */
   | { type: 'take_back'; drop: number }
+  /** Hand `count` of an item from this player's backpack to the crewmate `to`, standing close (`src/sim/give.ts`). */
+  | { type: 'give'; to: PlayerId; itemId: ItemId; count: number }
   | { type: 'eat'; itemId: ItemId }
   | { type: 'drink'; itemId: ItemId }
   | { type: 'fill_water'; count: number }
@@ -375,6 +377,15 @@ export type FailureReason =
   /** A drop asked back that is back already or was never made, and one whose few seconds are over. */
   | 'nothing_to_take_back'
   | 'take_back_too_late'
+  /** A give refused (`src/sim/give.ts`): to yourself, to nobody, to one who is away or too far or has no room, a tool or a key item, a stack that is smaller than it was. */
+  | 'give_to_self'
+  | 'no_such_crewmate'
+  | 'crewmate_away'
+  | 'crewmate_too_far'
+  | 'crewmate_bag_full'
+  | 'tool_is_shared'
+  | 'key_item_is_shared'
+  | 'stack_changed'
   | 'nothing_to_claim'
   /** The command was sent for a player who is away. */
   | 'player_away'
@@ -428,10 +439,10 @@ export type FailCause = 'capsized' | 'exhausted';
 export type GameEvent = GameEventBody & { playerId?: PlayerId };
 
 type GameEventBody =
-  /** `dropId`: the gain is this player's drop of that number, taken back. */
-  | { type: 'item_gained'; itemId: ItemId; count: number; container: Container | 'belt' | 'key_items'; dropId?: number }
-  /** `dropId`: the player dropped it by hand, and may take that drop back for a few seconds (`src/sim/takeback.ts`). */
-  | { type: 'item_lost'; itemId: ItemId; count: number; dropId?: number }
+  /** `dropId`: the gain is this player's drop of that number, taken back. `givenBy`: the crewmate who handed it over (`src/sim/give.ts`). */
+  | { type: 'item_gained'; itemId: ItemId; count: number; container: Container | 'belt' | 'key_items'; dropId?: number; givenBy?: PlayerId }
+  /** `dropId`: the player dropped it by hand, and may take that drop back for a few seconds (`src/sim/takeback.ts`). `givenTo`: nothing was lost, it went to that crewmate. */
+  | { type: 'item_lost'; itemId: ItemId; count: number; dropId?: number; givenTo?: PlayerId }
   | { type: 'item_left_behind'; nodeId: NodeId; itemId: ItemId; count: number }
   | { type: 'crafted'; recipeId: RecipeId; count: number }
   | { type: 'ate'; itemId: ItemId }

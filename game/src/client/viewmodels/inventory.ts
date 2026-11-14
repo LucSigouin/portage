@@ -149,6 +149,12 @@ export function buildInventoryPanel(state: GameState, playerId: PlayerId = 0, bi
  * by whoever sent the move: the rules' answer carries how many went.
  */
 export function partMovedText(sent: Command, result: CommandResult): string | null {
+  if (sent.type === 'give' && result.ok) {
+    // A give that only fitted in part: the note from the rules says how many went, this one says why not all.
+    const given = result.spent.find((entry) => entry.itemId === sent.itemId)?.count ?? 0;
+    if (given <= 0 || given >= sent.count) return null;
+    return `Their backpack is full: ${given} of ${sent.count} ${itemName(sent.itemId)} given, ${sent.count - given} stayed.`;
+  }
   if (sent.type !== 'transfer' || !result.ok) return null;
   const moved = result.gained.find((entry) => entry.itemId === sent.itemId)?.count ?? 0;
   if (moved <= 0 || moved >= sent.count) return null;
