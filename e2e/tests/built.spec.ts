@@ -283,8 +283,10 @@ test('in a crew, the one who did not build keeps their screen: the piece, a note
   await expect(guest.locator('.iw-panel-canoe_builder')).toBeVisible();
   await guest.waitForTimeout(800);
   const before = await see(guest);
-  // Since round 4 the screen-edge cards (the vitals among them) stand aside while a sheet is open (`interface/edgecards.ts`).
-  expect(before.hudShown, 'the guest\'s vitals stand aside behind the open builder').toBe(false);
+  // Since round 4 the screen-edge cards stand aside while a sheet is open (`interface/edgecards.ts`). In a crew the game
+  // runs on behind the sheet, so since round 5 the health card stays up, drawn small beside the tool belt.
+  expect(before.hudShown, 'the guest\'s vitals stay up, small, behind the open builder in a crew').toBe(true);
+  await expect(guest.locator('.iw.iw-vitals-small')).toHaveCount(1);
 
   // The host builds from the panel, and is shown it.
   await host.keyboard.press('KeyB');
