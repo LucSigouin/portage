@@ -486,5 +486,7 @@ describe('the inventory\'s own stylesheet', () => {
     expect(styles).toMatch(/\.iw-tile-menu \{[^}]*position: absolute;[^}]*z-index: 6;[^}]*max-width: 17rem;/);
     // The round-3 strip's rules are gone with the strip.
     expect(styles).not.toContain('iw-item-detail');
+    // And from the game's own sheet (the master review of round 4, finding 9).
+    expect(readFileSync(new URL('../../src/interface/theme.css', import.meta.url), 'utf8')).not.toContain('iw-item-detail');
   });
 });
