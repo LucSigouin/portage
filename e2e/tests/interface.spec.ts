@@ -86,10 +86,11 @@ const MENUS: View[] = [
     steps: [open('crew_join'), { intent: { type: 'crew_field', field: 'code', value: 'HELLO' } },
       { intent: { type: 'crew_field', field: 'name', value: 'Bartholomew W' } }, { intent: { type: 'crew_join' } }],
   },
-  // An inventory tile pressed open: what the item is and what can be done with it. And two open, in the bag and the boat.
-  { name: 'inventory, a row opened', query: '?shot=inventory', steps: [{ click: '.iw-item-pick' }], shows: '.iw-item-detail' },
+  // An inventory tile pressed (round 4): the small menu beside it, and the info panel about it. Then a tile of the
+  // boat pressed after one of the bag: one menu at a time, and it is the boat tile's.
+  { name: 'inventory, a tile\'s menu open', query: '?shot=inventory', steps: [{ click: '.iw-item-pick' }], shows: '.iw-tile-menu' },
   {
-    name: 'inventory, a row opened in each column', query: '?shot=inventory', shows: '.iw-item-detail',
+    name: 'inventory, a boat tile\'s menu open', query: '?shot=inventory', shows: '.iw-tile-menu[data-for^="cargo:"]',
     steps: [{ click: '.iw-inv-pack .iw-item-pick >> nth=-1' }, { click: '.iw-inv-boat .iw-item-pick' }],
   },
   // The room card with its code and its link. This one dials the relay: set PORTAGE_RELAY_UP=1 when it is running (relay/, npm run dev).
@@ -369,7 +370,7 @@ interface Focused {
   /** Position among the controls of the open surface, or -1. */
   index: number;
   button: boolean;
-  /** An inventory row: it opens what the item is under itself and sends nothing to the game. */
+  /** An inventory tile: it opens its small menu and sends nothing to the game. */
   opens: boolean;
   /** Its `aria-expanded`, for a row; null for anything else. */
   expanded: string | null;
@@ -442,7 +443,8 @@ test('every control on every menu, panel and dialog is reached and pressed by ke
     expect(count, `${view.name}: controls`).toBeGreaterThan(0);
 
     // Into the menu: Tab where the game leaves Tab alone, an arrow key where Tab is the game's. Then Tab from control to control.
-    // An inventory row, pressed, opens its actions right under it: they are the next controls, reached and pressed in turn.
+    // An inventory tile, pressed, opens its small menu and the keyboard goes to the menu's first line (round 4): each
+    // line that is on is reached by the arrows and pressed, and each pick closes the menu and gives the tile back.
     const reached = new Set<number>();
     let buttons = 0;
     let rowsOpened = 0;
@@ -457,23 +459,53 @@ test('every control on every menu, panel and dialog is reached and pressed by ke
         // A menu line inks its underline in over a quarter of a second.
         await expect.poll(async () => (await page.evaluate(focusState)).ringShown, { message: `${view.name}: no focus mark on "${state.focused.label}"` }).toBe(true);
       }
-      if (state.focused.button) {
-        if (state.focused.opens) rowsOpened += 1;
-        else buttons += 1;
+      if (state.focused.button && state.focused.opens) {
+        rowsOpened += 1;
+        const tileKey = await page.evaluate(() => (document.activeElement as HTMLElement).dataset.detail);
+        // The info panel is about the tile the keyboard is on.
+        expect(await page.evaluate(() => document.querySelector<HTMLElement>('.iw-info-card')?.dataset.about), `${view.name}: the info panel follows the keyboard`).toBe(tileKey);
+        const menuState = (): Promise<{ open: string | null; lines: number; held: number; onTile: boolean }> => page.evaluate(() => {
+          const menu = document.querySelector<HTMLElement>('.iw-tile-menu');
+          const lines = menu ? [...menu.querySelectorAll<HTMLElement>('button:not([disabled])')] : [];
+          const active = document.activeElement as HTMLElement | null;
+          return { open: menu?.dataset.for ?? null, lines: lines.length, held: active ? lines.indexOf(active) : -1, onTile: active?.dataset.detail !== undefined };
+        });
+        await page.keyboard.press('Enter');
+        const opened = await menuState();
+        expect([state.focused.expanded, opened.open], `${view.name}: "${state.focused.label}" opened its menu`).toEqual(['false', tileKey]);
+        if (opened.lines === 0) {
+          // Nothing in it can be pressed (a key item): the keyboard stays on the tile, and the same press closes the menu.
+          expect(opened.onTile, `${view.name}: "${state.focused.label}" kept the keyboard`).toBe(true);
+          await page.keyboard.press('Enter');
+        }
+        for (let line = 0; line < opened.lines; line += 1) {
+          if (line > 0) await page.keyboard.press('Enter');
+          expect((await menuState()).held, `${view.name}: "${state.focused.label}" menu, the keyboard on its first line`).toBe(0);
+          for (let step = 0; step < line; step += 1) await page.keyboard.press('ArrowDown');
+          expect((await menuState()).held, `${view.name}: "${state.focused.label}" menu, line ${line + 1} reached`).toBe(line);
+          pressed += 1;
+          buttons += 1;
+          await page.keyboard.press(pressed % 2 === 0 ? 'Space' : 'Enter');
+          // The pick closed the menu and the keyboard is back on the tile.
+          expect(await menuState(), `${view.name}: "${state.focused.label}" menu, after line ${line + 1}`).toMatchObject({ open: null, onTile: true });
+        }
+        expect((await menuState()).open, `${view.name}: "${state.focused.label}" menu closed`).toBeNull();
+        const after = await page.evaluate(focusState);
+        expect(after.focused.index, `${view.name}: "${state.focused.label}" lost the focus`).toBe(state.focused.index);
+        count = after.count;
+      } else if (state.focused.button) {
+        buttons += 1;
         pressed += 1;
         // Enter and Space both press a button; use each in turn.
         await page.keyboard.press(pressed % 2 === 0 ? 'Space' : 'Enter');
         const after = await page.evaluate(focusState);
         expect(after.focused.index, `${view.name}: "${state.focused.label}" lost the focus when pressed`).toBe(state.focused.index);
-        if (state.focused.opens) {
-          expect([state.focused.expanded, after.focused.expanded], `${view.name}: "${state.focused.label}" opened`).toEqual(['false', 'true']);
-        }
         count = after.count;
       }
     }
-    // The inventory's rows are buttons, and every one of them was opened.
+    // The inventory's tiles are buttons, and every one of them had its menu opened.
     const rowCount = await page.locator('.iw-veil:not([hidden]) .iw-item-pick').count();
-    expect(rowsOpened, `${view.name}: inventory rows opened`).toBe(rowCount);
+    expect(rowsOpened, `${view.name}: inventory tiles opened`).toBe(rowCount);
     if (view.name === 'inventory') expect(rowCount).toBeGreaterThan(2);
     expect(reached.size, `${view.name}: controls reached`).toBe(count);
     // One more step wraps round to the first control, and Shift+Tab steps back to the last.
@@ -483,7 +515,7 @@ test('every control on every menu, panel and dialog is reached and pressed by ke
     expect((await page.evaluate(focusState)).focused.index, `${view.name}: back`).toBe(count - 1);
 
     const sent = await page.evaluate(() => ((window as any).sent as string[]).sort());
-    expect(sent.length, `${view.name}: one intent per button, none for opening a row`).toBe(buttons);
+    expect(sent.length, `${view.name}: one intent per button and per menu line, none for opening a menu`).toBe(buttons);
     expect(sent, `${view.name}: the intents the model gave`).toEqual(await page.evaluate(expectedIntents));
   }
 
@@ -971,13 +1003,13 @@ test('nothing redraws itself, and opening a panel moves nothing else', async ({ 
   };
   await samePixels(SHOTS.find((shot) => shot.name === 'play')!, ['.iw-vitals', '.iw-notes', '.iw-hotbar', '.iw-compass', '.iw-hint']);
   await samePixels(SHOTS.find((shot) => shot.name === 'inventory')!, ['.iw-panel']);
-  await samePixels(MENUS.find((view) => view.name === 'inventory, a row opened')!, ['.iw-panel']);
+  await samePixels(MENUS.find((view) => view.name === 'inventory, a tile\'s menu open')!, ['.iw-panel']);
 
-  // The two crafting menus and an opened inventory row: not one change to the page in a second, and nothing animating.
+  // The two crafting menus and an inventory tile's open menu: not one change to the page in a second, and nothing animating.
   // (Their pixels are not compared: with the scene hidden behind the veil the graphics chip rasters a pixel of the
   // small dirty-water drawing a hair differently from one paint to the next, the page unchanged. Seen 2026-11-13.)
   for (const view of [SHOTS.find((shot) => shot.name === 'crafting')!, SHOTS.find((shot) => shot.name === 'builder')!,
-    MENUS.find((menu) => menu.name === 'inventory, a row opened')!]) {
+    MENUS.find((menu) => menu.name === 'inventory, a tile\'s menu open')!]) {
     await show(page, view);
     const still = await page.evaluate(() => new Promise<{ changes: string[]; running: number }>((resolve) => {
       const changes: string[] = [];

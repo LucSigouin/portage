@@ -19,6 +19,7 @@ import { sleep, sleepBlocked } from './survival.ts';
 import { setTracked } from './tracking.ts';
 import { clearPing, placePing } from './pings.ts';
 import { dropFromStacks, takeBack } from './takeback.ts';
+import { give } from './give.ts';
 import type { Command, CommandResult, Container, GameState, PlayerId, PlayerState } from './types.ts';
 import { groundHeight, islandAt, regionAt, terrainHeight } from './world.ts';
 
@@ -178,6 +179,8 @@ export function dispatch(state: GameState, command: Command, playerId: PlayerId 
     }
     case 'take_back':
       return takeBack(state, player, command.drop);
+    case 'give':
+      return give(state, player, command.to, command.itemId, command.count);
 
     case 'eat':
       return consume(state, player, command.itemId, false);

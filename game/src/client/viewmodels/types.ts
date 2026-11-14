@@ -23,6 +23,8 @@ export interface ButtonModel {
   intent: InterfaceIntent;
   enabled: boolean;
   note: string | null;
+  /** A line that names a crewmate (the inventory's Give): their toque colour, for a dot before the words. */
+  color?: string;
 }
 
 // --- HUD ---------------------------------------------------------------------
@@ -290,6 +292,18 @@ export interface ControlLineModel {
 
 // --- Panels --------------------------------------------------------------------
 
+/** One line of the inventory's info panel: a short lead, then the rest (`viewmodels/iteminfo.ts`). */
+export interface InfoLineModel {
+  lead: string;
+  text: string;
+}
+
+/** What the info panel says of an item beyond its name and its words: its kind, and what it is for. */
+export interface ItemInfoModel {
+  kind: string;
+  uses: InfoLineModel[];
+}
+
 export interface ItemSlotModel {
   itemId: ItemId | null;
   name: string;
@@ -461,7 +475,9 @@ export type PanelModel = { title: string; close: ButtonModel } & (
     cargo: { label: string; slots: ItemSlotModel[]; accessible: boolean };
     /** The crew's tools on this player's belt: the five numbered slots, then any spare slot with a tool on it. */
     belt: BeltSlotModel[];
-    keyItems: { itemId: ItemId; name: string; count: number; description: string; drop: InterfaceIntent }[];
+    keyItems: { itemId: ItemId; name: string; count: number; description: string; drop: InterfaceIntent; buttons: ButtonModel[] }[];
+    /** The info panel's lines for every item on the sheet, by item. */
+    info: Partial<Record<ItemId, ItemInfoModel>>;
     stow: ButtonModel;
     fillWater: ButtonModel;
     /** Rewards that did not fit, with the button that claims them. */

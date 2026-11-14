@@ -1,6 +1,9 @@
 /**
  * The inventory drawn as a grid of tiles (Luc's bugfix list, round 3): the two drawn buttons and the tool belt on
- * top, the bag on the left and the boat on the right, a tile a stack, an empty tile an empty slot.
+ * top, the bag on the left and the boat beside it, a tile a stack, an empty tile an empty slot.
+ *
+ * Round 4 (Luc: "it should have a info screen on the right", "clicking on it open a small hover menu"): the info
+ * panel down the right of the sheet, and the small menu at a tile. Nothing opens inside the grid any more.
  */
 import { describe, expect, it } from 'vitest';
 import type { PanelModel } from '../../src/client/contracts.ts';
@@ -9,11 +12,15 @@ import { collectIntents, collectText } from '../../src/interface/dom.ts';
 import type { ViewNode } from '../../src/interface/dom.ts';
 import { BUCKET_ICON, STOW_ICON } from '../../src/interface/inventoryicons.ts';
 import { TAKE_BACK_KEY_CODE } from '../../src/client/viewmodels/takeback.ts';
-import { DROP_KEY_CODE, QUICK_PRESS_HINT, inventoryBodyView, itemDetailKey, itemDetailKeys, quickIntent } from '../../src/interface/inventoryview.ts';
+import {
+  DROP_KEY_CODE, INFO_QUIET_LINE, NOTHING_SHOWN, QUICK_PRESS_HINT, inventoryBodyView, itemDetailKey, itemDetailKeys, quickIntent, tileMenuView,
+} from '../../src/interface/inventoryview.ts';
+import { toqueIcon } from '../../src/interface/icons.ts';
 import { panelView } from '../../src/interface/views.ts';
 import { ITEM_IDS, isStackable } from '../../src/data/index.ts';
+import { setPlayerName } from '../../src/sim/index.ts';
 import type { GameState } from '../../src/sim/index.ts';
-import { give, newGame, standOn } from '../support.ts';
+import { give, newGame, standOn, teleport } from '../support.ts';
 
 const fileSystemModule = 'node:fs';
 const { readFileSync } = await import(/* @vite-ignore */ fileSystemModule) as { readFileSync(path: URL, encoding: 'utf8'): string };
@@ -21,7 +28,7 @@ const styles = readFileSync(new URL('../../src/interface/inventoryview.css', imp
 
 type Inventory = Extract<PanelModel, { id: 'inventory' }>;
 
-const NONE: ReadonlySet<string> = new Set();
+const NONE = NOTHING_SHOWN;
 
 const panelOf = (state: GameState): Inventory => ({
   title: 'Inventory', close: { label: 'Close', intent: { type: 'close_panel' }, enabled: true, note: null }, ...buildInventoryPanel(state),
@@ -48,8 +55,8 @@ describe('the inventory as a grid', () => {
     give(state, 'driftwood', 12);
     const body = inventoryBodyView(panelOf(state), NONE);
     const [columns] = withClass([body], 'iw-columns');
-    // Two columns by two rows, filled in this order: top left, top right, bottom left, bottom right.
-    expect(columns!.children.map((child) => child.classes)).toEqual(['iw-pack-actions', 'iw-inv-belt', 'iw-inv-pack', 'iw-inv-boat']);
+    // The buttons and the belt on top, the bag and the boat under them, and the info panel last: down the right.
+    expect(columns!.children.map((child) => child.classes)).toEqual(['iw-pack-actions', 'iw-inv-belt', 'iw-inv-pack', 'iw-inv-boat', 'iw-inv-info']);
     expect(collectText(withClass([body], 'iw-inv-belt'))).toContain('Tool belt');
     expect(collectText(withClass([body], 'iw-inv-pack'))).toContain('Backpack 1 / 8');
     expect(collectText(withClass([body], 'iw-inv-boat'))).toContain('Canoe cargo 0 / 8');
@@ -71,8 +78,10 @@ describe('the inventory as a grid', () => {
     expect(collectText([filled!])).toBe('x12');
     expect(find([filled!], (node) => node.attributes['data-item'] === 'driftwood')).toHaveLength(1);
     const [pick] = find([filled!], (node) => node.tag === 'button');
-    expect(pick!.attributes).toMatchObject({ 'aria-label': 'Driftwood, 12', 'aria-expanded': 'false', 'data-detail': 'backpack:driftwood:0' });
-    // The words of the whole panel, closed: counts and headings, not one item's name or description.
+    expect(pick!.attributes).toMatchObject({ 'aria-label': 'Driftwood, 12', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'data-detail': 'backpack:driftwood:0' });
+    // No tooltip of the browser's on a tile: the info panel says what it is.
+    expect(pick!.attributes.title).toBeUndefined();
+    // The words of the whole panel, nothing pointed at: counts and headings, not one item's name or description.
     const text = collectText([body]);
     for (const slot of [...panel.backpack.slots, ...panel.cargo.slots, ...panel.belt]) {
       if (slot.itemId === null) continue;
@@ -105,34 +114,224 @@ describe('the inventory as a grid', () => {
     }
   });
 
-  it('opens a tile\'s strip right after the tile, for as many tiles as are pressed', () => {
+  it('opens nothing inside the grid: with a menu open and the info panel full, each grid holds its tiles and nothing else', () => {
     const state = newGame();
     standOn(state, 'home_knoll');
     give(state, 'driftwood', 12);
     give(state, 'berries', 3);
     give(state, 'lens');
     const panel = panelOf(state);
-    const open = new Set([itemDetailKey('backpack', 'berries'), itemDetailKey('belt', 'bailing_can'), itemDetailKey('key', 'lens')]);
-    const body = inventoryBodyView(panel, open);
-    const strips = withClass([body], 'iw-item-detail');
-    expect(strips).toHaveLength(3);
-    const berries = collectText(withClass(withClass([body], 'iw-inv-pack'), 'iw-item-detail').slice(0, 1));
-    expect(berries).toContain('Berries');
-    expect(berries).toContain('x3');
-    expect(berries).toContain(panel.backpack.slots[1]!.description);
-    expect(berries).toContain('Eat');
-    expect(berries).toContain('To cargo');
-    expect(berries).toContain('Drop');
-    // The berries' strip is the next thing after the berries' tile, before the tiles that follow.
-    const list = find([body], (node) => node.tag === 'ul' && collectText([node]).includes('Berries'))[0]!;
-    expect(list.children.map((child) => (has(child, 'iw-item-detail') ? 'strip' : has(child, 'iw-blank') ? '-' : 'tile')).slice(0, 4))
-      .toEqual(['tile', 'tile', 'strip', '-']);
-    // A key item's strip names it and has no button: there is nothing to do with it.
-    const [lens] = withClass(withClass([body], 'iw-key-tiles'), 'iw-item-detail');
-    expect(collectText([lens!])).toContain('Lens');
-    expect(collectIntents([lens!])).toEqual([]);
-    // Every key the interface may hold open is a tile on the sheet.
+    const berries = itemDetailKey('backpack', 'berries');
+    for (const shown of [NONE, { menu: berries, info: berries }, { menu: itemDetailKey('belt', 'bailing_can'), info: itemDetailKey('key', 'lens') }]) {
+      const body = inventoryBodyView(panel, shown);
+      for (const list of find([body], (node) => node.tag === 'ul' && has(node, 'iw-tiles'))) {
+        expect(list.children.every((child) => child.tag === 'li' && has(child, 'iw-tile')), JSON.stringify(shown)).toBe(true);
+      }
+      // The round-3 strip is gone, and the menu is not in the body at all: the body scrolls and would cut it.
+      expect(withClass([body], 'iw-item-detail')).toEqual([]);
+      expect(withClass([body], 'iw-tile-menu')).toEqual([]);
+      // The same tiles, in the same order, whatever is shown.
+      expect(withClass([body], 'iw-tile').map((tile) => tile.key)).toEqual(withClass([inventoryBodyView(panel, NONE)], 'iw-tile').map((tile) => tile.key));
+    }
+    // Every key the interface may hold is a tile on the sheet.
     expect(itemDetailKeys(panel).sort()).toEqual(['backpack:berries:0', 'backpack:driftwood:0', 'belt:bailing_can:0', 'key:lens:0']);
+  });
+
+  it('marks the tile whose menu is open and the tile the info panel is about', () => {
+    const state = newGame();
+    standOn(state, 'home_knoll');
+    give(state, 'driftwood', 12);
+    give(state, 'berries', 3);
+    const body = inventoryBodyView(panelOf(state), { menu: 'backpack:berries:0', info: 'backpack:driftwood:0' });
+    const tiles = withClass([body], 'iw-tile').filter((tile) => !has(tile, 'iw-blank'));
+    const marks = Object.fromEntries(tiles.map((tile) => [tile.key, [has(tile, 'iw-open'), has(tile, 'iw-read'), find([tile], (node) => node.tag === 'button')[0]!.attributes['aria-expanded']]]));
+    expect(marks).toEqual({
+      'belt:bailing_can:0': [false, false, 'false'], 'backpack:driftwood:0': [false, true, 'false'], 'backpack:berries:0': [true, false, 'true'],
+    });
+  });
+});
+
+describe('the info panel', () => {
+  const infoOf = (body: ViewNode): ViewNode => withClass([body], 'iw-inv-info')[0]!;
+
+  it('holds one quiet line until an item is pointed at, and again when that tile is gone', () => {
+    const state = newGame();
+    standOn(state, 'home_knoll');
+    give(state, 'berries', 3);
+    const panel = panelOf(state);
+    for (const shown of [NONE, { menu: null, info: 'backpack:stone:0' }, { menu: null, info: 'cargo:berries:0' }]) {
+      const info = infoOf(inventoryBodyView(panel, shown));
+      expect(collectText([info])).toBe(`About ${INFO_QUIET_LINE}`);
+      expect(find([info], (node) => node.attributes['data-item'] !== undefined)).toEqual([]);
+    }
+    expect(INFO_QUIET_LINE).toBe('Point at an item to read about it.');
+  });
+
+  it('shows the pointed tile: its drawing, its name, what it is and how many, its words, and what it is for', () => {
+    const state = newGame();
+    standOn(state, 'home_knoll');
+    give(state, 'berries', 3);
+    give(state, 'driftwood', 12);
+    const panel = panelOf(state);
+    const info = infoOf(inventoryBodyView(panel, { menu: null, info: 'backpack:berries:0' }));
+    const [card] = withClass([info], 'iw-info-card');
+    expect(card!.attributes['data-about']).toBe('backpack:berries:0');
+    expect(find([card!], (node) => node.attributes['data-item'] === 'berries')).toHaveLength(1);
+    expect(collectText(withClass([card!], 'iw-info-name'))).toBe('Berries');
+    expect(collectText(withClass([card!], 'iw-info-kind'))).toBe('Food · x3');
+    expect(collectText(withClass([card!], 'iw-info-about'))).toBe(panel.backpack.slots[0]!.description);
+    // What it is for: the model's lines, each a lead and its words, in the model's order.
+    const uses = withClass([card!], 'iw-info-uses')[0]!.children.map((line) => collectText([line]));
+    expect(uses).toEqual(panel.info.berries!.uses.map((line) => `${line.lead}:   ${line.text}`));
+    expect(uses.some((line) => line.startsWith('Eat it:'))).toBe(true);
+    // The other item is not in the panel: one item at a time.
+    expect(collectText([info])).not.toContain('Driftwood');
+    // No control in it: the panel is for reading.
+    expect(find([info], (node) => node.tag === 'button')).toEqual([]);
+    expect(collectIntents([info])).toEqual([]);
+  });
+
+  it('shows a tool and a key item the same way, with where the tool is', () => {
+    const state = newGame();
+    give(state, 'hatchet');
+    give(state, 'lens');
+    state.players[0].selectedTool = 'hatchet';
+    const panel = panelOf(state);
+    const tool = infoOf(inventoryBodyView(panel, { menu: null, info: 'belt:hatchet:0' }));
+    expect(collectText(withClass([tool], 'iw-info-name'))).toBe('Hatchet');
+    expect(collectText(withClass([tool], 'iw-info-kind'))).toBe('Tool · in hand');
+    const keyItem = infoOf(inventoryBodyView(panel, { menu: null, info: 'key:lens:0' }));
+    expect(collectText(withClass([keyItem], 'iw-info-name'))).toBe('Lens');
+    expect(collectText(withClass([keyItem], 'iw-info-kind'))).toBe('Key item · x1');
+  });
+
+  it('is the same element whatever it shows: its place never follows its words', () => {
+    const state = newGame();
+    standOn(state, 'home_knoll');
+    give(state, 'berries', 3);
+    const panel = panelOf(state);
+    const shapes = [NONE, { menu: null, info: 'backpack:berries:0' }, { menu: null, info: 'belt:bailing_can:0' }].map((shown) => {
+      const info = infoOf(inventoryBodyView(panel, shown));
+      return [info.tag, info.key, info.classes, info.children.map((child) => `${child.tag}.${child.classes}`).join(' ')];
+    });
+    expect(new Set(shapes.map((shape) => JSON.stringify(shape))).size).toBe(1);
+    expect(shapes[0]).toEqual(['aside', 'info', 'iw-inv-info', 'h3. div.iw-info-card']);
+  });
+});
+
+describe('the small menu at a tile', () => {
+  /** Luc ashore at Home Knoll by the landed canoe, Sam a step away. */
+  function withSam(): GameState {
+    const state = newGame(7, { crew: 2 });
+    standOn(state, 'home_knoll');
+    setPlayerName(state, 0, 'Luc');
+    setPlayerName(state, 1, 'Sam');
+    const [luc, sam] = state.players;
+    Object.assign(sam, { mode: 'foot', seat: null, islandId: luc.islandId, position: { ...luc.position, x: luc.position.x + 1 } });
+    return state;
+  }
+  const linesOf = (menu: ViewNode): string[] => find([menu], (node) => node.tag === 'button').map((button) =>
+    `${collectText(withClass([button], 'iw-label'))}${button.attributes.disabled ? ' (off)' : ''}${withClass([button], 'iw-note').length > 0 ? ` [${collectText(withClass([button], 'iw-note'))}]` : ''}`);
+
+  it('is not drawn until a tile is pressed, nor for a tile that is gone', () => {
+    const state = newGame();
+    standOn(state, 'home_knoll');
+    give(state, 'berries', 3);
+    const panel = panelOf(state);
+    expect(tileMenuView(panel, null)).toBeNull();
+    expect(tileMenuView(panel, 'backpack:stone:0')).toBeNull();
+    expect(tileMenuView(panel, 'backpack:berries:1')).toBeNull();
+    expect(tileMenuView(panel, 'backpack:berries:0')).not.toBeNull();
+  });
+
+  it('is the sheet\'s own child, after the body and outside it', () => {
+    const state = newGame();
+    standOn(state, 'home_knoll');
+    give(state, 'berries', 3);
+    const panel = panelOf(state);
+    const [sheet] = panelView(panel, { menu: 'backpack:berries:0', info: 'backpack:berries:0' });
+    const kinds = sheet!.children.map((child) => (has(child, 'iw-body') ? 'body' : has(child, 'iw-tile-menu') ? 'menu' : child.tag));
+    expect(kinds.slice(kinds.indexOf('body'), kinds.indexOf('body') + 2)).toEqual(['body', 'menu']);
+    expect(withClass(withClass([sheet!], 'iw-body'), 'iw-tile-menu')).toEqual([]);
+    // Closed: the sheet has no menu at all.
+    expect(withClass(panelView(panel), 'iw-tile-menu')).toEqual([]);
+    expect(withClass(panelView(panel, { menu: null, info: 'backpack:berries:0' }), 'iw-tile-menu')).toEqual([]);
+  });
+
+  it('names its tile and carries the model\'s lines, each with the intent the model gave it', () => {
+    const state = newGame();
+    standOn(state, 'home_knoll');
+    give(state, 'berries', 3);
+    const panel = panelOf(state);
+    const menu = tileMenuView(panel, 'backpack:berries:0')!;
+    expect(menu.attributes).toMatchObject({ role: 'menu', 'data-for': 'backpack:berries:0', 'aria-label': 'Berries: what to do' });
+    expect(collectText(withClass([menu], 'iw-menu-head'))).toBe('Berries x3');
+    expect(linesOf(menu)).toEqual(['Eat', 'Stow', 'Drop']);
+    expect(collectIntents([menu])).toEqual(panel.backpack.slots[0]!.buttons.map((button) => button.intent));
+    for (const line of find([menu], (node) => node.tag === 'button')) expect(line.attributes).toMatchObject({ type: 'button', role: 'menuitem' });
+    // A drop is drawn quietly, as everywhere.
+    expect(find([menu], (node) => node.tag === 'button').map((line) => has(line, 'iw-quiet'))).toEqual([false, false, true]);
+  });
+
+  it('gives each kind of item its own lines: a drink, a stack in the boat, a tool in hand and one put away, a key item', () => {
+    const state = newGame();
+    standOn(state, 'home_knoll');
+    give(state, 'clean_water', 2);
+    give(state, 'clay', 4, 'cargo');
+    give(state, 'hatchet');
+    give(state, 'lens');
+    state.players[0].selectedTool = 'hatchet';
+    const panel = panelOf(state);
+    expect(linesOf(tileMenuView(panel, 'backpack:clean_water:0')!)).toEqual(['Drink', 'Stow', 'Drop']);
+    expect(linesOf(tileMenuView(panel, 'cargo:clay:0')!)).toEqual(['Take', 'Drop']);
+    expect(linesOf(tileMenuView(panel, 'belt:hatchet:0')!)).toEqual(['Put away', 'To 1', 'To 3', 'To 4', 'To 5', 'Drop (off) [Tools stay on the belt. They are never dropped]']);
+    expect(linesOf(tileMenuView(panel, 'belt:bailing_can:0')!)).toEqual(['Hold', 'To 2', 'To 3', 'To 4', 'To 5', 'Drop (off) [Tools stay on the belt. They are never dropped]']);
+    expect(linesOf(tileMenuView(panel, 'key:lens:0')!)).toEqual(['Drop (off) [A key item stays with the crew. It is never dropped]']);
+    // A tool's moves to another slot stand together on one row, between Hold and Drop.
+    const tool = tileMenuView(panel, 'belt:hatchet:0')!;
+    const [row] = withClass([tool], 'iw-menu-row');
+    expect(find([row!], (node) => node.tag === 'button').map((button) => collectText([button]))).toEqual(['To 1', 'To 3', 'To 4', 'To 5']);
+    expect(tool.children.map((child) => (has(child, 'iw-menu-row') ? 'row' : has(child, 'iw-menu-line') ? 'line' : 'head'))).toEqual(['head', 'line', 'row', 'line']);
+  });
+
+  it('shows a line the rules would refuse as off, with the reason under it', () => {
+    const state = newGame();
+    standOn(state, 'home_knoll');
+    give(state, 'berries', 3);
+    give(state, 'clay', 4, 'cargo');
+    // Ashore, and the canoe paddled off: it is out of reach.
+    teleport(state, 'home_knoll', 0, 1150);
+    state.canoe.beached = false;
+    const panel = panelOf(state);
+    expect(panel.cargo.accessible).toBe(false);
+    expect(linesOf(tileMenuView(panel, 'backpack:berries:0')!)).toEqual(['Eat', 'Stow (off) [The canoe is out of reach]', 'Drop']);
+    expect(linesOf(tileMenuView(panel, 'cargo:clay:0')!)).toEqual(['Take (off) [The canoe is out of reach]', 'Drop (off) [The canoe is out of reach]']);
+    // Off is the button's own `disabled`: it cannot be pressed, and the keyboard steps over it.
+    const [stow] = find([tileMenuView(panel, 'backpack:berries:0')!], (node) => node.tag === 'button' && collectText([node]).startsWith('Stow'));
+    expect(stow!.attributes.disabled).toBe(true);
+  });
+
+  it('has one Give line for a crewmate in reach, with their name and their toque in their colour', () => {
+    const state = withSam();
+    give(state, 'plank', 5);
+    const panel = panelOf(state);
+    const menu = tileMenuView(panel, 'backpack:plank:0')!;
+    expect(linesOf(menu)).toEqual(['Stow', 'Give to Sam', 'Drop']);
+    const [line] = find([menu], (node) => node.tag === 'button' && has(node, 'iw-give'));
+    expect(line!.intent).toEqual({ type: 'command', command: { type: 'give', to: 1, itemId: 'plank', count: 5 } });
+    const colour = panel.backpack.slots[0]!.buttons.find((button) => button.label === 'Give to Sam')!.color!;
+    expect(colour).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(find([line!], (node) => node.html === toqueIcon(colour))).toHaveLength(1);
+    // No other line has a toque, and no style is written on anything: the live site's policy forbids it.
+    expect(find([menu], (node) => has(node, 'iw-menu-toque'))).toHaveLength(1);
+    expect(find([menu], (node) => node.attributes.style !== undefined)).toEqual([]);
+  });
+
+  it('has no Give line alone', () => {
+    const state = newGame();
+    standOn(state, 'home_knoll');
+    give(state, 'plank', 5);
+    expect(linesOf(tileMenuView(panelOf(state), 'backpack:plank:0')!)).toEqual(['Stow', 'Drop']);
   });
 });
 
@@ -238,7 +437,7 @@ describe('a quick press on a tile', () => {
     expect(quickIntent({ ...panel, id: 'credits', lines: [], completed: false } as PanelModel, 'backpack:stone:0', 'drop')).toBeNull();
   });
 
-  it('is not a control of the sheet: no tile carries an intent until its strip is open', () => {
+  it('is not a control of the sheet: no tile carries an intent until its menu is open', () => {
     const state = newGame();
     standOn(state, 'home_knoll');
     give(state, 'stone', 9);
@@ -262,10 +461,30 @@ describe('the inventory\'s own stylesheet', () => {
     for (const selector of dimmed) expect(selector.endsWith('.iw-ico'), selector).toBe(true);
   });
 
-  it('sizes the grids so 40 stacks fit the sheet: tiles of 3.7rem, the bag four across, the boat as many as fit', () => {
-    expect(styles).toMatch(/\.iw-inv \.iw-columns \{[^}]*grid-template-columns: 16\.3rem minmax\(0, 1fr\);/);
-    expect(styles).toMatch(/\.iw-inv \.iw-tiles \{[^}]*grid-template-columns: repeat\(auto-fill, 3\.7rem\);[^}]*grid-auto-flow: row dense;[^}]*gap: 0\.5rem;/);
-    // The bag's column holds exactly four tiles and three gaps.
+  it('sizes the grids so 40 stacks fit the sheet: tiles of 3.7rem, the bag four across, the boat eight, the info panel the rest', () => {
+    expect(styles).toMatch(/\.iw-inv \.iw-columns \{[^}]*grid-template-columns: 16\.3rem minmax\(0, 33\.1rem\) minmax\(13rem, 1fr\);[^}]*grid-template-rows: auto 1fr;/);
+    expect(styles).toMatch(/\.iw-inv \.iw-tiles \{[^}]*grid-template-columns: repeat\(auto-fill, 3\.7rem\);[^}]*gap: 0\.5rem;/);
+    // The bag's column holds exactly four tiles and three gaps, the boat's eight and seven.
     expect(4 * 3.7 + 3 * 0.5).toBeCloseTo(16.3);
+    expect(8 * 3.7 + 7 * 0.5).toBeCloseTo(33.1);
+    // The sheet is wide enough for the three columns and stays on a screen of about 94rem.
+    expect(styles).toMatch(/\.iw-panel\.iw-panel-inventory \{\s*width: min\(77rem, 96vw\);/);
+    expect(16.3 + 33.1 + 13 + 2 * 2.2 + 4 + 0.8).toBeLessThanOrEqual(77);
+  });
+
+  it('gives the info panel a column and a height of its own, and lays its card over them: its words move nothing', () => {
+    // Each part has its own cell, so the info panel cannot push a grid along.
+    for (const [part, column, row] of [['iw-pack-actions', '1', '1'], ['iw-inv-belt', '2', '1'], ['iw-inv-pack', '1', '2'], ['iw-inv-boat', '2', '2']] as const) {
+      expect(styles).toMatch(new RegExp(`\\.iw-inv \\.${part} \\{\\s*grid-column: ${column};\\s*grid-row: ${row};`));
+    }
+    expect(styles).toMatch(/\.iw-inv \.iw-inv-info \{[^}]*grid-column: 3;[^}]*grid-row: 1 \/ span 2;[^}]*position: relative;[^}]*min-height: 27rem;/);
+    // The card is out of the flow (it cannot make the column taller) and scrolls inside itself if it must.
+    expect(styles).toMatch(/\.iw-info-card \{[^}]*position: absolute;[^}]*inset: 2rem 0 0\.2rem 0;[^}]*overflow: hidden auto;/);
+  });
+
+  it('lays the menu over the sheet, out of the flow, so it moves no tile', () => {
+    expect(styles).toMatch(/\.iw-tile-menu \{[^}]*position: absolute;[^}]*z-index: 6;[^}]*max-width: 17rem;/);
+    // The round-3 strip's rules are gone with the strip.
+    expect(styles).not.toContain('iw-item-detail');
   });
 });

@@ -56,9 +56,13 @@ export function toastForEvent(event: GameEvent, state: GameState, readerId: Play
       if (event.container === 'key_items') {
         return toast(`${finder ? `${finder} found` : 'Found'}: ${itemName(event.itemId)}`, 'good', event.itemId);
       }
+      // Handed over by a crewmate (`sim/give.ts`): the note says who.
+      if (event.givenBy !== undefined) return toast(`${crewName(state, event.givenBy)} gave you ${countedName(event.itemId, event.count)}`, 'good', event.itemId);
       return toast(`+${event.count} ${itemName(event.itemId)}`, 'info', event.itemId);
     }
     case 'item_lost': {
+      // Given to a crewmate: nothing was lost, and there is nothing to take back.
+      if (event.givenTo !== undefined) return toast(`You gave ${crewName(state, event.givenTo)} ${countedName(event.itemId, event.count)}`, 'info', event.itemId);
       const lost = toast(`-${event.count} ${itemName(event.itemId)}`, 'warning', event.itemId);
       return event.dropId === undefined ? lost : { ...lost, takeBack: event.dropId };
     }
@@ -173,7 +177,7 @@ export function toastsFromEvents(
   const washedAshore = events.some((event) => event.type === 'washed_ashore');
   const gains = new Map<string, number>();
   for (const event of events) {
-    if (event.type === 'item_gained' && (event.container === 'backpack' || event.container === 'cargo')) {
+    if (event.type === 'item_gained' && event.givenBy === undefined && (event.container === 'backpack' || event.container === 'cargo')) {
       gains.set(event.itemId, (gains.get(event.itemId) ?? 0) + event.count);
     }
   }
@@ -181,7 +185,7 @@ export function toastsFromEvents(
   const told = new Set<string>();
   for (const event of events) {
     if (event.type === 'item_lost' && washedAshore) continue;
-    if (event.type === 'item_gained' && gains.has(event.itemId)) {
+    if (event.type === 'item_gained' && event.givenBy === undefined && gains.has(event.itemId)) {
       if (told.has(event.itemId)) continue;
       told.add(event.itemId);
       const gained = toast(`+${gains.get(event.itemId)} ${itemName(event.itemId)}`, 'info', event.itemId);

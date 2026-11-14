@@ -152,8 +152,8 @@ describe('an item\'s icon is shown wherever the model names the item', () => {
     ];
     const kept = model.panel.stow.intent;
     model.panel.keyItems = [
-      { itemId: 'lens', name: 'Lens', count: 1, description: 'A lens.', drop: kept },
-      { itemId: 'bellows', name: 'Bellows', count: 1, description: 'Bellows.', drop: kept },
+      { itemId: 'lens', name: 'Lens', count: 1, description: 'A lens.', drop: kept, buttons: [] },
+      { itemId: 'bellows', name: 'Bellows', count: 1, description: 'Bellows.', drop: kept, buttons: [] },
     ];
     model.panel.pendingRewards = {
       text: 'Waiting for room: 2 x Plank, 1 x Rope',

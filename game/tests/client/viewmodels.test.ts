@@ -422,10 +422,11 @@ describe('the panels', () => {
     expect(panel.backpack.slots[1].itemId).toBeNull();
     const berries = panel.backpack.slots[0];
     expect(berries).toMatchObject({ itemId: 'berries', name: 'Berries', count: 4 });
-    expect(berries.buttons.map((button) => button.label)).toEqual(['Eat', 'To cargo', 'Drop']);
+    // The lines of the small menu at the tile (round 4): Stow is what "To cargo" was, Take what "To backpack" was.
+    expect(berries.buttons.map((button) => button.label)).toEqual(['Eat', 'Stow', 'Drop']);
     expect(berries.buttons[1].intent).toEqual({ type: 'command', command: { type: 'transfer', from: 'backpack', itemId: 'berries', count: 4 } });
     expect(panel.cargo.slots).toHaveLength(8);
-    expect(panel.cargo.slots[0].buttons.map((button) => button.label)).toEqual(['To backpack', 'Drop']);
+    expect(panel.cargo.slots[0].buttons.map((button) => button.label)).toEqual(['Take', 'Drop']);
     expect(panel.stow.enabled).toBe(true);
     expect(panel.belt.map((slot) => slot.name)).toEqual(['Bailing can', '', '', '', '']);
 
@@ -435,9 +436,9 @@ describe('the panels', () => {
     const away = buildInventoryPanel(state);
     expect(away.cargo.accessible).toBe(false);
     expect(away.cargo.label).toContain('out of reach');
-    expect(away.backpack.slots[0].buttons.find((button) => button.label === 'To cargo')!.enabled).toBe(false);
+    expect(away.backpack.slots[0].buttons.find((button) => button.label === 'Stow')).toMatchObject({ enabled: false, note: 'The canoe is out of reach' });
     expect(away.stow.enabled).toBe(false);
-    expect(away.cargo.slots[0].buttons.every((button) => !button.enabled)).toBe(true);
+    expect(away.cargo.slots[0].buttons.every((button) => !button.enabled && button.note === 'The canoe is out of reach')).toBe(true);
   });
 
   it('groups the quest log and marks the tracked quest', () => {

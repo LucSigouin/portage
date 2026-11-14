@@ -19,7 +19,8 @@ import type { ItemId } from '../data/index.ts';
 import { ICON, SEAL, itemIcon, logotype, toqueIcon, waterGauge } from './icons.ts';
 import { boatTabsView, elsewhereView } from './stations.ts';
 import { craftDoorsView, craftRestView } from './craftdoors.ts';
-import { inventoryBodyView, inventoryHintView } from './inventoryview.ts';
+import { NOTHING_SHOWN, inventoryBodyView, inventoryHintView, tileMenuView } from './inventoryview.ts';
+import type { InventoryShown } from './inventoryview.ts';
 import { toastActionView } from './takeback.ts';
 import { keyFace, keyedText } from './keycaps.ts';
 import { mapHintView, markLegendRows } from './mapmarks.ts';
@@ -29,8 +30,6 @@ const icon = (markup: string, className = ''): ViewNode => h('i.iw-i', { class: 
 /** The drawing of an item, set before its name wherever the model names one. `data-item` says which. */
 const itemIconView = (itemId: ItemId, className = ''): ViewNode =>
   h('i.iw-i.iw-item-ico', { class: className, html: itemIcon(itemId), 'aria-hidden': 'true', 'data-item': itemId });
-
-const NONE_OPEN: ReadonlySet<string> = new Set();
 
 const classes = (...names: (string | false | null | undefined)[]): string => names.filter(Boolean).join(' ');
 
@@ -345,8 +344,9 @@ function saveSlotView(slot: SaveSlotModel): ViewNode {
 // The inventory has its own module (`inventoryview.ts`): the tiles, their keys, and the two quick presses.
 export { itemDetailKey, itemDetailKeys } from './inventoryview.ts';
 
-const inventoryView = (panel: Extract<PanelModel, { id: 'inventory' }>, open: ReadonlySet<string>): ViewNode[] =>
-  sheet(panel, 'wide', panel.stationsText, inventoryBodyView(panel, open), inventoryHintView());
+// The small menu at a tile is the sheet's own child, after its body: the body scrolls and would cut it.
+const inventoryView = (panel: Extract<PanelModel, { id: 'inventory' }>, shown: InventoryShown): ViewNode[] =>
+  sheet(panel, 'wide', panel.stationsText, [inventoryBodyView(panel, shown), tileMenuView(panel, shown.menu)], inventoryHintView());
 
 /**
  * The red ! before a recipe or a part an open quest still asks for (Luc's bugfix list, line 19). It is a mark, not a
@@ -559,8 +559,8 @@ function crewJoinView(panel: Extract<PanelModel, { id: 'crew_join' }>): ViewNode
   ], [panel.join], panel.cancel);
 }
 
-/** `open`: the inventory rows the player has opened (`itemDetailKey`). Every other panel ignores it. */
-export function panelView(panel: PanelModel, open: ReadonlySet<string> = NONE_OPEN): ViewNode[] {
+/** `shown`: the inventory tile whose menu is open and the tile its info panel is about (`inventorymenu.ts`). Every other panel ignores it. */
+export function panelView(panel: PanelModel, shown: InventoryShown = NOTHING_SHOWN): ViewNode[] {
   switch (panel.id) {
     case 'settings': return settingsView(panel);
     case 'how_to_play': return howToPlayView(panel);
@@ -568,7 +568,7 @@ export function panelView(panel: PanelModel, open: ReadonlySet<string> = NONE_OP
     case 'pause': return pauseView(panel);
     case 'save_slots':
       return sheet(panel, 'mid', '', h('ul.iw-body.iw-saves', { key: 'body' }, panel.slots.map(saveSlotView)));
-    case 'inventory': return inventoryView(panel, open);
+    case 'inventory': return inventoryView(panel, shown);
     case 'crafting': return craftingView(panel);
     case 'canoe_builder': return canoeBuilderView(panel);
     case 'quest_log': return questLogView(panel);
