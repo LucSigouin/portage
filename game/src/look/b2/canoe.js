@@ -561,11 +561,15 @@ const STROKE_WELL_LEAN = 0.24;
 const PADDLE_TIP = 1.485;
 // Below this effort, on its way to rest across the gunwales, the paddle is left to the canoe view to slide in.
 const STROKE_WELL_HOLD = 0.3;
-// Changing sides, the lower hand slides this far up the shaft toward the grip, to keep its hold.
-const SWITCH_SLIDE = 0.3;
-// Halfway through a change of sides: the grip at the chest, the paddle upright, its blade above the head.
-const SWITCH_GRIP = new THREE.Vector3(0, 0.5, 0.12);
-const SWITCH_AIM = new THREE.Vector3(0, 1.75, 0.05);
+// A change of sides carries the paddle across the bow, low: halfway it lies level and points straight ahead, the
+// grip at the lap this far above the figure's origin and this far ahead of it, the blade a touch higher than the grip.
+const CARRY_HEIGHT = 0.44;
+const CARRY_AHEAD = 0.26;
+const CARRY_ELEVATION = 0.03;
+// The hands change places on the shaft as it lies ahead: each passes on its own side of it, this far apart.
+const CARRY_PASS = 0.11;
+// The blade's middle, down the shaft from the grip.
+const BLADE_ALONG = 1.19;
 
 /** The stroke at `phase` 0..1: the keys joined by a smooth curve round the cycle (Catmull-Rom, by phase). */
 function strokeAt(phase) {
@@ -618,7 +622,6 @@ export function createCrew(outfit) {
   const sFootL = new THREE.Vector3();
   const sFootR = new THREE.Vector3();
   const bladeWorld = new THREE.Vector3();
-  const state = { sideS: 1 };
   // kneeling, bailing and sleeping
   const kKneeL = new THREE.Vector3();
   const kKneeR = new THREE.Vector3();
@@ -649,7 +652,10 @@ export function createCrew(outfit) {
     root: paddler.root,
     paddler,
     // seated: phase 0..1 of one stroke, effort 0..1 (0 = paddle resting across the gunwales), side ±1
+    // dt: kept for callers, unused (a change of sides is `more.cross`, the caller's to time).
     // more: { kneel: 0|1 (knees on the floor, heels tucked under: the two places between the seats),
+    //         cross: 0..1 through a change of sides, coming over from the other side to `side` (left out: settled),
+    //         carry: how high the paddle is carried across, above the figure's origin (left out: at the lap),
     //         floor: metres from the figure's origin down to the hull floor,
     //         bail: 0..1 with bailPhase 0..1 (scooping the bilge over the side with a tin, paddle laid down),
     //         sleep: 0..1 (slumped forward, hands in the lap),
@@ -662,8 +668,8 @@ export function createCrew(outfit) {
       const kneel = more?.kneel ?? 0;
       const bail = more?.bail ?? 0;
       const doze = more?.sleep ?? 0;
-      state.sideS += (side - state.sideS) * Math.min(1, dt * 5);
-      const s = state.sideS;
+      const s = side >= 0 ? 1 : -1;
+      const cross = Math.min(1, Math.max(0, more?.cross ?? 1));
       const pull = phase < STROKE_PULL;
       // stroke pose (paddler-local), from the keys round the cycle: grip, aim, feather, reach
       const key = strokeAt(phase);
@@ -671,27 +677,41 @@ export function createCrew(outfit) {
       const wider = (more?.beam ?? STROKE_BEAM) - STROKE_BEAM;
       // A higher gunwale takes the lower hand up the shaft, so it and its forearm stay above it.
       const higher = Math.max(0, (more?.gunwale ?? STROKE_GUNWALE) - STROKE_GUNWALE);
-      // The stroke keeps its reach outboard until the paddle is well up, on its way over to the other side.
-      const out = Math.sign(s) * Math.min(1, Math.abs(s) * 1.5);
-      G.set(out * (key[0] + wider * 0.3), key[1], key[2]);
-      A.set(out * (key[3] + wider * 1.8), key[4], key[5]);
+      // Drawn first for the figure's left (+x), then turned to the side the paddle works on.
+      G.set(key[0] + wider * 0.3, key[1], key[2]);
+      A.set(key[3] + wider * 1.8, key[4], key[5]);
       // Short of an outrigger's deck ahead or behind, the stroke is drawn in to keep the blade off its end.
       const [nearest, furthest] = more?.span ?? STROKE_SPAN;
       const fore = Math.min(1, furthest / STROKE_SPAN[1]);
       const aft = Math.min(1, nearest / STROKE_SPAN[0]);
       G.z *= G.z > 0 ? fore : aft;
       A.z *= A.z > 0 ? fore : aft;
-      // Changing sides, the paddle is lifted up and over, blade high above the head, never swung through the hull.
-      const over = 1 - s * s;
-      G.lerp(SWITCH_GRIP, over);
-      // The blade rises first, then the grip comes in: the shaft never lies low across the gunwale.
-      A.lerp(SWITCH_AIM, 1 - (1 - over) * (1 - over));
+      // A change of sides: the same pose on the far side (cross 0) is swung round the bow to this side (cross 1).
+      // The shaft turns about the grip, level and pointing straight ahead halfway, while the grip comes down to
+      // the lap and across: hands low, close to the body, the blade never over the head and never through the hull.
+      // `lead` is the side the body leans and turns to: it follows the paddle across.
+      let lead = s;
+      let carried = 0;
+      const eased = cross < 1 ? smooth(0, 1, cross) : 1;
+      if (cross < 1) {
+        carried = Math.sin(Math.PI * eased);
+        _v.subVectors(A, G).normalize();
+        const azimuth = Math.atan2(_v.z, _v.x);
+        const elevation = Math.asin(_v.y);
+        const turned = Math.PI - azimuth - (Math.PI - 2 * azimuth) * eased;
+        const raised = elevation + (CARRY_ELEVATION - elevation) * carried;
+        lead = -s * Math.cos(Math.PI * eased);
+        G.set(-G.x * Math.cos(Math.PI * eased), G.y + ((more?.carry ?? CARRY_HEIGHT) - G.y) * carried, G.z + (CARRY_AHEAD - G.z) * carried);
+        A.set(Math.cos(raised) * Math.cos(turned), Math.sin(raised), Math.cos(raised) * Math.sin(turned)).multiplyScalar(BLADE_ALONG).add(G);
+      }
+      G.x *= s;
+      A.x *= s;
       // Beside an outrigger's deck the blade works in the well: the grip goes out over the gunwale and the shaft
       // stands nearly upright, its tip short of the deck's inner edge (`well`, out from the figure's centre). Changing
       // sides there, the paddle goes straight up and over, never out across the deck.
       const well = more?.well ?? 0;
       if (well > 0) {
-        G.x += out * STROKE_WELL_GRIP;
+        G.x += s * STROKE_WELL_GRIP;
         G.y += STROKE_WELL_LIFT;
         // The hands stay ahead of the shoulders, so the elbows keep off whatever stands behind the kneeler.
         G.z = Math.max(G.z, STROKE_WELL_GRIP_AHEAD);
@@ -720,18 +740,25 @@ export function createCrew(outfit) {
           A.lerp(_h, smooth(0, STROKE_WELL_HOLD, effort));
         }
       }
-      const feather = key[6] * effort + (1 - effort) * 1.5;
+      // Carried across, the blade lies flat.
+      const feather = (key[6] + (1.5 - key[6]) * carried) * effort + (1 - effort) * 1.5;
       paddler.setPaddle(G, A, feather);
       // hands: top hand on the grip, lower hand down the shaft, above the gunwale
       _v.subVectors(A, G).normalize();
-      const top = G;
-      const low = _n.copy(G).addScaledVector(_v, STROKE_LOW_HAND - higher - 0.1 * (1 - effort) - SWITCH_SLIDE * over);
-      if (s >= 0) {
-        handR.copy(top);
-        handL.copy(low);
+      const hold = STROKE_LOW_HAND - higher - 0.1 * (1 - effort);
+      const top = s >= 0 ? handR : handL;
+      const low = s >= 0 ? handL : handR;
+      if (cross < 1) {
+        // Changing sides the hands change places. The one that held the shaft slides up to the grip: it is the top
+        // hand now. The one that held the grip slides down to where the other was. They pass half way, the left
+        // hand on the left of the shaft and the right on its right, so a change called back runs back the same way.
+        const slid = smooth(0.2, 0.8, eased);
+        _h.set(1, 0, 0).addScaledVector(_v, -_v.x).multiplyScalar((CARRY_PASS / 2) * carried * carried);
+        top.copy(G).addScaledVector(_v, hold * (1 - slid)).addScaledVector(_h, s >= 0 ? -1 : 1);
+        low.copy(G).addScaledVector(_v, hold * slid).addScaledVector(_h, s >= 0 ? 1 : -1);
       } else {
-        handL.copy(top);
-        handR.copy(low);
+        top.copy(G);
+        low.copy(G).addScaledVector(_v, hold);
       }
       // resting: both hands simply hold the shaft
       if (effort < 0.5) {
@@ -740,9 +767,9 @@ export function createCrew(outfit) {
       }
       const reach = key[7];
       let lean = 0.1 + effort * (0.06 + 0.16 * reach);
-      let twist = -s * effort * (0.34 * (reach - 0.5));
+      let twist = -lead * effort * (0.34 * (reach - 0.5));
       // Working in an outrigger's well, the kneeler leans out over the gunwale.
-      let tilt = -s * effort * (well > 0 ? 0.05 + STROKE_WELL_LEAN : 0.05);
+      let tilt = -lead * effort * (well > 0 ? 0.05 + STROKE_WELL_LEAN : 0.05);
       if (bail > 0) {
         // dip the tin between the knees, lift it, tip it over the side; the other hand braces on the far gunwale
         const u = more.bailPhase ?? 0;

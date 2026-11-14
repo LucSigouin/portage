@@ -37,6 +37,8 @@ interface TierMeshes {
   /** The kit shoved up to the thwart, for when someone kneels amidships. Built the first time it is needed. */
   kitCrewed: THREE.Mesh | null;
   bilge: THREE.Mesh;
+  /** How high the kit stands along the hull, slice by slice: measured the first time someone wants to change sides over it. */
+  kitTops: Float32Array | null;
 }
 
 /** Strokes a second while paddling, scoops a second while bailing, and metres walked per stride. */
@@ -53,8 +55,51 @@ const PATCHED_TIER = 1;
 const PULL_SHARE = STROKE_PULL;
 /** A paddle from grip to blade tip, as the figure's is built. */
 const PADDLE_LENGTH = 1.485;
-/** A paddler changes sides early in the recovery, with the hands drawn back: this share of the stroke. */
-const SIDE_CHANGE = [PULL_SHARE, PULL_SHARE + 0.08] as const;
+/** Where in the stroke a paddler changes sides: in the recovery, the blade out of the water, flat, swinging forward. */
+const CHANGE_AT = 0.87;
+/** A change of sides takes this long. The crew's stroke waits for it, then goes on from where it was. */
+const CHANGE_SECONDS = 0.9;
+/** The paddle is carried across the bow, level: it sweeps this far ahead of its paddler, who needs that much clear. */
+const CARRY_REACH = 1.75;
+/** It is carried this far above whatever lies ahead: at the lap at the lowest, and never higher than the chest. */
+const CARRY_CLEARANCE = 0.1;
+const CARRY_LOWEST = 0.44;
+const CARRY_HIGHEST = 0.6;
+/** What stands in a hull is measured along it in slices this long, over this many metres either way from amidships. */
+const SLICE = 0.1;
+const SLICES_HALF = 40;
+
+/** A row of slices along the hull with nothing in them yet. */
+const emptySlices = (): Float32Array => new Float32Array(SLICES_HALF * 2).fill(-Infinity);
+
+/**
+ * Raise `tops` to the top of every mesh under `root`: per slice along z, the highest y of any triangle that reaches
+ * into it. `toHull` takes a mesh's world space to the hull's own (bow toward +z, the waterline at y = 0).
+ */
+function measureTops(root: THREE.Object3D, toHull: THREE.Matrix4, tops: Float32Array): void {
+  const matrix = new THREE.Matrix4();
+  const corner = new THREE.Vector3();
+  root.traverse((object) => {
+    if (!(object instanceof THREE.Mesh)) return;
+    const positions = object.geometry.getAttribute('position');
+    if (!positions) return;
+    const index = object.geometry.getIndex();
+    matrix.multiplyMatrices(toHull, object.matrixWorld);
+    const count = index ? index.count : positions.count;
+    for (let first = 0; first + 2 < count; first += 3) {
+      let [nearest, furthest, top] = [Infinity, -Infinity, -Infinity];
+      for (let each = 0; each < 3; each += 1) {
+        corner.fromBufferAttribute(positions, index ? index.getX(first + each) : first + each).applyMatrix4(matrix);
+        nearest = Math.min(nearest, corner.z);
+        furthest = Math.max(furthest, corner.z);
+        top = Math.max(top, corner.y);
+      }
+      const from = Math.max(0, Math.floor(nearest / SLICE) + SLICES_HALF);
+      const to = Math.min(tops.length - 1, Math.floor(furthest / SLICE) + SLICES_HALF);
+      for (let slice = from; slice <= to; slice += 1) tops[slice] = Math.max(tops[slice], top);
+    }
+  });
+}
 /** Where in the stroke the blade marks the water: the catch and the exit firmly, the middle of the pull lightly. */
 const DIPS = { catch: 0.03, middle: 0.3, exit: PULL_SHARE - 0.04 } as const;
 /** The canoe going astern faster than this shows back strokes; ahead faster than this, forward ones. Between, as it was. */
@@ -85,6 +130,10 @@ interface Member {
   bailPhase: number;
   /** The side this one's paddle works on: +1 the figure's left, -1 its right. */
   side: number;
+  /** 0 to 1 through a change of sides, the paddle carried across the bow to `side`. 1: settled. */
+  cross: number;
+  /** How high this one carries the paddle across, above their seat: clear of what lies ahead in the hull. */
+  carry: number;
   stride: number;
   lastX: number;
   lastZ: number;
@@ -163,6 +212,12 @@ export class CanoeView {
    */
   private astern = false;
   private strokes = 0;
+  /** How high the fittings stand along the hull, slice by slice (bow toward +z, above the waterline): what a paddle carried across the bow has to clear. */
+  private fittingTops = emptySlices();
+  /** Whether the crew has room to change sides, and what it was worked out for: the hull and its fittings, and who sits where. */
+  private room = false;
+  private roomFittings = '';
+  private roomSeats = -1;
   private lastHeading = 0;
   private localId = 0;
   private readonly shaft = new THREE.Vector3();
@@ -187,7 +242,7 @@ export class CanoeView {
       const figure = createCrew({ coat, toque, legs });
       figure.root.rotation.order = 'YXZ';
       member = {
-        figure, seat: null, effort: 0, bailing: 0, asleep: 0, moving: 0, bailPhase: 0.6, side: 1, stride: 0, lastX: 0, lastZ: 0, afoot: false, seated: false,
+        figure, seat: null, effort: 0, bailing: 0, asleep: 0, moving: 0, bailPhase: 0.6, side: 1, cross: 1, carry: CARRY_LOWEST, stride: 0, lastX: 0, lastZ: 0, afoot: false, seated: false,
         lastSeat: null, restSide: 1, berth: new THREE.Group(), tools: new Map(), holding: null, lift: 0,
       };
       member.berth.rotation.order = 'YXZ';
@@ -208,7 +263,7 @@ export class CanoeView {
       // The patched hull is told from the leaky one by its bark: sheets along its sides and inside, laps over its rails.
       if (tier === PATCHED_TIER) group.add(buildMends(shape), buildSheets(shape));
       group.position.y = -HULL_TIERS[tier].dimensions.draft;
-      meshes = { shape, group, kit, kitCrewed: null, bilge };
+      meshes = { shape, group, kit, kitCrewed: null, bilge, kitTops: null };
       this.tiers.set(tier, meshes);
       this.hullSpace.add(group);
     }
@@ -250,6 +305,48 @@ export class CanoeView {
       return spot ? new THREE.Vector3(...spot) : null;
     };
     this.flames = { lantern: flame('lantern_mast'), firebox: flame('firebox') };
+    // What a paddle carried across the bow has to clear. The hull's own space runs the other way from the canoe's.
+    this.fittingTops = emptySlices();
+    this.group.updateMatrixWorld(true);
+    measureTops(this.attachments, this.toCanoe.copy(this.hullSpace.matrixWorld).invert(), this.fittingTops);
+    this.roomFittings = '';
+  }
+
+  /**
+   * Whether everyone aboard can change sides, and how high each carries the paddle across. A paddle is carried
+   * across the bow level, at the lap: it needs the hull clear ahead of its paddler as far as it sweeps, with nobody
+   * sitting there and nothing bolted on standing higher than the chest. Short of room, the crew keeps its sides.
+   * Worked out again only when the hull, its fittings or the seating change.
+   */
+  private roomToChange(aboard: Member[], tier: TierMeshes, fittings: string): boolean {
+    let seats = 0;
+    for (const member of aboard) seats |= 1 << (member.seat as number);
+    if (fittings === this.roomFittings && seats === this.roomSeats) return this.room;
+    this.roomFittings = fittings;
+    this.roomSeats = seats;
+    const { shape, kit } = tier;
+    const draft = shape.HULL.draft;
+    this.room = aboard.length > 0;
+    for (const member of aboard) {
+      const root = member.figure.root.position;
+      const [near, far] = [root.z + 0.15, root.z + CARRY_REACH];
+      if (aboard.some((other) => other !== member && other.figure.root.position.z > root.z && other.figure.root.position.z < far)) this.room = false;
+      if (kit.visible && !tier.kitTops) {
+        tier.kitTops = emptySlices();
+        this.group.updateMatrixWorld(true);
+        measureTops(kit, this.toCanoe.copy(this.hullSpace.matrixWorld).invert(), tier.kitTops);
+      }
+      let tallest = -Infinity;
+      for (let z = near; z <= Math.min(far, shape.HL); z += SLICE) tallest = Math.max(tallest, shape.sheerAt(z) - draft);
+      const [first, last] = [Math.max(0, Math.floor(near / SLICE) + SLICES_HALF), Math.min(SLICES_HALF * 2 - 1, Math.floor(far / SLICE) + SLICES_HALF)];
+      for (let slice = first; slice <= last; slice += 1) {
+        tallest = Math.max(tallest, this.fittingTops[slice]);
+        if (kit.visible && tier.kitTops) tallest = Math.max(tallest, tier.kitTops[slice]);
+      }
+      member.carry = Math.max(CARRY_LOWEST, tallest - root.y + CARRY_CLEARANCE);
+      if (member.carry > CARRY_HIGHEST) this.room = false;
+    }
+    return this.room;
   }
 
   /** Where the lantern's flame and the firebox's are drawn, in the world, as of the last `sync`. Null where the canoe has none. */
@@ -311,10 +408,13 @@ export class CanoeView {
     // starts mid-stroke, not from rest.
     const ease = (value: number, wanted: number, rate: number): number => (snap ? wanted : value + (wanted - value) * Math.min(1, seconds * rate));
     let working = 0;
+    let crossing = false;
     for (const player of players) {
       const member = this.member(player.id);
       member.seat = seatOf(player);
       const aboard = member.seat !== null;
+      if (snap || !aboard) member.cross = 1;
+      if (member.cross < 1) crossing = true;
       member.effort = aboard ? ease(member.effort, player.paddling ? 1 : 0, 4) : 0;
       member.bailing = aboard ? ease(member.bailing, player.bailing ? 1 : 0, 5) : 0;
       member.asleep = ease(member.asleep, player.asleep ? 1 : 0, 3);
@@ -322,11 +422,11 @@ export class CanoeView {
       working = Math.max(working, member.effort);
     }
 
-    // One stroke clock for the crew. It runs while anyone paddles.
+    // One stroke clock for the crew. It runs while anyone paddles, and waits while a paddle is carried across the bow.
     if (canoe.speed < -ASTERN_SPEED) this.astern = true;
     else if (canoe.speed > ASTERN_SPEED) this.astern = false;
     const previous = this.phase;
-    if (working > 0.3) this.phase += seconds * STROKE_RATE;
+    if (working > 0.3 && !crossing) this.phase += seconds * STROKE_RATE;
     if (this.phase >= 1) {
       this.phase -= 1;
       this.strokes += 1;
@@ -348,8 +448,22 @@ export class CanoeView {
     const wellEdge = deckInner(this.halfBeam(state)) - DECK_CLEARANCE;
     const deckRuns = deckSpan(this.tier);
     // Back-paddling is the stroke played backwards: the clock runs on, the figure takes the stroke from its end.
-    const stroke = this.astern ? (1 - this.phase) % 1 : this.phase;
-    const changing = stroke >= SIDE_CHANGE[0] && stroke <= SIDE_CHANGE[1];
+    const strokeAt = (clock: number): number => (this.astern ? (1 - clock) % 1 : clock);
+    // A paddler changes sides in the recovery, as the blade swings forward flat over the water: the stroke waits
+    // there while the paddle is carried across the bow, low, and goes on from the same place on the other side.
+    // Only with room for it, and never when everyone is on their side already.
+    const seated = players.map((player) => this.member(player.id)).filter((member) => member.seat !== null);
+    for (const member of seated) {
+      const seat = seatTransformForHull(this.tier, member.seat as number);
+      member.figure.root.position.set(-seat.position[0], seat.position[1] + SEAT_LIFT, -seat.position[2]);
+    }
+    const [before, now] = [strokeAt(previous), strokeAt(this.phase)];
+    const passing = this.phase > previous && Math.min(before, now) < CHANGE_AT && Math.max(before, now) >= CHANGE_AT;
+    const wantedOf = (player: CrewMember): number => this.side * (fromStern.indexOf(player) % 2 ? -1 : 1);
+    const due = passing && players.some((player) => seatOf(player) !== null && this.member(player.id).seated && this.member(player.id).side !== wantedOf(player))
+      && this.roomToChange(seated, tier, key);
+    if (due) this.phase = this.astern ? 1 - CHANGE_AT : CHANGE_AT;
+    const stroke = strokeAt(this.phase);
 
     const events: StrokeEvent[] = [];
     // A mark in the stroke, passed this frame. Astern, the stroke's marks come in the clock's reverse order.
@@ -370,9 +484,16 @@ export class CanoeView {
         root.rotation.set(-seat.rotation[0], seat.rotation[1], -seat.rotation[2]);
         // Counted along the hull from the stern, every second one works (and rests) their paddle on the other side.
         const across = fromStern.indexOf(player) % 2 ? -1 : 1;
-        // A paddler changes sides between strokes, early in the recovery, when the hands are drawn back over their
-        // own lap. Never across the catch: there the leading hand is furthest forward, over whatever is ahead.
-        if (!member.seated || member.effort < 0.05 || changing) member.side = this.side * across;
+        // Seated for the first time, a paddler takes their side at once. After that a change is carried across the
+        // bow, and one called back half way (the canoe turned the other way) comes back the way it went.
+        if (!member.seated) {
+          member.side = this.side * across;
+          member.cross = 1;
+        } else if (member.side !== this.side * across && (member.cross < 1 || due)) {
+          member.side = this.side * across;
+          member.cross = 1 - member.cross;
+        }
+        if (member.cross < 1) member.cross = Math.min(1, member.cross + seconds / CHANGE_SECONDS);
         const kneel = member.seat >= 2 ? 1 : 0;
         // The hull's widest half beam along the stroke, from the hip back to the catch ahead: the blade works outside it.
         const station = root.position.z;
@@ -381,6 +502,10 @@ export class CanoeView {
         // And its gunwale at the highest, above the seat: the lower hand rides over it.
         const gunwale = Math.max(...along.map((z) => shape.sheerAt(z))) - shape.HULL.draft - root.position.y;
         const more: SeatedPose = { kneel, floor: seat.position[1] + SEAT_LIFT + shape.HULL.draft, bail: member.bailing, bailPhase: member.bailPhase, sleep: member.asleep, restSide: across, beam, gunwale };
+        if (member.cross < 1) {
+          more.cross = member.cross;
+          more.carry = member.carry;
+        }
         // A kneeler beside a deck brings the blade back through the water the way it went: the pull run backwards,
         // the blade turned edge on. The figure's own recovery swings the blade out wide, under the deck.
         const hemmed = kneel === 1 && anyDeck;
@@ -399,7 +524,6 @@ export class CanoeView {
           more.span = [behind < 0 ? Math.min(-MINIMUM_REACH, behind) : -Infinity, ahead > 0 ? Math.max(MINIMUM_REACH, ahead) : Infinity];
         }
         const back = hemmed && stroke > PULL_SHARE ? (stroke - PULL_SHARE) / (1 - PULL_SHARE) : 0;
-        // The side eases over a fifth of a second. A figure seated for the first time takes its side at once.
         const dip = figure.paddle(member.seated ? seconds : 1, back > 0 ? PULL_SHARE * (1 - back) : stroke, member.effort, member.side, more);
         member.seated = true;
         if (back > 0) figure.paddler.paddle.rotateY(Math.sin(back * Math.PI) * member.effort * (Math.PI / 2));

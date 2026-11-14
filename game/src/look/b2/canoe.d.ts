@@ -43,6 +43,10 @@ export interface SeatedPose {
   well?: number;
   /** How far behind (negative) and ahead the blade may reach, metres from the figure. Left out, the full stroke. */
   span?: [number, number];
+  /** 0..1 through a change of sides, coming over from the other side to `side`, low across the bow. Left out, settled. */
+  cross?: number;
+  /** How high the paddle is carried across the bow in a change of sides, metres above the figure's origin. Left out, at the lap. */
+  carry?: number;
 }
 /** The share of a stroke the blade is pulled through the water, from the catch; the rest is the recovery. */
 export const STROKE_PULL: number;
