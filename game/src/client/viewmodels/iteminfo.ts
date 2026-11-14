@@ -93,7 +93,10 @@ function build(itemId: ItemId): ItemInfoModel {
   if (builds.length > 0) uses.push(line('Builds', listed(builds)));
   if (toolToBuild.length > 0) uses.push(line('Needed to build', listed(toolToBuild)));
 
-  return { kind: item.edible ? (item.isDrink ? 'Drink' : 'Food') : KIND_WORDS[item.category], uses };
+  // Food that keeps says so (the crew stocks it for the long crossing). Anything else that is eaten or drunk is
+  // food or drink, whatever its table calls it: boiled water is "made by the crew" and is a drink first.
+  const eaten = item.category !== 'stock' && item.edible !== null;
+  return { kind: eaten ? (item.isDrink ? 'Drink' : 'Food') : KIND_WORDS[item.category], uses };
 }
 
 const known = new Map<ItemId, ItemInfoModel>();
@@ -132,7 +135,7 @@ export function questLines(state: GameState, itemId: ItemId): InfoLineModel[] {
     const status = state.quests[quest.id]?.status;
     if (status !== 'active' && status !== 'ready') continue;
     for (const objective of quest.objectives) {
-      if (asks(objective, itemId)) lines.push(line(`Quest: ${quest.name}`, objective.text));
+      if (asks(objective, itemId)) lines.push(line('Quest', `${quest.name}. ${objective.text}`));
     }
   }
   return lines;

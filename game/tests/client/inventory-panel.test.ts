@@ -101,8 +101,8 @@ describe('the inventory panel\'s model', () => {
     give(state, 'clay', 3);
     const [driftwood, clay] = buildInventoryPanel(state).backpack.slots;
     const named = (slot: typeof driftwood, label: string) => slot.buttons.find((button) => button.label === label)!;
-    expect(named(driftwood, 'To cargo')).toMatchObject({ enabled: true, note: 'Room for 5' });
-    expect(named(clay, 'To cargo')).toMatchObject({ enabled: false, note: 'The canoe is full' });
+    expect(named(driftwood, 'Stow')).toMatchObject({ enabled: true, note: 'Room for 5' });
+    expect(named(clay, 'Stow')).toMatchObject({ enabled: false, note: 'The canoe is full' });
     expect(named(clay, 'Drop')).toMatchObject({ enabled: true, note: null });
     // The crew holds 27 driftwood and the quest asks for 3: the backpack's 12 are spare.
     expect(named(driftwood, 'Drop')).toMatchObject({ enabled: true, note: null });
@@ -118,15 +118,17 @@ describe('the inventory panel\'s model', () => {
       ['1', 'bailing_can'], ['2', 'stone_knife'], ['3', 'hatchet'], ['4', 'pry_bar'], ['5', 'saw'], ['', 'hammer'],
     ]);
     // A tool: take it in hand, or send it to any number it is not on. A spare tool can go to all five.
-    expect(panel.belt[1].buttons.map((button) => button.label)).toEqual(['Hold', 'To 1', 'To 3', 'To 4', 'To 5']);
-    expect(panel.belt[5].buttons.map((button) => button.label)).toEqual(['Hold', 'To 1', 'To 2', 'To 3', 'To 4', 'To 5']);
+    // Last, the menu's Drop line: off, with the rules' own reason (round 4).
+    expect(panel.belt[1].buttons.map((button) => button.label)).toEqual(['Hold', 'To 1', 'To 3', 'To 4', 'To 5', 'Drop']);
+    expect(panel.belt[5].buttons.map((button) => button.label)).toEqual(['Hold', 'To 1', 'To 2', 'To 3', 'To 4', 'To 5', 'Drop']);
+    expect(panel.belt[1].buttons.at(-1)).toEqual({ label: 'Drop', intent: panel.belt[1].drop, enabled: false, note: 'Tools stay on the belt. They are never dropped' });
     expect(panel.belt[5].buttons[2].intent).toEqual({ type: 'command', command: { type: 'move_tool', toolId: 'hammer', slot: 1 } });
     // The drop key on a tool sends a drop the rules refuse, so the player is told why.
     expect(panel.belt[0].drop).toEqual({ type: 'command', command: { type: 'discard', from: 'backpack', itemId: 'bailing_can', count: 1 } });
     // Rebound keys show as they are bound; an unbound one falls back to its number.
     const bindings = { ...DEFAULT_SETTINGS.controls.keyBindings, tool1: ['KeyZ'], tool2: [] };
     expect(buildInventoryPanel(state, 0, bindings).belt.slice(0, 3).map((slot) => slot.keyLabel)).toEqual(['Z', '2', '3']);
-    expect(buildInventoryPanel(state, 0, bindings).belt[2].buttons.map((button) => button.label)).toEqual(['Hold', 'To Z', 'To 2', 'To 4', 'To 5']);
+    expect(buildInventoryPanel(state, 0, bindings).belt[2].buttons.map((button) => button.label)).toEqual(['Hold', 'To Z', 'To 2', 'To 4', 'To 5', 'Drop']);
     // In hand: the tile says so, and its first button puts the tool away.
     state.players[0].selectedTool = 'hatchet';
     expect(buildInventoryPanel(state).belt[2]).toMatchObject({ selected: true });

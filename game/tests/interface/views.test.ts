@@ -15,6 +15,7 @@ import { applyDebugParameters } from '../../src/client/debug/index.ts';
 import { SHOT_NAMES, parseDebugParameters } from '../../src/client/debug/parameters.ts';
 import { collectIntents, collectText, h } from '../../src/interface/dom.ts';
 import type { ViewNode } from '../../src/interface/dom.ts';
+import { inventoryBodyView, tileMenuView } from '../../src/interface/inventoryview.ts';
 import { itemIcon } from '../../src/interface/icons.ts';
 import {
   confirmView, debugView, hintView, hotbarView, itemDetailKey, itemDetailKeys, lineNoteView, lobbyView, notesView, panelView, promptView,
@@ -81,11 +82,23 @@ function everyModel(): { name: string; model: InterfaceModel }[] {
   return models;
 }
 
-/** Every inventory row opened, the most the player can have on screen at once. */
-const everyRowOpen = (panel: InterfaceModel['panel']): ReadonlySet<string> | undefined =>
-  (panel?.id === 'inventory' ? new Set(itemDetailKeys(panel)) : undefined);
+/**
+ * A panel as views. The inventory shows one tile's menu and one tile's details at a time, so it is drawn as the
+ * player can have it tile by tile: the sheet with its first tile's menu open and the info panel about it, then
+ * every other tile's menu and info panel. Between them they hold every control and every word of the model, once.
+ */
+function panelViews(panel: NonNullable<InterfaceModel['panel']>): ViewNode[] {
+  if (panel.id !== 'inventory') return panelView(panel);
+  const [first, ...rest] = itemDetailKeys(panel);
+  if (first === undefined) return panelView(panel);
+  const infoOf = (node: ViewNode): ViewNode[] => (node.classes.split(' ').includes('iw-inv-info') ? [node] : node.children.flatMap(infoOf));
+  return [
+    ...panelView(panel, { menu: first, info: first }),
+    ...rest.flatMap((key) => [tileMenuView(panel, key)!, ...infoOf(inventoryBodyView(panel, { menu: null, info: key }))]),
+  ];
+}
 
-/** The whole interface as views, the way `InkInterface.update` draws it, with every inventory row the player could open opened. */
+/** The whole interface as views, the way `InkInterface.update` draws it, with every menu and every info panel of the inventory. */
 function viewsOf(model: InterfaceModel): ViewNode[] {
   const { lobby, hud, panel, confirm, debug } = model;
   return [
@@ -95,7 +108,7 @@ function viewsOf(model: InterfaceModel): ViewNode[] {
     ...(hud?.lineNote ? lineNoteView(hud.lineNote) : hud?.hint ? hintView(hud.hint) : []),
     ...(hud?.prompt ? promptView(hud.prompt) : []),
     ...toastsView(model.toasts),
-    ...(panel ? panelView(panel, everyRowOpen(panel)) : []),
+    ...(panel ? panelViews(panel) : []),
     ...(confirm ? confirmView(confirm) : []),
     ...(debug ? debugView(debug) : []),
   ];
@@ -174,7 +187,9 @@ function wordsOf(model: InterfaceModel): string[] {
       for (const entry of value) walk(entry, key);
     } else if (value !== null && typeof value === 'object') {
       for (const [childKey, entry] of Object.entries(value)) {
-        if (!INTENT_KEYS.has(childKey) && childKey !== 'debug') walk(entry, childKey);
+        // An inventory tile's two quick presses (`shift`, `drop`) are what a key sends, not words: the round-3 sheet
+        // only seemed to show them because a button read "To backpack".
+        if (!INTENT_KEYS.has(childKey) && childKey !== 'debug' && childKey !== 'shift' && childKey !== 'drop') walk(entry, childKey);
       }
     }
   };
@@ -288,7 +303,7 @@ describe('the Ink & Wash views', () => {
     expect(collectText(panelView(crafting.panel))).toContain('Scoop it at the water, from the inventory (Tab).');
   });
 
-  it('draws the inventory as tiles, a drawing and a count each: what an item is and what it does show only once its tile is pressed', () => {
+  it('draws the inventory as tiles, a drawing and a count each: what an item is shows in the info panel, what it does in the menu at its tile', () => {
     const model = models.find(({ name }) => name === 'shot inventory')!.model;
     if (model.panel?.id !== 'inventory') throw new Error('expected the inventory panel');
     const panel = model.panel;
@@ -299,7 +314,7 @@ describe('the Ink & Wash views', () => {
       nodes.flatMap((node) => [...(test(node) ? [node] : []), ...find(node.children, test)]);
     const tilesOf = (nodes: ViewNode[]): ViewNode[] => find(nodes, (node) => node.classes.split(' ').includes('iw-tile') && !node.classes.includes('iw-blank'));
 
-    // Closed: each tile is one button with the drawing and the count. No name, no description, no action.
+    // Nothing pointed at: each tile is one button with the drawing and the count. No name, no description, no action.
     const closed = panelView(panel);
     const closedText = collectText(closed);
     for (const slot of filled) {
@@ -321,22 +336,30 @@ describe('the Ink & Wash views', () => {
     const closedIntents = collectIntents(closed).map((intent) => JSON.stringify(intent));
     for (const intent of itemIntents) expect(closedIntents).not.toContain(intent);
 
-    // One tile pressed: its name, its description and its actions on a strip right after it, and nobody else's.
+    // One tile pointed at: its name and its description in the info panel, and nobody else's. Still no action.
     const first = filled[0]!;
     const second = filled.find((slot) => slot.description !== first.description)!;
-    const opened = panelView(panel, new Set([itemDetailKey('backpack', first.itemId!, 0)]));
-    const openedText = collectText(opened);
-    expect(openedText).toContain(first.name);
-    expect(openedText).toContain(first.description);
-    expect(openedText).not.toContain(second.description);
+    const key = itemDetailKey('backpack', first.itemId!, 0);
+    const pointed = panelView(panel, { menu: null, info: key });
+    const pointedText = collectText(pointed);
+    expect(pointedText).toContain(first.name);
+    expect(pointedText).toContain(first.description);
+    expect(pointedText).not.toContain(second.description);
+    expect(collectIntents(pointed).map((intent) => JSON.stringify(intent))).toEqual(closedIntents);
+    expect(tilesOf(pointed).length, 'the grid holds the same tiles').toBe(tiles.length);
+
+    // That tile pressed: its actions in the menu, outside the grid, and the grid as it was.
+    const opened = panelView(panel, { menu: key, info: key });
     const openTiles = tilesOf(opened).filter((tile) => tile.classes.includes('iw-open'));
     expect(openTiles.length).toBe(1);
     expect(find(openTiles, (node) => node.tag === 'button' && node.attributes['data-detail'] !== undefined)[0]!.attributes['aria-expanded']).toBe('true');
-    const strips = find(opened, (node) => node.classes.split(' ').includes('iw-item-detail'));
-    expect(strips.length).toBe(1);
-    const list = find(opened, (node) => node.children.includes(openTiles[0]!))[0]!;
-    expect(list.children.indexOf(strips[0]!), 'the strip is the next thing after its tile').toBe(list.children.indexOf(openTiles[0]!) + 1);
-    expect(collectIntents(strips).map((intent) => JSON.stringify(intent)).sort())
+    expect(find(opened, (node) => node.classes.split(' ').includes('iw-item-detail')), 'no strip opens inside the grid').toEqual([]);
+    const menus = find(opened, (node) => node.classes.split(' ').includes('iw-tile-menu'));
+    expect(menus.length).toBe(1);
+    const lists = find(opened, (node) => node.tag === 'ul' && node.classes.split(' ').includes('iw-tiles'));
+    for (const list of lists) expect(find([list], (node) => node === menus[0]), 'the menu is not inside a grid').toEqual([]);
+    expect(lists.map((list) => list.children.length)).toEqual(find(closed, (node) => node.tag === 'ul' && node.classes.split(' ').includes('iw-tiles')).map((list) => list.children.length));
+    expect(collectIntents(menus).map((intent) => JSON.stringify(intent)).sort())
       .toEqual(first.buttons.map((button) => JSON.stringify(button.intent)).sort());
   });
 
