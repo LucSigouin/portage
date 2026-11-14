@@ -552,9 +552,11 @@ const STROKE_KEYS = [
 // The elbow of the arm whose hand is on the grip bends forward, out ahead of the chest, a little down and to its
 // own side: that arm reaches across the body and has to pass in front of it. [x for the left arm, y, z].
 const TOP_ELBOW = [0.25, -0.3, 1];
-// The lower arm's elbow bends out, back and this much down: a touch higher than straight down, so the upper arm
-// rides over the ribbed hull's gunwale at the exit (it was 2 mm into it).
+// The lower arm's elbow bends out, back and this much down.
 const LOW_ELBOW_DOWN = -1;
+// Late in the pull and at the exit it bends this much less far down: on the ribbed hull the elbow crossed the
+// gunwale 2 mm low as the blade came out.
+const LOW_ELBOW_LIFT = 0.12;
 // The hull's half beam the keys are drawn for, and the lower hand's place down the shaft from the grip.
 const STROKE_BEAM = 0.38;
 const STROKE_LOW_HAND = 0.5;
@@ -812,8 +814,10 @@ export function createCrew(outfit) {
       // elbow forward; the other pulls, its elbow out, down and back. Changing sides, the two trade places.
       const gripR = effort * (s >= 0 ? eased : 1 - eased);
       const gripL = effort * (s >= 0 ? 1 - eased : eased);
-      elbowL.set(0.5 + (TOP_ELBOW[0] - 0.5) * gripL, LOW_ELBOW_DOWN + (TOP_ELBOW[1] - LOW_ELBOW_DOWN) * gripL, -0.45 + (TOP_ELBOW[2] + 0.45) * gripL);
-      elbowR.set(-0.5 - (TOP_ELBOW[0] - 0.5) * gripR, LOW_ELBOW_DOWN + (TOP_ELBOW[1] - LOW_ELBOW_DOWN) * gripR, -0.45 + (TOP_ELBOW[2] + 0.45) * gripR);
+      // As the blade leaves the water the lower arm's elbow passes out over the gunwale: it is lifted a touch just then.
+      const lowDown = LOW_ELBOW_DOWN + LOW_ELBOW_LIFT * smooth(0.4, 0.5, phase) * (1 - smooth(0.62, 0.68, phase));
+      elbowL.set(0.5 + (TOP_ELBOW[0] - 0.5) * gripL, lowDown + (TOP_ELBOW[1] - lowDown) * gripL, -0.45 + (TOP_ELBOW[2] + 0.45) * gripL);
+      elbowR.set(-0.5 - (TOP_ELBOW[0] - 0.5) * gripR, lowDown + (TOP_ELBOW[1] - lowDown) * gripR, -0.45 + (TOP_ELBOW[2] + 0.45) * gripR);
       const reach = key[7];
       let lean = 0.1 + effort * (0.06 + 0.12 * reach);
       let twist = -lead * effort * (0.34 * (reach - 0.5));
