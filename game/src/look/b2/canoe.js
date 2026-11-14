@@ -411,10 +411,15 @@ function buildPaddle() {
 const _v = new THREE.Vector3();
 const _n = new THREE.Vector3();
 const _h = new THREE.Vector3();
+// An arm: shoulder to elbow, elbow to hand, and how far short of dead straight it stops.
+const ARM_UPPER = 0.28;
+const ARM_FORE = 0.27;
+const ARM_SLACK = 0.002;
+const ARM_REACH = ARM_UPPER + ARM_FORE - ARM_SLACK;
 function ik(a, c, l1, l2, hint, elbow, hand) {
   _n.subVectors(c, a);
   const dist = _n.length();
-  const d = Math.min(Math.max(dist, 0.05), l1 + l2 - 0.002);
+  const d = Math.min(Math.max(dist, 0.05), l1 + l2 - ARM_SLACK);
   _n.divideScalar(dist || 1);
   const x = (l1 * l1 - l2 * l2 + d * d) / (2 * d);
   const h = Math.sqrt(Math.max(0, l1 * l1 - x * x));
@@ -485,20 +490,30 @@ export function createPaddler({ coat: coatColor = PAL.ochre, toque = '#a9483a', 
   const pz = new THREE.Vector3();
   const hint = new THREE.Vector3();
 
-  // pose: { hipY, lean, twist, tilt, handL, handR, kneeL, kneeR, footL, footR, footYaw, elbowL, elbowR }
+  // pose: { hipY, lean, twist, tilt, handL, handR, kneeL, kneeR, footL, footR, footYaw, elbowL, elbowR, shaft, slideL, slideR }
   // elbowL, elbowR: the way that elbow bends, a direction in the figure's space (left out: out, down and back).
+  // shaft: the hands hold a paddle whose shaft runs this way from grip to blade (a unit vector). A hand its arm
+  // cannot reach rides up the shaft toward the grip until the arm can, by slideL or slideR at the most: the hand
+  // stays on the shaft, and no arm is drawn short of it. Left out: the hands go where they are told, as far as they reach.
   function pose(p) {
     torso.position.set(0, p.hipY, 0);
     torso.rotation.set(p.lean, p.twist, p.tilt || 0, 'YXZ');
     torso.updateMatrix();
-    for (const [s, sg, hand, knee, foot, bend] of [
-      [L, 1, p.handL, p.kneeL, p.footL, p.elbowL],
-      [R, -1, p.handR, p.kneeR, p.footR, p.elbowR],
+    for (const [s, sg, hand, knee, foot, bend, slide] of [
+      [L, 1, p.handL, p.kneeL, p.footL, p.elbowL, p.slideL],
+      [R, -1, p.handR, p.kneeR, p.footR, p.elbowR, p.slideR],
     ]) {
       s.S.set(sg * 0.2, 0.43, 0).applyMatrix4(torso.matrix);
+      if (slide > 0) {
+        // Out of reach: up the shaft to the nearest place the arm reaches (or the nearest there is).
+        _n.subVectors(hand, s.S);
+        const over = _n.lengthSq() - ARM_REACH * ARM_REACH;
+        const down = _n.dot(p.shaft);
+        if (over > 0 && down > 0) hand.addScaledVector(p.shaft, -Math.min(slide, down - Math.sqrt(Math.max(0, down * down - over))));
+      }
       if (bend) hint.copy(bend);
       else hint.set(sg * 0.5, -1, -0.45);
-      ik(s.S, hand, 0.28, 0.27, hint, s.E, s.H);
+      ik(s.S, hand, ARM_UPPER, ARM_FORE, hint, s.E, s.H);
       setSpan(s.upper, s.S, s.E, 0.058);
       setSpan(s.fore, s.E, s.H, 0.05);
       s.elbow.position.copy(s.E);
@@ -602,6 +617,10 @@ const CARRY_HOLD_IN = 0.06;
 const CARRY_PASS = 0.11;
 // The blade's middle, down the shaft from the grip.
 const BLADE_ALONG = 1.19;
+// A hand whose arm cannot reach its place on the shaft rides up it toward the grip, this far at the most. The
+// stroke is drawn for the voyageur's shoulders: a kneeler with narrower or higher ones (the scout, the angler) is
+// up to 1 cm short of the lower hand's place as the blade swings forward, and holds the shaft that much higher.
+const SHAFT_SLIDE = 0.03;
 
 /** The stroke at `phase` 0..1: the keys joined by a smooth curve round the cycle (Catmull-Rom, by phase). */
 function strokeAt(phase) {
@@ -802,14 +821,19 @@ export function createCrew(outfit, character) {
       const lower = settled + (Math.min(settled, STROKE_LOW_HAND - higher - CARRY_HOLD_IN * (1 - working)) - settled) * smooth(0, 0.4, carried);
       const top = s >= 0 ? handR : handL;
       const low = s >= 0 ? handL : handR;
+      // How far down the shaft from the grip each hand holds: it can ride up that far and no further (`pose`).
+      let topAlong = upper;
+      let lowAlong = lower;
       if (cross < 1) {
         // Changing sides the hands change places. The one that held the shaft slides up to the grip: it is the top
         // hand now. The one that held the grip slides down to where the other was. They pass half way, the left
         // hand on the left of the shaft and the right on its right, so a change called back runs back the same way.
         const slid = smooth(0.2, 0.8, eased);
         _h.set(1, 0, 0).addScaledVector(_v, -_v.x).multiplyScalar((CARRY_PASS / 2) * carried * carried * working);
-        top.copy(G).addScaledVector(_v, upper + (lower - upper) * (1 - slid)).addScaledVector(_h, s >= 0 ? -1 : 1);
-        low.copy(G).addScaledVector(_v, upper + (lower - upper) * slid).addScaledVector(_h, s >= 0 ? 1 : -1);
+        topAlong = upper + (lower - upper) * (1 - slid);
+        lowAlong = upper + (lower - upper) * slid;
+        top.copy(G).addScaledVector(_v, topAlong).addScaledVector(_h, s >= 0 ? -1 : 1);
+        low.copy(G).addScaledVector(_v, lowAlong).addScaledVector(_h, s >= 0 ? 1 : -1);
       } else {
         top.copy(G).addScaledVector(_v, upper);
         low.copy(G).addScaledVector(_v, lower);
@@ -849,6 +873,8 @@ export function createCrew(outfit, character) {
         twist *= 1 - doze;
         tilt += (0.1 - tilt) * doze;
       }
+      // Beside an outrigger's deck the shaft stands nearly upright, and riding up it would not bring it nearer: left as it was.
+      const onShaft = well > 0 ? 0 : (1 - bail) * (1 - doze);
       if (kneel > 0) {
         // knees down on the floor ahead, heels tucked under: thigh and shin keep their standing lengths
         const down = Math.max(-0.3, 0.085 - (more.floor ?? 0.3));
@@ -870,6 +896,11 @@ export function createCrew(outfit, character) {
         kneeR: kneel > 0 ? kKneeR : kneeR,
         footL: kneel > 0 ? kFootL : footL,
         footR: kneel > 0 ? kFootR : footR,
+        // On the paddle a hand rides up the shaft sooner than hang short of it. Bailing or asleep the hands are off it.
+        // `_v` is the shaft's way, grip to blade, and is not touched before the pose reads it.
+        shaft: _v,
+        slideL: Math.min(SHAFT_SLIDE, s >= 0 ? lowAlong : topAlong) * onShaft,
+        slideR: Math.min(SHAFT_SLIDE, s >= 0 ? topAlong : lowAlong) * onShaft,
       });
       if (bail > 0.02) {
         // the tin rides in the hand that holds it, and tips outward at the top of the lift
