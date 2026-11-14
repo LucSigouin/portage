@@ -119,6 +119,25 @@ describe('?pen=today is the old pen, to the letter', () => {
     expect(withoutSamples(pens(null, 'today').world.fragmentShader)).not.toContain('slim');
   });
 
+  it('the slim probe runs only where the full pen is on: its reads sit inside a gFull > 0. branch (review r5, finding 1)', () => {
+    const text = pens(null).world.fragmentShader;
+    const start = text.indexOf('float slim = 0.;');
+    const end = text.indexOf('gFull *= 1. - slim;', start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const probe = text.slice(start, end);
+    const branch = probe.indexOf('if (gFull > 0.) {');
+    expect(branch).toBeGreaterThan(-1);
+    expect(probe.indexOf('for (int i = 0; i < 4; i++)')).toBeGreaterThan(branch);
+    // every read of the id texture in the probe comes after the branch opens, and the branch closes before gFull is cut
+    const reads = [...probe.matchAll(/textureLod\(tAux/g)].map((match) => match.index ?? 0);
+    expect(reads).toHaveLength(4);
+    expect(Math.min(...reads)).toBeGreaterThan(branch);
+    let depth = 0;
+    for (const character of probe.slice(branch)) depth += character === '{' ? 1 : character === '}' ? -1 : 0;
+    expect(depth).toBe(0);
+  });
+
   it('picking today\'s pen after C leaves nothing defined, and C again puts it back', () => {
     const { world, state } = pens('today');
     expect(state).toBe('today');
