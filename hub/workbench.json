@@ -6,7 +6,7 @@
   ],
   "title": "Portage",
   "subtitle": "The workbench: every step so far",
-  "updated": "2026-11-13, 20:15",
+  "updated": "2026-11-14, 11:20",
   "ask": "A flooded world and all you have is a canoe. Scavenge islands, craft, and build a crazy impressive canoe.",
   "now": [
     {
@@ -16,27 +16,27 @@
     },
     {
       "label": "Stage",
-      "value": "Your whole bugfix list is live: Version 1.0.320"
+      "value": "Round 4 is live: Version 1.0.410"
     },
     {
       "label": "Tests",
-      "value": "1864 unit, 87 relay, 163 in a browser: all pass in one run"
+      "value": "2579 unit, 172 in a browser: all pass"
     },
     {
       "label": "Running",
-      "value": "Nothing. The round is done"
+      "value": "Nothing. Round 4 is done"
     },
     {
       "label": "Live now",
-      "value": "All 34 items of your list, the relay with its dial limit, feedback"
+      "value": "Your notes, four people to pick, outline C"
     },
     {
       "label": "Not live yet",
-      "value": "Two small fixes from the second review: the Z, the capsize"
+      "value": "Nothing"
     },
     {
       "label": "Waiting on you",
-      "value": "Play it, and rule on the calls in the review"
+      "value": "Play it, and the calls in the review"
     }
   ],
   "steps": [
@@ -876,6 +876,45 @@
       ],
       "pictures": [],
       "report": "pages/review-r3/review.html"
+    },
+    {
+      "when": "Nov 13",
+      "title": "Round 4: your notes from the Feedback menu",
+      "state": "done",
+      "asked": "Yes to all. And the main menu: can my canoe be the one floating around?",
+      "built": [
+        "You sent notes from the live game. All came through",
+        "Built: Z, I and 5 on a key cap are drawn so they read right",
+        "Built: a drop no longer dodges a capsize",
+        "Built: your saved canoe drifts behind the main menu. The still is gone",
+        "Built: C lists only what your hands can make",
+        "Built: the rain barrel, the fishing place and 16 more are solid",
+        "Built: F at a lit fire opens cooking",
+        "Built: an About panel right of the inventory, a click menu on a tile",
+        "Built: Give a stack to a crewmate standing close",
+        "Built: outline C, a full even line. Your pick",
+        "Built: four coats, one for each person",
+        "You said yes. It went live the next morning",
+        "Built: the rowing. A level carry across the bow, arms ahead of the chest",
+        "Built: a screen to pick who you are, four people"
+      ],
+      "proof": [
+        "The Feedback menu works end to end on the live game",
+        "2579 unit tests and 172 in a browser pass on the final tree",
+        "Six bot runs reach the Beacon, 0 fails",
+        "First review 8 9 9 8 8 7. After the fixes 9 9 9 8 9 8",
+        "The outline samples leave the live look alone: 0 pixels differ"
+      ],
+      "snags": [
+        "A requests feed on this page was started, then cancelled on your word",
+        "A hidden worker is stopped at 30 minutes. They now work in short legs",
+        "In a camp, C has cards that open the fire and the bench. Your call",
+        "Merged, the new stroke did not fit two of the four people. A fixer fitted it",
+        "Your Fable limit ran out mid-round. Opus 5.5 finished it",
+        "With a sheet open in a crew, the health bars hide. Your call"
+      ],
+      "pictures": [],
+      "report": ""
     }
   ],
   "calls": [
@@ -926,19 +965,19 @@
   "numbers": [
     {
       "label": "Commits",
-      "value": "321"
+      "value": "410"
     },
     {
       "label": "Worker runs",
-      "value": "69"
+      "value": "127"
     },
     {
       "label": "Unit tests",
-      "value": "1864"
+      "value": "2579"
     },
     {
       "label": "Browser tests",
-      "value": "163"
+      "value": "172"
     },
     {
       "label": "Lines of game code",
@@ -950,7 +989,7 @@
     },
     {
       "label": "Deploys",
-      "value": "12"
+      "value": "13"
     },
     {
       "label": "Agent hours",
@@ -963,8 +1002,8 @@
   ],
   "left": [
     {
-      "what": "Two small fixes from the second review: the Z, the capsize",
-      "hours": "0.5"
+      "what": "Your calls from the round 4 review",
+      "hours": "yours"
     },
     {
       "what": "The Cloudflare rate rule in front of the relay",
@@ -984,6 +1023,10 @@
     }
   ],
   "yours": [
+    "C in a camp: keep the fire and bench cards?",
+    "Stow says Room for 7 when only part fits: keep?",
+    "Under outline C the paddles read as black sticks",
+    "Full screen (#7) and the name shown twice (#8)",
     "The arrival card: watch it once, Animated and Still",
     "How walking and the jump feel in your hands",
     "Chests: the names, the costs, and how they sit on the deck",
