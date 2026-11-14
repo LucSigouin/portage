@@ -25,7 +25,7 @@ const everyWord = JSON.stringify(panel);
 describe('How to Play says what round 3 added', () => {
   it('beside the panel each belongs to, with no new section: the page keeps its five headings', () => {
     expect(panel.sections.map((entry) => entry.heading)).toEqual(['The loop', 'In the canoe', 'On foot', 'Panels and camera', 'Staying alive']);
-    expect(section('Panels and camera').controls.map((control) => control.keys)).toEqual(['Tab', 'Shift+click', 'Q', 'Z', 'C', 'B', 'J', 'M', 'Esc']);
+    expect(section('Panels and camera').controls.map((control) => control.keys)).toEqual(['Tab', 'Click', 'Shift+click', 'Q', 'Z', 'C', 'B', 'J', 'M', 'Esc']);
   });
 
   it('Shift+click, Q on a stack, and Z to take a drop back, with the keys the inventory really answers', () => {
@@ -38,6 +38,11 @@ describe('How to Play says what round 3 added', () => {
     expect(TAKE_BACK.seconds).toBeGreaterThanOrEqual(TOAST_SECONDS.warning);
     expect(QUICK_PRESS_HINT).toContain(`${HOW_TO_PLAY_DROP_KEY} with the pointer on a tile: drop it.`);
     expect(QUICK_PRESS_HINT).toContain(`${keyLabel(TAKE_BACK_KEY_CODE)} takes a drop back`);
+  });
+
+  it('a click on a stack: its menu, and Give to a crewmate close by (the master review of round 4, finding 5)', () => {
+    expect(keysOf('A stack: eat, drop, or give to a crewmate close by')).toBe('Click');
+    expect(everyWord).toContain('give to a crewmate');
   });
 
   it('the map mark, on the map\'s own line, and the map says the rest itself', () => {

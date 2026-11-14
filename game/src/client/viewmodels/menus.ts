@@ -9,6 +9,9 @@ import { buildCrewLobbyButtons, buildCrewPauseButton } from './crew.ts';
 import { MAXIMUM_TRACKED } from '../../sim/index.ts';
 import { SLEEP_FROM_TEXT, actionKeys, capitalise, durationText, keyLabel } from './format.ts';
 import { TAKE_BACK_KEY_CODE } from './takeback.ts';
+
+/** How to Play's line for a click on a stack: its menu, and Give. Short: the page already scrolls. */
+export const HOW_TO_PLAY_CLICK_LABEL = 'A stack: eat, drop, or give to a crewmate close by';
 import { TOAST_SECONDS } from './toasts.ts';
 import type { ButtonModel, ConfirmModel, ControlLineModel, LobbyModel, PanelModel, SaveSlotModel } from './types.ts';
 
@@ -162,6 +165,8 @@ export function buildHowToPlayPanel(settings: Settings): PanelBody<'how_to_play'
         // belongs to. Shift+click, the drop key and the take-back key are fixed, not bound.
         controls: [
           control('Inventory', 'inventory'),
+          // Round 4's click menu and Give (the master review of round 4, finding 5).
+          { label: HOW_TO_PLAY_CLICK_LABEL, keys: 'Click' },
           { label: 'A stack to the other side', keys: 'Shift+click' },
           { label: 'Pointer on a stack: drop it', keys: HOW_TO_PLAY_DROP_KEY },
           { label: `Take a drop back, within ${TOAST_SECONDS.warning} s`, keys: keyLabel(TAKE_BACK_KEY_CODE) },
