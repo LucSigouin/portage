@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { parseDebugParameters } from '../../src/client/debug/parameters.ts';
 import { DEFAULT_PEN, PENS, PEN_NAMES, penDefines, penFrom, penReach } from '../../src/look/b2/pens.js';
 import type { PenName } from '../../src/look/b2/pens.js';
+import { terrainMaterialFor } from '../../src/look/b2/palette.js';
 import { createPost } from '../../src/look/b2/post.js';
 
 /** The pen's shader on `main` at 2857012, before this round: its SHA-256 and its length (tools/pen-hash.mjs). */
@@ -168,5 +169,55 @@ describe('the samples', () => {
     }
     expect(penReach('near')).toBe(1);
     expect(penReach('bold')).toBeGreaterThan(penReach('full'));
+  });
+});
+
+describe('the samples tell the ground from the things that stand on it', () => {
+  // The ink buffer is half-float: 10 bits after the leading one. A chip stores a number it cannot hold as the one
+  // below it or as the nearest one (both are allowed, and both are out there).
+  const halfStep = (value: number): number => 2 ** (Math.floor(Math.log2(value)) - 10);
+  const below = (value: number): number => Math.floor(Math.fround(value) / halfStep(value)) * halfStep(value);
+  const above = (value: number): number => below(value) + halfStep(value);
+
+  /** The terrain's three ink ids, read off its own shader (rock, moss, sand). */
+  function terrainIds(): number[] {
+    const found = /id = mix\(mix\(([\d.]+), ([\d.]+), mossM\), ([\d.]+), sand\);/.exec(terrainMaterialFor().fragmentShader);
+    expect(found, 'the terrain\'s ink ids').not.toBeNull();
+    return found!.slice(1, 4).map(Number);
+  }
+
+  /** The pen's `groundAt`, read off its shader and worked out here as the chip works it out. */
+  function groundAt(): (id: number) => number {
+    const text = /float groundAt\(float id\)\{\n\s*return ([^;]+);/.exec(pens(null).world.fragmentShader);
+    expect(text, 'groundAt in the pen\'s shader').not.toBeNull();
+    const terms = [...text![1].matchAll(/step\(abs\(id \* (\d+)\. - ([\d.]+)\), ([\d.]+)\)/g)].map((term) => term.slice(1, 4).map(Number));
+    expect(terms).toHaveLength(3);
+    expect(text![1].replace(/step\(abs\(id \* \d+\. - [\d.]+\), [\d.]+\)/g, 'T')).toBe('T + T + T');
+    return (id) => terms.reduce((sum, [scale, centre, reach]) => sum + (Math.abs(Math.fround(id) * scale - centre) <= reach ? 1 : 0), 0);
+  }
+
+  it('each of the ground\'s three washes is ground, whichever way the chip rounded its id', () => {
+    const ground = groundAt();
+    const ids = terrainIds();
+    expect(ids).toEqual([0.11, 0.35, 0.52]);
+    for (const id of ids) {
+      expect(below(id), `${id} cannot be held as it is`).not.toBe(id);
+      expect(ground(below(id)), `${id} rounded down`).toBe(1);
+      expect(ground(above(id)), `${id} rounded up`).toBe(1);
+      // and no wider than that
+      expect(ground(below(id) - halfStep(id)), `${id}, one step under both`).toBe(0);
+      expect(ground(above(id) + halfStep(id)), `${id}, one step over both`).toBe(0);
+    }
+  });
+
+  it('water, sky, a rope and all but three of the 2003 piece ids are not', () => {
+    const ground = groundAt();
+    expect(ground(0)).toBe(0);
+    expect(ground(1)).toBe(0);
+    expect(ground(2040 / 2048)).toBe(0);
+    // geo.js hands pieces the ids 16 to 2018 of 2048. The three that fall on a wash's id keep a seam at their foot, as today.
+    const taken: number[] = [];
+    for (let piece = 16; piece <= 2018; piece += 1) if (ground(piece / 2048) > 0) taken.push(piece);
+    expect(taken).toEqual([717, 1064, 1065]);
   });
 });

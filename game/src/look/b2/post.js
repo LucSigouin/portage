@@ -81,10 +81,12 @@ const vec2 OFFS[8] = vec2[8](
 // A fuller pen: one of the samples of pens.js, picked by ?pen=. Today's pen is drawn with PEN_FULL not defined,
 // so none of these blocks is in it. gFull: how much of the fuller pen this pixel gets, 0 (today's pen) to 1.
 float gFull = 1.;
-// The ground's own washes: the terrain's three ink ids (rock, moss, sand: palette.js) as the half-float ink buffer
-// holds them. An edge between two of them is where one wash meets the next, not the outline of a thing.
+// The ground's own washes: the terrain's three ink ids (rock .11, moss .35, sand .52: palette.js) as the half-float
+// ink buffer holds them. A chip may round a number down or to the nearest when it stores it, so both neighbours are
+// taken: .11 is 1802 or 1803 of 16384, .35 is 1433 or 1434 of 4096, .52 is 1064 or 1065 of 2048.
+// An edge between two of them is where one wash meets the next, not the outline of a thing.
 float groundAt(float id){
-  return step(abs(id - 1802. / 16384.), .00003) + step(abs(id - 717. / 2048.), .00003) + step(abs(id - 1065. / 2048.), .00003);
+  return step(abs(id * 16384. - 1802.5), .75) + step(abs(id * 4096. - 1433.5), .75) + step(abs(id * 2048. - 1064.5), .75);
 }
 #endif
 
@@ -131,6 +133,9 @@ vec4 penAt(vec2 uv, vec2 apx, float r, vec4 de, float inner, float weight, float
   float inkS = 0.; // contour: a real step in depth, or an object against water / sky
   float inkI = 0.; // interior: seams and creases, drawn lighter
   float foam = 0.;
+#ifdef PEN_FULL
+  float inkG = 0.; // one wash of the ground against the next (moss on rock): not the outline of a thing
+#endif
   for (int i = 0; i < 4; i++) {
     vec2 oa = OFFS[i] * r * apx;
     vec4 a = textureLod(tAux, inWindow(uv + oa), 0.);
@@ -163,6 +168,12 @@ vec4 penAt(vec2 uv, vec2 apx, float r, vec4 de, float inner, float weight, float
 #endif
         inkS += edge;
         inkI += max(ne, ie) * (1. - edge);
+#ifdef PEN_FULL
+        // moss against rock is taken out of the seams and counted apart: it stays a thin, light line
+        float wash = ie * groundAt(t.a) * groundAt(idc) * gFull * (1. - edge);
+        inkI -= max(ne, ie) * (1. - edge) * wash;
+        inkG += wash;
+#endif
       }
     }
   }
@@ -170,6 +181,10 @@ vec4 penAt(vec2 uv, vec2 apx, float r, vec4 de, float inner, float weight, float
   if (waterC) {
     for (int i = 0; i < 4; i++) {
       vec4 a = textureLod(tAux, inWindow(uv + OFFS[i * 2 + 1] * r * 1.7 * apx), 0.);
+#ifdef PEN_FULL
+      // the white line keeps its reach: a wider pen does not widen it
+      a = textureLod(tAux, inWindow(uv + OFFS[i * 2 + 1] * r * 1.7 / mix(1., max(PEN_WIDTH, 1.), gFull) * apx), 0.);
+#endif
 #ifdef HERO
       hit += heroAt(a);
       if (world > .5 && heroAt(a) > 0.) continue;
@@ -181,6 +196,8 @@ vec4 penAt(vec2 uv, vec2 apx, float r, vec4 de, float inner, float weight, float
   float eI = smoothstep(.08, .3, inkI / 8.) * .64 * inner;
 #ifdef PEN_FULL
   eI *= mix(1., PEN_SEAM / .64, gFull);
+  // a wash's edge: even, half the line's width (it takes three of the eight taps to see it, not two), a seam's ink
+  eI = max(eI, smoothstep(.3, .45, inkG / 8.) * .64 * inner);
 #endif
   return vec4(max(eS, eI), smoothstep(.04, .3, foam / 8.) * mix(.55, 1., nearK), hit, hit + own);
 }
