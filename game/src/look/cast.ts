@@ -1,8 +1,8 @@
 /**
  * The cast: the four people a player can be (`data/cast.ts`), drawn on the paddler's own rig.
  *
- * - The voyageur is the paddler the game has always drawn. Nothing here touches that figure: `dressAs` returns
- *   at once, so it is `createPaddler`'s own drawing, piece for piece, in every seat's colours.
+ * - The voyageur is the paddler the game has always drawn: `createPaddler`'s own drawing, piece for piece. Only its
+ *   coat and trousers are turned to the voyageur's own colours where a seat's differ (in seat 1 they do not).
  * - The trapper, the angler and the scout are that same rig redrawn (`createPaddler` in `b2/canoe.js` calls
  *   `dressAs` once the figure is made): the torso's mesh gets another drawing (body, head, headgear and what is
  *   carried), and each limb's mesh another thickness and colour. The joints, the limb lengths, the poses and the
@@ -13,9 +13,11 @@
  * - angler: tall and lean. A rain hat with a long back brim, an oilskin coat to the knee, tall boots, a creel at the hip.
  * - scout: small and quick. A pointed hood and a short cape, a fringe and a braid, a map case slung across the back.
  *
- * What is whose colour: the main garment is the seat's coat colour, the trousers the seat's legs, and the headgear
- * the seat's toque colour (`CREW_MARKS`), on every one of the four. So the HUD's colour still finds a player by
- * their head, and two friends who pick the same person are still two.
+ * What is whose colour (`CAST_COATS`, `castOutfit`): the coat and the trousers are the character's own, the same in
+ * every seat; only the headgear takes the seat's toque colour (`CREW_MARKS`). So four people read as four at a
+ * glance, the HUD's colour still finds a player by their head, and two friends who pick the same person are still two.
+ * Each coat is the one its character's player number wore before the four had coats of their own, so a crew of
+ * four in its first picks looks as it always has, and the voyageur in seat 1 is the paddler to the pixel.
  *
  * Two things differ from the paddler in build, and neither is in a pose:
  * - `torso.scale` (`CAST_BUILD[id].scale`): the pose reads the shoulders through the torso's own matrix, so a
@@ -35,6 +37,26 @@ import { PAL } from './b2/palette.js';
 
 /** What a seat wears (`CREW_MARKS`): the colours a figure is dressed in. */
 export interface CastOutfit { coat: string; toque: string; legs: string }
+
+/** A character's own clothes, the same in every seat. */
+export interface CastCoat { coat: string; legs: string }
+
+/**
+ * What each of the four wears, from the game's palette: an ochre wool coat (the paddler's own), a blue jacket, a
+ * sage-green oilskin, a terracotta tunic and cape. Each is the coat and trousers of the player number that stood for
+ * that character (`characterOf`), so a first crew of four looks as it always has. Four hues of one value range, told apart by day and at dusk.
+ */
+export const CAST_COATS: Readonly<Record<CharacterId, CastCoat>> = {
+  voyageur: { coat: PAL.ochre, legs: '#57697b' },
+  trapper: { coat: PAL.barrelBlue, legs: PAL.bark },
+  angler: { coat: PAL.sageDeep, legs: PAL.iron },
+  scout: { coat: PAL.rustLight, legs: '#57697b' },
+};
+
+/** What a character wears in a seat: their own coat and trousers, the seat's headgear. */
+export function castOutfit(character: CharacterId, seat: CastOutfit): CastOutfit {
+  return { ...CAST_COATS[character], toque: seat.toque };
+}
 
 /** The meshes of one arm and one leg, as `createPaddler` makes them. */
 export interface CastLimbs {
@@ -274,7 +296,7 @@ function scout(rig: CastRig, outfit: CastOutfit): void {
   b.sphere(0.125, outfit.coat, { pos: [0, 0.428, 0], scale: [1.42, 0.5, 0.9], id: tunic, flat: true }, 10);
   b.torus(0.13, 0.016, LEATHER_DARK, { pos: [0, 0.14, 0], rot: [HALF_TURN, 0, 0], kind: KIND.PLAIN }, 12);
   b.box(0.07, 0.08, 0.045, LEATHER, { pos: [-0.085, 0.11, 0.12], rot: [0, -0.35, 0], kind: KIND.PLAIN });
-  // the cape, the seat's colour: over the shoulders, short at the front and the sides, a point down the back
+  // the cape, the scout's own colour (the hood above it is the seat's): over the shoulders, short at the front and the sides, a point down the back
   const rings = 16;
   const cape: THREE.Vector3[][] = [[], [], [], []];
   for (let step = 0; step <= rings; step += 1) {
@@ -288,7 +310,7 @@ function scout(rig: CastRig, outfit: CastOutfit): void {
     cape[3].push(new THREE.Vector3(across * 0.25, 0.325 + 0.04 * front - 0.155 * back, ahead * (0.155 + 0.045 * back)));
   }
   const cloak = nextId();
-  b.grid(cape, () => outfit.toque, () => cloak, { kind: KIND.CLOTH });
+  b.grid(cape, () => outfit.coat, () => cloak, { kind: KIND.CLOTH });
   b.sphere(0.022, BRASS, { pos: [0, 0.47, 0.118], flat: true, kind: KIND.PLAIN }, 6);
   // a small fair face, a red fringe
   face(b, 0.645, 0.01, 0.125, SKIN_FAIR, [1, 1, 1], 0.05);
@@ -319,13 +341,37 @@ function scout(rig: CastRig, outfit: CastOutfit): void {
   }));
 }
 
+/** Every vertex of `mesh` in colour `from` takes colour `to`. */
+function recolour(mesh: THREE.Mesh, from: string, to: string): void {
+  const [was, now] = [new THREE.Color(from), new THREE.Color(to)];
+  const colours = mesh.geometry.getAttribute('aColor');
+  for (let index = 0; index < colours.count; index += 1) {
+    if (Math.abs(colours.getX(index) - was.r) + Math.abs(colours.getY(index) - was.g) + Math.abs(colours.getZ(index) - was.b) < 1e-4) colours.setXYZ(index, now.r, now.g, now.b);
+  }
+  colours.needsUpdate = true;
+}
+
+/**
+ * The voyageur keeps `createPaddler`'s drawing, only its coat and trousers turned from the seat's colours to the
+ * voyageur's own. In seat 1 they are the same colours, so nothing is touched at all.
+ */
+function voyageur(rig: CastRig, seat: CastOutfit): void {
+  const own = CAST_COATS.voyageur;
+  const meshes = [rig.torso.children[0] as THREE.Mesh, ...[rig.L, rig.R].flatMap((side) => Object.values(side).filter((value): value is THREE.Mesh => value instanceof THREE.Mesh))];
+  for (const [from, to] of [[seat.coat, own.coat], [seat.legs, own.legs]] as const) {
+    if (from !== to) for (const mesh of meshes) recolour(mesh, from, to);
+  }
+}
+
 const DRESS: Record<Exclude<CharacterId, 'voyageur'>, (rig: CastRig, outfit: CastOutfit) => void> = { trapper, angler, scout };
 
 /**
- * Redraw the paddler's figure as one of the cast. The voyageur, and anything that is not one of the four, is
- * left exactly as `createPaddler` made it.
+ * Redraw the paddler's figure as one of the cast, in their own coat and the seat's headgear (`outfit` is the
+ * seat's colours). The voyageur, and anything that is not one of the four, is `createPaddler`'s own drawing
+ * in the voyageur's coat.
  */
 export function dressAs(character: unknown, rig: CastRig, outfit: CastOutfit): void {
-  if (!isCharacterId(character) || character === 'voyageur') return;
-  DRESS[character](rig, outfit);
+  const who = isCharacterId(character) ? character : 'voyageur';
+  if (who === 'voyageur') voyageur(rig, outfit);
+  else DRESS[who](rig, castOutfit(who, outfit));
 }

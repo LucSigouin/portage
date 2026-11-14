@@ -1,9 +1,9 @@
 /**
  * The cast (`look/cast.ts`): four people on one rig. Read from the figures themselves, with no graphics card.
  *
- * - The voyageur is the paddler as `createPaddler` has always made it: not a vertex, not a colour differs.
- * - The other three are the same rig redrawn: the same meshes, their own torso scale, the seat's colours on the
- *   coat, the legs and the head.
+ * - The voyageur is the paddler as `createPaddler` has always made it: not a vertex differs, and in seat 1 not a colour.
+ * - The other three are the same rig redrawn: the same meshes, their own torso scale, their own coat and legs, the
+ *   seat's colour on the head. (Their coats, seat by seat: `coats.test.ts`.)
  * - Told apart in solid black: each one's outline against each other one's, and against the three survivors'.
  *   (All four stand on one rig: the arms and the legs are in the same place, so half of any two shapes is shared.)
  * - What each one wears and carries stays out of their own arms, legs and paddle, and out of everyone in the next
@@ -25,7 +25,7 @@ import type { Crew as Figure } from '../../src/look/b2/canoe.js';
 import { inkMaterial } from '../../src/look/b2/palette.js';
 import { CREW_LAYER } from '../../src/look/b2/post.js';
 import { CanoeView } from '../../src/look/canoe.ts';
-import { CAST_BUILD } from '../../src/look/cast.ts';
+import { CAST_BUILD, CAST_COATS } from '../../src/look/cast.ts';
 import { buildCharacter } from '../../src/look/characters.ts';
 import { crewOf } from '../../src/look/crew.ts';
 import { jumpPose } from '../../src/look/jump-pose.ts';
@@ -109,13 +109,13 @@ describe('the other three are the same rig, redrawn', () => {
       expect(torsoMesh(figure).geometry.getAttribute('position').count).not.toBe(plain[0].geometry.getAttribute('position').count);
     });
 
-    it(`the ${who} in each seat's colours: the coat on the sleeves, the legs on the trousers, the seat's own colour on the head`, () => {
+    it(`the ${who} in each seat: their own coat on the sleeves, their own legs on the trousers, the seat's own colour on the head`, () => {
       const [, sy] = CAST_BUILD[who].scale;
       for (const mark of CREW_MARKS) {
         const figure = createCrew({ coat: mark.coat, toque: mark.toque, legs: mark.legs }, who);
         for (const side of [figure.paddler.L, figure.paddler.R]) {
-          expect([...coloursOf(side.upper).keys()]).toEqual([mark.coat]);
-          expect(coloursOf(side.thigh).has(mark.legs)).toBe(true);
+          expect([...coloursOf(side.upper).keys()]).toEqual([CAST_COATS[who].coat]);
+          expect(coloursOf(side.thigh).has(CAST_COATS[who].legs)).toBe(true);
         }
         // From the brow up (the top 20 cm of the figure), the headgear: a fifth of it or more is the seat's colour.
         const torso = torsoMesh(figure);
@@ -417,7 +417,7 @@ describe('a player who comes back as someone else', () => {
     const after = membersOf(view).get(1)!;
     expect(after.figure).not.toBe(old);
     expect(after.character).toBe('angler');
-    expect(view.figures()[1]).toMatchObject({ character: 'angler', seat: before.seat, coat: CREW_MARKS[1].coat });
+    expect(view.figures()[1]).toMatchObject({ character: 'angler', seat: before.seat, coat: CAST_COATS.angler.coat });
     // The old one is out of the picture, paddle and all, and every geometry it had is disposed of.
     expect(old.root.parent).toBeNull();
     expect(old.paddler.paddle.parent === null || old.paddler.paddle.parent === old.root).toBe(true);
