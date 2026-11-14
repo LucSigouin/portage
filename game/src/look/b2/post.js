@@ -287,7 +287,8 @@ void main(){
     float rSlim = rBase * mix(.62, 1.3, 1. - smoothstep(5., 110., zOwn)) * (.52 + .74 * PEN_WEIGHT) * PEN_WIDTH;
     float slim = 0.;
     for (int i = 0; i < 4; i++) {
-      vec2 o = OFFS[i] * rSlim * apx;
+      // half again the reach: a thing only a little wider than two full lines is still left as two lines and no wood
+      vec2 o = OFFS[i] * rSlim * 1.5 * apx;
       float ip = textureLod(tAux, inWindow(aUv + o), 0.).a;
       float im = textureLod(tAux, inWindow(aUv - o), 0.).a;
       // on it: the thing is gone again within the pen's reach on both sides
@@ -295,8 +296,9 @@ void main(){
       // beside it: a tap lands on a thing, and twice as far the pixel's own ground is back
       float ip2 = textureLod(tAux, inWindow(aUv + 2. * o), 0.).a;
       float im2 = textureLod(tAux, inWindow(aUv - 2. * o), 0.).a;
-      if (solid(ip) && abs(ip - aux.a) > .0003 && abs(ip2 - aux.a) <= .0003) slim = 1.;
-      if (solid(im) && abs(im - aux.a) > .0003 && abs(im2 - aux.a) <= .0003) slim = 1.;
+      // (open water and sky carry no one id: any of theirs is the pixel's own ground back)
+      if (solid(ip) && abs(ip - aux.a) > .0003 && (abs(ip2 - aux.a) <= .0003 || (plain && !solid(ip2)))) slim = 1.;
+      if (solid(im) && abs(im - aux.a) > .0003 && (abs(im2 - aux.a) <= .0003 || (plain && !solid(im2)))) slim = 1.;
     }
     gFull *= 1. - slim;
     wob *= 1. - gFull;
