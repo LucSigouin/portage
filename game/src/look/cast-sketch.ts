@@ -33,7 +33,7 @@ import { paletteAt } from './daylight.ts';
 export interface CastSketchRequest {
   /** Who to draw, in the order the pictures come back. */
   characters: readonly CharacterId[];
-  /** The seat whose colour each figure wears (`CREW_MARKS`), 0 to 3. */
+  /** The seat whose colour each figure wears on its headgear (`CREW_MARKS`), 0 to 3. The coat is the figure's own. */
   seat: number;
   /** The size of each picture, in real pixels. All the pictures are the same size. */
   pixelWidth: number;
@@ -196,7 +196,7 @@ function pointsOf(figure: Figure, visit: (point: THREE.Vector3) => void): void {
   });
 }
 
-/** One of the cast standing still at the origin in a seat's colours, facing +z, the soles of the boots at y = 0. */
+/** One of the cast standing still at the origin in their own coat and a seat's headgear, facing +z, the soles of the boots at y = 0. */
 export function standingFigure(character: CharacterId, seat: number): Figure {
   const figure = createCrew(outfitOf(Math.round(seat) || 0), character);
   figure.stand(0);
