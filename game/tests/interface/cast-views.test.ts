@@ -212,6 +212,11 @@ describe('the pick screen\'s stylesheet', () => {
     expect(declarations('.cs-line')).toMatch(/min-height: \d+(\.\d+)?rem;/);
   });
 
+  it('lies straight: a picture on a turned sheet has no whole screen pixel to sit on', () => {
+    expect(declarations('.iw-panel.cs')).toContain('--tilt: 0deg;');
+    expect(rules).not.toMatch(/rotate|skew|scale\(/);
+  });
+
   it('is four cards side by side', () => {
     expect(declarations('.cs-cards')).toContain('grid-template-columns: repeat(4, minmax(0, 1fr));');
   });

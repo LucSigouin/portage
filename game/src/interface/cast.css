@@ -11,8 +11,10 @@
 
    A card's frame for its picture has its size before any picture is in it, and the letter that stands in it is
    laid over the same box: a picture arriving, or never arriving, changes no size and moves no word. */
+/* The sheet lies straight. The paper sheets elsewhere are turned a hair, and a picture on a turned sheet has
+   no whole screen pixel to sit on: it would be drawn soft. */
 .iw-panel.cs {
-  --tilt: -0.2deg;
+  --tilt: 0deg;
   width: min(56rem, 92vw);
   padding: 1.3rem 1.9rem 1.15rem;
 }

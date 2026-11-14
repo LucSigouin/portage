@@ -75,19 +75,21 @@ export function withCastPictures<Inner extends GameInterface>(inner: Inner, opti
   const ratio = (): number => window.devicePixelRatio || 1;
   const askKey = (): string | null => (wanted && size ? `${wanted.key}@${size.width}x${size.height}` : null);
 
-  /** How far a canvas in `slot` is from a whole screen pixel because of a transform above it (see `preview-host.ts`). */
+  /**
+   * How far a canvas in `slot` is from a whole screen pixel. The cards are laid out in rem, so a frame's corner
+   * falls between two screen pixels more often than not, and a picture left there is smeared over both.
+   */
   const nudgeOf = (slot: HTMLElement): [number, number] => {
-    let [across, down] = [0, 0];
     for (let above: HTMLElement | null = slot; above; above = above.parentElement) {
       const transform = getComputedStyle(above).transform;
       if (!transform || transform === 'none') continue;
       const matrix = new DOMMatrixReadOnly(transform);
-      // Turned or scaled: there is no whole pixel to sit on.
+      // Turned or scaled: there is no whole pixel to sit on. (The sheet itself lies straight: `cast.css`.)
       if (!matrix.is2D || matrix.a !== 1 || matrix.b !== 0 || matrix.c !== 0 || matrix.d !== 1) return [0, 0];
-      across += matrix.e;
-      down += matrix.f;
     }
-    return [pixelNudge(across, ratio()), pixelNudge(down, ratio())];
+    // Where the frame really is on the screen, every transform above it counted.
+    const box = slot.getBoundingClientRect();
+    return [pixelNudge(box.left, ratio()), pixelNudge(box.top, ratio())];
   };
 
   /** Lay the kept pictures in the frames, or take them out when they are not this ask's. */
