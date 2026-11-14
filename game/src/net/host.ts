@@ -31,6 +31,7 @@ import { PROTOCOL_VERSION, isOtherVersion, readClientMessage } from './messages.
 import type { ClientMessage, HostMessage, LeaveReason } from './messages.ts';
 import type { Transport } from './transport.ts';
 import { WalkTimeline } from './walk.ts';
+import { endTakeBacksOf } from '../sim/index.ts';
 
 export interface HostOptions {
   /** The game being shared. The link changes it only through the rules engine. */
@@ -364,6 +365,8 @@ export class HostLink {
         setPlayerName(game, taken.id, name);
         setConnected(game, taken.id, true, true);
       }
+      // A seat that goes to someone new comes with nothing to take back: a drop is its dropper's own.
+      if (taken !== returning) endTakeBacksOf(game, taken.id);
       joined = taken !== returning && taken.connected;
       playerId = taken.id;
       this.keys.set(key, playerId);

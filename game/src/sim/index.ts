@@ -193,6 +193,8 @@ export { BELT_SLOTS, NUMBERED_BELT_SLOTS, beltOf, discardRefusal, questHolding, 
 // A dropped stack's way back.
 export { TAKE_BACK, standingDrop } from './takeback.ts';
 export type { DropLedger, DropRecord } from './takeback.ts';
+// A seat that goes to someone new comes with nothing to take back.
+export { endTakeBacksOf } from './takeback.ts';
 
 // --- State, input, commands, events -----------------------------------------
 export { STATE_VERSION, MAXIMUM_PLAYERS, MAXIMUM_NAME_LENGTH } from './types.ts';

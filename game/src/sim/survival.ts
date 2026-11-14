@@ -7,6 +7,7 @@ import {
   addToStacks, atCanoe, campInReach, cargoSlots, connectedPlayers, distanceToBed, emit, freeSeat, hasAttachment, playersAboard,
 } from './inventory.ts';
 import { notifySlept, updateQuests } from './quests.ts';
+import { endTakeBacksFrom } from './takeback.ts';
 import type { FailCause, GameState, ItemStack, PlayerState } from './types.ts';
 import { groundHeight, islandAt, islandLanding, landingBerth, regionAt, terrainHeight } from './world.ts';
 import { updateWeather } from './weather.ts';
@@ -251,6 +252,7 @@ function washAshore(state: GameState, cause: FailCause, victims: readonly Player
   const canoe = state.canoe;
   const respawn = respawnPoint(state);
   const lost = loseHalf(canoe.cargo);
+  endTakeBacksFrom(state, canoe.cargo);
 
   skipTime(state, TUNING.time.failSkipHours * hourSeconds, 0, []);
   for (const victim of victims) comeRound(victim);
@@ -316,6 +318,7 @@ export function applyExhaustion(state: GameState, player: PlayerState): void {
   }
   const respawn = respawnPoint(state);
   const lost = loseHalf(player.backpack);
+  endTakeBacksFrom(state, player.backpack);
   comeRound(player);
   const spot = shoreSpotBeside(respawn.x, respawn.z, respawn.heading) ?? islandLanding(respawn.islandId).shore;
   standAt(player, clearSpot(state, player, spot));

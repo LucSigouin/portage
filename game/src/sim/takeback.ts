@@ -13,6 +13,12 @@
  * - The clock is the game's own (`playedSeconds`). Alone with a panel open the game stands still and so does the
  *   offer: there the note on the screen, which runs on real time, is what ends it.
  *
+ * - A drop does not dodge a loss (the second review of round 3, new finding 2). A capsize takes half of every cargo
+ *   stack, and a collapse alone in a crew half of that player's backpack. What was dropped a moment earlier is not
+ *   there to lose its half, so the loss ends every take-back out of that container: it stays dropped
+ *   (`endTakeBacksFrom`).
+ * - A drop is its dropper's own. A seat that goes to someone new comes with nothing to take back (`endTakeBacksOf`).
+ *
  * Each player has their own record (`PlayerState.drops`). It is absent until that player's first drop, and in
  * every save from before it existed.
  */
@@ -131,4 +137,22 @@ export function takeBack(state: GameState, player: PlayerState, dropId: number):
   emit(state, { type: 'item_gained', itemId: record.itemId, count: record.count, container: record.from, dropId: record.id }, player);
   updateQuests(state, player);
   return success([{ itemId: record.itemId, count: record.count }]);
+}
+
+/**
+ * A loss has just taken half of every stack in `stacks` (the cargo, or one player's backpack): every take-back out
+ * of that container ends. The cargo is the whole crew's, so each player's drops out of it end, also those of a
+ * player who is away and was not washed ashore. Drops out of any other container stand as they were.
+ */
+export function endTakeBacksFrom(state: GameState, stacks: ItemStack[]): void {
+  for (const player of state.players) {
+    const ledger = player.drops;
+    if (ledger) ledger.open = ledger.open.filter((record) => stacksOf(state, player, record.from) !== stacks);
+  }
+}
+
+/** This player's seat goes to someone new: nothing the one before them dropped may be taken back. The count goes on. */
+export function endTakeBacksOf(state: GameState, playerId: PlayerId): void {
+  const ledger = state.players.find((player) => player.id === playerId)?.drops;
+  if (ledger) ledger.open = [];
 }
