@@ -63,8 +63,11 @@ const QUOTED = /("[^"]*"?|“[^”]*”?)/;
  * a number is nearly always a count ("5 stone"), read beside its word. So is whatever stands in quotation marks:
  * a letter out of a bottle says "I am putting one of these in every morning", and that I is no key.
  */
-export function keyedText(text: string): ViewChild {
+export function keyedText(text: string, said: readonly string[] = []): ViewChild {
   if (!text.includes('Z') && !text.includes('I')) return text;
+  // What a player typed (a crewmate's name, `said`) is someone's own words too: a crewmate named "I" gets no key box.
+  const typed = said.filter((words) => words !== '').map((words) => words.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const own = typed.length === 0 ? QUOTED : new RegExp(`(${QUOTED.source.slice(1, -1)}|(?<![A-Za-z0-9])(?:${typed.join('|')})(?![A-Za-z0-9]))`);
   const pieces: (string | ViewNode)[] = [];
   let drew = false;
   const say = (words: string): void => {
@@ -73,7 +76,7 @@ export function keyedText(text: string): ViewChild {
     else pieces.push(words);
   };
   // `split` with one group: said, quoted, said, quoted, said. And within what is said: words, letter, words.
-  text.split(QUOTED).forEach((passage, place) => {
+  text.split(own).forEach((passage, place) => {
     if (place % 2 === 1) return say(passage);
     passage.split(KEY_LETTER).forEach((part, index) => {
       if (index % 2 === 0) return say(part);

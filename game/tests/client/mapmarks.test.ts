@@ -68,8 +68,8 @@ describe('marking a spot tells the rest of the crew', () => {
     const game = crewGame(3);
     dispatch(game, { type: 'ping', x: 120, z: 900 }, 1);
     const events = drainEvents(game);
-    expect(toastsForPlayer(events, game, 0)).toEqual([{ text: 'Sam marked a spot on the map', tone: 'info' }]);
-    expect(toastsForPlayer(events, game, 2)).toEqual([{ text: 'Sam marked a spot on the map', tone: 'info' }]);
+    expect(toastsForPlayer(events, game, 0)).toEqual([{ text: 'Sam marked a spot on the map', tone: 'info', said: ['Sam'] }]);
+    expect(toastsForPlayer(events, game, 2)).toEqual([{ text: 'Sam marked a spot on the map', tone: 'info', said: ['Sam'] }]);
     expect(toastsForPlayer(events, game, 1)).toEqual([]);
     // A crewmate with no name is told by their mark's label, as everywhere else.
     setPlayerName(game, 1, '');

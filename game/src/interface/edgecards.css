@@ -1,0 +1,4 @@
+/* While a sheet is open the notes in the corner stand over its edge, whole (edgecards.ts). No transition. */
+.iw.iw-sheet-open > .iw-toasts {
+  z-index: 1;
+}

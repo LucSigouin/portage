@@ -52,6 +52,9 @@ export const CRAFT_DOOR_ICON: Record<CraftDoorKind, string> = {
   forge: STATION_KIND_ICON.forge,
 };
 
+/** The line under the cards that says what their red ! means. */
+export const CRAFT_DOORS_KEY = 'on a card: a quest wants something made there.';
+
 /** The red ! on a card: the same mark the recipes carry, named by the quest. */
 const questMark = (questText: string): ViewNode | null => (questText
   ? h('b.iw-quest-mark', { key: 'quest', title: questText, 'aria-label': questText }, '!')
@@ -70,7 +73,10 @@ export function craftDoorsView(doors: CraftDoorModel[]): ViewNode | null {
     },
     h('i.iw-i.iw-craft-ico', { html: CRAFT_DOOR_ICON[door.kind], 'aria-hidden': 'true' }),
     h('span.iw-label', null, door.label),
-    questMark(door.questText)), door.intent)));
+    questMark(door.questText)), door.intent)),
+  // What the red ! means, while a card carries one (the master review of round 4, finding 6). It stands still.
+  doors.some((door) => door.questText) ? h('small.iw-craft-doors-key', { key: 'quest-key' },
+    h('b.iw-craft-key-mark', { 'aria-hidden': 'true' }, '!'), CRAFT_DOORS_KEY) : null);
 }
 
 /** The quiet line under the hand crafts: where the rest is made. */

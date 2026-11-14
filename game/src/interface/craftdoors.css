@@ -68,6 +68,20 @@
   line-height: 1;
   color: var(--iw-rust-deep);
 }
+/* What the red ! means: a line of its own under the cards, while a card carries one. */
+.iw-craft-doors-key {
+  flex-basis: 100%;
+  font-family: var(--iw-hand);
+  font-size: 0.98rem;
+  line-height: 1.2;
+  color: var(--iw-ink-soft);
+}
+.iw-craft-key-mark {
+  margin-right: 0.3rem;
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--iw-rust-deep);
+}
 /* Where the rest is made: one quiet line under the hand crafts. */
 .iw-craft-rest {
   margin: 0.7rem 0 0;

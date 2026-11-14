@@ -355,6 +355,18 @@ describe('a camp\'s stations have menus of their own', () => {
     expect(craftingPanel(atQuest(inCamp('home_knoll'), 'first_haul')).doors.map((door) => door.questText)).toEqual(['', '', '']);
   });
 
+  it('says what the red ! means under the cards, only while a card carries one (the master review of round 4, finding 6)', () => {
+    const keyLine = (panel: ReturnType<typeof craftingPanel>) => find(panelView(panel), hasClass('iw-craft-doors-key'));
+    const marked = keyLine(craftingPanel(atQuest(inCamp('home_knoll'), 'stop_the_leak')));
+    expect(marked).toHaveLength(1);
+    expect(collectText(marked)).toContain('! on a card: a quest wants something made there.');
+    // Inside the row of cards, so it stands where they do.
+    expect(find(panelView(craftingPanel(atQuest(inCamp('home_knoll'), 'stop_the_leak'))), hasClass('iw-craft-doors'))
+      .flatMap((row) => find([row], hasClass('iw-craft-doors-key')))).toHaveLength(1);
+    expect(keyLine(craftingPanel(atQuest(inCamp('home_knoll'), 'first_haul')))).toEqual([]);
+    expect(keyLine(craftingPanel(inCamp('home_knoll')))).toEqual([]);
+  });
+
   it('draws the row over the body, each card a button that names its menu, the open one marked', () => {
     const state = inCamp('home_knoll');
     const drawn = panelView(craftingPanel(state, 0, 'fire'));

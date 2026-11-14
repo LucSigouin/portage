@@ -1776,13 +1776,6 @@ html.iw-document {
   text-decoration-color: var(--iw-rust-deep);
   text-underline-offset: 0.18rem;
 }
-.iw-item-detail {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 0.3rem 0.8rem;
-  margin: 0.1rem 0 0.3rem 2.5rem;
-}
 .iw-item-about {
   font-family: var(--iw-hand);
   font-size: 0.86rem;

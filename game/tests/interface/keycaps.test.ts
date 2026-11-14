@@ -20,6 +20,8 @@ import { DRAWN_KEY_SIGNS, keyFace, keyedText } from '../../src/interface/keycaps
 import { toastActionView } from '../../src/interface/takeback.ts';
 import { hintView, hotbarView, panelView, promptView, toastsView } from '../../src/interface/views.ts';
 import { give, newGame, standOn } from '../support.ts';
+import { addPlayer } from '../../src/sim/step.ts';
+import { toastForEvent, ToastQueue } from '../../src/client/viewmodels/toasts.ts';
 
 const fileSystemModule = 'node:fs';
 const { readFileSync } = await import(/* @vite-ignore */ fileSystemModule) as { readFileSync(path: URL, encoding: 'utf8'): string };
@@ -277,4 +279,43 @@ describe('the look rules', () => {
     // The take-back cap is as heavy as every other key cap.
     expect(rule(sheet('takeback.css'), '.iw-toast-key')).toMatch(/font-weight:\s*700/);
   });
+});
+
+// The master review of round 4, finding 7: what a player types is never a key.
+describe('a crewmate named I or Z gets no key box', () => {
+  const crewOf = (name: string) => {
+    const state = newGame();
+    const mate = addPlayer(state)!;
+    mate.name = name;
+    return { state, mate };
+  };
+
+  it('a name in a sentence is left in the hand, a key beside it is still drawn', () => {
+    expect(drawn(wrap(keyedText('I gave you 3 bark', ['I'])))).toEqual([]);
+    expect(drawn(wrap(keyedText('Z is back. Hold Z to bail.', ['Z'])))).toEqual([]);
+    expect(drawn(wrap(keyedText('Sam is back. Hold Z to bail.', ['Sam'])))).toEqual(['Z']);
+  });
+
+  for (const name of ['I', 'Z']) {
+    it(`every note naming a crewmate called ${name}`, () => {
+      const { state, mate } = crewOf(name);
+      const events = [
+        { type: 'item_gained', itemId: 'plank', count: 5, container: 'backpack', givenBy: mate.id, playerId: 0 },
+        { type: 'item_lost', itemId: 'plank', count: 5, container: 'backpack', givenTo: mate.id, playerId: 0 },
+        { type: 'spot_marked', who: mate.id },
+        { type: 'crew_changed', who: mate.id, change: 'joined' },
+        { type: 'crew_changed', who: mate.id, change: 'back' },
+      ] as unknown as Parameters<typeof toastForEvent>[0][];
+      const queue = new ToastQueue();
+      for (const event of events) {
+        const input = toastForEvent(event, state, 0);
+        expect(input, event.type).not.toBeNull();
+        expect(input!.text).toContain(name);
+        queue.add(input!);
+      }
+      const view = toastsView(queue.models());
+      expect(drawn(view)).toEqual([]);
+      expect(words(view)).toContain(`${name} joined the crew`);
+    });
+  }
 });

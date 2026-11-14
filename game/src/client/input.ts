@@ -162,7 +162,7 @@ export class InputController {
         // At a bench the key opens the bench's own menu: the crafting key lists hand crafts only (Luc, Round 4).
         // A prompt of that kind may name its station (a camp's fire, in r4-solid): then that station's menu opens.
         if (snapshot.interactable.kind === 'bench') {
-          return [{ type: 'use_station', station: (snapshot.interactable as { station?: StationId }).station ?? 'bench' }];
+          return [{ type: 'use_station', station: snapshot.interactable.station ?? 'bench' }];
         }
         // Land, board, talk, sleep, scavenge, pick up: one press, one command.
         return [{ type: 'command', command: snapshot.interactable.command }];

@@ -306,6 +306,13 @@ export class Session {
     return keptCharacter(this.storage);
   }
 
+  /**
+   * The pick a join went out with, while no game has started: a join that failed after the pick (no such crew, a
+   * full canoe, the relay down) is tried again from the join card with the same pick, not the screen again (the
+   * master review of round 4, finding 8).
+   */
+  private joinPick: CharacterId | null = null;
+
   /** Show the pick screen for a door, with last time's pick marked. Nothing else happens until the player picks. */
   private openCast(door: CastDoor): void {
     if (this.game) return;
@@ -325,6 +332,7 @@ export class Session {
     }
     // Back on the join card, which says how the line is doing, as it always has. The join goes out now, with the pick.
     this.applyPanels({ type: 'close' }, true);
+    this.joinPick = cast.marked;
     this.crew?.join(cast.marked);
     this.sound('click');
   }
@@ -350,6 +358,7 @@ export class Session {
     if (this.guest) this.leaveHost();
     this.stopSharing();
     this.game = state;
+    this.joinPick = null;
     this.slot = slot;
     this.driver = null;
     this.driverCarry = 0;
@@ -565,6 +574,7 @@ export class Session {
     const playedBefore = this.game?.playedSeconds ?? view.playedSeconds;
     this.game = view;
     this.localPlayerId = guest.playerId;
+    this.joinPick = null;
     this.hostId = guest.hostId;
     if (arrived) {
       this.slot = null;
@@ -998,7 +1008,11 @@ export class Session {
         if (!this.crew) break;
         // The name and the code as always; what is wrong with them is said on the card. Then the pick screen: nothing
         // is dialled and nothing is sent until the player has picked (`cast_confirm`).
-        if (this.crew.readyToJoin()) this.openCast({ kind: 'join' });
+        // A try again after a failed join keeps its pick (`joinPick`).
+        if (this.crew.readyToJoin() && this.joinPick && !this.game) {
+          this.crew.join(this.joinPick);
+          this.sound('click');
+        } else if (this.crew.readyToJoin()) this.openCast({ kind: 'join' });
         else this.sound('click');
         break;
       case 'cast_mark':
