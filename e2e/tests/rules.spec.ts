@@ -122,7 +122,7 @@ test('line 14: Q paddles on its own, and Q, W or S stops it', async ({ page }) =
   expect(problems).toEqual([]);
 });
 
-test('line 21: F at the stump bench says "Use the bench" and opens the crafting panel', async ({ page }) => {
+test('line 21: F at the stump bench says "Use the bench" and opens the stump bench\'s own menu', async ({ page }) => {
   const problems = await open(page, '?shot=island&live=1');
   // Just south of Home Knoll's stump bench, facing it.
   await standAt(page, 11.6, 1131.1, 0);
@@ -131,6 +131,9 @@ test('line 21: F at the stump bench says "Use the bench" and opens the crafting 
   await page.screenshot({ path: `${SHOTS}/fix21-1-prompt.png` });
   await page.keyboard.press('KeyF');
   await expect.poll(async () => (await read(page)).panels).toContain('crafting');
+  // Round 4: the crafting key lists hand crafts only, so the bench's key opens the bench's menu, not the hands'.
+  await expect(page.locator('.iw-panel-crafting h2')).toHaveText('Stump bench');
+  await expect(page.locator('.iw-panel-crafting .iw-craft-door.iw-on')).toHaveText('Stump bench');
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${SHOTS}/fix21-2-crafting-open.png` });
   expect(problems).toEqual([]);

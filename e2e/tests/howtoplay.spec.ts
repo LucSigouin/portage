@@ -80,7 +80,7 @@ test('How to Play has the round\'s new lines and fits its panel at 1920x1080 and
     expect(top.headings, where).toEqual(['The loop', 'In the canoe', 'On foot', 'Panels and camera', 'Staying alive']);
     expect(top.addedKeys, where).toEqual(['Tab', 'Shift+click', 'Q', 'Z', 'C', 'B', 'J', 'M', 'Esc']);
     expect(top.addedLabels, where).toEqual([
-      'Inventory', 'A stack to the other side', 'Pointer on a stack: drop it', 'Take a drop back, within 5 s', 'Crafting',
+      'Inventory', 'A stack to the other side', 'Pointer on a stack: drop it', 'Take a drop back, within 5 s', "Crafting by hand. A camp's fire and bench are on it too",
       'The canoe: its builder (beached), its stations (afloat too)', 'Quest log: track up to three quests', 'Map: a click marks a spot for the crew',
       'Pause, or close a panel',
     ]);

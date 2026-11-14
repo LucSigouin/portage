@@ -115,23 +115,46 @@ test('a canoe with no station shows the canoe builder alone, and says what would
   await expect(page.locator('.iw-panel-canoe_builder .iw-blocked')).toHaveText('Beach the canoe to work on it.');
 });
 
-test('C lists only what can be made here: no station out of reach, no recipe that needs one', async ({ page }) => {
-  // Afloat with no station aboard: hands, and nothing else.
+test('C lists hand crafts only: a camp\'s stations are cards on it, the canoe\'s stations are on B', async ({ page }) => {
+  // Round 4 (Luc: "The craft menu with c should only show you what you can craft without the benchs/tools").
+  const sections = page.locator('.iw-panel-crafting .iw-body section:not(.iw-elsewhere) > h3');
+  const doors = page.locator('.iw-panel-crafting .iw-craft-door');
+  // Afloat with no station aboard: hands, and nothing else. No row of cards away from a camp.
   await open(page, '?shot=play&live=1');
   await tap(page, 'KeyC');
   expect((await read(page)).panels).toEqual(['crafting']);
   await expect(page.locator('.iw-panel-crafting .iw-body section:not(.iw-elsewhere) > h3')).toHaveText(['Hands']);
   await expect(page.locator('.iw-panel-crafting')).not.toContainText('not in reach');
   await expect(page.locator('.iw-panel-crafting .iw-entry')).toHaveCount(4);
-  // At Home Knoll's camp: hands, the fire and the stump bench. The smoker and the forge are not here, and not listed.
-  await open(page, '?shot=crafting');
-  await expect(page.locator('.iw-panel-crafting .iw-body section:not(.iw-elsewhere) > h3')).toHaveText(['Hands', 'Fire', 'Bench']);
+  await expect(doors).toHaveCount(0);
+  // At Home Knoll's camp: the hands' list, and a card each for the hands, the campfire and the stump bench.
+  await open(page, '?shot=crafting&live=1');
+  await expect(sections).toHaveText(['Hands']);
+  await expect(page.locator('.iw-panel-crafting .iw-entry')).toHaveCount(4);
+  await expect(doors).toHaveText(['Hands', 'Campfire', 'Stump bench']);
   await expect(page.locator('.iw-panel-crafting')).not.toContainText('not in reach');
-  await expect(page.locator('.iw-panel-crafting')).not.toContainText('Smoked fish');
-  await expect(page.locator('.iw-panel-crafting')).not.toContainText('Metal sheet');
-  // Afloat with all four aboard, everything is here.
+  for (const name of ['Pitch', 'Plank', 'Smoked fish', 'Metal sheet']) await expect(page.locator('.iw-panel-crafting'), name).not.toContainText(name);
+  // The campfire's card shows the campfire's own menu: its eight recipes, under its name.
+  await doors.nth(1).click();
+  expect((await read(page)).panels).toEqual(['crafting']);
+  await expect(page.locator('.iw-panel-crafting h2')).toHaveText('Campfire');
+  await expect(page.locator('.iw-panel-crafting .iw-craft-door.iw-on')).toHaveText('Campfire');
+  await expect(page.locator('.iw-panel-crafting .iw-entry')).toHaveCount(8);
+  await expect(page.locator('.iw-panel-crafting')).toContainText('Pitch');
+  // The stump bench's: four.
+  await doors.nth(2).click();
+  await expect(page.locator('.iw-panel-crafting h2')).toHaveText('Stump bench');
+  await expect(page.locator('.iw-panel-crafting .iw-entry')).toHaveCount(4);
+  // C again is the hands again.
+  await tap(page, 'KeyC');
+  await tap(page, 'KeyC');
+  await expect(page.locator('.iw-panel-crafting h2')).toHaveText('Crafting');
+  await expect(sections).toHaveText(['Hands']);
+  // Afloat with all four aboard: still the hands alone, and one line that says where the rest is.
   await open(page, '?shot=upgraded&live=1');
   await tap(page, 'KeyC');
-  await expect(page.locator('.iw-panel-crafting .iw-body section:not(.iw-elsewhere) > h3')).toHaveText(['Hands', 'Fire', 'Bench', 'Smoker', 'Forge']);
-  await expect(page.locator('.iw-panel-crafting .iw-entry')).toHaveCount(20);
+  await expect(sections).toHaveText(['Hands']);
+  await expect(page.locator('.iw-panel-crafting .iw-entry')).toHaveCount(4);
+  await expect(doors).toHaveCount(0);
+  await expect(page.locator('.iw-panel-crafting .iw-craft-rest')).toHaveText('The firebox, the workbench, the smoker and the forge have their own menus on the boat (B).');
 });

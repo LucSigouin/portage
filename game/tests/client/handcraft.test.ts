@@ -14,7 +14,7 @@ import { createSilentAudio } from '../../src/client/contracts.ts';
 import type { GameInterface, InterfaceModel, WorldView } from '../../src/client/contracts.ts';
 import { createPanelState, topPanel } from '../../src/client/panels.ts';
 import {
-  buildCraftNotes, buildCraftingPanel, campStationsHere, craftRestText, stationDoor,
+  HOW_TO_PLAY_CRAFT_LABEL, buildCraftNotes, buildCraftingPanel, buildHowToPlayPanel, campStationsHere, craftRestText, stationDoor,
 } from '../../src/client/viewmodels/index.ts';
 import { ATTACHMENTS, ATTACHMENT_IDS, CAMP_LAYOUTS, ISLANDS, QUEST_LIST, RECIPES, RECIPE_IDS } from '../../src/data/index.ts';
 import type { IslandId, ItemId, QuestId, StationId } from '../../src/data/index.ts';
@@ -462,6 +462,73 @@ describe('where the rest is made', () => {
     expect(collectText(find(drawn, hasClass('iw-craft-rest')))).toBe(none(beach));
     expect(find(drawn, hasClass('iw-grid'))).toEqual([]);
     expect(find(drawn, hasClass('iw-entry'))).toEqual([]);
+  });
+});
+
+describe('the words that send a player to C or to a station stay true', () => {
+  it('How to Play says the crafting key is the hands, and that a camp\'s fire and bench are on it', () => {
+    const settings = createDefaultSettings();
+    const controls = buildHowToPlayPanel(settings).sections.flatMap((section) => section.controls);
+    const crafting = controls.find((control) => control.keys === 'C')!;
+    expect(crafting.label).toBe('Crafting by hand. A camp\'s fire and bench are on it too');
+    expect(crafting.label).toBe(HOW_TO_PLAY_CRAFT_LABEL);
+    // The line after it is the canoe's: its stations are on the boat's key, as C's own line says.
+    expect(controls[controls.indexOf(crafting) + 1]).toMatchObject({ label: 'The canoe: its builder (beached), its stations (afloat too)', keys: 'B' });
+    // The key follows the player's binding.
+    settings.controls.keyBindings = { ...settings.controls.keyBindings, craft: ['KeyK'] };
+    expect(buildHowToPlayPanel(settings).sections.flatMap((section) => section.controls).find((control) => control.label === HOW_TO_PLAY_CRAFT_LABEL)!.keys).toBe('K');
+  });
+
+  it('a new player\'s first crafts are where the screen says: the knife by hand, pitch and the first meal at the campfire', () => {
+    /** Find a recipe on the menus the player can open, press its Make button, and say which menu it was on. */
+    const make = (state: GameState, recipeId: string): string => {
+      const menu = craftMenus(state).find((entry) => entry.recipes.some((row) => row.recipeId === recipeId));
+      if (!menu) return 'nowhere';
+      const row = menu.recipes.find((entry) => entry.recipeId === recipeId)!;
+      if (row.craft.intent.type !== 'command') throw new Error('Make sends a command');
+      expect(dispatch(state, row.craft.intent.command), recipeId).toMatchObject({ ok: true });
+      return menu.name;
+    };
+    const objectiveText = (questId: QuestId, index: number): string => QUEST_LIST.find((quest) => quest.id === questId)!.objectives[index].text;
+
+    // Quest 2, "Make a stone knife": by hand, on the beach the game starts at. No camp needed.
+    const second = atQuest(newGame(), 'first_haul');
+    standOn(second, 'home_knoll');
+    give(second, 'stone', 2);
+    give(second, 'driftwood', 1);
+    give(second, 'fiber', 2);
+    expect(craftMenus(second).map((menu) => menu.name)).toEqual(['C: Hands']);
+    expect(craftingPanel(second).stations[0].recipes.find((row) => row.recipeId === 'stone_knife')!.questText).toBe('For First haul');
+    expect(make(second, 'stone_knife')).toBe('C: Hands');
+    expect(second.tools).toContain('stone_knife');
+
+    // Quest 3, "Cook pitch at the campfire". On the beach C says where: a fire, at any camp.
+    const third = atQuest(newGame(), 'stop_the_leak');
+    standOn(third, 'home_knoll');
+    give(third, 'spruce_gum', 4);
+    give(third, 'driftwood', 2);
+    expect(make(third, 'pitch')).toBe('nowhere');
+    expect(craftingPanel(third).elsewhere.map((line) => line.text)).toEqual(['Pitch needs a fire: any camp, or a firebox built on the canoe.']);
+    // In the camp the quest names the campfire, and C has a card of that name, with the red ! on it.
+    teleportToCamp(third, 'home_knoll');
+    const card = craftingPanel(third).doors.find((door) => door.tab === 'fire')!;
+    expect(objectiveText('stop_the_leak', 2)).toBe('Cook pitch at the campfire');
+    expect(objectiveText('stop_the_leak', 2)).toContain(card.label.toLowerCase());
+    expect(card.questText).toBe('For Stop the leak');
+    expect(third.quests.stop_the_leak.progress[2]).toBe(0);
+    expect(make(third, 'pitch')).toBe('C: Campfire');
+    expect(make(third, 'pitch')).toBe('C: Campfire');
+    expect(countIn(third.players[0].backpack, 'pitch')).toBe(2);
+    expect(third.quests.stop_the_leak.progress[2]).toBe(2);
+
+    // Quest 4, "Boil water" and "Cook a meal": the campfire's card again.
+    const fourth = atQuest(inCamp('home_knoll'), 'something_to_eat');
+    give(fourth, 'dirty_water', 1);
+    give(fourth, 'cattail_root', 2);
+    expect(craftingPanel(fourth).doors.find((door) => door.tab === 'fire')!.questText).toBe('For Something to eat');
+    expect(make(fourth, 'clean_water')).toBe('C: Campfire');
+    expect(make(fourth, 'roast_roots')).toBe('C: Campfire');
+    expect(fourth.quests.something_to_eat.progress.slice(1, 3)).toEqual([1, 1]);
   });
 });
 
