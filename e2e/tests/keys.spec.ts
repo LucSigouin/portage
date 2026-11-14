@@ -288,6 +288,8 @@ test('a key rebound in the settings drives the canoe, and survives a reload', as
 
   await page.getByRole('button', { name: 'New Game' }).click();
   await page.getByRole('button', { name: 'New game here' }).first().click();
+  // The pick screen: start as whoever is marked.
+  await page.locator('.iw-panel-character_select .cs-start').click();
   await page.waitForTimeout(300);
   expect((await read(page)).screen).toBe('game');
   const start = await read(page);
@@ -330,6 +332,8 @@ test('a new game from the lobby is saved, and Continue brings it back', async ({
   await expect(page.getByRole('button', { name: 'Continue' })).toBeDisabled();
   await page.getByRole('button', { name: 'New Game' }).click();
   await page.getByRole('button', { name: 'New game here' }).nth(1).click();
+  // The pick screen: start as whoever is marked.
+  await page.locator('.iw-panel-character_select .cs-start').click();
   await hold(page, 'KeyR', 2500);
   const played = await read(page);
   expect(played.waterLevel).toBeLessThan(57);

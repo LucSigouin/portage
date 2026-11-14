@@ -144,12 +144,18 @@ async function hostByClicks(page: Page, name: string, startGame = true): Promise
   if (startGame) {
     await card.getByRole('button', { name: 'New Game' }).click();
     await page.locator('.iw-panel-save_slots').getByRole('button', { name: 'New game here' }).first().click();
+    await pick(page);
     await inGame(page);
   }
   return shown;
 }
 
-/** Join by the lobby's own entries: "Join a crew", the code, a name, "Join". */
+/** The pick screen, after a new game's slot or after Join: press its one button, as whoever is marked. */
+async function pick(page: Page): Promise<void> {
+  await page.locator('.iw-panel-character_select .cs-start').click();
+}
+
+/** Join by the lobby's own entries: "Join a crew", the code, a name, "Join", and then who you are. */
 async function joinByClicks(page: Page, code: string, name: string): Promise<void> {
   await page.getByRole('button', { name: 'Join a crew' }).click();
   const card = page.locator('.iw-panel-crew_join');
@@ -157,6 +163,7 @@ async function joinByClicks(page: Page, code: string, name: string): Promise<voi
   await card.getByLabel('Crew code').fill(code);
   await card.getByLabel('Your name').fill(name);
   await card.getByRole('button', { name: 'Join', exact: true }).click();
+  await pick(page);
 }
 
 const profile = (browser: Browser, viewport = { width: 1280, height: 720 }): Promise<BrowserContext> =>
@@ -188,6 +195,7 @@ test('friends join by a link: host, copy, open, name, in the canoe; they move, d
   // The game to share is started from the room card.
   await card.getByRole('button', { name: 'New Game' }).click();
   await host.page.locator('.iw-panel-save_slots').getByRole('button', { name: 'New game here' }).first().click();
+  await pick(host.page);
   await inGame(host.page);
   expect(await read(host.page)).toMatchObject({ role: 'host', hosting: 'open' });
   expect(host.sockets.filter((address) => address.includes('/room/')), 'the host dialled the relay once, for its room').toEqual([
@@ -202,6 +210,10 @@ test('friends join by a link: host, copy, open, name, in the canoe; they move, d
   await expect(joinCard.getByLabel('Crew code')).toHaveValue(shown);
   await expect(joinCard.getByLabel('Your name'), 'the caret is on the empty line').toBeFocused();
   await sam.page.keyboard.type('Sam');
+  await sam.page.keyboard.press('Enter');
+  // The pick screen. Nothing was dialled for the room yet: the join goes out with the pick. Enter again joins.
+  await expect(sam.page.locator('.iw-panel-character_select')).toBeVisible();
+  expect(sam.sockets.filter((address) => address.includes('/room/')), 'nothing is dialled before the pick').toEqual([]);
   await sam.page.keyboard.press('Enter');
   await inGame(sam.page);
   await expect(host.page.locator('.iw-crew .iw-mate')).toHaveCount(2);
@@ -275,6 +287,7 @@ test('friends join by a link: host, copy, open, name, in the canoe; they move, d
   sam = await arrive(samContext, link, problems, 'sam');
   await expect(sam.page.locator('.iw-panel-crew_join').getByLabel('Your name'), 'the name is remembered').toHaveValue('Sam');
   await sam.page.locator('.iw-panel-crew_join').getByRole('button', { name: 'Join', exact: true }).click();
+  await pick(sam.page);
   await inGame(sam.page);
   await expect(host.page.locator('.iw-crew .iw-mate.iw-away')).toHaveCount(0);
   onHost = await read(host.page);
@@ -452,6 +465,7 @@ test('a relay that cannot be reached is said so, to a guest and to a host', asyn
   await guest.page.keyboard.press('Escape');
   await guest.page.getByRole('button', { name: 'New Game' }).click();
   await guest.page.locator('.iw-panel-save_slots').getByRole('button', { name: 'New game here' }).first().click();
+  await pick(guest.page);
   await inGame(guest.page);
   expect(await read(guest.page)).toMatchObject({ role: 'solo', hosting: 'failed' });
   await context.close();
@@ -479,6 +493,9 @@ test('pictures of the crew lobby at 1920x1080', async ({ browser }) => {
   await guest.page.keyboard.type('Sam');
   await guest.page.screenshot({ path: `${SHOTS}/4-join-from-link.png` });
   await guest.page.keyboard.press('Enter');
+  await expect(guest.page.locator('.iw-panel-character_select')).toBeVisible();
+  await guest.page.screenshot({ path: `${SHOTS}/4b-pick-who-you-are.png` });
+  await pick(guest.page);
   await expect(guest.page.locator('.iw-panel-crew_join .iw-crew-status')).toHaveText('Found the crew. Waiting for the host to start the game…');
   await guest.page.screenshot({ path: `${SHOTS}/5-join-waiting.png` });
   await expect(host.page.locator('.iw-panel-crew_host .iw-crew-status')).toHaveText('One friend is in the room.');
@@ -486,6 +503,7 @@ test('pictures of the crew lobby at 1920x1080', async ({ browser }) => {
 
   await host.page.locator('.iw-panel-crew_host').getByRole('button', { name: 'New Game' }).click();
   await host.page.locator('.iw-panel-save_slots').getByRole('button', { name: 'New game here' }).first().click();
+  await pick(host.page);
   await inGame(host.page);
   await inGame(guest.page);
   await expect(guest.page.locator('.iw-crew .iw-mate')).toHaveCount(2);
@@ -545,6 +563,7 @@ test('a build made with no relay has no crew entries, opens no socket, and ignor
   // A solo game plays, with the pause menu it always had.
   await player.page.getByRole('button', { name: 'New Game' }).click();
   await player.page.locator('.iw-panel-save_slots').getByRole('button', { name: 'New game here' }).first().click();
+  await pick(player.page);
   await inGame(player.page);
   await player.page.keyboard.press('Escape');
   // (The menu is drawn on the frame after the key: look until it is there.)
@@ -587,6 +606,7 @@ test('under the live site\'s security policy, a relay on the site\'s own host wo
   const guest = await arrive(guestContext, `${BUILT}/?invite=${shown.replace('-', '')}`, problems, 'guest');
   await guest.page.keyboard.type('Sam');
   await guest.page.keyboard.press('Enter');
+  await pick(guest.page);
   await inGame(guest.page);
   await expect(host.page.locator('.iw-crew .iw-mate')).toHaveCount(2);
   expect(await read(guest.page)).toMatchObject({ role: 'guest', localPlayerId: 1 });

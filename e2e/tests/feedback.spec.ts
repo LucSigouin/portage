@@ -41,6 +41,8 @@ const openFromLobby = async (page: Page): Promise<void> => {
 async function openFromPause(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'New Game' }).click();
   await page.locator('.iw-panel-save_slots').getByRole('button', { name: 'New game here' }).first().click();
+  // The pick screen: start as whoever is marked.
+  await page.locator('.iw-panel-character_select .cs-start').click();
   await page.waitForFunction(() => {
     const { session } = (window as unknown as { portage: Portage }).portage;
     return session.game != null && session.panels.stack.length === 0;

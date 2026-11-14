@@ -38,7 +38,7 @@ const read = (page) => page.evaluate(() => {
     role: session.host ? 'host' : session.guest ? 'guest' : 'solo',
     x: game.canoe.position.x,
     z: game.canoe.position.z,
-    players: game.players.map((player) => ({ name: player.name, connected: player.connected, paddling: player.paddling })),
+    players: game.players.map((player) => ({ name: player.name, connected: player.connected, paddling: player.paddling, character: player.character })),
     mismatches: session.guest ? session.guest.mismatches : 0,
   };
 });
@@ -72,6 +72,9 @@ try {
   must(link === `${base}?invite=${code}`, `the copied link is ${link}, not ${base}?invite=${code}`);
   await card.getByRole('button', { name: 'New Game' }).click();
   await host.page.locator('.iw-panel-save_slots').getByRole('button', { name: 'New game here' }).first().click();
+  // The pick screen: the host starts as the second of the cast, to tell it from the guest's pick below.
+  await host.page.locator('.iw-panel-character_select .cs-card[data-character="trapper"]').click({ timeout: 10_000 });
+  await host.page.locator('.iw-panel-character_select .cs-start').click();
   await inGame(host.page);
   must((await read(host.page)).role === 'host', 'the first browser is not the host');
 
@@ -83,6 +86,9 @@ try {
   must(await joinCard.getByLabel('Crew code').inputValue() === shown, 'the link did not fill in the crew code');
   await guest.page.keyboard.type('Guest');
   await guest.page.keyboard.press('Enter');
+  // The pick screen, then the join goes out with the pick.
+  await guest.page.locator('.iw-panel-character_select .cs-card[data-character="scout"]').click({ timeout: 10_000 });
+  await guest.page.locator('.iw-panel-character_select .cs-start').click();
   await inGame(guest.page);
   const joined = (Date.now() - began) / 1000;
   await until('two in the crew list, on both screens', async () =>
@@ -90,6 +96,11 @@ try {
   must((await read(guest.page)).role === 'guest', 'the second browser is not a guest');
   const names = (await read(host.page)).players.map((player) => player.name).join(', ');
   must(names === 'Host, Guest', `the host's crew is "${names}"`);
+  // Each is who they picked, on both screens.
+  for (const [who, page] of [['host', host.page], ['guest', guest.page]]) {
+    const picks = (await read(page)).players.map((player) => player.character).join(', ');
+    must(picks === 'trapper, scout', `on the ${who}'s screen the crew is "${picks}", not the two who were picked`);
+  }
 
   // --- Each sees the other paddle -----------------------------------------------------------
   const afloat = await read(host.page);
