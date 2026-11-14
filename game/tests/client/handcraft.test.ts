@@ -12,6 +12,8 @@ import { createApp } from '../../src/client/app.ts';
 import type { App } from '../../src/client/app.ts';
 import { createSilentAudio } from '../../src/client/contracts.ts';
 import type { GameInterface, InterfaceModel, WorldView } from '../../src/client/contracts.ts';
+import { InputController } from '../../src/client/input.ts';
+import type { InputOutcome, InputSnapshot } from '../../src/client/input.ts';
 import { createPanelState, topPanel } from '../../src/client/panels.ts';
 import {
   HOW_TO_PLAY_CRAFT_LABEL, buildCraftNotes, buildCraftingPanel, buildHowToPlayPanel, campStationsHere, craftRestText, stationDoor,
@@ -23,7 +25,7 @@ import { collectText } from '../../src/interface/dom.ts';
 import type { ViewNode } from '../../src/interface/dom.ts';
 import { BUILDER_ICON, STATION_KIND_ICON } from '../../src/interface/stationicons.ts';
 import { panelView } from '../../src/interface/views.ts';
-import { DEFAULT_KEY_BINDINGS, createDefaultSettings } from '../../src/settings/index.ts';
+import { DEFAULT_KEY_BINDINGS, cloneKeyBindings, createDefaultSettings } from '../../src/settings/index.ts';
 import { FIXED_STEP, dispatch, drainEvents, islandAt, selectInteractable, selectInventory, terrainHeight } from '../../src/sim/index.ts';
 import type { GameState } from '../../src/sim/index.ts';
 import { FakeStorage, build, countIn, floatCanoeAt, give, newGame, standOn, teleport, teleportToCamp } from '../support.ts';
@@ -612,6 +614,26 @@ describe('the interact key at a station opens that station\'s own menu', () => {
     press(app, 'KeyF');
     expect(app.session.panels).toMatchObject({ stack: ['canoe_builder'], boatTab: 'workbench' });
     expect(models.at(-1)!.panel).toMatchObject({ id: 'canoe_builder', title: 'Workbench', station: { attachmentId: 'workbench' } });
+  });
+
+  it('opens the menu of the station a prompt names: a fire to cook at opens the campfire\'s menu, not the bench\'s', () => {
+    // The rules of this branch offer the stump and the workbench, with no station named. Another branch of this
+    // round (r4-solid) adds the camp's fire as the same kind of prompt, with `station: 'fire'` on it.
+    const input = new InputController({ keyBindings: cloneKeyBindings(DEFAULT_KEY_BINDINGS), mouseSensitivity: 1, invertY: false });
+    const at = (station?: StationId): InputSnapshot => ({
+      mode: 'foot', sailRaised: false, tools: [], selectedTool: null,
+      interactable: { kind: 'bench', name: 'Campfire', prompt: 'Cook at the fire', distance: 1, ...(station ? { station } : {}) },
+    });
+    expect(input.keyDown('KeyF', false, at())).toEqual([{ type: 'use_station', station: 'bench' }]);
+    expect(input.keyDown('KeyF', false, at('fire'))).toEqual([{ type: 'use_station', station: 'fire' }]);
+    expect(input.keyDown('KeyF', false, at('forge'))).toEqual([{ type: 'use_station', station: 'forge' }]);
+    // And the session takes it to the camp's own menu.
+    const { app, models } = client(inCamp('home_knoll'));
+    frames(app, 0.1);
+    // (The session's own handler for a key's outcome: private, and the rules of this branch have no fire to press at.)
+    (app.session as unknown as { applyOutcome(outcome: InputOutcome): void }).applyOutcome({ type: 'use_station', station: 'fire' });
+    frames(app, 0.05);
+    expect(models.at(-1)!.panel).toMatchObject({ id: 'crafting', title: 'Campfire', tab: 'fire' });
   });
 
   it('leads each kind of station to its menu: the camp\'s own first, then the part on the canoe, else nothing', () => {
