@@ -2,3 +2,33 @@
 .iw.iw-sheet-open > .iw-toasts {
   z-index: 1;
 }
+
+/* In a crew the game runs on behind a sheet: the health card stays, small, in one row at the bottom left beside the
+   tool belt, over the sheet's wash and clear of the sheet (edgecards.ts). The bars, their numbers and the water in
+   the hull; no words, no crew list. Nothing moves: it is drawn small or full, never between. */
+.iw.iw-vitals-small .iw-vitals {
+  z-index: 1;
+  width: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.95rem;
+  padding: 0.4rem 0.85rem 0.35rem;
+}
+.iw.iw-vitals-small .iw-vitals > .iw-tape,
+.iw.iw-vitals-small .iw-vitals > .iw-canoe-lines,
+.iw.iw-vitals-small .iw-vitals > .iw-crew,
+.iw.iw-vitals-small .iw-vitals .iw-meter .iw-lab,
+.iw.iw-vitals-small .iw-vitals .iw-bilge .iw-gauge-holder {
+  display: none;
+}
+.iw.iw-vitals-small .iw-vitals .iw-meter {
+  grid-template-columns: 1.5rem 3.2rem 1.8rem;
+  gap: 0.35rem;
+}
+.iw.iw-vitals-small .iw-vitals .iw-bilge {
+  display: block;
+  margin: 0;
+  padding: 0 0 0 0.95rem;
+  border-top: 0;
+  border-left: 0.09rem dashed var(--iw-ink-faint);
+}

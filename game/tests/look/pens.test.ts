@@ -105,6 +105,20 @@ describe('?pen=today is the old pen, to the letter', () => {
     for (const block of blocks) expect(block.match(/#if|#else/g)).toHaveLength(1);
   });
 
+  it('under C a thing thinner than the full pen keeps today\'s line, on it and beside it; under ?pen=today nothing of it is compiled', () => {
+    const { world } = pens(null);
+    const blocks = world.fragmentShader.match(/#ifdef PEN_FULL\n[\s\S]*?#endif\n/g) ?? [];
+    const slim = blocks.find((block) => block.includes('float slim'));
+    expect(slim).toBeDefined();
+    // the reach it measures is the full pen's own width, and where it finds a slim thing the full pen is off
+    expect(slim).toContain('PEN_WIDTH');
+    expect(slim).toMatch(/gFull \*= 1\. - slim;/);
+    // both cases: the pen on the thing (gone on both sides), the pen beside it (the pixel's own ground back at twice the reach)
+    expect(slim).toMatch(/abs\(ip - aux\.a\) > \.0003 && abs\(im - aux\.a\) > \.0003/);
+    expect(slim).toMatch(/abs\(ip2 - aux\.a\) <= \.0003/);
+    expect(withoutSamples(pens(null, 'today').world.fragmentShader)).not.toContain('slim');
+  });
+
   it('picking today\'s pen after C leaves nothing defined, and C again puts it back', () => {
     const { world, state } = pens('today');
     expect(state).toBe('today');

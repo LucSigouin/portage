@@ -22,7 +22,8 @@ import { TileMenu } from './inventorymenu.ts';
 import { toastKeyIntent } from './takeback.ts';
 import type { ViewNode } from './dom.ts';
 import './edgecards.css';
-import { setEdgeCardsHidden, sheetHidesEdges } from './edgecards.ts';
+import { edgeCardsFor, setEdgeCardsHidden } from './edgecards.ts';
+import type { EdgeCards } from './edgecards.ts';
 import { MapChart, MinimapCard } from './chart.ts';
 import { feedbackInputIntent, focusFeedbackNote } from './feedback.ts';
 import { castKeyDown, focusMarkedCard } from './cast.ts';
@@ -182,7 +183,7 @@ export class InkInterface implements GameInterface {
   private hudShown: boolean | null = null;
   private dialogue: boolean | null = null;
   /** The edge cards stand aside for a sheet (`edgecards.ts`). */
-  private edgesHidden: boolean | null = null;
+  private edges: EdgeCards | null = null;
   /** The built view holds the screen: what a click anywhere sends, or null the rest of the time. */
   private builtDismiss: InterfaceIntent | null = null;
   /** The control that had the keyboard when the built view began: it gets it back. */
@@ -608,10 +609,13 @@ export class InkInterface implements GameInterface {
       this.dialogue = panel?.id === 'dialogue';
       part('panel').classList.toggle('iw-veil-clear', this.dialogue);
     }
-    if (sheetHidesEdges(panel) !== this.edgesHidden) {
-      this.edgesHidden = sheetHidesEdges(panel);
-      setEdgeCardsHidden([part('vitals'), part('notes'), part('hint'), part('prompt'), this.minimap?.element], this.edgesHidden);
-      root.classList.toggle('iw-sheet-open', this.edgesHidden);
+    const edges = edgeCardsFor(panel, (hud?.crew.length ?? 0) > 1);
+    if (edges !== this.edges) {
+      this.edges = edges;
+      setEdgeCardsHidden([part('notes'), part('hint'), part('prompt'), this.minimap?.element], edges !== 'shown');
+      setEdgeCardsHidden([part('vitals')], edges === 'hidden');
+      root.classList.toggle('iw-sheet-open', edges !== 'shown');
+      root.classList.toggle('iw-vitals-small', edges === 'small');
     }
     if (this.draw('confirm', confirm ? JSON.stringify(confirm) : '', () => confirmView(confirm!))) part('confirm').hidden = !confirm;
     this.followBuilt(model, root);

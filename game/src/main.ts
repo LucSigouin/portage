@@ -19,6 +19,7 @@ import { createWorldView } from './look/index.ts';
 import { setLocalPlayerId } from './look/crew.ts';
 import { CrewLobby } from './client/crewlobby.ts';
 import { FeedbackDesk } from './client/feedback.ts';
+import { FullscreenSwitch } from './client/fullscreen.ts';
 import { buildFeedbackContext } from './client/viewmodels/feedback.ts';
 import { GAME_VERSION } from './client/version.ts';
 import { createFrameLoop } from './client/loop.ts';
@@ -141,6 +142,11 @@ function boot(): void {
     fetch: (address, request) => window.fetch(address, request), storage: browserStorage(),
     context: () => buildFeedbackContext(session.game, session.settings, session.localPlayerId),
   });
+
+  // Full screen: a line in the lobby menu and on the pause card. The browser's own Esc or F11 can leave it too, so on
+  // every change nothing held carries across (`session.blur`). The view refits by the ResizeObserver below.
+  session.fullscreen = new FullscreenSwitch(document);
+  document.addEventListener('fullscreenchange', () => session.blur());
 
   worldView.mount(worldElement);
   gameInterface.mount(interfaceElement, (intent) => session.handleIntent(intent));

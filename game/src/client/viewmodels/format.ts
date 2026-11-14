@@ -10,6 +10,12 @@ export const itemName = (itemId: ItemId): string => ITEMS[itemId].name;
 /** "3 x Plank". */
 export const countedName = (itemId: ItemId, count: number): string => `${count} x ${itemName(itemId)}`;
 
+/**
+ * What a recipe's row says beside its name: how many it makes, and only when that is more than one ("× 2"). The row
+ * already names the thing, so "Rope 1 x Rope" said it twice (Luc's feedback note #8).
+ */
+export const recipeOutputText = (count: number): string => (count > 1 ? `× ${count}` : '');
+
 export const FLAG_SOURCES: Record<FlagId, string> = {
   wren_taught_sailcloth: 'Wren to teach you',
   wren_gave_cloth: 'a word with Wren',

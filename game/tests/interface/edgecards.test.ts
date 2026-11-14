@@ -3,7 +3,7 @@
  * minimap mid-word. They stand aside while a sheet is open, at once, and come back when it closes.
  */
 import { describe, expect, it } from 'vitest';
-import { setEdgeCardsHidden, sheetHidesEdges } from '../../src/interface/edgecards.ts';
+import { edgeCardsFor, setEdgeCardsHidden, sheetHidesEdges } from '../../src/interface/edgecards.ts';
 
 const fileSystemModule = 'node:fs';
 const { readFileSync } = await import(/* @vite-ignore */ fileSystemModule) as { readFileSync(path: URL, encoding: 'utf8'): string };
@@ -24,8 +24,30 @@ describe('the edge cards while a sheet is open', () => {
     expect(cards.map((card) => card.hidden)).toEqual([false, false]);
   });
 
-  it('the interface hides the vitals (crew list and health bars), the quest card, the tip and prompt slips under the sheet and the minimap', () => {
-    expect(source('interface.ts')).toContain("setEdgeCardsHidden([part('vitals'), part('notes'), part('hint'), part('prompt'), this.minimap?.element], this.edgesHidden)");
+  it('the interface hides the quest card, the tip and prompt slips under the sheet and the minimap; the vitals too, unless in a crew', () => {
+    const code = source('interface.ts');
+    expect(code).toContain("const edges = edgeCardsFor(panel, (hud?.crew.length ?? 0) > 1);");
+    expect(code).toContain("setEdgeCardsHidden([part('notes'), part('hint'), part('prompt'), this.minimap?.element], edges !== 'shown');");
+    expect(code).toContain("setEdgeCardsHidden([part('vitals')], edges === 'hidden');");
+    expect(code).toContain("root.classList.toggle('iw-vitals-small', edges === 'small');");
+  });
+
+  // The second review of round 4, new finding 1: in a crew the game runs on behind a sheet, and the hunger bar must show.
+  it('in a crew, a sheet leaves the health card up, small; alone it hides it; a talk or no panel leaves it whole', () => {
+    for (const id of ['inventory', 'crafting', 'map', 'pause']) {
+      expect(edgeCardsFor({ id } as never, true), id).toBe('small');
+      expect(edgeCardsFor({ id } as never, false), id).toBe('hidden');
+    }
+    for (const inCrew of [true, false]) {
+      expect(edgeCardsFor({ id: 'dialogue' } as never, inCrew)).toBe('shown');
+      expect(edgeCardsFor(null, inCrew)).toBe('shown');
+    }
+  });
+
+  it('the small card is one row over the wash, the bars and numbers and the water in the hull, no words', () => {
+    const sheet = source('edgecards.css').replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(sheet).toMatch(/\.iw\.iw-vitals-small \.iw-vitals \{[^}]*z-index: 1;[^}]*display: flex;/);
+    for (const gone of ['> .iw-crew', '.iw-meter .iw-lab', '.iw-bilge .iw-gauge-holder']) expect(sheet).toContain(`.iw.iw-vitals-small .iw-vitals ${gone}`);
   });
 
   it('nothing fades or slides: no transition and no animation in its style sheet', () => {

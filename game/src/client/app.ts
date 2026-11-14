@@ -241,6 +241,7 @@ export class App {
       crew: session.crew?.view() ?? null,
       feedback: session.feedback,
       cast: session.cast,
+      fullscreen: session.fullscreen?.view ?? null,
       built: built ? builtWords(built.piece) : null,
       arrival: this.arrivals.model(),
       debug: showFrameRate || debugLines.length > 0 ? {

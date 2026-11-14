@@ -31,6 +31,8 @@ export type InterfaceIntent =
   | { type: 'open_panel'; panel: OpenablePanelId }
   | { type: 'close_panel' }
   | { type: 'resume' }
+  /** The full screen line of the lobby menu and the pause card (`fullscreen.ts`). */
+  | { type: 'toggle_fullscreen' }
   | { type: 'select_settings_tab'; tab: SettingsTabId }
   /** A click on an icon of the boat's menu: the canoe builder, or a station built on the canoe. */
   | { type: 'select_boat_tab'; tab: BoatTabId }
