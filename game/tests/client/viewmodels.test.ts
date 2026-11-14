@@ -323,7 +323,9 @@ describe('the panels', () => {
     // The fire is at the camp, not at the beach: at the beach its recipes are not listed at all (Luc's list, Round 3).
     expect(buildCraftingPanel(state).stations.map((station) => station.name)).toEqual(['Hands']);
     teleportToCamp(state, 'home_knoll');
-    const fire = buildCraftingPanel(state).stations.find((station) => station.name === 'Fire')!;
+    // The camp's fire has a menu of its own (Round 4: the crafting key lists the hands alone).
+    expect(buildCraftingPanel(state).stations.map((station) => station.name)).toEqual(['Hands']);
+    const fire = buildCraftingPanel(state, 0, undefined, 'fire').stations[0];
     expect(fire.recipes.find((recipe) => recipe.recipeId === 'pitch')!.missingText).not.toContain('the fire');
   });
 
@@ -331,7 +333,8 @@ describe('the panels', () => {
     const state = newGame();
     standOn(state, 'home_knoll');
     teleportToCamp(state, 'home_knoll');
-    const recipes = (bindings = settings.controls.keyBindings) => buildCraftingPanel(state, 0, bindings).stations.flatMap((station) => station.recipes);
+    // Water is boiled at the fire: the campfire's own menu.
+    const recipes = (bindings = settings.controls.keyBindings) => buildCraftingPanel(state, 0, bindings, 'fire').stations.flatMap((station) => station.recipes);
     const boil = (bindings = settings.controls.keyBindings) => recipes(bindings).find((recipe) => recipe.recipeId === 'clean_water')!;
     expect(boil()).toMatchObject({ name: 'Boil water', missingText: 'Needs 1 more dirty water', sourceText: 'Scoop it at the water, from the inventory (Tab).' });
     // Nothing else is short of dirty water, so nothing else says it.
@@ -340,8 +343,9 @@ describe('the panels', () => {
     const rebound = { ...settings.controls.keyBindings, inventory: ['KeyI'] };
     expect(boil(rebound).sourceText).toBe('Scoop it at the water, from the inventory (I).');
     // The whole interface model passes the player's own bindings through.
+    const opened = reducePanels(createPanelState('game'), { type: 'open', panel: 'crafting' }, { canoeBeached: true }).state;
     const model = buildInterfaceModel({
-      panels: reducePanels(createPanelState('game'), { type: 'open', panel: 'crafting' }, { canoeBeached: true }).state,
+      panels: reducePanels(opened, { type: 'select_craft_tab', tab: 'fire' }, { canoeBeached: true }).state,
       settings: { ...settings, controls: { ...settings.controls, keyBindings: rebound } },
       game: state, paused: false, cameraYaw: 0, toasts: [], slots: [], latestSlot: null, currentSlot: null, now: 0, capture: null,
       bindingNotice: '', progressText: '', debug: null,
@@ -363,11 +367,11 @@ describe('the panels', () => {
     const rope = buildCraftingPanel(state).stations[0].recipes.find((recipe) => recipe.recipeId === 'rope')!;
     expect(rope.craftAll).toMatchObject({ label: 'Make 3', intent: { type: 'command', command: { type: 'craft', recipeId: 'rope', count: 3 } } });
     teleportToCamp(state, 'home_knoll'); // the stump bench is in the camp
-    const bench = buildCraftingPanel(state).stations.find((station) => station.name === 'Bench')!;
+    const bench = buildCraftingPanel(state, 0, undefined, 'bench').stations[0];
     const sailcloth = bench.recipes.find((recipe) => recipe.recipeId === 'sailcloth')!;
     expect(sailcloth).toMatchObject({ known: false, name: 'Unknown recipe', inputs: [], craft: { enabled: false } });
     state.flags.wren_taught_sailcloth = true;
-    expect(buildCraftingPanel(state).stations.find((station) => station.name === 'Bench')!.recipes
+    expect(buildCraftingPanel(state, 0, undefined, 'bench').stations[0].recipes
       .find((recipe) => recipe.recipeId === 'sailcloth')).toMatchObject({ known: true, name: 'Sailcloth' });
   });
 

@@ -284,7 +284,8 @@ describe('the Ink & Wash views', () => {
     const recipes = crafting.panel.stations.flatMap((station) => station.recipes);
     for (const recipe of recipes) recipe.sourceText = '';
     expect(collectText(panelView(crafting.panel))).not.toContain('Scoop it');
-    recipes.find((recipe) => recipe.recipeId === 'clean_water')!.sourceText = 'Scoop it at the water, from the inventory (Tab).';
+    // Any row will do: the staged panel is the hands' list (Round 4), and the line is the row's own.
+    recipes[0]!.sourceText = 'Scoop it at the water, from the inventory (Tab).';
     expect(collectText(panelView(crafting.panel))).toContain('Scoop it at the water, from the inventory (Tab).');
   });
 

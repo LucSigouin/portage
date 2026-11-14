@@ -8,7 +8,7 @@
  * - `sample` returns the held state as a `StepInput`, once per frame.
  * - `takeCameraInput` returns the orbit and zoom since the last call.
  */
-import type { ToolId } from '../data/index.ts';
+import type { StationId, ToolId } from '../data/index.ts';
 import { actionForKey, cloneKeyBindings, rebindKey } from '../settings/index.ts';
 import type { InputAction, KeyBindings } from '../settings/index.ts';
 import { NEUTRAL_INPUT } from '../sim/index.ts';
@@ -29,6 +29,8 @@ export interface InputSnapshot {
 export type InputOutcome =
   | { type: 'command'; command: Command }
   | { type: 'toggle_panel'; panel: PanelId }
+  /** The interact key at a station: open that station's own menu (`stationDoor` in viewmodels/handcraft.ts). */
+  | { type: 'use_station'; station: StationId }
   | { type: 'escape' }
   /** A rebind capture took a key. `unbound` lists the actions that lost it. */
   | { type: 'rebound'; action: InputAction; slot: number; keyCode: string; bindings: KeyBindings; unbound: InputAction[] }
@@ -157,8 +159,8 @@ export class InputController {
         return [];
       case 'interact':
         if (!snapshot.interactable) return [];
-        // At a bench the key opens the crafting panel, as the crafting key does.
-        if (snapshot.interactable.kind === 'bench') return [{ type: 'toggle_panel', panel: 'crafting' }];
+        // At a bench the key opens the bench's own menu: the crafting key lists hand crafts only (Luc, Round 4).
+        if (snapshot.interactable.kind === 'bench') return [{ type: 'use_station', station: 'bench' }];
         // Land, board, talk, sleep, scavenge, pick up: one press, one command.
         return [{ type: 'command', command: snapshot.interactable.command }];
       case 'lantern':

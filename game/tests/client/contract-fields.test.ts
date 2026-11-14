@@ -12,8 +12,9 @@ import type { FrameInfo, GameInterface, InterfaceModel, WorldView } from '../../
 import { Session } from '../../src/client/session.ts';
 import type { SessionSignal } from '../../src/client/session.ts';
 import {
-  ToastQueue, buildCanoeBuilderPanel, buildCraftingPanel, buildHudModel, buildInventoryPanel, toastsFromEvents,
+  ToastQueue, buildCanoeBuilderPanel, buildHudModel, buildInventoryPanel, toastsFromEvents,
 } from '../../src/client/viewmodels/index.ts';
+import { craftRows } from './craftmenus.ts';
 import { ITEMS, NODES_BY_ID, NPCS, ISLANDS_BY_ID, spotPosition } from '../../src/data/index.ts';
 import { createDefaultSettings } from '../../src/settings/index.ts';
 import {
@@ -198,7 +199,8 @@ describe('an item id on every row that names an item', () => {
   });
 
   it('names the output and every input and tool on recipe rows, and nothing on an untaught recipe', () => {
-    const recipes = buildCraftingPanel(stocked()).stations.flatMap((station) => station.recipes);
+    // Every menu open at the camp: the hands, the campfire, the stump bench (Round 4: one menu each).
+    const recipes = craftRows(stocked());
     expect(recipes.length).toBeGreaterThan(10);
     const known = recipes.filter((recipe) => recipe.known);
     const untaught = recipes.filter((recipe) => !recipe.known);

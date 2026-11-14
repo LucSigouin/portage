@@ -14,6 +14,7 @@ import type { QuestId } from '../../src/data/index.ts';
 import { CAMP_LAYOUTS } from '../../src/data/index.ts';
 import { terrainHeight } from '../../src/sim/index.ts';
 import { give, newGame, standOn } from '../support.ts';
+import { craftRows } from './craftmenus.ts';
 
 /** A game where every quest before `questId` is done and `questId` has been given. */
 function atQuest(questId: QuestId, crew = 1): GameState {
@@ -41,8 +42,9 @@ function atQuest(questId: QuestId, crew = 1): GameState {
   return state;
 }
 
-const marked = (state: GameState, playerId = 0): string[] => buildCraftingPanel(state, playerId).stations
-  .flatMap((station) => station.recipes).filter((recipe) => recipe.questText !== '').map((recipe) => recipe.recipeId).sort();
+/** The marked recipes on every menu open in the camp: the hands, the campfire, the stump bench (Round 4: one menu each). */
+const marked = (state: GameState, playerId = 0): string[] => craftRows(state, playerId)
+  .filter((recipe) => recipe.questText !== '').map((recipe) => recipe.recipeId).sort();
 
 const markedParts = (state: GameState, playerId = 0): string[] => {
   const panel = buildCanoeBuilderPanel(state, playerId);
@@ -59,8 +61,7 @@ describe('the red ! on what an open quest asks for', () => {
     const state = atQuest('ribs_and_rails');
     // Saw and hammer are made at the bench. The pry bar is found, not made: there is no recipe to mark.
     expect(marked(state)).toEqual(['hammer', 'saw']);
-    expect(buildCraftingPanel(state).stations.flatMap((station) => station.recipes).find((recipe) => recipe.recipeId === 'saw')!.questText)
-      .toBe('For Ribs and rails');
+    expect(craftRows(state).find((recipe) => recipe.recipeId === 'saw')!.questText).toBe('For Ribs and rails');
     // The ribbed hull is the next hull: marked. The port outrigger is the next quest's: not yet.
     expect(markedParts(state)).toEqual(['hull']);
   });
@@ -104,9 +105,13 @@ describe('the red ! on what an open quest asks for', () => {
 
   it('is drawn as a red ! before the name, naming the quest, in both menus', () => {
     const state = atQuest('ribs_and_rails');
+    // On C the stump bench's card carries it: the hands make nothing this quest asks for (Round 4).
     const crafting = panelView({ ...buildCraftingPanel(state), title: 'Crafting', close: CLOSE });
-    const drawn = marks(crafting);
-    expect(drawn.length).toBe(2);
+    expect(marks(crafting).length).toBe(1);
+    // On the stump bench's own menu: its card, the saw and the hammer.
+    const bench = panelView({ ...buildCraftingPanel(state, 0, undefined, 'bench'), title: 'Stump bench', close: CLOSE });
+    const drawn = [...marks(crafting), ...marks(bench)];
+    expect(drawn.length).toBe(4);
     for (const mark of drawn) {
       expect(collectText([mark])).toBe('!');
       expect(mark.attributes.title).toBe('For Ribs and rails');

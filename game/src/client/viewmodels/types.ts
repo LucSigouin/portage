@@ -3,7 +3,7 @@
  * and sorted. View models build it from the selectors; the UI only renders it
  * and sends back the intent attached to whatever was clicked.
  */
-import type { AttachmentId, IslandId, ItemId, QuestId, RecipeId, ToolId } from '../../data/index.ts';
+import type { AttachmentId, IslandId, ItemId, QuestId, RecipeId, StationId, ToolId } from '../../data/index.ts';
 import type { InputAction } from '../../settings/index.ts';
 import type { PlayerId } from '../../sim/index.ts';
 import type { InterfaceIntent, SettingId, SettingValue } from '../intents.ts';
@@ -12,6 +12,7 @@ import type { ChartGeometry, ChartPingModel } from './chart.ts';
 export type { ChartGeometry, ChartPingModel } from './chart.ts';
 import type { PanelId, ScreenId, SettingsTabId } from '../panels.ts';
 import type { BoatStationModel, BoatTabModel, CraftElsewhereModel } from './stations.ts';
+import type { CraftDoorModel } from './handcraft.ts';
 import type { ArrivalModel } from './arrival.ts';
 
 export type Tone = 'info' | 'good' | 'warning' | 'danger';
@@ -471,10 +472,21 @@ export type PanelModel = { title: string; close: ButtonModel } & (
   }
   | {
     id: 'crafting';
-    /** The stations in reach, each with its recipes. A station out of reach is not listed, and neither are its recipes. */
+    /**
+     * The one menu that is open, with its recipes: the hands (what the crafting key opens on), or a station of the
+     * camp the player stands in. No other station is listed here: a station on the canoe has its menu on the boat.
+     */
     stations: { name: string; recipes: RecipeRowModel[] }[];
-    /** One line for each station out of reach that an open quest needs: what to make there, and where one is. */
+    /** The menu that is open: 'hands', or the camp station's kind. */
+    tab: StationId;
+    /** "Fire: cooks, boils and renders": a camp station's menu in a few words. Empty on the hands. */
+    about: string;
+    /** The row of cards: the hands, then each station of the camp the player stands in. Empty away from a camp. */
+    doors: CraftDoorModel[];
+    /** Hands only. One line for whatever an open quest needs and the list does not show: what, and where it is made. */
     elsewhere: CraftElsewhereModel[];
+    /** Hands only. Where the rest is made, when there is something to say (`craftRestText`). Empty otherwise. */
+    restText: string;
   }
   | {
     id: 'canoe_builder';
