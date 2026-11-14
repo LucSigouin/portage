@@ -15,6 +15,7 @@ import {
 } from './gamepanels.ts';
 import { buildCrewHostPanel, buildCrewJoinPanel } from './crew.ts';
 import { buildFeedbackPanel, withFeedbackEntry } from './feedback.ts';
+import { withFullscreenEntry } from './fullscreen.ts';
 import { buildCastPanel } from './cast.ts';
 import { buildHudModel } from './hud.ts';
 import {
@@ -26,6 +27,7 @@ import type { DebugModel, InterfaceModel, PanelModel, ToastModel } from './types
 
 export * from './types.ts';
 export * from './format.ts';
+export * from './fullscreen.ts';
 export * from './hud.ts';
 export * from './shore.ts';
 export * from './toasts.ts';
@@ -72,6 +74,8 @@ export interface InterfaceModelInput {
   feedback?: { view(): import('../feedback.ts').FeedbackView } | null;
   /** The pick screen while it is open (`Session.cast`). Null or absent the rest of the time. */
   cast?: import('./cast.ts').CastView | null;
+  /** Full screen's state (`client/fullscreen.ts`). Null or absent where the browser has no Fullscreen API: no line then. */
+  fullscreen?: import('../fullscreen.ts').FullscreenView | null;
   /** The words of the built view while it holds the screen (`builtWords`). Null or absent the rest of the time. */
   built?: { kicker: string; title: string; text: string } | null;
   /** The arrival card on the screen this frame (`ArrivalQueue.model`). Null or absent the rest of the time. */
@@ -110,7 +114,7 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
       return { ...frame, ...buildCreditsPanel(game?.flags.beacon_lit === true) };
     case 'pause': {
       const pause = buildPausePanel(input.progressText, input.crew ?? null, isGuestScreen(input));
-      return { ...frame, ...pause, buttons: withFeedbackEntry(pause.buttons) };
+      return { ...frame, ...pause, buttons: withFeedbackEntry(withFullscreenEntry(pause.buttons, input.fullscreen)) };
     }
     case 'feedback':
       return input.feedback ? { ...frame, ...buildFeedbackPanel(input.feedback.view()) } : null;
@@ -143,6 +147,7 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
 }
 
 /** The lobby with its Feedback entry (`feedback.ts`). */
+const withLobbyFullscreen = (lobby: InterfaceModel['lobby'] & object, view: InterfaceModelInput['fullscreen']): InterfaceModel['lobby'] & object => ({ ...lobby, buttons: withFullscreenEntry(lobby.buttons, view) });
 const withLobbyFeedback = (lobby: InterfaceModel['lobby'] & object): InterfaceModel['lobby'] => ({ ...lobby, buttons: withFeedbackEntry(lobby.buttons, 'A bug, an idea, anything') });
 
 /** One frame of UI. Only the panel on top (under any confirm dialog) is built. */
@@ -155,7 +160,7 @@ export function buildInterfaceModel(input: InterfaceModelInput): InterfaceModel 
     uiScale: settings.accessibility.uiScale,
     patternedMeters: settings.accessibility.patternedMeters,
     paused: input.paused,
-    lobby: panels.screen === 'lobby' ? withLobbyFeedback(buildLobbyModel(input.slots, input.latestSlot, input.crew ?? null)) : null,
+    lobby: panels.screen === 'lobby' ? withLobbyFeedback(withLobbyFullscreen(buildLobbyModel(input.slots, input.latestSlot, input.crew ?? null), input.fullscreen)) : null,
     hud: game ? buildHudModel(game, settings, input.cameraYaw, input.playerId ?? 0, input.hostId ?? null, input.hostQuiet ?? false) : null,
     toasts: input.toasts,
     panel: beneath ? buildPanelModel(beneath, input) : null,

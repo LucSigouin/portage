@@ -36,6 +36,7 @@ import { GuestLink, HostLink } from '../net/index.ts';
 import type { Transport } from '../net/index.ts';
 import type { CrewLobby } from './crewlobby.ts';
 import type { FeedbackDesk } from './feedback.ts';
+import type { FullscreenSwitch } from './fullscreen.ts';
 import { HOST_BACK_TEXT, JOIN_PROBLEM_TEXT, LEAVE_TEXT } from './viewmodels/crew.ts';
 import { keepCharacter, keptCharacter } from './viewmodels/cast.ts';
 import type { CastDoor, CastView } from './viewmodels/cast.ts';
@@ -136,6 +137,8 @@ export class Session {
   crew: CrewLobby | null = null;
   /** The feedback desk: a play tester's note for Luc (`feedback.ts`). Null until `main.ts` makes one: then the panel does not open. */
   feedback: FeedbackDesk | null = null;
+  /** Full screen (`fullscreen.ts`). Null until `main.ts` makes one: then no menu has the line. */
+  fullscreen: FullscreenSwitch | null = null;
   /**
    * The pick screen, while it is open: the door it was opened from and the card marked (`viewmodels/cast.ts`).
    * Null the rest of the time. Nothing is started, saved or sent while it stands.
@@ -916,6 +919,12 @@ export class Session {
         break;
       case 'resume':
         this.applyPanels({ type: 'close_all' });
+        break;
+      case 'toggle_fullscreen':
+        // Called inside the click or the key press, as the browser asks. Nothing held carries across.
+        this.input.releaseAll();
+        this.fullscreen?.toggle();
+        this.sound('click');
         break;
       case 'select_settings_tab':
         this.applyPanels({ type: 'select_settings_tab', tab: intent.tab });
