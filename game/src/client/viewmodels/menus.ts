@@ -11,7 +11,7 @@ import { SLEEP_FROM_TEXT, actionKeys, capitalise, durationText, keyLabel } from 
 import { TAKE_BACK_KEY_CODE } from './takeback.ts';
 
 /** How to Play's line for a click on a stack: its menu, and Give. Short: the page already scrolls. */
-export const HOW_TO_PLAY_CLICK_LABEL = 'A stack: eat, drop, or give to a crewmate close by';
+export const HOW_TO_PLAY_CLICK_LABEL = 'A stack: eat, drop, give to crew';
 import { TOAST_SECONDS } from './toasts.ts';
 import type { ButtonModel, ConfirmModel, ControlLineModel, LobbyModel, PanelModel, SaveSlotModel } from './types.ts';
 
