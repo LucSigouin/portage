@@ -10,10 +10,14 @@
  * - `?host=ROOM`: start a game that other tabs of this site can join. `&name=...` names the host.
  * - `?join=ROOM&name=...`: join it, from another tab or window on the same computer.
  *   A tester's door (a channel between tabs, no server), not the lobby's.
+ * - `&pen=full` (or `bold`, `near`, `today`): draw with one of the pen's samples (`look/b2/pens.js`). Saves stay as they are.
  *
  * And one that is not for testing: `?invite=CODE` is the link a host sends. It opens the lobby's
  * join panel with the code filled in. It touches nothing else: the player's own saves stay as they are.
  */
+import { penFrom } from '../../look/b2/pens.js';
+import type { PenName } from '../../look/b2/pens.js';
+
 export const SHOT_NAMES = [
   'lobby', 'settings', 'play', 'island', 'inventory', 'crafting', 'builder', 'quests', 'map', 'dialogue', 'pause',
   'storm', 'night', 'upgraded', 'beacon',
@@ -42,6 +46,8 @@ export interface DebugParameters {
   name: string;
   /** The room code of an invite link, or null. Checked for shape only: the relay says whether there is such a room. */
   invite: string | null;
+  /** The pen's sample the look draws with: 'today' unless the address asks for another. It replaces no game: never a sandbox. */
+  pen: PenName;
   /** True when a switch replaces the normal game: saves stay untouched. */
   sandbox: boolean;
 }
@@ -79,6 +85,7 @@ export function parseDebugParameters(query: string): DebugParameters {
     join,
     name: (values.get('name') ?? '').slice(0, 40),
     invite: /^[A-Za-z0-9-]{6,9}$/.test(values.get('invite') ?? '') ? values.get('invite') : null,
+    pen: penFrom(values.get('pen')),
     sandbox: bot || atQuest !== null || shot !== null || crew > 1 || host !== null || join !== null,
   };
 }

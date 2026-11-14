@@ -31,6 +31,7 @@
 // thinned pen's reach of a hero use it; the rest of the window draws the world's own lines at the world's width.
 import * as THREE from 'three';
 import { PAL, GU, NOISE, wearMaterials } from './palette.js';
+import { DEFAULT_PEN, penDefines } from './pens.js';
 
 // start: metres of world across the window's height at the hero's depth, up to which the pen is full (14.3 m away
 // at a 60 degree field of view: past the far end of the long hull in the staged full-canoe view, whose camera
@@ -76,6 +77,16 @@ const float THIN = 0.99609375;   // 2040 / 2048, as in geo.js
 const vec2 OFFS[8] = vec2[8](
   vec2(1., 0.), vec2(.707, .707), vec2(0., 1.), vec2(-.707, .707),
   vec2(-1., 0.), vec2(-.707, -.707), vec2(0., -1.), vec2(.707, -.707));
+#ifdef PEN_FULL
+// A fuller pen: one of the samples of pens.js, picked by ?pen=. Today's pen is drawn with PEN_FULL not defined,
+// so none of these blocks is in it. gFull: how much of the fuller pen this pixel gets, 0 (today's pen) to 1.
+float gFull = 1.;
+// The ground's own washes: the terrain's three ink ids (rock, moss, sand: palette.js) as the half-float ink buffer
+// holds them. An edge between two of them is where one wash meets the next, not the outline of a thing.
+float groundAt(float id){
+  return step(abs(id - 1802. / 16384.), .00003) + step(abs(id - 717. / 2048.), .00003) + step(abs(id - 1065. / 2048.), .00003);
+}
+#endif
 
 #ifdef HERO
 // the hero buffers hold one window: a read past its edge takes the edge, as a read past the screen's edge does
@@ -146,6 +157,10 @@ vec4 penAt(vec2 uv, vec2 apx, float r, vec4 de, float inner, float weight, float
         float ie = step(.0003, abs(t.a - idc));
         // a real step in depth, or a crew figure's edge against anything else: a contour
         float edge = max(de[i], abs(crewAt(t) - crewAt(aux)));
+#ifdef PEN_FULL
+        // closed: where a thing stands on the ground its edge is a contour too, not a seam
+        edge = max(edge, ie * abs(groundAt(t.a) - groundAt(idc)) * gFull);
+#endif
         inkS += edge;
         inkI += max(ne, ie) * (1. - edge);
       }
@@ -164,6 +179,9 @@ vec4 penAt(vec2 uv, vec2 apx, float r, vec4 de, float inner, float weight, float
   }
   float eS = smoothstep(.05, .21, inkS / 8.);
   float eI = smoothstep(.08, .3, inkI / 8.) * .64 * inner;
+#ifdef PEN_FULL
+  eI *= mix(1., PEN_SEAM / .64, gFull);
+#endif
   return vec4(max(eS, eI), smoothstep(.04, .3, foam / 8.) * mix(.55, 1., nearK), hit, hit + own);
 }
 
@@ -204,6 +222,11 @@ void main(){
 #ifdef HERO
   float heroW = hit > 0. ? wc : 0.;          // the nearest hero texel in the pen's reach, as 1 / its depth
 #endif
+#ifdef PEN_FULL
+  // The line's owner, as 1 / its depth: the nearest thing the probe touches. The pixel's own depth says nothing on
+  // sky or water, and on the ground behind a trunk it is the ground's.
+  float wOwn = plain ? 0. : wc;
+#endif
   for (int i = 0; i < 4; i++) {
     vec2 uvt = aUv + OFFS[i * 2 + 1] * Rp * apx;
     vec2 uvb = aUv + OFFS[i * 2] * Rp * .55 * apx;
@@ -215,6 +238,10 @@ void main(){
     if (heroAt(b) > 0.) heroW = max(heroW, invZ(uvb));
 #endif
     if (abs(a.a - aux.a) > .0003 || distance(a.xy, aux.xy) > .16 || abs(b.a - aux.a) > .0003 || distance(b.xy, aux.xy) > .16) busy = true;
+#ifdef PEN_FULL
+    if (solid(a.a) && (plain || abs(a.a - aux.a) > .0003)) wOwn = max(wOwn, invZ(uvt));
+    if (solid(b.a) && (plain || abs(b.a - aux.a) > .0003)) wOwn = max(wOwn, invZ(uvb));
+#endif
     if (plain) {
       if (wNear == 0.) {
         if (solid(b.a)) { wNear = 1.; sv = b.b; }
@@ -233,6 +260,14 @@ void main(){
     float s = fract(sv * 2.) / .9 - .5;
     vec2 wob = vec2(sin(s * 5.), sin(s * 7.3 + 1.1)) * wobR;
     float weight = .5 + .5 * sin(s * 8. + 2.);
+#ifdef PEN_FULL
+    // The fuller pen: the line sits on the true edge and keeps one weight along it, near (PEN_FROM) or everywhere.
+    if (!plain) wOwn = max(wOwn, wNear);
+    float zOwn = 1. / max(wOwn, 1. / uFar);
+    gFull = 1. - smoothstep(PEN_FROM, PEN_TO, zOwn);
+    wob *= 1. - gFull;
+    weight = mix(weight, PEN_WEIGHT, gFull);
+#endif
     // optional line boil (off by default): the whole drawing re-wobbles a few times a second
     if (uBoil > 0.) wob += (vnoise4(q * 13. + floor(uBoilTime * 7.) * 5.3).xy - .5) * 2.4 * uSc * uS;
 #ifdef HERO
@@ -260,6 +295,10 @@ void main(){
     float zq = 1. / wq;
     nk = 1. - smoothstep(5., 110., zq);
     float r = rBase * mix(.62, 1.3, nk) * (.52 + .74 * weight);
+#ifdef PEN_FULL
+    // as wide on the far side of the edge as on the near: the owner's distance sets the width, not the pixel's own
+    r = mix(r, rBase * mix(.62, 1.3, 1. - smoothstep(5., 110., zOwn)) * (.52 + .74 * PEN_WEIGHT) * PEN_WIDTH, gFull);
+#endif
 #ifdef HERO
     // a thinned pen never goes under one ink texel: under that its taps would land on the texel they started from
     if (thin < 1.) r = max(r * thin, min(r, 1.));
@@ -564,6 +603,7 @@ export function createPost(renderer, camera) {
     w: 4, h: 4, inkScale: 2, reflScale: 1, inkW: 4, inkH: 4,
     sheetW: 4, sheetH: 4, fine: 1,
     heroRoomW: 0, heroRoomH: 0, heroInkScale: 2, heroWindows: [], heroFine: 0, heroDrawnW: 0, heroDrawnH: 0,
+    pen: DEFAULT_PEN,
   };
   const bench = { draws: 1, pass: '', discard: false };
   // ?hullwater=1 leaves the world's water inside the hull, as it was. Only to prove the floor check can fail.
@@ -667,6 +707,17 @@ export function createPost(renderer, camera) {
     state,
     bench,
     hullWater,
+    // One of the pen's samples (pens.js), or today's pen again. The world's pen and the heroes' are compiled with the
+    // same settings: one pen, so a world line does not change where it passes a hero's window. Today's pen is
+    // compiled with none, as it always was.
+    setPen(name) {
+      const defines = penDefines(name);
+      material.defines = { ...defines };
+      heroMaterial.defines = { HERO: 1, ...defines };
+      material.needsUpdate = true;
+      heroMaterial.needsUpdate = true;
+      state.pen = name;
+    },
     // w, h: the world's drawing size. reflScale: reflection size against the drawing. inkMax: most ink texels per pixel, each way.
     // sheetW, sheetH: the window's size in pixels (the canvas). fine: the world's fine strokes, 0 or 1.
     setSize(w, h, reflScale = 1, inkMax = 2, sheetW = w, sheetH = h, fine = 1) {
