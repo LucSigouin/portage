@@ -787,8 +787,11 @@ export function createCrew(outfit) {
       // Laid across the gunwales, both hands simply hold the shaft, each on its own side of the lap. Taking the
       // paddle up, they slide to their working hold: no hand lets go, and none jumps.
       // Carried across the bow the paddle points ahead: no hand is further down it than an arm reaches.
-      const upper = REST_HOLD[0] * (1 - working);
-      const settled = REST_HOLD[1] + (STROKE_LOW_HAND - higher - REST_HOLD[1]) * working;
+      // In an outrigger's well the shaft stands nearly upright until the paddle is almost down: the hands slide to
+      // their resting hold only then (sliding sooner, the lower hand went down the shaft into the cargo rack).
+      const held = well > 0 ? smooth(0, STROKE_WELL_HOLD, effort) : working;
+      const upper = REST_HOLD[0] * (1 - held);
+      const settled = REST_HOLD[1] + (STROKE_LOW_HAND - higher - REST_HOLD[1]) * held;
       // The hold is drawn in early in the carry: at half effort a hand was 9 cm off the shaft, at arm's length.
       const lower = settled + (Math.min(settled, STROKE_LOW_HAND - higher - CARRY_HOLD_IN * (1 - working)) - settled) * smooth(0, 0.4, carried);
       const top = s >= 0 ? handR : handL;

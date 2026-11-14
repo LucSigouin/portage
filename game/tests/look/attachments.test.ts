@@ -306,7 +306,7 @@ describe('the fully fitted long canoe with a crew of four', () => {
                 if (found.has(`${pose}:${player.seat}:${part.id}`)) continue;
                 if (boxTouchesTriangle(box, part.triangles)) {
                   const at = box.getCenter(new THREE.Vector3());
-                  found.set(`${pose}:${player.seat}:${part.id}`, { pose, seat: player.seat ?? -1, part: part.id, limb: `at ${at.x.toFixed(2)}, ${at.y.toFixed(2)}, ${at.z.toFixed(2)}` });
+                  found.set(`${pose}:${player.seat}:${part.id}`, { pose, seat: player.seat ?? -1, part: part.id, limb: `at ${at.x.toFixed(2)}, ${at.y.toFixed(2)}, ${at.z.toFixed(2)}, ${time.toFixed(2)} s` });
                 }
               }
             }
