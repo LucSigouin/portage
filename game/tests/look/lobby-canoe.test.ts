@@ -16,6 +16,7 @@ import { crewOf } from '../../src/look/crew.ts';
 import { canoePieceTime } from '../../src/look/lobby.ts';
 import type { GameState } from '../../src/sim/index.ts';
 import { FakeStorage, newGame } from '../support.ts';
+import worldViewSource from '../../src/look/world-view.ts?raw';
 
 /** The two windows the brief names. */
 const SIZES: [number, number][] = [[1920, 1080], [1366, 768]];
@@ -280,6 +281,12 @@ describe('nothing new moves behind the menu', () => {
     expect(canoePieceTime('lobby', 0)).toBe(canoePieceTime('lobby', 3600));
     expect(canoePieceTime('game', 41.5)).toBe(41.5);
     expect(canoePieceTime('credits', 41.5)).toBe(41.5);
+  });
+
+  it('the look hands its canoe that moment on every frame (read from the source: the look itself needs a graphics card)', () => {
+    expect(worldViewSource).toContain('this.canoe.sync(state, crewOf(state), this.paintSeconds, canoePieceTime(this.stage, this.paintTime), this.stage !== \'lobby\', jumped)');
+    // And nobody is aboard behind the menu, as before: the figures and the paddles are shown outside the lobby only.
+    expect(worldViewSource.match(/this\.canoe\.sync\(/g)).toHaveLength(1);
   });
 
   it('a raised sail and a flag are the same vertices a minute later in the lobby, and not in the game', () => {
