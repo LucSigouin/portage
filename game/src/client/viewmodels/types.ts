@@ -362,7 +362,7 @@ export interface RecipeRowModel {
   itemId: ItemId | null;
   name: string;
   description: string;
-  /** "2 x Plank". */
+  /** How many it makes, only when more than one: "× 2". Empty for one: the name is already on the row. */
   outputText: string;
   /** False until a survivor teaches it. */
   known: boolean;

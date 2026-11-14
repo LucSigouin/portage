@@ -17,7 +17,7 @@ import { buildCraftDoors, buildCraftNotes, craftRestText, craftTabName, craftTab
 import type { CraftTabId } from './handcraft.ts';
 import { DEFAULT_KEY_BINDINGS } from '../../settings/index.ts';
 import type { KeyBindings } from '../../settings/index.ts';
-import { FLAG_SOURCES, capitalise, cardinalName, countedName, distanceText, itemName, needsText, primaryKey } from './format.ts';
+import { FLAG_SOURCES, capitalise, cardinalName, distanceText, itemName, needsText, primaryKey, recipeOutputText } from './format.ts';
 import { crewElsewhere, crewName, crewTag, objectiveRows } from './hud.ts';
 import { CHART, lakeSeenShare, seenCells, valleyChart } from './chart.ts';
 import type {
@@ -143,7 +143,7 @@ function recipeRow(
     itemId: entry.known ? recipe.output.itemId : null,
     name: entry.known ? recipe.name : 'Unknown recipe',
     description: entry.known ? recipe.description : '',
-    outputText: entry.known ? countedName(recipe.output.itemId, recipe.output.count) : '',
+    outputText: entry.known ? recipeOutputText(recipe.output.count) : '',
     known: entry.known,
     inputs: entry.known ? [
       ...costRows(recipe.inputs, inventory, state),
