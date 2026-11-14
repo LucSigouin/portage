@@ -4,6 +4,7 @@ import type {
   AttachmentId, BottleId, Difficulty, FlagId, IslandId, ItemAmount, ItemId, NodeId, NpcId, QuestId,
   QuestStatus, RecipeId, RegionId, StationId, ToolId, WeatherKind,
 } from '../data/types.ts';
+import type { CharacterId } from '../data/cast.ts';
 
 /**
  * Bump when the shape of GameState changes; add a migration in `src/save/`.
@@ -106,6 +107,12 @@ export interface PlayerState {
   id: PlayerId;
   /** What the player typed as their name, at most `MAXIMUM_NAME_LENGTH` letters. Empty: show the crew mark's label. */
   name: string;
+  /**
+   * Who this player is drawn as, picked on the pick screen (`data/cast.ts`). Absent in every save from before
+   * there was a pick, and for a player nobody picked for: read it with `characterOf`, never raw. The rules
+   * never read it.
+   */
+  character?: CharacterId;
   /**
    * False while the player is away: their screen closed or never opened. They keep
    * their seat or their spot ashore, their backpack and their place in the crew; their
