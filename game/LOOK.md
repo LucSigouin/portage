@@ -223,14 +223,17 @@ Four people a player can be (`data/cast.ts`). Who a player is drawn as is `chara
 - **One rig.** All four are `createPaddler` in `b2/canoe.js`. It calls `dressAs` (`look/cast.ts`) once, which redraws the torso's mesh and each limb's mesh. The joints, limb lengths, poses and mesh count are the paddler's, so every pose works for all four. `b2/canoe.js` holds five lines of this: nothing in `pose`, `ik` or the stroke.
 - **The voyageur is the paddler, untouched.** `dressAs` returns at once for it. Proof: `tests/look/cast.test.ts` (vertex for vertex in every seat's colours), and a staged view before and after with 0 pixels different.
 - **Build without touching a pose**: `CAST_BUILD[id].scale` scales the torso group (the pose reads the shoulders through the torso's matrix), and limb thickness is drawn into each limb's unit mesh. Drawings are written in real metres from the hips. Lower shoulders than the paddler's fail today's stroke: go narrower or taller.
-- **Told apart by outline first**, the way the survivors are. Trapper: fur hat with ear flaps, beard, short thick jacket, bedroll across the back. Angler: rain hat with a long back brim, coat to the knee, tall boots, creel at the small of the back. Scout: pointed hood, short cape, fringe and braid, map case across the back.
+- **Told apart by outline first**, the way the survivors are. Trapper: fur hat with ear flaps, beard, short thick jacket, bedroll across the back. Angler: rain hat with the brim longer behind, coat to the knee, tall boots, creel at the small of the back. Scout: pointed hood, short cape, fringe and braid, map case low across the back.
 - **Colours follow the seat on all four**: coat colour on the main garment, legs on the trousers, and `CREW_MARKS[seat].toque` on the headgear. The HUD's colour still finds a player by the head.
 - **What sticks out is listed**: `CAST_BUILD[id].solids` are capsules for the bedroll, creel, brims, map case, hood point. `tests/look/cast-clearance.ts` holds them clear of the figure's own arms, legs and paddle and of the crew, on every hull and seat. If you move a carried thing, move its capsule with it.
-- **Tight places**: the kneeler in seat 3 is 0.65 m behind the bow paddler, so nothing stands further back at hip height than the paddler's own coat. Today's stroke folds the upper hand's elbow in behind the shoulder blade late in the pull, so the scout's map case rides out on the cape.
+- **Tight places**, all three found by tests:
+  - The kneeler in seat 3 is 0.65 m behind the bow paddler, so nothing stands further back at hip height than the paddler's own coat.
+  - On the fully fitted long canoe there is 23 to 30 cm from a spine back to the gear behind a seat. Nothing carried reaches past 24 cm (`tests/look/cast-fitted.test.ts`: each of the four in every seat, by points on the figure's own surface).
+  - Today's stroke folds the upper hand's elbow in behind the shoulder blade late in the pull. So the bedroll is thin and the map case lies low, under the shoulder blades.
 - **Nothing moves by itself**: no cloth swings, no braid sways.
 - **The pick screen's pictures**: `drawCastSketches` in `look/cast-sketch.ts`. One 3D context a call, one camera for all four (`castFrame`: one scale, feet on one line), the game's frame pipeline, see-through. The line has no wander (`uWobble` 0) and one weight (`evenPen`: the look's noise is one flat value while the ink buffer is drawn). No change to the pen. `tests/look/cast-sketch.test.ts` reads the pen's two lines of shader and fails if they change: look at the cards again then.
 - **To see them**: `&cast=<id>` dresses a staged game's local player, `&cast=mix` makes a crew of four with one of each (`?shot=island&cast=mix`).
-- New character: add the id in `data/cast.ts`, a drawing and a `CAST_BUILD` row in `look/cast.ts`. The looped tests (`cast`, `crew`, `stroke`, `jump`, `ashore`, `outline`) pick it up from `CHARACTER_IDS`.
+- New character: add the id in `data/cast.ts`, a drawing and a `CAST_BUILD` row in `look/cast.ts`. The looped tests (`cast`, `cast-fitted`, `crew`, `stroke`, `jump`, `ashore`, `outline`) pick it up from `CHARACTER_IDS`.
 
 ## Debug switches
 
