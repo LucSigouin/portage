@@ -37,6 +37,7 @@ import { heroMargin, heroWindow, heroWindows } from './hero-windows.ts';
 import type { HeroWindow } from './hero-windows.ts';
 import { LANDMARK_HEIGHT, disposeLandmarks, landmarkGeometry } from './landmarks.ts';
 import { LAMP_SLOTS, LampGlows, lampsOf, poolLamps } from './lamps.ts';
+import { canoePieceTime } from './lobby.ts';
 import { atTheShore } from '../client/viewmodels/shore.ts';
 import { Marks } from './marks.ts';
 import type { Anchor } from './marks.ts';
@@ -488,7 +489,8 @@ export class InkWashWorldView implements WorldView {
     this.syncLight(state, jumped || this.frameCount <= 1 || this.settleDue);
     this.settleDue = false;
     this.syncWaves(state);
-    const dips = this.canoe.sync(state, crewOf(state), this.paintSeconds, this.paintTime, this.stage !== 'lobby', jumped);
+    // In the lobby the canoe's own pieces hold still: a raised sail does not breathe and a flag does not wave behind the menu.
+    const dips = this.canoe.sync(state, crewOf(state), this.paintSeconds, canoePieceTime(this.stage, this.paintTime), this.stage !== 'lobby', jumped);
     this.syncLamps(state);
     this.beams.sync(state);
     this.syncWake(state, dips);
@@ -813,6 +815,11 @@ export class InkWashWorldView implements WorldView {
     const toStarboard = light.x * elements[0] + light.y * elements[1] + light.z * elements[2];
     const lit = Math.abs(toStarboard) < 0.15 ? null : toStarboard > 0 ? 'starboard' : 'port';
     return { min: { x: box.min.x, y: box.min.y, z: box.min.z }, max: { x: box.max.x, y: box.max.y, z: box.max.z }, aspect: this.width / this.height, lit };
+  }
+
+  /** The frame's shape, width over height, for the lobby's camera. */
+  viewAspect(): number {
+    return this.width / this.height;
   }
 
   /** Before each pass of the world (2 mirrored, 0 colour, 1 ink): the mirror sees less, and the ink buffer no washes of light. */

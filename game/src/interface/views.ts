@@ -19,7 +19,6 @@ import type { ItemId } from '../data/index.ts';
 import { ICON, SEAL, itemIcon, logotype, toqueIcon, waterGauge } from './icons.ts';
 import { boatTabsView, elsewhereView } from './stations.ts';
 import { inventoryBodyView, inventoryHintView } from './inventoryview.ts';
-import { previewView } from './preview.ts';
 import { toastActionView } from './takeback.ts';
 import { mapHintView, markLegendRows } from './mapmarks.ts';
 
@@ -90,8 +89,7 @@ export function lobbyView(lobby: LobbyModel): ViewNode[] {
   return [h('div.iw-lobby-col', { key: 'lobby' },
     h('div.iw-logo-row', null, h('h1.iw-logo-holder', { html: logotype(lobby.title) }), icon(SEAL, 'iw-seal-holder')),
     h('p.iw-tagline', null, lobby.tagline),
-    h('nav.iw-menu', null, lobby.buttons.map(menuItemView)),
-    lobby.preview ? previewView(lobby.preview) : null)];
+    h('nav.iw-menu', null, lobby.buttons.map(menuItemView)))];
 }
 
 // --- HUD ---------------------------------------------------------------------------

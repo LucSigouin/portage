@@ -11,6 +11,7 @@ import { ChaseCamera, lobbyCameraPose, subjectFromState, surfaceFromState } from
 import type { CameraOptions, CameraPose } from './camera.ts';
 import type { AudioEngine, FrameInfo, GameInterface, StageName, WorldView } from './contracts.ts';
 import type { FrameStats } from './loop.ts';
+import { LobbyCanoe } from './lobbycanoe.ts';
 import { coversPlayView } from './panels.ts';
 import { Session } from './session.ts';
 import type { SessionOptions, SessionSignal } from './session.ts';
@@ -50,6 +51,8 @@ export class App {
   private elapsedSeconds = 0;
   /** Seconds the lobby's backdrop has stepped: the clock its camera circles on. */
   private lobbySeconds = 0;
+  /** The lobby's canoe as the look drew it: its camera keeps its distance by it. */
+  private readonly lobbyCanoe = new LobbyCanoe();
   private audioScene: AudioScene | null = null;
   private stage: StageName | null = null;
   private snapCamera = true;
@@ -122,7 +125,7 @@ export class App {
     if (session.screen === 'lobby') {
       // The slow circle turns on the backdrop's own steps, not on the frames.
       this.lobbySeconds += steppedSeconds;
-      return lobbyCameraPose(state.canoe.position, this.lobbySeconds, this.cameraOptions(), surface);
+      return lobbyCameraPose(state.canoe.position, this.lobbySeconds, this.cameraOptions(), surface, this.lobbyCanoe.framing(this.worldView, this.cameraOptions().fieldOfView));
     }
     // A frozen game does not swing the camera round: only the mouse moves it.
     const subject = {
@@ -208,7 +211,10 @@ export class App {
     if (built && !this.builtPose) {
       this.builtPose = builtViewPose(state, built.piece, this.worldView.canoeBounds?.() ?? null, surfaceFromState(state), session.localPlayerId);
     }
-    const pose = built && this.builtPose ? this.builtPose : chase;
+    // The lobby's camera frames the canoe the look just drew. Another canoe is measured once, and framed on this same frame.
+    const lobby = session.screen === 'lobby' && this.lobbyCanoe.changed(state.canoe, this.worldView)
+      ? lobbyCameraPose(state.canoe.position, this.lobbySeconds, this.cameraOptions(), surfaceFromState(state), this.lobbyCanoe.framing(this.worldView, this.cameraOptions().fieldOfView)) : null;
+    const pose = built && this.builtPose ? this.builtPose : lobby ?? chase;
     this.lastPose = pose;
     this.worldView.render(pose);
 

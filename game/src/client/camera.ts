@@ -16,6 +16,8 @@
 import { bearingDifference, playerOf, terrainHeight, waterRoughnessAt, waveHeight } from '../sim/index.ts';
 import type { GameState, PlayerId, StepInput, Vector3 } from '../sim/index.ts';
 import type { CameraInput } from './input.ts';
+import { LOBBY_FOCUS_HEIGHT, LOBBY_PITCH, LOBBY_UNFRAMED } from './lobbyframe.ts';
+import type { LobbyFraming } from './lobbyframe.ts';
 
 /** Where the camera is, what it looks at, and its vertical field of view in degrees. */
 export interface CameraPose {
@@ -237,15 +239,25 @@ export class ChaseCamera {
   }
 }
 
-/** The lobby backdrop: a slow circle around the canoe. */
+/**
+ * The lobby backdrop: a slow circle around the canoe. `framing` (`lobbyframe.ts`) is how far out the circle runs
+ * for the canoe that is drawn and how far left of it the camera looks, so the canoe sits whole in the painted
+ * part of the sheet. Without it the canoe is in the middle of the window, 13 m off, as it always was.
+ */
 export function lobbyCameraPose(
   subject: Vector3,
   elapsedSeconds: number,
   options: CameraOptions,
   surface: CameraSurface,
+  framing: LobbyFraming = LOBBY_UNFRAMED,
 ): CameraPose {
-  const focus = { x: subject.x, y: 1.2, z: subject.z };
+  const focus = { x: subject.x, y: LOBBY_FOCUS_HEIGHT, z: subject.z };
   const yaw = 0.6 + (options.reduceMotion ? 0 : elapsedSeconds * 0.05);
-  const position = liftAboveSurface(orbitPosition(focus, yaw, 0.24, 13), focus, surface);
-  return { position, target: focus, fieldOfView: options.fieldOfView };
+  const position = liftAboveSurface(orbitPosition(focus, yaw, LOBBY_PITCH, framing.distance), focus, surface);
+  if (framing.turn === 0) return { position, target: focus, fieldOfView: options.fieldOfView };
+  // Look to the left of the canoe, as far off and as low as the canoe is: the canoe moves to the right of the window.
+  const reach = Math.hypot(focus.x - position.x, focus.z - position.z);
+  const bearing = yaw - framing.turn;
+  const target = { x: position.x + Math.sin(bearing) * reach, y: focus.y, z: position.z - Math.cos(bearing) * reach };
+  return { position, target, fieldOfView: options.fieldOfView };
 }
