@@ -41,8 +41,8 @@ describe('How to Play says what round 3 added', () => {
   });
 
   it('a click on a stack: its menu, and Give to a crewmate close by (the master review of round 4, finding 5)', () => {
-    expect(keysOf('A stack: eat, drop, or give to a crewmate close by')).toBe('Click');
-    expect(everyWord).toContain('give to a crewmate');
+    expect(keysOf('A stack: eat, drop, give to crew')).toBe('Click');
+    expect(everyWord).toContain('give to crew');
   });
 
   it('the map mark, on the map\'s own line, and the map says the rest itself', () => {
