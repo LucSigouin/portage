@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { CHARACTER_IDS, CREW_MARKS } from '../../src/data/index.ts';
 import type { CharacterId } from '../../src/data/index.ts';
 import { createCrew } from '../../src/look/b2/canoe.js';
+import { CAST_COATS } from '../../src/look/cast.ts';
 import type { Crew as Figure } from '../../src/look/b2/canoe.js';
 import { GU } from '../../src/look/b2/palette.js';
 import { SKETCH_HOUR, sketchLight } from '../../src/look/canoe-sketch.ts';
@@ -89,13 +90,17 @@ describe('each picture is the game\'s own figure, standing still', () => {
     });
   }
 
-  it('a seat past the last wraps round, as the crew\'s colours do', () => {
-    const colourOf = (figure: Figure): number[] => {
+  it('a seat past the last wraps round, as the crew\'s colours do: the headgear is that seat\'s, the coat the character\'s own', () => {
+    const coloursOf = (figure: Figure): Set<string> => {
       const colour = ((figure.root.children[0] as THREE.Group).children[0] as THREE.Mesh).geometry.getAttribute('aColor');
-      return [colour.getX(0), colour.getY(0), colour.getZ(0)];
+      const all = new Set<string>();
+      for (let index = 0; index < colour.count; index += 1) all.add(`#${new THREE.Color(colour.getX(index), colour.getY(index), colour.getZ(index)).getHexString()}`);
+      return all;
     };
-    expect(colourOf(standingFigure('trapper', 5))).toEqual(colourOf(standingFigure('trapper', 1)));
-    expect(colourOf(standingFigure('trapper', 1))).not.toEqual(colourOf(standingFigure('trapper', 0)));
+    expect([...coloursOf(standingFigure('trapper', 5))].sort()).toEqual([...coloursOf(standingFigure('trapper', 1))].sort());
+    expect(coloursOf(standingFigure('trapper', 1)).has(CREW_MARKS[1].toque)).toBe(true);
+    expect(coloursOf(standingFigure('trapper', 0)).has(CREW_MARKS[1].toque)).toBe(false);
+    for (const seat of [0, 1, 2, 3]) expect(coloursOf(standingFigure('trapper', seat)).has(CAST_COATS.trapper.coat), `seat ${seat + 1}`).toBe(true);
   });
 });
 
