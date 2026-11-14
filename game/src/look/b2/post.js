@@ -78,7 +78,7 @@ const vec2 OFFS[8] = vec2[8](
   vec2(1., 0.), vec2(.707, .707), vec2(0., 1.), vec2(-.707, .707),
   vec2(-1., 0.), vec2(-.707, -.707), vec2(0., -1.), vec2(.707, -.707));
 #ifdef PEN_FULL
-// A fuller pen: one of the samples of pens.js, picked by ?pen=. Today's pen is drawn with PEN_FULL not defined,
+// A fuller pen: one of the samples of pens.js, C (bold) by default, another by ?pen=. Today's pen (?pen=today) is drawn with PEN_FULL not defined,
 // so none of these blocks is in it. gFull: how much of the fuller pen this pixel gets, 0 (today's pen) to 1.
 float gFull = 1.;
 // The ground's own washes: the terrain's three ink ids (rock .11, moss .35, sand .52: palette.js) as the half-float
@@ -443,7 +443,8 @@ void main(){
 // frame (the camera turning, a paddle swinging) does not rebuild it.
 const roomFor = (room, need) => (need > room || need < room * 0.4 ? Math.ceil((need * 1.2) / 64) * 64 : room);
 
-export function createPost(renderer, camera) {
+// pen: the pen's sample both pens start with (pens.js). The game's own unless asked: C, `bold`.
+export function createPost(renderer, camera, pen = DEFAULT_PEN) {
   // colour: 4x multisampled, resolved by the renderer when the pass ends
   const color = new THREE.WebGLRenderTarget(4, 4, {
     samples: 4,
@@ -549,13 +550,14 @@ export function createPost(renderer, camera) {
   const material = new THREE.ShaderMaterial({
     uniforms,
     vertexShader: 'varying vec2 vUv; void main(){ vUv = position.xy * .5 + .5; gl_Position = vec4(position.xy, 0., 1.); }',
+    defines: { ...penDefines(pen) },
     fragmentShader: COMPOSITE,
     depthTest: false,
     depthWrite: false,
   });
   const heroMaterial = new THREE.ShaderMaterial({
     uniforms: heroUniforms,
-    defines: { HERO: 1 },
+    defines: { HERO: 1, ...penDefines(pen) },
     vertexShader: 'uniform vec4 uRect; varying vec2 vUv; void main(){ vUv = uRect.xy + (position.xy * .5 + .5) * uRect.zw; gl_Position = vec4(vUv * 2. - 1., 0., 1.); }',
     fragmentShader: COMPOSITE,
     depthTest: false,
@@ -620,7 +622,7 @@ export function createPost(renderer, camera) {
     w: 4, h: 4, inkScale: 2, reflScale: 1, inkW: 4, inkH: 4,
     sheetW: 4, sheetH: 4, fine: 1,
     heroRoomW: 0, heroRoomH: 0, heroInkScale: 2, heroWindows: [], heroFine: 0, heroDrawnW: 0, heroDrawnH: 0,
-    pen: DEFAULT_PEN,
+    pen,
   };
   const bench = { draws: 1, pass: '', discard: false };
   // ?hullwater=1 leaves the world's water inside the hull, as it was. Only to prove the floor check can fail.

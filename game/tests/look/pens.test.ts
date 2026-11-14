@@ -1,8 +1,9 @@
 /**
  * The pen's samples (round 4). Luc, from the live game: "the outline should be full and not kinda drawn on".
  *
- * The samples are settings of the one pen (`look/b2/pens.js`), switched by `?pen=<name>`. This file holds two things:
- * with no switch the pen is today's to the letter, and each sample is what it says it is. No graphics card here:
+ * The samples are settings of the one pen (`look/b2/pens.js`), switched by `?pen=<name>`. Luc picked C, `bold`, and it
+ * is the game's pen. This file holds three things: with no switch the pen is C, with `?pen=today` it is the old pen to
+ * the letter, and each sample is what it says it is. No graphics card here:
  * the pen's shader is read off a stand-in renderer, as `outline.test.ts` does.
  */
 import * as THREE from 'three';
@@ -12,14 +13,18 @@ import { DEFAULT_PEN, PENS, PEN_NAMES, penDefines, penFrom, penReach } from '../
 import type { PenName } from '../../src/look/b2/pens.js';
 import { terrainMaterialFor } from '../../src/look/b2/palette.js';
 import { createPost } from '../../src/look/b2/post.js';
+import { CAST_PEN, castPenWidth } from '../../src/look/cast-sketch.ts';
 
 /** The pen's shader on `main` at 2857012, before this round: its SHA-256 and its length (tools/pen-hash.mjs). */
 const BEFORE = { sha256: 'bf09ec43d0fba18c8027c020bb93bfb2632ebe7d9a105f0e57b1d3c676697786', length: 12619 };
 
 interface PenMaterial { fragmentShader: string; defines: Record<string, string | number> | undefined }
 
-/** One frame through a renderer that draws nothing: the two pens (the world's, the heroes') as they were handed over. */
-function pens(name: PenName | null): { world: PenMaterial; hero: PenMaterial; state: string } {
+/**
+ * One frame through a renderer that draws nothing: the two pens (the world's, the heroes') as they were handed over.
+ * `name`: a pen picked by `setPen` after the start (null: none). `start`: the pen `createPost` is given (none: its own).
+ */
+function pens(name: PenName | null, start?: PenName): { world: PenMaterial; hero: PenMaterial; state: string } {
   const seen: PenMaterial[] = [];
   const renderer = {
     clear: () => {},
@@ -33,7 +38,7 @@ function pens(name: PenName | null): { world: PenMaterial; hero: PenMaterial; st
     setClearColor: () => {},
   };
   const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 2000);
-  const post = createPost(renderer as unknown as THREE.WebGLRenderer, camera);
+  const post = start === undefined ? createPost(renderer as unknown as THREE.WebGLRenderer, camera) : createPost(renderer as unknown as THREE.WebGLRenderer, camera, start);
   post.setSize(640, 360);
   if (name !== null) post.setPen(name);
   const scene = new THREE.Scene();
@@ -54,17 +59,40 @@ const sampleDefines = (material: PenMaterial): Record<string, string | number> =
 /** The shader with every block of the samples taken out: what the graphics card compiles with no sample picked. */
 const withoutSamples = (text: string): string => text.replace(/#ifdef PEN_FULL\n[\s\S]*?#endif\n/g, '');
 
-describe('with no switch the pen is today\'s', () => {
-  it('nothing is defined, so none of the samples\' blocks is compiled', () => {
+describe('with no switch the pen is C, Luc\'s pick', () => {
+  it('the game\'s pen is bold, and both pens start with it: the world\'s and the heroes\'', () => {
+    expect(DEFAULT_PEN).toBe('bold');
     const { world, hero, state } = pens(null);
-    expect(state).toBe('today');
-    expect(sampleDefines(world)).toEqual({});
-    expect(sampleDefines(hero)).toEqual({});
-    expect(hero.defines).toEqual({ HERO: 1 });
+    expect(state).toBe('bold');
+    expect(sampleDefines(world)).toEqual(penDefines('bold'));
+    expect(sampleDefines(hero)).toEqual(penDefines('bold'));
+    expect(hero.defines).toEqual({ HERO: 1, ...penDefines('bold') });
+    expect(penDefines('bold')).toMatchObject({ PEN_FULL: 1, PEN_WIDTH: '1.6', PEN_SEAM: '0.8' });
+  });
+
+  it('the address with no pen, or one it does not know, is C too', () => {
+    expect(parseDebugParameters('').pen).toBe('bold');
+    expect(parseDebugParameters('?pen=nonsense').pen).toBe('bold');
+    expect(penFrom(null)).toBe('bold');
+  });
+});
+
+describe('?pen=today is the old pen, to the letter', () => {
+  it('nothing is defined, so none of the samples\' blocks is compiled', () => {
+    for (const [name, start] of [[null, 'today'], ['today', undefined]] as const) {
+      const { world, hero, state } = pens(name, start);
+      expect(state).toBe('today');
+      expect(sampleDefines(world)).toEqual({});
+      expect(sampleDefines(hero)).toEqual({});
+      expect(hero.defines).toEqual({ HERO: 1 });
+      expect(world.defines ?? {}).toEqual({});
+    }
+    expect(parseDebugParameters('?pen=today').pen).toBe('today');
+    expect(parseDebugParameters('?pen=a').pen).toBe('today');
   });
 
   it('and what is left of the shader is the text before this round, to the letter', async () => {
-    const { world, hero } = pens(null);
+    const { world, hero } = pens(null, 'today');
     expect(hero.fragmentShader).toBe(world.fragmentShader);
     const left = withoutSamples(world.fragmentShader);
     expect(left).not.toContain('PEN_');
@@ -77,37 +105,47 @@ describe('with no switch the pen is today\'s', () => {
     for (const block of blocks) expect(block.match(/#if|#else/g)).toHaveLength(1);
   });
 
-  it('picking today\'s pen again after a sample leaves nothing defined', () => {
-    const seenFull = pens('full');
-    expect(sampleDefines(seenFull.world).PEN_FULL).toBe(1);
+  it('picking today\'s pen after C leaves nothing defined, and C again puts it back', () => {
+    const { world, state } = pens('today');
+    expect(state).toBe('today');
+    expect(sampleDefines(world)).toEqual({});
     const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 2000);
-    const post = createPost({} as unknown as THREE.WebGLRenderer, camera);
+    const post = createPost({} as unknown as THREE.WebGLRenderer, camera, 'today');
     post.setPen('bold');
+    expect(post.state.pen).toBe('bold');
     post.setPen('today');
     expect(post.state.pen).toBe('today');
     expect(penDefines('today')).toEqual({});
   });
 });
 
+describe('the pick screen\'s cards draw with the game\'s pen', () => {
+  it('under C a card\'s line is the game\'s width; under ?pen=today the old cards\' own', () => {
+    expect(castPenWidth('bold')).toBe(1);
+    expect(castPenWidth(DEFAULT_PEN)).toBe(1);
+    expect(castPenWidth('today')).toBe(CAST_PEN.width);
+    expect(CAST_PEN).toEqual({ wobble: 0, weight: 1, width: 0.8 });
+  });
+});
+
 describe('one switch: ?pen=<name>', () => {
   it('reads a name or its letter, in any case', () => {
     expect(PEN_NAMES).toEqual(['today', 'full', 'bold', 'near']);
-    expect(DEFAULT_PEN).toBe('today');
     for (const name of PEN_NAMES) expect(penFrom(name)).toBe(name);
     expect(['a', 'b', 'c', 'd'].map(penFrom)).toEqual(['today', 'full', 'bold', 'near']);
     expect(penFrom(' Bold ')).toBe('bold');
     expect(penFrom('C')).toBe('bold');
   });
 
-  it('anything else, or nothing, is today\'s pen', () => {
-    for (const text of [null, undefined, '', 'e', 'thick', '1', 'full;bold', 'constructor', '__proto__', 'toString']) expect(penFrom(text), String(text)).toBe('today');
+  it('anything else, or nothing, is the game\'s pen: C', () => {
+    for (const text of [null, undefined, '', 'e', 'thick', '1', 'full;bold', 'constructor', '__proto__', 'toString']) expect(penFrom(text), String(text)).toBe('bold');
   });
 
   it('the address parameter hands it over, and replaces no game: saves stay in use', () => {
-    expect(parseDebugParameters('').pen).toBe('today');
-    expect(parseDebugParameters('?pen=bold')).toMatchObject({ pen: 'bold', sandbox: false, shot: null });
+    expect(parseDebugParameters('').pen).toBe('bold');
+    expect(parseDebugParameters('?pen=today')).toMatchObject({ pen: 'today', sandbox: false, shot: null });
     expect(parseDebugParameters('?shot=island&pen=d')).toMatchObject({ pen: 'near', shot: 'island', sandbox: true });
-    expect(parseDebugParameters('?pen=nonsense').pen).toBe('today');
+    expect(parseDebugParameters('?pen=nonsense').pen).toBe('bold');
   });
 });
 

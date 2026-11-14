@@ -166,7 +166,7 @@ export interface LookProbe {
   puffs: number;
   /** Columns of light standing: one for each ping the crew has on the map. */
   beams: number;
-  /** The pen's sample the picture is drawn with: 'today' unless `?pen=` or `setPen` picked another (`b2/pens.js`). */
+  /** The pen's sample the picture is drawn with: 'bold' (C) unless `?pen=` or `setPen` picked another (`b2/pens.js`). */
   penName: PenName;
 }
 
@@ -213,7 +213,7 @@ export class InkWashWorldView implements WorldView {
   private readonly rain = new Rain();
   /** `&rain=0` leaves the rain's strokes out (the rings, the wet and the sky stay): to prove that in rain the land changes only where a stroke is drawn. */
   private rainStrokes = true;
-  /** `?pen=<name>` (or `setPen(name)`) draws with one of the pen's samples (`b2/pens.js`). Today's pen unless asked. */
+  /** `?pen=<name>` (or `setPen(name)`) draws with one of the pen's samples (`b2/pens.js`). C, `bold`, unless asked. */
   private penName: PenName = DEFAULT_PEN;
   private readonly islands: IslandView[] = [];
   private readonly beacon = new THREE.Group();
@@ -285,7 +285,9 @@ export class InkWashWorldView implements WorldView {
     this.stallMilliseconds = Math.max(0, Number(switches.get('stall')) || 0);
     this.rainStrokes = switches.get('rain') !== '0';
 
-    const post = createPost(renderer, this.camera);
+    // ?pen=<name> draws with one of the pen's samples. Without it, the game's pen: C (round 4). ?pen=today is the old one.
+    this.penName = parseDebugParameters(window.location.search).pen;
+    const post = createPost(renderer, this.camera, this.penName);
     this.post = post;
     // ?boil=1 turns B2's line boil on, on real time. It exists so the steadiness test can be seen to fail. Never on otherwise.
     post.pen.uBoil.value = this.boil ? 1 : 0;
@@ -295,9 +297,6 @@ export class InkWashWorldView implements WorldView {
     post.bench.pass = switches.get('benchpass') ?? '';
     // ?hullwater=1 leaves the world's water inside the hull, as it was. It exists so the floor check can be seen to fail.
     post.hullWater.keep = switches.get('hullwater') === '1';
-    // ?pen=<name> draws with one of the pen's samples (round 4: a fuller outline). Without it, today's pen, untouched.
-    this.penName = DEFAULT_PEN;
-    this.setPen(parseDebugParameters(window.location.search).pen);
     const sky = createSky();
     this.sky = sky;
     const water = createWater(post.reflection, post.resolution);
@@ -865,7 +864,7 @@ export class InkWashWorldView implements WorldView {
     if (this.post) Object.assign(this.post.bench, { draws: Math.max(1, Math.min(64, draws)), pass });
   }
 
-  /** Draw with one of the pen's samples (`b2/pens.js`), or with today's pen again. The same as `?pen=<name>`. */
+  /** Draw with one of the pen's samples (`b2/pens.js`): C, or another for a before-and-after. The same as `?pen=<name>`. */
   setPen(name: PenName): void {
     if (!this.post || name === this.penName) return;
     this.post.setPen(name);

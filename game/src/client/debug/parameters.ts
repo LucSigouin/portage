@@ -13,7 +13,7 @@
  * - `?host=ROOM`: start a game that other tabs of this site can join. `&name=...` names the host.
  * - `?join=ROOM&name=...`: join it, from another tab or window on the same computer.
  *   A tester's door (a channel between tabs, no server), not the lobby's.
- * - `&pen=full` (or `bold`, `near`, `today`): draw with one of the pen's samples (`look/b2/pens.js`). Saves stay as they are.
+ * - `&pen=today` (or `full`, `near`, `bold`): draw with one of the pen's samples (`look/b2/pens.js`). The game's own is `bold` (C); `today` is the old pen. Saves stay as they are.
  *
  * And one that is not for testing: `?invite=CODE` is the link a host sends. It opens the lobby's
  * join panel with the code filled in. It touches nothing else: the player's own saves stay as they are.
@@ -53,7 +53,7 @@ export interface DebugParameters {
   name: string;
   /** The room code of an invite link, or null. Checked for shape only: the relay says whether there is such a room. */
   invite: string | null;
-  /** The pen's sample the look draws with: 'today' unless the address asks for another. It replaces no game: never a sandbox. */
+  /** The pen's sample the look draws with: 'bold' (C) unless the address asks for another. It replaces no game: never a sandbox. */
   pen: PenName;
   /** True when a switch replaces the normal game: saves stay untouched. */
   sandbox: boolean;

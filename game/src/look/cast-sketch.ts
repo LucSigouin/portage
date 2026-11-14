@@ -15,8 +15,10 @@
  *   scale with the feet on one line, whoever is asked for and in whatever order.
  * - Everything made is disposed of and the context given back before it returns. The look's shared uniforms are
  *   kept and put back, whatever happens. The figures' material is the game's own and is left alone.
- * - The line is full and even (Luc: "make the outline of the character full not drawn"): it does not wander
- *   (the pen's `uWobble` is 0 for the draw) and it is one weight all round (`evenPen`). Neither changes the pen.
+ * - The pen is the game's own (round 4: C, `bold`, or the one `?pen=` names), so a card and the figure in play read
+ *   as one hand. C is full and even by itself. Only under `?pen=today` (the old, wandering pen) do the cards keep
+ *   their own fix (Luc: "make the outline of the character full not drawn"): no wander (`uWobble` 0 for the draw),
+ *   one weight all round (`evenPen`) and `CAST_PEN.width`. Neither changes the pen.
  */
 import * as THREE from 'three';
 import { CHARACTER_IDS } from '../data/cast.ts';
@@ -25,7 +27,9 @@ import { createCrew } from './b2/canoe.js';
 import type { Crew as Figure } from './b2/canoe.js';
 import { GU } from './b2/palette.js';
 import { createPost } from './b2/post.js';
+import { parseDebugParameters } from '../client/debug/parameters.ts';
 import type { Post } from './b2/post.js';
+import type { PenName } from './b2/pens.js';
 import { SKETCH_HOUR, frameSubject, keepUniforms, pinUniform, seeThrough, sketchDaylight, sketchLight, sketchPen } from './canoe-sketch.ts';
 import { outfitOf } from './crew.ts';
 import { paletteAt } from './daylight.ts';
@@ -79,7 +83,9 @@ export function drawCastSketches(request: CastSketchRequest): HTMLCanvasElement[
     renderer.autoClear = false;
     renderer.setPixelRatio(1);
     renderer.setSize(width, height, false);
-    post = createPost(renderer, camera);
+    // The game's pen: C unless the address names another (the same switch the world view reads).
+    const pen = parseDebugParameters(window.location.search).pen;
+    post = createPost(renderer, camera, pen);
     // The game's own switches for a still picture (as the lobby's canoe): no line boil, no paper frame, no wash, no grain.
     post.pen.uBoil.value = 0;
     post.uniforms.uFrame.value = -0.5;
@@ -87,9 +93,9 @@ export function drawCastSketches(request: CastSketchRequest): HTMLCanvasElement[
     post.uniforms.uWash.value = 0;
     post.uniforms.uGrain.value = 0;
     post.setSize(width, height, 0.25, 2, width, height, 1);
-    // The game's pen for a figure this size on that window, with no wander.
+    // The game's pen for a figure this size on that window. A full pen (C) is the game's as it is; today's has no wander.
     post.pen.uWobble.value = CAST_PEN.wobble;
-    post.pen.uLineW.value *= sketchPen(metres, height, request.sheetHeight) * CAST_PEN.width;
+    post.pen.uLineW.value *= sketchPen(metres, height, request.sheetHeight) * castPenWidth(pen);
 
     const water = new THREE.Mesh();
     const pictures: HTMLCanvasElement[] = [];
@@ -147,6 +153,15 @@ export const CAST_VIEW = { yaw: 24, pitch: 5, lens: 20, margin: 0.05, light: 38 
  * the game's pen at that weight.
  */
 export const CAST_PEN = { wobble: 0, weight: 1, width: 0.8 } as const;
+
+/**
+ * The cards' pen width against the game's. Under a full pen (C, the game's own) it is the game's: 1, since the full
+ * pen already keeps one weight and no wander, and its own width (1.6) is in its shader. Under `?pen=today`, the
+ * old cards' `CAST_PEN.width`, so the old look stays exactly as it was.
+ */
+export function castPenWidth(pen: PenName): number {
+  return pen === 'today' ? CAST_PEN.width : 1;
+}
 
 /**
  * The pen's weight on a surface comes from one number the ink buffer carries for it (`aux.b` in b2/post.js: noise
