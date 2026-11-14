@@ -12,7 +12,7 @@ import {
 } from '../../data/index.ts';
 import type { IslandId, ItemId, QuestId, WeatherKind } from '../../data/index.ts';
 import {
-  FIXED_STEP, NEUTRAL_INPUT, addPlayer, bodyBlocked, createGame, dispatch, drainEvents, freeSpotNear, landingBerth, setConnected, step, terrainHeight,
+  FIXED_STEP, NEUTRAL_INPUT, addPlayer, clearSpot, createGame, dispatch, drainEvents, freeSpotNear, landingBerth, setConnected, step, terrainHeight,
 } from '../../sim/index.ts';
 import type { GameState, StepInput } from '../../sim/index.ts';
 import type { OpenablePanelId } from '../intents.ts';
@@ -52,17 +52,18 @@ export function addIdleCrew(state: GameState, crew: number): GameState {
     // Nobody plays a stand-in: they are away, so they never starve and never hold up the night.
     setConnected(state, extra.id, false, true);
     if (lead.mode !== 'foot') continue;
-    // A step to the lead's right for each one, wherever the ground allows and nothing solid stands.
+    // A step to the lead's right for each one. Where that is in the water or in something solid (a spot is solid
+    // now: Luc, Round 4), the nearest clear ground that nobody stands on, as for a crew stepping ashore.
     const side = lead.heading + Math.PI / 2;
     const reach = 0.9 * (state.players.length - 1);
     const x = lead.position.x + Math.sin(side) * reach;
     const z = lead.position.z - Math.cos(side) * reach;
-    const dry = terrainHeight(x, z) >= 0 && !bodyBlocked(x, z);
     extra.mode = 'foot';
     extra.seat = null;
     extra.islandId = lead.islandId;
     extra.heading = lead.heading;
-    extra.position = dry ? { x, y: terrainHeight(x, z), z } : { ...lead.position };
+    const spot = clearSpot(state, extra, terrainHeight(x, z) >= 0 ? { x, z } : lead.position);
+    extra.position = { x: spot.x, y: terrainHeight(spot.x, spot.z), z: spot.z };
   }
   return state;
 }
@@ -166,7 +167,11 @@ export function stageShot(name: ShotName, seed: number = BOT_SEED): StagedShot {
       setClock(state, 11);
       setWeather(state, 'clear');
       const node = NODES_BY_ISLAND.home_knoll.find((definition) => definition.reach === 'foot' && !state.nodes[definition.id]);
-      if (node) teleport(state, 'home_knoll', node.position.x + 1.2, node.position.z + 0.6);
+      if (node) {
+        // Beside the spot, not in it: a spot is solid now (Luc, Round 4).
+        const beside = freeSpotNear(node.position.x + 1.2, node.position.z + 0.6, 4) ?? { x: node.position.x + 1.2, z: node.position.z + 0.6 };
+        teleport(state, 'home_knoll', beside.x, beside.z);
+      }
       settle(state, 0.2);
       return game(state, null, { pitch: 0.42, distance: 8 });
     }

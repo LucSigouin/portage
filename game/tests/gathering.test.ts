@@ -12,7 +12,7 @@ import type { GameState, PlayerState } from '../src/sim/index.ts';
 import { findWildNode, wildIndex, wildNodesNear, wildNodesOn } from '../src/sim/gathering.ts';
 import type { WildNode } from '../src/sim/gathering.ts';
 import { scatterIsland } from '../src/sim/scatter.ts';
-import { bodyBlocked, dressingAnchors } from '../src/sim/solids.ts';
+import { approachTo, bodyBlocked, dressingAnchors } from '../src/sim/solids.ts';
 import { terrainHeight } from '../src/sim/world.ts';
 import { toastForEvent } from '../src/client/viewmodels/toasts.ts';
 import { countIn, newGame, standOn } from './support.ts';
@@ -218,7 +218,7 @@ describe('a tree works like a spot', () => {
     expect(Object.keys(state.nodes)).toEqual([second.definition.id]);
   });
 
-  it('the nearest wins, a placed spot or a tree: measured from a spot\'s middle and from a tree\'s bark', () => {
+  it('the nearest wins, a placed spot or a tree: measured from a spot\'s edge where it is solid, and from a tree\'s bark', () => {
     const state = ashore();
     const spot = NODES_BY_ID['home_knoll.spruce.1'];
     const tree = wildNodesOn('home_knoll')
@@ -233,7 +233,8 @@ describe('a tree works like a spot', () => {
       putAt(state.players[0], 'home_knoll', x, z);
       const candidates = [
         ...NODES.filter((node) => node.islandId === 'home_knoll' && node.reach === 'foot')
-          .map((node) => ({ id: node.id, distance: Math.hypot(x - node.position.x, z - node.position.z), reach: TUNING.foot.nodeRange })),
+          // A solid spot (Luc, Round 4) is used from its edge: its middle is as deep in as `approachTo` says.
+          .map((node) => ({ id: node.id, distance: Math.hypot(x - node.position.x, z - node.position.z) - approachTo(node.position.x, node.position.z).depth, reach: TUNING.foot.nodeRange })),
         ...wildNodesOn('home_knoll').map((node) => ({ id: node.definition.id, distance: bark(node, x, z), reach: TUNING.nodes.wildReach })),
       ].filter((candidate) => candidate.distance <= candidate.reach).sort((first, second) => first.distance - second.distance);
       const target = selectInteractable(state);

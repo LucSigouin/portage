@@ -224,10 +224,19 @@ describe('limits', () => {
     teleport(state, 'quarry_face', quarry.center.x, quarry.center.z + quarry.radiusZ - 0.5);
     run(state, { moveY: 1 }, 20);
     expect(terrainHeight(state.players[0].position.x, state.players[0].position.z)).toBeLessThan(quarry.peakHeight * 0.5);
-    // From the east tip, the spine goes all the way to the top.
+    // From the east tip, the spine goes all the way to the top. Old machinery stands on its very line and is solid
+    // now (Luc, Round 4): a walker held by it steps aside for a second, as a player would, and walks on.
     teleport(state, 'quarry_face', quarry.center.x + quarry.radiusX - 1, quarry.center.z);
-    run(state, { moveX: -1 }, 45);
+    let sidesteps = 0;
+    for (let second = 0; second < 46; second += 1) {
+      const before = state.players[0].position.x;
+      run(state, { moveX: -1 }, 1);
+      if (before - state.players[0].position.x > 0.5) continue;
+      run(state, { moveY: 1 }, 1);
+      sidesteps += 1;
+    }
     expect(terrainHeight(state.players[0].position.x, state.players[0].position.z)).toBeGreaterThan(quarry.peakHeight * 0.9);
+    expect(sidesteps).toBe(1);
   });
 
   it('slides along what it cannot climb instead of sticking', () => {
