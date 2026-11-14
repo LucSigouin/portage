@@ -24,8 +24,8 @@ describe('the edge cards while a sheet is open', () => {
     expect(cards.map((card) => card.hidden)).toEqual([false, false]);
   });
 
-  it('the interface hides the vitals (crew list and health bars), the quest card and the minimap', () => {
-    expect(source('interface.ts')).toContain("setEdgeCardsHidden([part('vitals'), part('notes'), this.minimap?.element], this.edgesHidden)");
+  it('the interface hides the vitals (crew list and health bars), the quest card, the tip and prompt slips under the sheet and the minimap', () => {
+    expect(source('interface.ts')).toContain("setEdgeCardsHidden([part('vitals'), part('notes'), part('hint'), part('prompt'), this.minimap?.element], this.edgesHidden)");
   });
 
   it('nothing fades or slides: no transition and no animation in its style sheet', () => {

@@ -610,7 +610,7 @@ export class InkInterface implements GameInterface {
     }
     if (sheetHidesEdges(panel) !== this.edgesHidden) {
       this.edgesHidden = sheetHidesEdges(panel);
-      setEdgeCardsHidden([part('vitals'), part('notes'), this.minimap?.element], this.edgesHidden);
+      setEdgeCardsHidden([part('vitals'), part('notes'), part('hint'), part('prompt'), this.minimap?.element], this.edgesHidden);
       root.classList.toggle('iw-sheet-open', this.edgesHidden);
     }
     if (this.draw('confirm', confirm ? JSON.stringify(confirm) : '', () => confirmView(confirm!))) part('confirm').hidden = !confirm;
