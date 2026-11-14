@@ -145,6 +145,8 @@ test('a build cuts to a still, framed view of the canoe with the new piece, then
   expect(before.built).toBeNull();
   expect(before.panelShown).toBe(true);
   expect(before.scrolled).toBe(60);
+  // Since round 4 the screen-edge cards (the vitals among them) stand aside while a sheet is open (`interface/edgecards.ts`).
+  expect(before.hudShown, 'the vitals stand aside behind the open builder').toBe(false);
 
   const began = Date.now();
   const made = await build(page);
@@ -190,7 +192,7 @@ test('a build cuts to a still, framed view of the canoe with the new piece, then
   const after = await see(page);
   expect(after.panels).toBe('canoe_builder');
   expect(after.panelShown).toBe(true);
-  expect(after.hudShown).toBe(true);
+  expect(after.hudShown, 'the HUD as it was before the build').toBe(before.hudShown);
   expect(after.slip).toBeNull();
   expect(after.scrolled, 'the list is where it was scrolled to').toBe(60);
   // A cut back to the very pose the player left.
@@ -281,6 +283,8 @@ test('in a crew, the one who did not build keeps their screen: the piece, a note
   await expect(guest.locator('.iw-panel-canoe_builder')).toBeVisible();
   await guest.waitForTimeout(800);
   const before = await see(guest);
+  // Since round 4 the screen-edge cards (the vitals among them) stand aside while a sheet is open (`interface/edgecards.ts`).
+  expect(before.hudShown, 'the guest\'s vitals stand aside behind the open builder').toBe(false);
 
   // The host builds from the panel, and is shown it.
   await host.keyboard.press('KeyB');
@@ -299,7 +303,7 @@ test('in a crew, the one who did not build keeps their screen: the piece, a note
     expect(now.built, 'the guest is not shown the built view').toBeNull();
     expect(now.slip).toBeNull();
     expect(now.panelShown).toBe(true);
-    expect(now.hudShown).toBe(true);
+    expect(now.hudShown, 'the guest\'s HUD as it was').toBe(before.hudShown);
     expect(now.pose.fieldOfView).toBe(before.pose.fieldOfView);
     expect(now.puffs).toBe(0);
     await guest.waitForTimeout(100);
