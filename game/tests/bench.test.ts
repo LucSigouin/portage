@@ -40,7 +40,8 @@ describe('"F Use the bench"', () => {
     expect(selectInteractable(state)?.kind ?? null).not.toBe('bench');
     for (const landmark of CAMP_LAYOUTS.home_knoll!.landmarks.filter((entry) => entry.kind !== 'stump_bench')) {
       teleport(state, 'home_knoll', landmark.x + 1, landmark.z);
-      expect(selectInteractable(state)?.kind ?? null, landmark.kind).not.toBe('bench');
+      // The fire has a prompt of its own since Round 4 (tests/fire.test.ts): never the bench's words.
+      expect(selectInteractable(state)?.prompt ?? null, landmark.kind).not.toBe('Use the bench');
     }
   });
 

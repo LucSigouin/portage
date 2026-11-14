@@ -19,6 +19,7 @@ import {
   setConnected, setPlayerName, step,
 } from '../sim/index.ts';
 import type { Command, CommandResult, GameEvent, GameState, PlayerId, StepInput } from '../sim/index.ts';
+import { standClear } from '../sim/index.ts';
 import { BackdropCanoe } from './backdrop.ts';
 import { BUILT_VIEW_FRAME_CAP, BUILT_VIEW_SECONDS, BUILT_VIEW_WAIT_SECONDS, builtPieceOf, isBuildCommand, showsPiece } from './builtview.ts';
 import type { BuiltPiece, BuiltView } from './builtview.ts';
@@ -276,6 +277,8 @@ export class Session {
     }
     // A save from a shared game: the others are not here now. They keep their place for when they are.
     this.onlyLocalPlayerPresent(result.state);
+    // A save from before a thing was solid may have someone standing in it: they step clear (Luc, Round 4).
+    standClear(result.state);
     this.enterGame(result.state, slot);
     return true;
   }

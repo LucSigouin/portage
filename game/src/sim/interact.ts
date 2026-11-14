@@ -1,4 +1,4 @@
-import type { ItemAmount, LandmarkKind, NodeDefinition, NodeId, NpcId } from '../data/types.ts';
+import type { ItemAmount, LandmarkKind, NodeDefinition, NodeId, NpcId, StationId } from '../data/types.ts';
 import { ATTACHMENTS, attachmentTransformForHull } from '../data/canoe.ts';
 import { NPCS, NPC_IDS } from '../data/dialogue.ts';
 import { ITEMS } from '../data/items.ts';
@@ -12,7 +12,7 @@ import { distanceToWild, forgetRefilledWild, wildNodesNear } from './gathering.t
 import { questGateOpen, updateQuests } from './quests.ts';
 import { nextRandom, randomInteger } from './random.ts';
 import { approachTo, bodyBlocked, freeSpotNear } from './solids.ts';
-import { findStandingSpot, terrainHeight } from './world.ts';
+import { findStandingSpot, groundHeight, terrainHeight } from './world.ts';
 import type { Command, GameState, Missing, NodeState, PlayerState } from './types.ts';
 
 const CANOE_NODES = NODES.filter((definition) => definition.reach === 'canoe');
@@ -45,11 +45,23 @@ export type Interactable =
   /**
    * A bench to work at: the stump bench in a camp, or the workbench on the canoe. No command: the interact key opens
    * the crafting panel, as the crafting key does (Luc's list, line 21). The panel is the screen's, not the rules'.
+   * A camp's fire is one too (Luc, Round 4: "f at fire should open cooking yes"): `station` says which station the
+   * key was pressed at, so the screen can open on what that one makes. Left out, it is the bench.
    */
-  | { kind: 'bench'; name: string; prompt: string; distance: number };
+  | { kind: 'bench'; name: string; prompt: string; distance: number; station?: StationId };
 
 /** The camp landmarks that are a bench to work at. */
 const BENCH_KINDS: readonly LandmarkKind[] = ['stump_bench'];
+
+/**
+ * The camp landmarks that are a lit fire to cook at, with the station each is and the words on the key (Luc, Round 4:
+ * "the fire you cant interact with it?", then "f at fire should open cooking yes"). Tink's hearth is his forge: the
+ * key says so, and the panel it opens lists what a fire makes there too.
+ */
+const FIRE_KINDS: Partial<Record<LandmarkKind, { station: StationId; name: string; prompt: string }>> = {
+  campfire: { station: 'fire', name: 'Campfire', prompt: 'Cook at the fire' },
+  forge_hearth: { station: 'forge', name: 'Forge', prompt: 'Use the forge' },
+};
 
 /** Where the workbench stands on the canoe now, in world metres: its mount, turned with the hull. */
 export function workbenchPosition(state: GameState): { x: number; z: number } {
@@ -186,6 +198,25 @@ export function clearSpot(state: GameState, player: PlayerState, spot: { x: numb
 /** How far a landing or a waking looks for clear ground round a spot in a solid, metres. */
 const CLEAR_REACH = 4;
 
+/**
+ * Everyone on foot who stands in something solid steps to the nearest clear ground. For a save made before the
+ * thing they stand in was solid (Luc, Round 4: scavenge spots and survivors are solid now, and a spot was stood on
+ * to use it). Run once when a save is loaded: in play nothing puts a walker in a solid. Returns how many moved.
+ */
+export function standClear(state: GameState): number {
+  let moved = 0;
+  for (const player of state.players) {
+    if (player.mode !== 'foot' || !bodyBlocked(player.position.x, player.position.z)) continue;
+    const spot = freeSpotNear(player.position.x, player.position.z, CLEAR_REACH);
+    if (!spot) continue;
+    player.position.x = spot.x;
+    player.position.z = spot.z;
+    player.position.y = groundHeight(spot.x, spot.z);
+    moved += 1;
+  }
+  return moved;
+}
+
 /** The nearest thing the interact key would act on for this player, or null. */
 export function findInteractable(state: GameState, player: PlayerState): Interactable | null {
   if (player.dialogue) return null;
@@ -236,7 +267,18 @@ export function findInteractable(state: GameState, player: PlayerState): Interac
       for (const landmark of CAMP_LAYOUTS[player.islandId]?.landmarks ?? []) {
         if (!BENCH_KINDS.includes(landmark.kind)) continue;
         const distance = Math.hypot(landmark.x - player.position.x, landmark.z - player.position.z);
-        if (distance <= TUNING.foot.benchRange) consider({ kind: 'bench', name: 'Stump bench', prompt: 'Use the bench', distance });
+        if (distance <= TUNING.foot.benchRange) consider({ kind: 'bench', name: 'Stump bench', prompt: 'Use the bench', distance, station: 'bench' });
+      }
+    }
+    // A lit fire: F opens the crafting panel, as at the bench. A fire is solid, so it is used from its edge: the
+    // key reaches as far past the ring of stones as it does from a bench's middle.
+    for (const landmark of CAMP_LAYOUTS[player.islandId]?.landmarks ?? []) {
+      const fire = FIRE_KINDS[landmark.kind];
+      if (!fire || !ISLANDS_BY_ID[player.islandId].camp?.stations.includes(fire.station)) continue;
+      const distance = Math.hypot(landmark.x - player.position.x, landmark.z - player.position.z);
+      const depth = approachTo(landmark.x, landmark.z).depth;
+      if (distance <= TUNING.foot.benchRange + depth) {
+        consider({ kind: 'bench', name: fire.name, prompt: fire.prompt, distance: Math.max(0, distance - depth), station: fire.station });
       }
     }
     // Only a bed sleeps: the lean-to, a bedroll, the keeper's hut. The fire warms and cooks.
@@ -246,7 +288,7 @@ export function findInteractable(state: GameState, player: PlayerState): Interac
   if (hasAttachment(state, 'workbench')) {
     const bench = workbenchPosition(state);
     const distance = Math.hypot(bench.x - player.position.x, bench.z - player.position.z);
-    if (distance <= TUNING.foot.workbenchRange) consider({ kind: 'bench', name: 'Workbench', prompt: 'Use the bench', distance });
+    if (distance <= TUNING.foot.workbenchRange) consider({ kind: 'bench', name: 'Workbench', prompt: 'Use the bench', distance, station: 'bench' });
   }
   const hullDistance = distanceToHull(state, player.position.x, player.position.z);
   if (hullDistance <= TUNING.canoe.boardRange) {

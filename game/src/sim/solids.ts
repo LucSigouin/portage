@@ -5,16 +5,21 @@
  * - Crags on the high ground, skerries and drowned snags in the shallows, the great pine over Home Knoll's camp:
  *   the look's dressing (`look/world/dressing.ts`), placed here by the same seeded rules. A test holds the two.
  * - Landmarks: their footprints, measured from the drawings (`data/footprints.ts`).
+ * - Scavenge spots that are hard and stand above the shin (a rain barrel, a fishing place, a crate, a shed), the
+ *   survivors, the herons and the buffer stop at the end of the bridge's track (Luc, from the live game: "you can
+ *   still walk through some things"): circles, fitted to the drawings (`NODE_SOLIDS` in `data/footprints.ts`).
  *
  * Built once, the first time anything asks, and filed in a coarse grid, so the question "is a body standing here
  * in something?" costs a handful of comparisons: four players, every step. The answer depends on the place alone,
  * never on the state, so a guest's own screen (`net/walk.ts`) gets the same answer as the host.
  */
-import type { IslandDefinition, IslandId, LandmarkKind } from '../data/types.ts';
-import { LANDMARK_FOOTPRINTS } from '../data/footprints.ts';
+import type { IslandDefinition, IslandId, LandmarkKind, NodeDefinition } from '../data/types.ts';
+import { NPCS, NPC_IDS } from '../data/dialogue.ts';
+import { HERON_RADIUS, LANDMARK_FOOTPRINTS, NODE_SOLIDS, SURVIVOR_RADIUS } from '../data/footprints.ts';
 import type { Footprint } from '../data/footprints.ts';
 import { FOOTPRINT_CELL } from '../data/footprints.ts';
 import { floraMixFor, floraPresetFor } from '../data/flora.ts';
+import { NODES_BY_ISLAND } from '../data/nodes.ts';
 import { TUNING } from '../data/tuning.ts';
 import { ISLANDS, REGIONS_BY_ID, START, spotPosition } from '../data/world.ts';
 import { hashText, keepOutCircles, scatterIsland, seededRandom, shoreLength } from './scatter.ts';
@@ -104,7 +109,7 @@ function scatterSolids(island: IslandDefinition, placements: readonly Placement[
 
 /** One solid piece of the look's dressing where it stands: as the look places its instance. */
 export interface DressingAnchor {
-  kind: 'crag' | 'skerry' | 'snag' | 'signal_pine';
+  kind: 'crag' | 'skerry' | 'snag' | 'heron' | 'signal_pine';
   /** The shape: which crag, or which snag. */
   variant: number;
   x: number;
@@ -116,7 +121,7 @@ export interface DressingAnchor {
 /**
  * The solid part of the look's dressing on one island, by its own seeded rules and in its own order: crags on the
  * slopes of high ground, skerries off rough-water rock, drowned snags round wet ground and in the Fog, and the
- * great pine over the starting camp. Herons and wrecks are left out: a heron is not in the way, a wreck is afloat.
+ * great pine over the starting camp, and the herons that stand off a reed bed. Wrecks are left out: a wreck is afloat.
  * `tests/look/solids.test.ts` holds these to the look's own instances.
  */
 export function dressingAnchors(island: IslandDefinition): DressingAnchor[] {
@@ -151,6 +156,10 @@ export function dressingAnchors(island: IslandDefinition): DressingAnchor[] {
       ring('snag', variant, Math.round(shoreLength(island) / (region.fogWall ? 60 : 55)), 1.03, 1.11, (x, z) => clear(x, z, 6), () => 0.8 + random() * 0.5);
     }
   }
+  // Herons come after the snags in the look's own order, so no crag, skerry or snag changes its place in this list.
+  if (island.landmarks.some((landmark) => landmark.kind === 'reed_bed')) {
+    ring('heron', 0, 7, 1.012, 1.04, (x, z, height) => height < 0 && height > -0.4 && clear(x, z, 6), () => 1);
+  }
   if (island.id === START.islandId) {
     const top = spotPosition(island, { along: 0.02, across: 0.05 });
     anchors.push({ kind: 'signal_pine', variant: 0, x: top.x, z: top.z, yaw: 0.4, scale: 1.7 });
@@ -158,20 +167,56 @@ export function dressingAnchors(island: IslandDefinition): DressingAnchor[] {
   return anchors;
 }
 
-/** One piece of the look's dressing as circles: a crag block by block, a snag or the great pine by its trunk. */
+/** One piece of the look's dressing as circles: a crag block by block, a snag or the great pine by its trunk, a heron by its body. */
 export function anchorSolids(anchor: DressingAnchor, islandId: IslandId): SolidCircle[] {
   if (anchor.kind === 'crag' || anchor.kind === 'skerry') {
     return CRAG_BLOCKS[anchor.variant].map((block) => ({
       ...placed(anchor.x, anchor.z, anchor.yaw, anchor.scale, block.x, block.z), radius: block.radius * anchor.scale, kind: anchor.kind, islandId,
     }));
   }
-  const radius = anchor.kind === 'snag' ? TRUNK_RADIUS.snag * anchor.scale : TRUNK_RADIUS.signalPine;
+  const radius = anchor.kind === 'snag' ? TRUNK_RADIUS.snag * anchor.scale : anchor.kind === 'heron' ? HERON_RADIUS : TRUNK_RADIUS.signalPine;
   return [{ x: anchor.x, z: anchor.z, radius, kind: anchor.kind, islandId }];
 }
 
 /** The look's solid dressing on one island, as circles. */
 export function dressingSolids(island: IslandDefinition): SolidCircle[] {
   return dressingAnchors(island).flatMap((anchor) => anchorSolids(anchor, island.id));
+}
+
+/** How a scavenge spot is turned where it stands, radians: the look's own rule (`buildIsland` in `look/world-view.ts`). */
+export const nodeYaw = (nodeId: string): number => (hashText(nodeId) % 628) / 100;
+
+/** One scavenge spot as solid circles, where it stands: none for a soft, flat or floating kind (`NODE_SOLIDS`). */
+export function nodeSolids(node: NodeDefinition): SolidCircle[] {
+  if (node.reach !== 'foot') return [];
+  const yaw = nodeYaw(node.id);
+  return NODE_SOLIDS[node.typeId].map(([x, z, radius]) => ({
+    ...placed(node.position.x, node.position.z, yaw, 1, x, z), radius, kind: `spot:${node.typeId}`, islandId: node.islandId,
+  }));
+}
+
+/** The survivors of one island, each a body where they stand. */
+export function survivorSolids(island: IslandDefinition): SolidCircle[] {
+  return NPC_IDS.filter((npcId) => NPCS[npcId].islandId === island.id).map((npcId) => ({
+    ...spotPosition(island, NPCS[npcId].spot), radius: SURVIVOR_RADIUS, kind: 'survivor', islandId: island.id,
+  }));
+}
+
+/** The buffer stop's bar, metres: half its length, and the circles it is made of. */
+const BUFFER_STOP = { sides: [-0.9, -0.3, 0.3, 0.9], radius: 0.35 } as const;
+
+/**
+ * The buffer stop where the bridge's track gives out at its north end (`track` in `look/world/dressing.ts`): a bar
+ * across the rails at chest height. Its numbers are the look's: the track runs nine tenths of the island's length.
+ */
+export function bufferStopSolids(island: IslandDefinition): SolidCircle[] {
+  if (!island.landmarks.some((landmark) => landmark.kind === 'truss_span')) return [];
+  const long = island.radiusZ >= island.radiusX;
+  const half = (long ? island.radiusZ : island.radiusX) * 0.9;
+  return BUFFER_STOP.sides.map((side) => ({
+    ...spotPosition(island, long ? { along: side / island.radiusX, across: -half / island.radiusZ } : { along: -half / island.radiusX, across: side / island.radiusZ }),
+    radius: BUFFER_STOP.radius, kind: 'buffer_stop', islandId: island.id,
+  }));
 }
 
 /** Every landmark of the island table that has a footprint, where it stands. */
@@ -202,8 +247,12 @@ function onFootprint(placedFootprint: PlacedFootprint, x: number, z: number): bo
   return column >= 0 && column < line.length && line.charCodeAt(column) === 35; // '#'
 }
 
-/** Metres a filing cell spans, and how far past its own edge a solid is filed, so any body radius up to it is seen. */
-const FILE_CELL = 8;
+/**
+ * Metres a filing cell spans, and how far past its own edge a solid is filed, so any body radius up to it is seen.
+ * Four metres, not eight: with the scavenge spots solid too (Luc, Round 4) an ask looks at fewer circles than it did
+ * before they were (0.47 an ask over all the ground of the islands, from 0.87), so collisions cost no more a step.
+ */
+const FILE_CELL = 4;
 const FILE_MARGIN = 1.2;
 
 interface SolidIndex {
@@ -236,6 +285,7 @@ export function solidIndex(): SolidIndex {
   const index: SolidIndex = { circles: [], footprints: [], cells: new Map() };
   for (const island of ISLANDS) {
     index.circles.push(...scatterSolids(island, scatterIsland(island, floraMixFor(island))), ...dressingSolids(island));
+    index.circles.push(...(NODES_BY_ISLAND[island.id] ?? []).flatMap(nodeSolids), ...survivorSolids(island), ...bufferStopSolids(island));
     index.footprints.push(...placedFootprints(island));
   }
   index.circles.forEach((circle, at) => {
@@ -254,12 +304,18 @@ export function solidIndex(): SolidIndex {
   return index;
 }
 
+/** How many solids are filed where a point is: the most one ask there looks through. For the tests and the cost's measure. */
+export function filedAt(x: number, z: number): { circles: number; footprints: number } {
+  const entry = solidIndex().cells.get(cellKey(Math.floor(x / FILE_CELL), Math.floor(z / FILE_CELL)));
+  return { circles: entry?.circles.length ?? 0, footprints: entry?.footprints.length ?? 0 };
+}
+
 /** Points round a body's edge that are tried against footprints: its middle and eight round it. */
 const RIM = Array.from({ length: 8 }, (_, step) => [Math.sin((step / 8) * Math.PI * 2), -Math.cos((step / 8) * Math.PI * 2)] as const);
 
 /**
  * True when a body `radius` wide (a walker's, `TUNING.foot.bodyRadius`, unless said) standing at a point would be
- * in a tree, a rock or a landmark. A radius past `bodyRadius + FILE_MARGIN` is not supported.
+ * in a tree, a rock, a landmark, a hard scavenge spot or a survivor. A radius past `bodyRadius + FILE_MARGIN` is not supported.
  */
 export function bodyBlocked(x: number, z: number, radius: number = TUNING.foot.bodyRadius): boolean {
   const index = solidIndex();

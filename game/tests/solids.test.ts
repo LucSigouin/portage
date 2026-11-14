@@ -12,7 +12,7 @@ import type { GameState, SolidCircle, StepInput } from '../src/sim/index.ts';
 import { canWalk } from '../src/sim/foot.ts';
 import { newGame, standOn } from './support.ts';
 import { createRig } from './net/rig.ts';
-import { findFootPath } from '../src/bot/navigation.ts';
+import { findFootPath, walkGoal } from '../src/bot/navigation.ts';
 import { createBotDriver } from '../src/bot/bot.ts';
 import { deserialize } from '../src/save/index.ts';
 
@@ -277,6 +277,10 @@ describe('the bot, with solids in its way', () => {
   it('wades out of the shallows it stands in (an old save left one at wading depth)', () => {
     const from = { x: 14.46, z: 1099.89 };
     expect(terrainHeight(from.x, from.z)).toBeLessThan(-0.45);
-    expect(findFootPath('home_knoll', from, { x: 32, z: 1127 })).not.toBeNull();
+    // To the driftwood pile at 31.9, 1127: solid since Round 4, so the walk ends beside it, as the bot's own does.
+    const { target } = walkGoal({ x: 31.9, z: 1127 }, TUNING.foot.nodeRange);
+    expect(bodyBlocked(target.x, target.z)).toBe(false);
+    expect(Math.hypot(target.x - 31.9, target.z - 1127)).toBeLessThan(TUNING.foot.nodeRange);
+    expect(findFootPath('home_knoll', from, target)).not.toBeNull();
   });
 });
