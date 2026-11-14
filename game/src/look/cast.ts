@@ -100,7 +100,7 @@ export const CAST_BUILD: Readonly<Record<CharacterId, CastBuild>> = {
   scout: {
     scale: [0.86, 1, 0.88], top: 0.845, arm: 0.86, leg: 0.85,
     solids: [
-      { name: 'map case', from: [-0.085, 0.6, -0.195], to: [0, 0.3, -0.195], radius: 0.045 },
+      { name: 'map case', from: [-0.1, 0.63, -0.236], to: [0.02, 0.33, -0.236], radius: 0.045 },
       { name: 'hood point', from: [0, 0.72, -0.06], to: [0, 0.83, -0.215], radius: 0.035 },
       { name: 'cape, back hem', from: [-0.1, 0.185, -0.19], to: [0.1, 0.185, -0.19], radius: 0.015 },
     ],
@@ -278,8 +278,8 @@ function scout(rig: CastRig, outfit: CastOutfit): void {
     const back = Math.max(0, -ahead) ** 1.5;
     const front = Math.max(0, ahead);
     cape[0].push(new THREE.Vector3(across * 0.08, 0.5, ahead * 0.075));
-    cape[1].push(new THREE.Vector3(across * 0.15, 0.48, ahead * 0.11));
-    cape[2].push(new THREE.Vector3(across * 0.212, 0.435, ahead * (0.14 + 0.02 * back)));
+    cape[1].push(new THREE.Vector3(across * 0.15, 0.48, ahead * (0.11 + 0.04 * back)));
+    cape[2].push(new THREE.Vector3(across * 0.212, 0.435, ahead * (0.14 + 0.05 * back)));
     cape[3].push(new THREE.Vector3(across * 0.25, 0.325 + 0.04 * front - 0.155 * back, ahead * (0.155 + 0.045 * back)));
   }
   const cloak = nextId();
@@ -294,15 +294,16 @@ function scout(rig: CastRig, outfit: CastOutfit): void {
   // a braid out of the hood, forward over the left shoulder, tied with a ribbon
   b.tube([[0.085, 0.6, 0.075], [0.115, 0.525, 0.105], [0.12, 0.465, 0.128]], 0.027, RED_HAIR, { id: hair, flat: true, kind: KIND.ROPE, steps: 8 }, 6);
   b.sphere(0.032, PAL.rust, { pos: [0.12, 0.445, 0.132], flat: true, kind: KIND.PLAIN }, 7);
-  // the map case: a leather tube across the back, capped at both ends, its top over the right shoulder
-  const lean = Math.atan2(0.085, 0.3);
+  // the map case: a leather tube across the back, capped at both ends, its top over one shoulder. It rides on
+  // the cape, well off the spine: today's stroke folds the upper hand's elbow in behind the shoulder blade.
+  const lean = Math.atan2(0.12, 0.3);
   const tilt: Triple = [0, 0, lean];
   const [dx, dy] = [-Math.sin(lean), Math.cos(lean)];
-  b.cyl(0.04, 0.04, 0.32, LEATHER, { pos: [-0.0425, 0.45, -0.195], rot: tilt, kind: KIND.PLAIN }, 9);
+  b.cyl(0.04, 0.04, 0.34, LEATHER, { pos: [-0.04, 0.48, -0.236], rot: tilt, kind: KIND.PLAIN }, 9);
   for (const end of [-1, 1]) {
-    b.cyl(0.045, 0.045, 0.04, LEATHER_DARK, { pos: [-0.0425 + dx * end * 0.155, 0.45 + dy * end * 0.155, -0.195], rot: tilt, kind: KIND.PLAIN }, 9);
+    b.cyl(0.045, 0.045, 0.04, LEATHER_DARK, { pos: [-0.04 + dx * end * 0.16, 0.48 + dy * end * 0.16, -0.236], rot: tilt, kind: KIND.PLAIN }, 9);
   }
-  strap(b, 0.325, 0.206, 0.68, 0.158, LEATHER_DARK);
+  strap(b, 0.325, 0.206, 0.68, 0.19, LEATHER_DARK);
   finishTorso(rig, b);
 
   const { arm, leg } = CAST_BUILD.scout;
