@@ -6,6 +6,8 @@
  * - `?shot=<name>`: stage a fixed state for a screenshot. Add `&live=1` to let it run.
  * - `?crew=N` (2 to 4): a new game with N-1 extra players sitting idle beside the local one, to see
  *   the look and the HUD with a crew. Adds the same idle crew to `?at=`, `?shot=` and `?bot=1`.
+ * - `&cast=<id>` (voyageur, trapper, angler, scout): the local player of a staged game is drawn as that one of
+ *   the cast. `&cast=mix`: a crew of four, one of each. Goes with `?shot=`, `?at=`, `?crew=` and `?bot=1`.
  * - `&fps=1`: show the frame-rate readout. `&seed=<n>` picks the game's seed.
  * - `?host=ROOM`: start a game that other tabs of this site can join. `&name=...` names the host.
  * - `?join=ROOM&name=...`: join it, from another tab or window on the same computer.
@@ -14,6 +16,9 @@
  * And one that is not for testing: `?invite=CODE` is the link a host sends. It opens the lobby's
  * join panel with the code filled in. It touches nothing else: the player's own saves stay as they are.
  */
+import { isCharacterId } from '../../data/cast.ts';
+import type { CharacterId } from '../../data/cast.ts';
+
 export const SHOT_NAMES = [
   'lobby', 'settings', 'play', 'island', 'inventory', 'crafting', 'builder', 'quests', 'map', 'dialogue', 'pause',
   'storm', 'night', 'upgraded', 'beacon',
@@ -34,6 +39,8 @@ export interface DebugParameters {
   seed: number | null;
   /** Players in the game, 1 to 4. Above 1 the extra ones are idle stand-ins. */
   crew: number;
+  /** Who a staged game's local player is drawn as, `mix` for a crew of four with one of each, or null. */
+  cast: CharacterId | 'mix' | null;
   /** The room to host for other tabs, or null. Letters, digits, `_` and `-`, 32 at most. */
   host: string | null;
   /** The room to join as a guest, or null. Ignored when `host` is set. */
@@ -62,7 +69,9 @@ export function parseDebugParameters(query: string): DebugParameters {
   const shotText = values.get('shot');
   const shot = SHOT_NAMES.find((name) => name === shotText) ?? null;
   const bot = flag('bot');
-  const crew = Math.max(1, Math.min(4, whole('crew') ?? 1));
+  const castText = values.get('cast');
+  const cast = castText === 'mix' ? 'mix' : isCharacterId(castText) ? castText : null;
+  const crew = cast === 'mix' ? 4 : Math.max(1, Math.min(4, whole('crew') ?? 1));
   const room = (name: string): string | null => {
     const text = values.get(name);
     return text !== null && /^[A-Za-z0-9_-]{1,32}$/.test(text) ? text : null;
@@ -75,6 +84,7 @@ export function parseDebugParameters(query: string): DebugParameters {
     showFrameRate: flag('fps'),
     seed: whole('seed'),
     crew,
+    cast,
     host,
     join,
     name: (values.get('name') ?? '').slice(0, 40),
