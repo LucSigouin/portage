@@ -1039,11 +1039,24 @@ test('nothing redraws itself, and opening a panel moves nothing else', async ({ 
     return [selector, box.x, box.y, box.width];
   })));
   const atRest = await places();
-  for (const key of ['Tab', 'KeyC', 'KeyJ', 'KeyM', 'Escape']) {
+  // Since round 4 the edge cards (the vitals and the notes) stand aside while a sheet is open (`interface/edgecards.ts`):
+  // so each card is where it was or hidden, never anywhere else; the compass and the hotbar stay put; and the
+  // vitals are hidden behind the inventory, the rule itself. Escape gives every card back exactly where it was.
+  const rest = JSON.parse(atRest) as [string, number, number, number][];
+  const MAY_HIDE = ['.iw-vitals', '.iw-notes'];
+  for (const key of ['Tab', 'KeyC', 'KeyJ', 'KeyM']) {
     await page.keyboard.press(key);
     await frames(page, 4);
-    expect(await places(), `after ${key}`).toBe(atRest);
+    const now = JSON.parse(await places()) as [string, number, number, number][];
+    now.forEach(([selector, x, y, width], index) => {
+      if (x === 0 && y === 0 && width === 0) expect(MAY_HIDE, `after ${key}: ${selector} is hidden`).toContain(selector);
+      else expect([selector, x, y, width], `after ${key}: ${selector} where it was`).toEqual(rest[index]);
+    });
+    if (key === 'Tab') expect(now[0][3], 'after Tab: the vitals stand aside behind the inventory').toBe(0);
   }
+  await page.keyboard.press('Escape');
+  await frames(page, 4);
+  expect(await places(), 'after Escape').toBe(atRest);
 
   // The settings sheet hangs from the same top edge on every tab, so the tabs never move under the pointer.
   await show(page, { name: 'settings', query: '', steps: [open('settings')], shows: '.iw-panel-settings' });
