@@ -4,6 +4,7 @@
  * joins the belt, and on a timer). No DOM in here: pass `window.localStorage`
  * in from the client, or a fake in tests.
  */
+import { isCharacterId } from '../data/cast.ts';
 import { MAIN_QUESTS } from '../data/quests.ts';
 import { TUNING } from '../data/tuning.ts';
 import { STATE_VERSION, chartKnownWaters } from '../sim/index.ts';
@@ -160,6 +161,10 @@ export function deserialize(
     if (envelope.version <= before) return { ok: false, reason: 'no_migration' };
   }
   if (!looksLikeState(envelope.state)) return { ok: false, reason: 'corrupt' };
+  // Who a player is (the pick screen, `data/cast.ts`): a value this build does not know is dropped, and the save loads.
+  for (const player of envelope.state.players as unknown[]) {
+    if (typeof player === 'object' && player !== null && 'character' in player && !isCharacterId(player.character)) delete player.character;
+  }
   envelope.state.version = SAVE_VERSION;
   return { ok: true, state: envelope.state, savedAt: envelope.savedAt, migratedFrom };
 }
