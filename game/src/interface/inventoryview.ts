@@ -18,6 +18,7 @@ import type { ItemId } from '../data/index.ts';
 import { control, h } from './dom.ts';
 import type { ViewNode } from './dom.ts';
 import { itemIcon } from './icons.ts';
+import { keyFace, keyedText } from './keycaps.ts';
 import { BUCKET_ICON, STOW_ICON } from './inventoryicons.ts';
 
 type InventoryModel = Extract<PanelModel, { id: 'inventory' }>;
@@ -126,7 +127,7 @@ function tileView(tile: TileContent, open: ReadonlySet<string>): ViewNode[] {
     h('button.iw-item-pick', {
       type: 'button', 'data-detail': tile.key, 'aria-expanded': String(shown), 'aria-label': tile.label, title: tile.name,
     },
-    tile.corner ? h('span.iw-n', null, tile.corner) : null,
+    tile.corner ? h('span.iw-n', null, keyFace(tile.corner)) : null,
     itemIconView(tile.itemId),
     tile.under ? h('span.iw-tile-count', null, tile.under) : null))];
   if (shown) {
@@ -139,7 +140,7 @@ function tileView(tile: TileContent, open: ReadonlySet<string>): ViewNode[] {
 }
 
 const emptyTileView = (key: string, corner = ''): ViewNode =>
-  h('li.iw-item.iw-tile.iw-blank', { key, 'aria-label': 'Empty slot' }, corner ? h('span.iw-n', null, corner) : null);
+  h('li.iw-item.iw-tile.iw-blank', { key, 'aria-label': 'Empty slot' }, corner ? h('span.iw-n', null, keyFace(corner)) : null);
 
 function stackTiles(slots: ItemSlotModel[], group: 'backpack' | 'cargo', open: ReadonlySet<string>): ViewNode[] {
   const seen = new Map<string, number>();
@@ -169,7 +170,7 @@ function beltTiles(belt: BeltSlotModel[], open: ReadonlySet<string>): ViewNode[]
 /** The quick presses, said in the sheet's footer, and the way back from a drop (`takeback.ts`). It stands still. */
 export const QUICK_PRESS_HINT = 'Shift+click a tile: to the other side. Q with the pointer on a tile: drop it. Z takes a drop back while its note stands.';
 
-export const inventoryHintView = (): ViewNode => h('small.iw-inv-hint', { key: 'hint' }, QUICK_PRESS_HINT);
+export const inventoryHintView = (): ViewNode => h('small.iw-inv-hint', { key: 'hint' }, keyedText(QUICK_PRESS_HINT));
 
 /** The body of the inventory panel. `open`: the tiles the player has opened (`itemDetailKey`). */
 export function inventoryBodyView(panel: InventoryModel, open: ReadonlySet<string>): ViewNode {

@@ -1,0 +1,50 @@
+/* Key signs the hand writes like another sign, drawn in the same pen (keycaps.ts).
+   The sign keeps its place in the line and its own ink is left out. The strokes stand over it, on its writing line.
+   Written once and whole: nothing here moves. */
+.iw-kd {
+  /* One cell for both: the sign gives the width and the writing line, the pen is set on that line, in the middle. */
+  display: inline-grid;
+  justify-items: center;
+  align-items: baseline;
+  line-height: 1;
+  /* The pen's width in hundredths of the font size: the hand's own, measured. A sentence is written with the light pen. */
+  --iw-kd-pen: 9;
+}
+/* A key cap, a slot's number and anything in bold are written with the heavy pen. */
+.iw-key .iw-kd,
+.iw-toast-key .iw-kd,
+.iw-n .iw-kd,
+b .iw-kd {
+  --iw-kd-pen: 13;
+}
+/* The I's two bars are wider than the hand's bare stem: room for them, so they touch no neighbour. */
+.iw-kd[data-drawn='I'] {
+  padding: 0 0.1em;
+}
+.iw-kd-said {
+  grid-area: 1 / 1;
+  color: transparent;
+  /* Also where the system forces its own colours: the strokes are the ink. */
+  forced-color-adjust: none;
+}
+/* A point on the writing line, in the middle of the sign. It takes no room. */
+.iw-kd-pen {
+  grid-area: 1 / 1;
+  position: relative;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.iw-kd-pen svg {
+  position: absolute;
+  left: -0.35em;
+  bottom: 0;
+  width: 0.7em;
+  height: 0.8em;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--iw-kd-pen);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

@@ -37,6 +37,8 @@
   min-width: 1.15rem;
   padding: 0 0.22rem;
   font-family: var(--iw-hand);
+  /* As heavy as every other key cap. */
+  font-weight: 700;
   font-size: 0.86rem;
   line-height: 1.2;
   text-align: center;

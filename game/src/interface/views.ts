@@ -21,6 +21,7 @@ import { boatTabsView, elsewhereView } from './stations.ts';
 import { inventoryBodyView, inventoryHintView } from './inventoryview.ts';
 import { previewView } from './preview.ts';
 import { toastActionView } from './takeback.ts';
+import { keyFace, keyedText } from './keycaps.ts';
 import { mapHintView, markLegendRows } from './mapmarks.ts';
 
 const icon = (markup: string, className = ''): ViewNode => h('i.iw-i', { class: className, html: markup, 'aria-hidden': 'true' });
@@ -188,7 +189,7 @@ export function builtView(built: BuiltModel): ViewNode[] {
 }
 
 export function hintView(hint: string): ViewNode[] {
-  return [h('div.iw-hint', { key: 'hint' }, hint)];
+  return [h('div.iw-hint', { key: 'hint' }, keyedText(hint))];
 }
 
 /** The line to the host has stalled: a slip that stands where the tip does until the host is heard again. It does not move. */
@@ -198,7 +199,7 @@ export function lineNoteView(note: string): ViewNode[] {
 
 export function promptView(prompt: PromptModel): ViewNode[] {
   return [h('div.iw-prompt.iw-paper', { key: 'prompt', class: classes(`iw-prompt-${prompt.mode}`, prompt.keyLabel === '' && 'iw-prompt-keyless') },
-    prompt.keyLabel === '' ? null : h('span.iw-key', null, prompt.keyLabel),
+    prompt.keyLabel === '' ? null : h('span.iw-key', null, keyFace(prompt.keyLabel)),
     h('span.iw-prompt-text', null, prompt.text))];
 }
 
@@ -209,16 +210,16 @@ export function hotbarView(hotbar: HotbarSlotModel[]): ViewNode[] {
       key: slot.number, type: 'button', tabindex: -1, class: slot.selected ? 'iw-selected' : '', title: slot.name,
       'aria-label': `${slot.keyLabel}: ${slot.name}`, 'aria-pressed': String(slot.selected),
     },
-    h('span.iw-n', null, slot.keyLabel),
+    h('span.iw-n', null, keyFace(slot.keyLabel)),
     itemIconView(slot.itemId),
     slot.selected ? h('span.iw-nm', null, slot.name) : null,
     slot.selected ? h('i.iw-underline') : null), slot.intent)
-    : h('div.iw-slot.iw-empty', { key: slot.number }, h('span.iw-n', null, slot.keyLabel)))))];
+    : h('div.iw-slot.iw-empty', { key: slot.number }, h('span.iw-n', null, keyFace(slot.keyLabel))))))];
 }
 
 export const toastsView = (toasts: ToastModel[]): ViewNode[] => toasts.map((toast) =>
   h('div.iw-toast', { key: toast.id, class: `iw-toast-${toast.tone}${toast.action ? ' iw-toast-offer' : ''}`, role: 'status' }, h('i.iw-dab'),
-    toast.itemId ? itemIconView(toast.itemId) : null, h('span', null, toast.text),
+    toast.itemId ? itemIconView(toast.itemId) : null, h('span', null, keyedText(toast.text)),
     // A dropped stack's way back, while it may still be taken (takeback.ts).
     toast.action ? toastActionView(toast.action) : null));
 
@@ -283,14 +284,14 @@ function settingsView(panel: Extract<PanelModel, { id: 'settings' }>): ViewNode[
     key: tab.tab, type: 'button', class: tab.selected ? 'iw-on' : '', 'aria-current': tab.selected ? 'page' : null,
   }, tab.label), tab.intent)));
   const bindings = panel.bindings.length > 0 ? [
-    h('p.iw-notice', { key: 'notice', role: 'status' }, panel.bindingNotice || 'Click a key to change it.'),
+    h('p.iw-notice', { key: 'notice', role: 'status' }, keyedText(panel.bindingNotice || 'Click a key to change it.')),
     h('table.iw-bindings', { key: 'bindings', style: `--iw-rows:${Math.ceil(panel.bindings.length / 2)}` },
       h('tbody', null, panel.bindings.map((binding) => h('tr', { key: binding.action, class: binding.unbound ? 'iw-unbound' : '' },
         h('th', { scope: 'row' }, binding.label, h('small', null, binding.contextLabel)),
         binding.slots.map((slot) => h('td', { key: slot.slot },
           control(h('button.iw-key.iw-bind', {
             type: 'button', class: slot.capturing ? 'iw-listen' : slot.keyLabel === null ? 'iw-none' : '',
-          }, slot.capturing ? 'press…' : slot.keyLabel ?? 'none'), slot.rebind),
+          }, slot.capturing ? 'press…' : keyFace(slot.keyLabel ?? 'none')), slot.rebind),
           slot.clear ? control(h('button.iw-clear', {
             type: 'button', 'aria-label': 'Remove this key', title: 'Remove this key', html: ICON.cross,
           }), slot.clear) : null)))))),
@@ -303,7 +304,7 @@ function settingsView(panel: Extract<PanelModel, { id: 'settings' }>): ViewNode[
 
 /** "W / Up, S / Down" as key caps: a comma parts the keys, a slash the two ways to press one. */
 const keyCapsView = (keys: string): ViewNode[] => keys.split(', ').map((group, index) =>
-  h('span.iw-ks', { key: index }, group.split(' / ').map((key, alternative) => h('span.iw-key', { key: alternative }, key))));
+  h('span.iw-ks', { key: index }, group.split(' / ').map((key, alternative) => h('span.iw-key', { key: alternative }, keyFace(key)))));
 
 function howToPlayView(panel: Extract<PanelModel, { id: 'how_to_play' }>): ViewNode[] {
   return sheet(panel, 'wide', '', h('div.iw-body.iw-howto', { key: 'body' }, panel.sections.map((section, index) =>

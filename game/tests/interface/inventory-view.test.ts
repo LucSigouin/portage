@@ -206,7 +206,8 @@ describe('a quick press on a tile', () => {
     standOn(state, 'home_knoll');
     const footers = find(panelView(panelOf(state)), (node) => node.tag === 'footer');
     expect(footers).toHaveLength(1);
-    expect(collectText(footers)).toContain(QUICK_PRESS_HINT);
+    // The Z in the line is a drawn letter (`keycaps.ts`), a piece of its own: the words are the same, read with single spaces.
+    expect(collectText(footers).replace(/\s+/g, ' ')).toContain(QUICK_PRESS_HINT);
     expect(QUICK_PRESS_HINT).toContain('Shift+click');
     expect(QUICK_PRESS_HINT).toContain(`${DROP_KEY_CODE.replace('Key', '')} with the pointer on a tile`);
     // The way back from a drop is said beside the drop key (the master review, finding 2).
