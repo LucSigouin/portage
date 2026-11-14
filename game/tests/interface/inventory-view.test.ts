@@ -482,6 +482,13 @@ describe('the inventory\'s own stylesheet', () => {
     expect(styles).toMatch(/\.iw-info-card \{[^}]*position: absolute;[^}]*inset: 2rem 0 0\.2rem 0;[^}]*overflow: hidden auto;/);
   });
 
+  it('draws Drop in the menu in the same ink as the other lines: only a refused line looks off', () => {
+    const quiet = [...styles.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{[^}]*\}/g)].map((match) => match[1]!.trim())
+      .filter((selector) => selector.includes('iw-menu-line') && selector.includes('iw-quiet'));
+    expect(quiet).toEqual([]);
+    expect(styles).toMatch(/\.iw-menu-line:disabled \.iw-label \{[^}]*line-through/);
+  });
+
   it('lays the menu over the sheet, out of the flow, so it moves no tile', () => {
     expect(styles).toMatch(/\.iw-tile-menu \{[^}]*position: absolute;[^}]*z-index: 6;[^}]*max-width: 17rem;/);
     // The round-3 strip's rules are gone with the strip.

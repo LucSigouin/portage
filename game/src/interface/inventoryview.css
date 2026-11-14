@@ -359,12 +359,8 @@
 .iw-menu-line.iw-give .iw-note {
   grid-column: 2;
 }
-/* A drop is drawn quietly, as everywhere: the eye lands on the safe lines. */
-.iw-menu-line.iw-quiet .iw-label {
-  color: var(--iw-ink-soft);
-  text-decoration: underline wavy var(--iw-ink-faint);
-  text-underline-offset: 0.25rem;
-}
+/* Drop is drawn in the same ink as every other line (the master review of round 4, finding 4): grey and a wavy
+   line read as "off", and only a refused line, struck through with its reason, is off. */
 /* A line the rules would refuse: off, in the soft ink, with the reason under it. */
 .iw .iw-menu-line:disabled {
   color: var(--iw-ink-soft);
