@@ -1,18 +1,43 @@
-/* The inventory as a grid of tiles (inventoryview.ts). Sized in rem like the rest of the theme, so it is the same
-   sheet at 1366x768 and at 1920x1080.
+/* The inventory as a grid of tiles, with its info panel on the right and the small menu at a tile
+   (inventoryview.ts). Sized in rem like the rest of the theme, so it is the same sheet at 1366x768 and at 1920x1080.
 
    Nothing here moves by itself, and nothing moves at all: no transition, no animation, no transform on hover.
-   A tile under the pointer changes its paper, a label under a drawn button is written whole or not at all.
+   A tile under the pointer changes its paper, a label under a drawn button is written whole or not at all, the
+   info panel's words are changed in place, and the menu is written beside its tile at once.
 
-   The sums, in rem. A tile is 3.7 and the gap 0.5. The backpack is 4 across (16.3), the cargo and the belt up to
-   8 across (33.1). The sheet's body is about 55 wide and 38 tall: 40 stacks of cargo are 5 rows (20.5) under the
-   belt (3.7), with room left for one open strip. More rows than fit scroll inside the sheet, under its cut mark. */
+   The sums, in rem. The screen is about 94 wide and 53 tall. A tile is 3.7 and the gap 0.5. The backpack is
+   4 across (16.3), the cargo and the belt up to 8 across (33.1), the info panel takes the rest (about 18). The
+   sheet is 77 wide: 4 of padding, 0.8 of the body's own, the three columns and two gaps of 2.2. Its body is about
+   38 tall: 40 stacks of cargo are 5 rows (20.5) under the belt (3.7). More rows than fit scroll inside the sheet,
+   under its cut mark. */
+.iw-panel.iw-panel-inventory {
+  width: min(77rem, 96vw);
+}
 .iw-inv .iw-columns {
-  /* Two columns, two rows: the buttons and the belt on top, the backpack and the cargo under them. */
-  grid-template-columns: 16.3rem minmax(0, 1fr);
-  column-gap: 2.6rem;
+  /* Three columns, two rows: the buttons and the belt on top, the backpack and the cargo under them, and the info
+     panel down the right, the height of both. The second row takes what the info panel's fixed height leaves, so
+     the belt's row is never stretched. */
+  grid-template-columns: 16.3rem minmax(0, 33.1rem) minmax(13rem, 1fr);
+  grid-template-rows: auto 1fr;
+  column-gap: 2.2rem;
   row-gap: 0.7rem;
   align-items: start;
+}
+.iw-inv .iw-pack-actions {
+  grid-column: 1;
+  grid-row: 1;
+}
+.iw-inv .iw-inv-belt {
+  grid-column: 2;
+  grid-row: 1;
+}
+.iw-inv .iw-inv-pack {
+  grid-column: 1;
+  grid-row: 2;
+}
+.iw-inv .iw-inv-boat {
+  grid-column: 2;
+  grid-row: 2;
 }
 .iw-body.iw-inv .iw-columns > section > h3 {
   margin-top: 0;
@@ -28,7 +53,7 @@
   align-items: flex-start;
   gap: 0.7rem;
   /* The buttons stand level with the belt's tiles beside them (the belt's heading is 1.5 tall, its grid starts 0.5
-     lower), and stay there when a strip opens under the belt. */
+     lower). */
   align-self: start;
   padding: 2rem 0 0.2rem;
 }
@@ -93,8 +118,6 @@
 .iw-inv .iw-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fill, 3.7rem);
-  /* A strip takes a whole row; the tiles after it fill the row it left, in their order. */
-  grid-auto-flow: row dense;
   gap: 0.5rem;
   padding: 0.5rem 0 0.2rem;
   list-style: none;
@@ -148,7 +171,12 @@
   border-radius: 0.5rem 0.28rem 0.6rem 0.24rem;
   background: var(--iw-paper-deep);
 }
-/* Open: the tile is ruled twice and marked in rust under it, so the strip below is seen to be its own. */
+/* The tile the info panel is about: ruled twice, as under the pointer, and it stays so when the pointer leaves. */
+.iw-inv .iw-tile.iw-read .iw-item-pick {
+  background: var(--iw-paper);
+  box-shadow: inset 0 0 0 0.09rem var(--iw-ink);
+}
+/* Its menu open: marked in rust under it as well, so the menu beside it is seen to be its own. */
 .iw-inv .iw-tile.iw-open .iw-item-pick {
   background: var(--iw-paper);
   box-shadow: inset 0 0 0 0.09rem var(--iw-ink), 0 0.26rem 0 var(--iw-rust-deep);
@@ -180,37 +208,195 @@
   border-width: 0.14rem;
   box-shadow: 0 0.26rem 0 var(--iw-rust);
 }
+.iw-inv .iw-tile.iw-held.iw-read .iw-item-pick {
+  box-shadow: inset 0 0 0 0.09rem var(--iw-ink), 0 0.26rem 0 var(--iw-rust);
+}
 .iw-inv .iw-tile.iw-held.iw-open .iw-item-pick {
   box-shadow: inset 0 0 0 0.09rem var(--iw-ink), 0 0.26rem 0 var(--iw-rust-deep);
 }
 
-/* --- A tile's strip: what it is and what can be done with it ------------------------------ */
-.iw-inv .iw-item-detail {
-  grid-column: 1 / -1;
-  display: block;
-  margin: 0;
-  padding: 0.35rem 0.6rem 0.45rem;
+/* --- The info panel: the item under the pointer, down the right of the sheet ------------------ */
+/* Its column and its height are fixed here and never follow what is written in it: the card is laid over the
+   column, out of the flow, so a long item makes the card scroll and a short one leaves paper. The grids beside it
+   never move. */
+.iw-inv .iw-inv-info {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  align-self: stretch;
+  position: relative;
+  min-width: 0;
+  min-height: 27rem;
+}
+.iw-body.iw-inv .iw-columns > .iw-inv-info > h3 {
+  margin-top: 0;
+}
+.iw-info-card {
+  position: absolute;
+  inset: 2rem 0 0.2rem 0;
+  padding: 0.7rem 0.8rem 0.6rem;
+  overflow: hidden auto;
+  overflow-wrap: anywhere;
+  scrollbar-width: thin;
+  scrollbar-color: var(--iw-ink-soft) transparent;
   border: 0.09rem solid var(--iw-ink);
-  border-radius: 0.4rem 0.28rem 0.45rem 0.24rem;
-  background: var(--iw-paper);
+  border-radius: 0.5rem 0.28rem 0.6rem 0.24rem;
+  background: var(--iw-paper-bright);
 }
-.iw-item-head {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  font-size: 1.1rem;
-  line-height: 1.2;
+.iw-info-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.7rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 0.09rem dashed var(--iw-ink-faint);
 }
-.iw-item-head b {
+.iw-info-head .iw-item-ico .iw-ico {
+  width: 3.2rem;
+  height: 3.2rem;
+}
+.iw-info-name {
+  display: block;
   font-weight: 400;
+  font-size: 1.4rem;
+  line-height: 1.15;
 }
-.iw-inv .iw-item-detail .iw-item-about {
+.iw-info-kind {
   display: block;
   margin-top: 0.1rem;
+  font-family: var(--iw-hand);
+  font-size: 0.9rem;
+  line-height: 1.25;
+  color: var(--iw-ink-soft);
 }
-.iw-inv .iw-item-detail .iw-actions {
-  justify-content: flex-start;
-  margin-top: 0.4rem;
+.iw-info-about {
+  margin-top: 0.5rem;
+  font-size: 1.02rem;
+  line-height: 1.3;
+}
+.iw-info-uses {
+  margin-top: 0.55rem;
+  padding-top: 0.45rem;
+  border-top: 0.09rem dashed var(--iw-ink-faint);
+  font-family: var(--iw-hand);
+  font-size: 0.9rem;
+  line-height: 1.3;
+}
+.iw-info-uses li + li {
+  margin-top: 0.28rem;
+}
+.iw-info-uses b {
+  font-weight: 700;
+}
+/* Before the first item: one quiet line, in the hand. */
+.iw-info-quiet {
+  font-family: var(--iw-hand);
+  font-size: 0.95rem;
+  line-height: 1.3;
+  color: var(--iw-ink-soft);
+}
+
+/* --- The menu at a tile: what can be done with it -------------------------------------------- */
+/* The sheet's own child, laid over it beside the tile that was pressed (inventorymenu.ts writes its left and top,
+   in the same task that draws it). It is written whole, at once, and stands still. */
+.iw-tile-menu {
+  position: absolute;
+  z-index: 6;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.16rem;
+  width: max-content;
+  min-width: 10.5rem;
+  max-width: 17rem;
+  padding: 0.45rem 0.45rem 0.5rem;
+  text-align: left;
+  border: 0.115rem solid var(--iw-ink);
+  border-radius: 0.5rem 0.3rem 0.6rem 0.26rem;
+  background: var(--iw-paper-bright);
+  box-shadow: 0.14rem 0.2rem 0 var(--iw-ink);
+  pointer-events: auto;
+}
+.iw-menu-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.9rem;
+  margin-bottom: 0.2rem;
+  padding: 0 0.4rem 0.25rem;
+  font-size: 1.08rem;
+  line-height: 1.2;
+  border-bottom: 0.09rem dashed var(--iw-ink-faint);
+}
+.iw-menu-head b {
+  font-weight: 400;
+}
+.iw .iw-menu-line {
+  display: block;
+  width: 100%;
+  padding: 0.26rem 0.6rem 0.2rem;
+  font-size: 1.08rem;
+  line-height: 1.2;
+  text-align: left;
+  border: 0.09rem solid transparent;
+  border-radius: 0.4rem 0.28rem 0.45rem 0.24rem;
+}
+.iw-menu-line:enabled:hover {
+  background: var(--iw-paper);
+  border-color: var(--iw-ink);
+}
+/* A crewmate's line: their toque in their colour, then the words. */
+.iw .iw-menu-line.iw-give {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.45rem;
+}
+.iw-menu-toque .iw-ico {
+  width: 1.3rem;
+  height: 1.3rem;
+}
+.iw-menu-line.iw-give .iw-note {
+  grid-column: 2;
+}
+/* A drop is drawn quietly, as everywhere: the eye lands on the safe lines. */
+.iw-menu-line.iw-quiet .iw-label {
+  color: var(--iw-ink-soft);
+  text-decoration: underline wavy var(--iw-ink-faint);
+  text-underline-offset: 0.25rem;
+}
+/* A line the rules would refuse: off, in the soft ink, with the reason under it. */
+.iw .iw-menu-line:disabled {
+  color: var(--iw-ink-soft);
+}
+.iw-menu-line:disabled .iw-label {
+  text-decoration: line-through var(--iw-ink-faint);
+}
+.iw-menu-line .iw-note,
+.iw-menu-slot .iw-note {
+  display: block;
+  font-family: var(--iw-hand);
+  font-size: 0.8rem;
+  line-height: 1.2;
+  color: var(--iw-ink-soft);
+}
+/* A tool's moves to another slot of the belt: small buttons on one row. */
+.iw-menu-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem 0.24rem;
+}
+.iw .iw-menu-slot {
+  padding: 0.2rem 0.55rem 0.12rem;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  border: 0.09rem solid var(--iw-ink);
+  border-radius: 0.5rem 0.34rem 0.56rem 0.3rem;
+  background: var(--iw-paper);
+}
+.iw-menu-slot:enabled:hover {
+  box-shadow: inset 0 0 0 0.09rem var(--iw-ink);
 }
 
 /* --- The footer: the two quick presses, in the hand, beside the way out -------------------- */

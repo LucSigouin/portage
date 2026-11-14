@@ -9,8 +9,8 @@
  * string compare and nothing on screen is ever rebuilt.
  *
  * The only state kept here is what a browser needs: which control has the
- * keyboard, whether the player is steering the menus by key, and which rows
- * of the inventory the player has opened to read.
+ * keyboard, whether the player is steering the menus by key, and which tile
+ * of the inventory has its menu open and which one the info panel is about.
  */
 import './fonts.css';
 import './theme.css';
@@ -18,6 +18,7 @@ import type { CompassModel, GameInterface, InterfaceIntent, InterfaceModel, Pane
 import { arrivalView } from './arrival.ts';
 import { intentOf, reconcile } from './dom.ts';
 import { DROP_KEY_CODE, quickIntent } from './inventoryview.ts';
+import { TileMenu } from './inventorymenu.ts';
 import { toastKeyIntent } from './takeback.ts';
 import type { ViewNode } from './dom.ts';
 import { MapChart, MinimapCard } from './chart.ts';
@@ -25,7 +26,7 @@ import { feedbackInputIntent, focusFeedbackNote } from './feedback.ts';
 import { FILTER_DEFINITIONS, ICON, toqueIcon } from './icons.ts';
 import { paperTexture, tornPageOutline } from './paper.ts';
 import {
-  builtView, confirmView, debugView, hintView, hotbarView, itemDetailKeys, lineNoteView, lobbyView, notesView, panelView, promptView, toastsView,
+  builtView, confirmView, debugView, hintView, hotbarView, lineNoteView, lobbyView, notesView, panelView, promptView, toastsView,
   vitalsView,
 } from './views.ts';
 
@@ -181,9 +182,15 @@ export class InkInterface implements GameInterface {
   private builtDismiss: InterfaceIntent | null = null;
   /** The control that had the keyboard when the built view began: it gets it back. */
   private heldBeforeBuilt: HTMLElement | null = null;
-  /** The inventory rows the player has opened to read (`itemDetailKey`). Emptied when the inventory closes. */
-  private readonly openItems = new Set<string>();
-  /** The panel last drawn, so a row opened by a press is drawn at once, not a frame later. */
+  /** The inventory's small menu at a tile, and the tile its info panel is about (`inventorymenu.ts`). Both end with the inventory. */
+  private readonly tileMenu = new TileMenu({
+    emit: (intent) => this.emit(intent),
+    redraw: () => void this.drawPanel(this.lastPanel, true),
+    panel: () => this.lastPanel,
+    sheet: () => this.parts.get('panel')?.element ?? null,
+    byKeys: () => this.keyboardNavigation,
+  });
+  /** The panel last drawn, so a menu opened by a press is drawn at once, not a frame later. */
   private lastPanel: PanelModel | null = null;
   /** The notes last drawn: one of them may offer a key (takeback.ts). */
   private toasts: InterfaceModel['toasts'] = [];
@@ -237,6 +244,8 @@ export class InkInterface implements GameInterface {
     root.addEventListener('change', (event) => this.onChange(event), options);
     root.addEventListener('input', (event) => this.onInput(event), options);
     root.addEventListener('pointerover', (event) => this.onPointerOver(event), options);
+    // The keyboard on an inventory tile shows it in the info panel, as the pointer does.
+    root.addEventListener('focusin', (event) => this.tileMenu.point(event.target), options);
     root.addEventListener('pointerdown', () => this.setKeyboardNavigation(false), options);
     // The built view covers the screen, and a press anywhere on it gives the screen back.
     this.parts.get('built')!.element.addEventListener('pointerdown', () => {
@@ -246,6 +255,9 @@ export class InkInterface implements GameInterface {
     // the cut mark under it may be due, or done.
     root.addEventListener('scroll', () => this.markCut(), { capture: true, passive: true, signal: this.abort.signal });
     window.addEventListener('resize', () => this.markCut(), options);
+    // A scrolled sheet or a resized window closes the inventory's tile menu: its tile is no longer where it was.
+    root.addEventListener('scroll', () => this.tileMenu.dismiss(), { capture: true, passive: true, signal: this.abort.signal });
+    window.addEventListener('resize', () => this.tileMenu.dismiss(), options);
     // Before the game's own key handler, to decide which keys work the menus.
     window.addEventListener('keydown', (event) => this.onKeyDown(event), { capture: true, signal: this.abort.signal });
 
@@ -270,22 +282,10 @@ export class InkInterface implements GameInterface {
     // A field that only shows something (the invite link) is selected whole, ready to copy by hand.
     if (event.target instanceof HTMLInputElement && event.target.readOnly) event.target.select();
     const button = event.target instanceof Element ? event.target.closest('button') : null;
+    // An inventory tile (its menu opens, or Shift+click moves its stack) or a line of that menu: done there.
+    // Any other click closes an open menu and goes on (`inventorymenu.ts`).
+    if (this.tileMenu.click(event, button)) return;
     if (!button || button.disabled) return;
-    // An inventory row: it opens or closes what the item is and what can be done with it. Nothing goes to the game.
-    const detail = button.dataset.detail;
-    if (detail !== undefined && event.shiftKey) {
-      // Shift+click on a tile: its whole stack goes to the other side. The tile does not open.
-      const quick = quickIntent(this.lastPanel, detail, 'shift');
-      if (quick) this.emit(quick);
-      if (event.detail > 0) button.blur();
-      return;
-    }
-    if (detail !== undefined) {
-      if (!this.openItems.delete(detail)) this.openItems.add(detail);
-      this.drawPanel(this.lastPanel, true);
-      if (event.detail > 0) button.blur();
-      return;
-    }
     const intent = intentOf(button);
     if (!intent) return;
     const copy = button.dataset.copy;
@@ -359,6 +359,7 @@ export class InkInterface implements GameInterface {
   }
 
   private onPointerOver(event: Event): void {
+    this.tileMenu.point(event.target);
     const target = event.target instanceof Element ? event.target.closest('button:not([disabled])') : null;
     if (target === this.hovered) return;
     this.hovered = target;
@@ -381,7 +382,8 @@ export class InkInterface implements GameInterface {
   }
 
   private focusableControls(): HTMLElement[] {
-    const surface = this.topSurface();
+    // While the inventory's tile menu is open the keyboard walks its lines alone.
+    const surface = this.tileMenu.scope(this.topSurface());
     if (!surface) return [];
     return Array.from(surface.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])'))
       .filter((control) => control.tabIndex >= 0 && control.getClientRects().length > 0);
@@ -401,7 +403,8 @@ export class InkInterface implements GameInterface {
   }
 
   /**
-   * Keys that work the menus. Esc is never touched: backing out belongs to the session.
+   * Keys that work the menus. Esc is never touched: backing out belongs to the session. The one exception is
+   * the inventory's tile menu: Esc closes that menu and the inventory stays open.
    *
    * The rule is the one the game already has for sliders: a key pressed on a
    * focused control belongs to the control, and otherwise to the game.
@@ -424,6 +427,11 @@ export class InkInterface implements GameInterface {
       event.preventDefault();
       event.stopImmediatePropagation();
       if (!event.repeat) this.emit(offered);
+      return;
+    }
+    if (event.code === 'Escape' && this.tileMenu.escape()) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
       return;
     }
     const surface = this.topSurface();
@@ -520,27 +528,25 @@ export class InkInterface implements GameInterface {
   }
 
   /**
-   * Draw the panel, if it or the rows opened in it changed. `force` draws it even when they did not (a press that
-   * opened a row). Rows that are gone (eaten, moved, dropped) are forgotten, and every row closes with the inventory.
+   * Draw the panel, if it or what the inventory shows on it changed (the tile whose menu is open, the tile the info
+   * panel is about). `force` draws it even when they did not. A tile that is gone (eaten, moved, dropped, given) takes
+   * its menu with it, and both are forgotten when the inventory closes.
    */
   private drawPanel(panel: PanelModel | null, force = false): boolean {
     this.lastPanel = panel;
-    if (panel?.id === 'inventory') {
-      const present = new Set(itemDetailKeys(panel));
-      for (const key of this.openItems) if (!present.has(key)) this.openItems.delete(key);
-    } else {
-      this.openItems.clear();
-    }
+    this.tileMenu.follow(panel);
     const part = this.parts.get('panel');
     if (force && part) part.signature = '';
-    const signature = panel ? `${JSON.stringify(panel)}|${[...this.openItems].sort().join(',')}` : '';
-    if (!this.draw('panel', signature, () => panelView(panel!, this.openItems))) return false;
+    const signature = panel ? `${JSON.stringify(panel)}|${this.tileMenu.signature}` : '';
+    if (!this.draw('panel', signature, () => panelView(panel!, this.tileMenu.shown))) return false;
     const veil = this.parts.get('panel')!.element;
     veil.hidden = !panel;
     for (const slider of veil.querySelectorAll<HTMLInputElement>('input[type="range"]')) this.fillSlider(slider);
     this.capturing = panel?.id === 'settings' && panel.bindings.some((binding) => binding.slots.some((slot) => slot.capturing));
     // What the panel holds changed, so how far it runs may have.
     this.markCut();
+    // The inventory's tile menu is put beside its tile, before the browser paints it.
+    this.tileMenu.drawn();
     return true;
   }
 
