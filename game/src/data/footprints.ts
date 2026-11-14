@@ -12,7 +12,7 @@
  * Not solid (`WALK_ON_LANDMARKS`): what you walk on or lie on. The dock, the bridge deck, the dam crest, the quarry
  * benches (their faces are walls already, `groundHeight`), the reed beds and the bedrolls.
  */
-import type { LandmarkKind } from './types.ts';
+import type { LandmarkKind, NodeTypeId } from './types.ts';
 
 /** Metres per footprint cell. */
 export const FOOTPRINT_CELL = 0.5;
@@ -435,3 +435,65 @@ export const LANDMARK_FOOTPRINTS: Partial<Record<LandmarkKind, Footprint>> = {
     ],
   },
 };
+
+/**
+ * Where each kind of scavenge spot is solid (Luc, from the live game: "you can still walk through some things, like
+ * the fishing, the water container"): circles `[x, z, radius]` in the spot's own frame, as the look builds it
+ * (`look/nodes.ts`), turned where it stands by `nodeYaw` (`sim/solids.ts`). Circles, not a grid: a walker slides
+ * round a barrel as round a trunk, with no corner to catch on.
+ *
+ * The rule: a hard thing that stands above the shin (`FOOTPRINT_BAND.low`) is solid. A tree is solid by its trunk,
+ * as a wild one is. An empty list is walked through: plants a walker pushes through (cattails, a berry bush),
+ * a thing that lies flat (a bottle), a thing afloat (a wreck's buoy). To make one solid, or soft, change its line.
+ * `tests/look/node-solids.test.ts` holds every circle to its drawing.
+ */
+export const NODE_SOLIDS: Record<NodeTypeId, readonly (readonly [number, number, number])[]> = {
+  // Stacked logs, knee to waist high.
+  driftwood_pile: [[-0.7, 0.05, 0.55], [0, 0, 0.55], [0.8, -0.15, 0.55]],
+  // Soft: tall leaves, pushed through like the reeds on the shore.
+  cattail_stand: [],
+  // Soft: low scrub, pushed through like the scrub between the trees.
+  berry_bush: [],
+  // The trunk. The crown is overhead.
+  apple_tree: [[0.07, 0.03, 0.3]],
+  // A fallen trunk, shin to knee high.
+  mushroom_log: [[-0.55, 0.02, 0.3], [0, 0.05, 0.3], [0.55, 0.08, 0.3]],
+  // The trunk, as a wild birch (`TRUNK_RADIUS.birch`).
+  birch: [[0, 0, 0.3]],
+  // The trunk and the low boughs, as a wild spruce of this height.
+  spruce: [[0, 0, 0.6]],
+  // A hump of bedrock.
+  stone_outcrop: [[-0.5, 0.1, 0.8], [0.45, -0.05, 0.8]],
+  // A cut bank.
+  clay_bank: [[-0.6, -0.3, 0.75], [0, -0.35, 0.8], [0.6, -0.3, 0.75]],
+  crate: [[0, 0, 0.5]],
+  // The cupola. On a cottage it stands inside the roof's own outline.
+  attic: [[0, 0, 0.75]],
+  // The four walls, door shut or open.
+  shed: [[-0.45, -0.45, 0.8], [0.45, -0.45, 0.8], [-0.45, 0.45, 0.8], [0.45, 0.45, 0.8]],
+  junk_heap: [[-0.3, 0.05, 0.7], [0.45, 0, 0.75]],
+  // A skiff on its side, bow to stern.
+  boat_wreck: [[-0.25, -1.5, 0.6], [-0.25, -0.75, 0.7], [-0.25, 0, 0.7], [-0.25, 0.75, 0.7], [-0.25, 1.5, 0.6]],
+  machinery: [[-0.45, 0, 0.6], [0.3, 0, 0.6]],
+  // The barrel, the board spout over it and the spout's post.
+  rain_barrel: [[0, 0, 0.45], [-0.6, 0, 0.2], [-1.1, 0.05, 0.2]],
+  // The raised bed's frame.
+  garden_bed: [[-0.6, 0, 0.7], [0, 0, 0.7], [0.6, 0, 0.7]],
+  // The catch on its line between two stakes, the forked sticks, and the rod out over the water.
+  fishing_spot: [
+    [-0.5, 0.3, 0.25], [0, 0.3, 0.25], [0.5, 0.3, 0.25],
+    [-0.02, -0.75, 0.3], [0.1, -1.2, 0.15], [0.25, -1.6, 0.15], [0.4, -2, 0.15], [0.5, -2.35, 0.15],
+  ],
+  // Afloat: nobody walks there.
+  wreck_buoy: [],
+  // Flat on the ground.
+  message_bottle: [],
+  cache: [[-0.2, 0, 0.4], [0.2, 0, 0.4]],
+  beacon_lamp: [[0, 0, 0.65]],
+};
+
+/** How wide a survivor stands to a walker, metres: a body, as the walker's own (`TUNING.foot.bodyRadius`). */
+export const SURVIVOR_RADIUS = 0.3;
+
+/** A heron in the shallows, metres: its body. It does not move, so it is walked round. */
+export const HERON_RADIUS = 0.25;

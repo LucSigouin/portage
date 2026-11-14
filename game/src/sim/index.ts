@@ -242,6 +242,8 @@ export { attachmentTransformForHull, seatTransformForHull } from '../data/canoe.
 // --- Solids on the islands (Luc's list, line 1) -------------------------------
 // What a walker cannot pass: trees, rocks, landmarks. The look draws its trees from the same placements.
 export { anchorSolids, approachTo, bodyBlocked, dressingAnchors, dressingSolids, freeSpotNear, solidIndex, TRUNK_RADIUS } from './solids.ts';
+export { bufferStopSolids, nodeSolids, nodeYaw, survivorSolids } from './solids.ts';
+export { standClear } from './interact.ts';
 export type { DressingAnchor, SolidCircle, PlacedFootprint } from './solids.ts';
 export {
   LANDMARK_CLEARANCE, LANDMARK_FOOTPRINT, VARIANTS, hashText, islandHectares, keepOutCircles, scatterIsland, seededRandom,
