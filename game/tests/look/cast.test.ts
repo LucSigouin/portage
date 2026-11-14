@@ -7,7 +7,7 @@
  * - Told apart in solid black: each one's outline against each other one's, and against the three survivors'.
  *   (All four stand on one rig: the arms and the legs are in the same place, so half of any two shapes is shared.)
  * - What each one wears and carries stays out of their own arms, legs and paddle, and out of everyone in the next
- *   seat, on every hull: at rest, through the pull of the stroke, bailing and asleep. Through the whole stroke, the
+ *   seat, on every hull: at rest, through the whole stroke, bailing and asleep. Through the whole stroke, the
  *   recovery included, nothing of their own touches it either, and the paddler's own hands stay off the paddler's
  *   own head and chest (the stroke was redrawn: its hands went 12.5 cm into the head, and that was this test's
  *   yardstick). One thing is let through by name: the trapper's forearm brushes the front of his own beard.
@@ -274,22 +274,18 @@ describe('aboard, what each one wears and carries stays clear', () => {
     each(view, 'asleep', null);
   }
 
-  /**
-   * The first half of the stroke: the blade in the water and the arms out ahead. This test holds a figure against
-   * everyone beside them there. The whole stroke, each figure against their own things, is the next test's.
-   */
-  const PULL_ENDS = 0.5;
+  // The old stroke drew the lower arm back past the hip in its second half, and the crew was held against each
+  // other through the first half only. The stroke was redrawn: both tests below hold the whole of it.
   /**
    * The trapper's beard is hair, and it hangs where the hand on the grip passes the chin: his own forearm goes
    * this deep into its front through the pull, and no deeper (6.7 cm measured, hull 3, a kneeler, a tenth into the stroke).
    */
   const BEARD_BRUSH = 0.07;
 
-  it('at rest, through the pull, bailing and asleep: clear of their own arms, legs and paddle and of everyone beside them, on every hull, in every seat', () => {
+  it('at rest, through the whole stroke, bailing and asleep: clear of their own arms, legs and paddle and of everyone beside them, on every hull, in every seat', () => {
     const tight = new Map<string, Nearest>();
     for (const lineup of LINEUPS) for (let tier = 0; tier < HULL_TIERS.length; tier += 1) for (const side of [1, -1]) {
-      poses(lineup, tier, side, (view, when, stroke) => {
-        if (stroke !== null && stroke >= PULL_ENDS) return;
+      poses(lineup, tier, side, (view, when) => {
         const crew = [...membersOf(view).values()].map((member) => ({ parts: partsOf(member.figure, member.character), label: `${member.character} in seat ${member.seat}` }));
         tightest(crew, tight, `${lineup.name}, hull ${tier}, side ${side}, ${when}`, (solid) => /beard|fur hat/.test(solid));
       });
