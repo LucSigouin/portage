@@ -11,10 +11,18 @@ export const itemName = (itemId: ItemId): string => ITEMS[itemId].name;
 export const countedName = (itemId: ItemId, count: number): string => `${count} x ${itemName(itemId)}`;
 
 /**
- * What a recipe's row says beside its name: how many it makes, and only when that is more than one ("× 2"). The row
- * already names the thing, so "Rope 1 x Rope" said it twice (Luc's feedback note #8).
+ * What a recipe's row says beside its name: the thing it makes, unless the name already says it, and how many when
+ * that is more than one. "Rope" makes Rope: nothing ("Rope 1 x Rope" said it twice, Luc's feedback note #8). "Plank"
+ * makes two: "× 2". "Charcoal from driftwood" begins with what it makes: nothing. "Boil water" makes Clean water:
+ * "Clean water", so a player looking for Stew's Clean water finds its row (review r5, finding 2).
  */
-export const recipeOutputText = (count: number): string => (count > 1 ? `× ${count}` : '');
+export function recipeOutputText(recipeName: string, itemId: ItemId, count: number): string {
+  const made = itemName(itemId);
+  const named = recipeName.toLowerCase() === made.toLowerCase() || recipeName.toLowerCase().startsWith(`${made.toLowerCase()} `);
+  const counted = count > 1 ? `× ${count}` : '';
+  if (named) return counted;
+  return counted ? `${made} ${counted}` : made;
+}
 
 export const FLAG_SOURCES: Record<FlagId, string> = {
   wren_taught_sailcloth: 'Wren to teach you',

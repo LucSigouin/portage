@@ -143,7 +143,7 @@ function recipeRow(
     itemId: entry.known ? recipe.output.itemId : null,
     name: entry.known ? recipe.name : 'Unknown recipe',
     description: entry.known ? recipe.description : '',
-    outputText: entry.known ? recipeOutputText(recipe.output.count) : '',
+    outputText: entry.known ? recipeOutputText(recipe.name, recipe.output.itemId, recipe.output.count) : '',
     known: entry.known,
     inputs: entry.known ? [
       ...costRows(recipe.inputs, inventory, state),
