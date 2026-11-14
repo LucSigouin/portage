@@ -18,6 +18,7 @@ import {
   setConnected, setPlayerName, step,
 } from '../sim/index.ts';
 import type { Command, CommandResult, GameEvent, GameState, PlayerId, StepInput } from '../sim/index.ts';
+import { BackdropCanoe } from './backdrop.ts';
 import { BUILT_VIEW_FRAME_CAP, BUILT_VIEW_SECONDS, BUILT_VIEW_WAIT_SECONDS, builtPieceOf, isBuildCommand, showsPiece } from './builtview.ts';
 import type { BuiltPiece, BuiltView } from './builtview.ts';
 import { InputController } from './input.ts';
@@ -134,6 +135,8 @@ export class Session {
   slot: number | null = null;
   /** The scene behind the lobby: a game nobody plays. */
   backdrop: GameState = createBackdrop();
+  /** The canoe that scene shows: the one of the save played last, worn over the scene's own (`backdrop.ts`). */
+  readonly backdropCanoe = new BackdropCanoe();
   readonly input: InputController;
   /** True while the tab is hidden. */
   hidden = false;
@@ -475,8 +478,7 @@ export class Session {
   /** The lobby's backdrop drifts on; it is staged afresh now and then. */
   private driftBackdrop(frameSeconds: number): void {
     if (this.backdrop.playedSeconds >= BACKDROP_RESET_SECONDS) this.backdrop = createBackdrop(this.backdrop.time);
-    if (!this.hidden) step(this.backdrop, NEUTRAL_INPUT, frameSeconds);
-    drainEvents(this.backdrop);
+    this.backdropCanoe.drift(this.backdrop, this, this.store, frameSeconds, this.hidden);
   }
 
   /** What the panels do by themselves: the conversation follows the local player's talk, the credits follow the Beacon. */

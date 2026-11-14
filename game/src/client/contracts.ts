@@ -128,6 +128,8 @@ export interface WorldView {
    * the frame's shape. The built view frames the canoe with it. Optional: without it the bare hull is framed.
    */
   canoeBounds?(): CanoeBounds | null;
+  /** The frame's shape right now, width over height. The lobby's camera asks every frame, so a window pulled to a new shape is followed at once. Optional. */
+  viewAspect?(): number;
   dispose(): void;
 }
 
