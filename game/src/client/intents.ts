@@ -3,6 +3,7 @@
  * interface model and emits one of these when the player clicks or types.
  * The session decides what each intent does.
  */
+import type { CharacterId } from '../data/index.ts';
 import type { InputAction } from '../settings/index.ts';
 import type { Command } from '../sim/index.ts';
 import type { BoatTabId, PanelId, SettingsTabId } from './panels.ts';
@@ -54,6 +55,9 @@ export type InterfaceIntent =
   | { type: 'crew_copied' }
   | { type: 'crew_join' }
   | { type: 'crew_cancel_join' }
+  // the pick screen (viewmodels/cast.ts): mark one of the four, then start or join as them. Back is `close_panel`.
+  | { type: 'cast_mark'; character: CharacterId }
+  | { type: 'cast_confirm' }
   // the Feedback panel (feedback.ts)
   | { type: 'feedback_field'; field: 'note' | 'name'; value: string }
   | { type: 'feedback_kind'; kind: 'bug' | 'idea' | 'other' }

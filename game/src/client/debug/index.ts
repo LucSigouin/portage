@@ -24,6 +24,8 @@ export function applyDebugParameters(app: App, parameters: DebugParameters): voi
     const shot = stageShot(parameters.shot, seed);
     if (shot.state) session.adoptGame(addIdleCrew(shot.state, parameters.crew));
     if (shot.panel) session.handleIntent({ type: 'open_panel', panel: shot.panel });
+    // `?shot=cast`: the first slot's "New game here", which leads to the pick screen.
+    if (parameters.shot === 'cast') session.handleIntent({ type: 'new_game', slot: 0 });
     if (shot.state) {
       // Run one frame so the camera snaps behind the subject, then place it.
       app.frame(0);

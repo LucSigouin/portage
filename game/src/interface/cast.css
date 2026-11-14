@@ -1,0 +1,162 @@
+/* ---------- the pick screen: who you are, one of four ----------
+   A sheet of the lobby's paper with four cards side by side, one button under them and Back.
+
+   Nothing here moves by itself, and nothing moves under the pointer either: no transition, no animation, no fade,
+   no slide. A card under the pointer gets a firmer frame at once, and that is all. (The paper buttons elsewhere
+   lift a hair under the pointer. On this sheet they stand still.)
+
+   Every size is in rem, so the sheet keeps its shape at every window size and every interface size. It is sized
+   to be whole, with no scroll bar, in a 16 to 9 window at the largest interface size the settings offer: 90% of
+   the window's height is about 31.8 rem there, and 92% of its width about 57.9 rem.
+
+   A card's frame for its picture has its size before any picture is in it, and the letter that stands in it is
+   laid over the same box: a picture arriving, or never arriving, changes no size and moves no word. */
+.iw-panel.cs {
+  --tilt: -0.2deg;
+  width: min(56rem, 92vw);
+  padding: 1.3rem 1.9rem 1.15rem;
+}
+.cs > header {
+  align-items: baseline;
+}
+.cs-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.95rem;
+  flex: none;
+  margin-top: 1rem;
+  /* Room for the tick that sits on a card's corner. */
+  padding: 0.35rem 0.35rem 0 0;
+}
+.iw .cs-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  padding: 0.55rem 0.6rem 0.6rem;
+  text-align: center;
+  /* The frame is as thick marked as not: marking a card changes its ink, never its size. */
+  border: 0.14rem dashed var(--iw-ink-faint);
+  border-radius: 0.7rem 0.5rem 0.8rem 0.45rem;
+  background: var(--iw-paper);
+}
+/* Under the pointer: a firmer frame, at once. */
+.iw .cs-card:hover {
+  border-color: var(--iw-ink-soft);
+}
+/* The marked card: a full ink frame, brighter paper, a hard shadow, and the tick at its corner. */
+.iw .cs-card.cs-marked {
+  border-style: solid;
+  border-color: var(--iw-ink);
+  background: var(--iw-paper-bright);
+  box-shadow: 0.14rem 0.2rem 0 var(--iw-ink);
+}
+.cs-frame {
+  position: relative;
+  display: block;
+  height: 11.2rem;
+  border-bottom: 0.09rem solid var(--iw-ink-faint);
+  border-radius: 0.45rem 0.35rem 0 0;
+  background: var(--iw-paper-deep);
+  overflow: hidden;
+}
+.cs-card.cs-marked .cs-frame {
+  border-bottom-color: var(--iw-ink);
+}
+/* The letter that stands in the frame. Decoration: the name under it carries the word. */
+.cs-initial {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--iw-serif);
+  font-style: italic;
+  font-size: 7.2rem;
+  line-height: 1;
+  color: var(--iw-ink-faint);
+}
+/* A frame with its picture in it shows the picture alone. */
+.cs-frame[data-pictured] .cs-initial {
+  visibility: hidden;
+}
+.cs-slot {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+/* The picture: one of its pixels is one screen pixel (its size is set in whole pixels by the host). */
+.cs-pic {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+}
+.cs-tick {
+  position: absolute;
+  top: -0.62rem;
+  right: -0.62rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 0.115rem solid var(--iw-ink);
+  border-radius: 50%;
+  background: var(--iw-rust-fill);
+  color: var(--iw-paper);
+  visibility: hidden;
+}
+.cs-card.cs-marked .cs-tick {
+  visibility: visible;
+}
+.cs-tick svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.cs-name {
+  display: block;
+  margin-top: 0.5rem;
+  font-weight: 400;
+  font-style: italic;
+  font-size: 1.42rem;
+  line-height: 1.15;
+  color: var(--iw-ink);
+}
+/* Three lines are kept for it whatever it says, so the four cards end level. */
+.cs-line {
+  display: block;
+  min-height: 3.75rem;
+  margin-top: 0.2rem;
+  font-family: var(--iw-hand);
+  font-size: 0.95rem;
+  line-height: 1.3;
+  color: var(--iw-ink-soft);
+  text-wrap: balance;
+}
+.cs-card.cs-marked .cs-line {
+  color: var(--iw-ink);
+}
+.cs-note {
+  flex: none;
+  margin-top: 0.75rem;
+  font-family: var(--iw-hand);
+  font-size: 0.98rem;
+  line-height: 1.3;
+  color: var(--iw-ink-soft);
+  text-align: center;
+}
+.iw-panel > .cs-foot {
+  justify-content: center;
+  gap: 1.2rem;
+  margin-top: 0.75rem;
+}
+/* The sheet's two buttons stand still under the pointer: brighter paper at once, no lift. */
+.iw .cs .iw-btn {
+  transition: none;
+}
+.iw .cs .iw-btn:enabled:hover {
+  transform: none;
+}

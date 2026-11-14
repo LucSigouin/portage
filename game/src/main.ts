@@ -14,7 +14,9 @@ import type { AudioEngine } from './client/contracts.ts';
 import { parseDebugParameters } from './client/debug/parameters.ts';
 import { createGameInterface } from './interface/index.ts';
 import { withCanoePreview } from './interface/preview-host.ts';
+import { withCastPictures } from './interface/cast-host.ts';
 import { drawCanoeSketch } from './look/canoe-sketch.ts';
+import { drawCastSketches } from './look/cast-sketch.ts';
 import { createSaveStore } from './save/index.ts';
 import { createWorldView } from './look/index.ts';
 import { setLocalPlayerId } from './look/crew.ts';
@@ -96,12 +98,13 @@ function boot(): void {
   // (Worded as it always was: `tests/perf/readout.test.ts` reads this line to see that the readout plays in a storage that forgets.)
   const played = { storage: parameters.sandbox || perf ? createMemoryStorage() : browserStorage() };
   // The lobby shows the canoe of the save played last (`interface/preview-host.ts`): the interface, with that added.
-  const gameInterface = withCanoePreview(createGameInterface(), {
+  // And the pick screen shows the four of the cast (`interface/cast-host.ts`): the same interface, with that added too.
+  const gameInterface = withCastPictures(withCanoePreview(createGameInterface(), {
     slotSummaries: () => app.session.slotSummaries(),
     latestSlot: () => app.session.latestSlot(),
     load: (slot) => createSaveStore(played.storage).load(slot),
     draw: drawCanoeSketch,
-  });
+  }), { draw: drawCastSketches });
   const audio = createAudio();
   let loop: FrameLoop | null = null;
 
@@ -247,12 +250,13 @@ function boot(): void {
 
   const start = (): void => {
     // A handle for the console and for browser tests.
-    (window as unknown as { portage: unknown }).portage = { app, session, worldView, loop, followVisibility, preview: gameInterface.preview };
+    (window as unknown as { portage: unknown }).portage = { app, session, worldView, loop, followVisibility, preview: gameInterface.preview, cast: gameInterface.cast };
     loop?.start();
     if (perf) void import('./client/debug/index.ts').then((debug) => debug.runPerfReadout(app, worldView, loop));
     // `?join=ROOM&name=...`: ask the host tab for a seat. The lobby shows until it answers.
     if (parameters.join !== null) {
-      session.joinGame(joinTabRoom(parameters.join, randomHex(8)), { name: parameters.name, key: crewKey(parameters.join, parameters.name) });
+      // A tester's door: no pick screen. It joins as whoever this browser last picked, or the first of the cast.
+      session.joinGame(joinTabRoom(parameters.join, randomHex(8)), { name: parameters.name, key: crewKey(parameters.join, parameters.name), character: session.keptCharacter() });
     }
   };
 

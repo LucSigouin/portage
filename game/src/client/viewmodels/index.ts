@@ -15,6 +15,7 @@ import {
 } from './gamepanels.ts';
 import { buildCrewHostPanel, buildCrewJoinPanel } from './crew.ts';
 import { buildFeedbackPanel, withFeedbackEntry } from './feedback.ts';
+import { buildCastPanel } from './cast.ts';
 import { buildHudModel } from './hud.ts';
 import {
   buildConfirmModel, buildCreditsPanel, buildHowToPlayPanel, buildLobbyModel, buildPausePanel, buildSaveSlotsPanel,
@@ -35,6 +36,7 @@ export * from './stations.ts';
 export * from './menus.ts';
 export * from './crew.ts';
 export * from './feedback.ts';
+export * from './cast.ts';
 export * from './settings.ts';
 export * from './chart.ts';
 
@@ -67,6 +69,8 @@ export interface InterfaceModelInput {
   crew?: CrewView | null;
   /** The feedback desk (`client/feedback.ts`). Asked for its state only while its panel is the one open. */
   feedback?: { view(): import('../feedback.ts').FeedbackView } | null;
+  /** The pick screen while it is open (`Session.cast`). Null or absent the rest of the time. */
+  cast?: import('./cast.ts').CastView | null;
   /** The words of the built view while it holds the screen (`builtWords`). Null or absent the rest of the time. */
   built?: { kicker: string; title: string; text: string } | null;
   /** The arrival card on the screen this frame (`ArrivalQueue.model`). Null or absent the rest of the time. */
@@ -82,7 +86,7 @@ const PANEL_TITLES: Readonly<Record<PanelId, string>> = {
   settings: 'Settings', how_to_play: 'How to Play', credits: 'Credits', pause: 'Paused', save_slots: 'Save slots',
   inventory: 'Inventory', crafting: 'Crafting', canoe_builder: 'Canoe builder', quest_log: 'Quest log', map: 'Map',
   dialogue: 'Conversation', confirm: 'Confirm', crew_host: 'Host a crew', crew_join: 'Join a crew',
-  feedback: 'Feedback',
+  feedback: 'Feedback', character_select: 'Pick who you are',
 };
 
 /** The model of one open panel, or null when it has nothing to show. */
@@ -109,6 +113,9 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
     }
     case 'feedback':
       return input.feedback ? { ...frame, ...buildFeedbackPanel(input.feedback.view()) } : null;
+    case 'character_select':
+      // Its way out is Back: to the save slots or the join card it came from.
+      return input.cast ? { ...frame, close: { ...frame.close, label: 'Back' }, ...buildCastPanel(input.cast, input.crew ?? null) } : null;
     case 'save_slots':
       return { ...frame, ...buildSaveSlotsPanel(input.slots, input.now, input.currentSlot) };
     case 'inventory':

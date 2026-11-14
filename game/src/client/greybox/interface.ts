@@ -198,6 +198,11 @@ function panelBodyHtml(panel: PanelModel): string {
     // The Feedback card is the Ink & Wash interface's too. What a player typed is never built into markup: not drawn here at all.
     case 'feedback':
       return `<p>${escapeHtml(panel.status)}</p>`;
+    // The pick screen is the Ink & Wash interface's as well. Here: the four as plain buttons, and the one that starts.
+    case 'character_select':
+      return `<p>${escapeHtml(panel.subtitle)}</p><nav class="gb-column">${panel.cards.map((card) =>
+        `<button class="${card.marked ? 'gb-selected' : ''}" ${intentAttribute(card.intent)}>${escapeHtml(card.name)}<small>${escapeHtml(card.line)}</small></button>`).join('')}`
+        + `${buttonHtml(panel.start)}</nav>`;
   }
 }
 

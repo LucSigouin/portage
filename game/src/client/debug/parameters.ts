@@ -4,6 +4,7 @@
  * - `?bot=1&speed=8`: the headless bot plays the live session.
  * - `?at=quest7`: fast-forward a game to the start of a main quest, then hand over.
  * - `?shot=<name>`: stage a fixed state for a screenshot. Add `&live=1` to let it run.
+ *   `?shot=cast` is the pick screen, as a new game in slot 1 meets it.
  * - `?crew=N` (2 to 4): a new game with N-1 extra players sitting idle beside the local one, to see
  *   the look and the HUD with a crew. Adds the same idle crew to `?at=`, `?shot=` and `?bot=1`.
  * - `&fps=1`: show the frame-rate readout. `&seed=<n>` picks the game's seed.
@@ -15,7 +16,7 @@
  * join panel with the code filled in. It touches nothing else: the player's own saves stay as they are.
  */
 export const SHOT_NAMES = [
-  'lobby', 'settings', 'play', 'island', 'inventory', 'crafting', 'builder', 'quests', 'map', 'dialogue', 'pause',
+  'lobby', 'cast', 'settings', 'play', 'island', 'inventory', 'crafting', 'builder', 'quests', 'map', 'dialogue', 'pause',
   'storm', 'night', 'upgraded', 'beacon',
 ] as const;
 

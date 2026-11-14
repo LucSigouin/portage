@@ -535,6 +535,7 @@ export type PanelModel = { title: string; close: ButtonModel } & (
     cancel: ButtonModel | null;
   }
   | import('./feedback.ts').FeedbackPanelBody
+  | import('./cast.ts').CastPanelBody
 );
 
 export interface ConfirmModel {
