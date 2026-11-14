@@ -105,8 +105,8 @@ const METER_ICON = { hunger: ICON.hunger, thirst: ICON.thirst, energy: ICON.ener
  * words say which. An away player's toque and meters are washed out and their name is tagged
  * "away"; the words keep their full ink. Nothing in it moves.
  */
-export function crewView(crew: CrewRowModel[], patterned: boolean): ViewNode {
-  return h('div.iw-crew.iw-paper', { key: 'crew', role: 'group', 'aria-label': 'Crew' },
+export function crewView(crew: CrewRowModel[], patterned: boolean, hidden = false): ViewNode {
+  return h('div.iw-crew.iw-paper', { key: 'crew', role: 'group', 'aria-label': 'Crew', hidden },
     h('i.iw-tape'),
     crew.map((mate) => h('div.iw-mate', {
       key: mate.playerId, 'data-player': mate.playerId, 'data-where': mate.where,
@@ -132,26 +132,31 @@ export function crewView(crew: CrewRowModel[], patterned: boolean): ViewNode {
       mate.lowText !== '' ? h('b.iw-mate-low', null, mate.lowText) : null))));
 }
 
-/** Bottom left: the three meters, the water in the hull and the canoe's status lines. With a crew, the crew list over them. */
-export function vitalsView(hud: HudModel, patterned: boolean): ViewNode[] {
+/**
+ * Bottom left: the three meters, the water in the hull and the canoe's status lines. With a crew, the crew list over them.
+ * Small (in a crew, behind a sheet: edgecards.ts) it is one row: the bars, their numbers and the water's words. The rest
+ * takes the hidden attribute, so it is off the screen and out of a screen reader's reach alike.
+ */
+export function vitalsView(hud: HudModel, patterned: boolean, small = false): ViewNode[] {
   const water = hud.water;
+  const left = small || undefined;
   return [h('div.iw-vitals.iw-paper', { key: 'vitals' },
-    h('i.iw-tape'),
+    h('i.iw-tape', { hidden: left }),
     hud.meters.map((meter) => h('div.iw-meter', { key: meter.id, class: meter.low ? 'iw-low' : '' },
       icon(METER_ICON[meter.id]),
-      h('span.iw-lab', null, meter.label),
+      h('span.iw-lab', { hidden: left }, meter.label),
       h('div.iw-bar', { class: classes(`iw-bar-${meter.id}`, patterned && `iw-${meter.pattern}`) },
         h('i', { style: `--v:${meter.value / 100}` }),
         meter.cap < 100 ? h('u', { style: `--v:${meter.cap / 100}` }) : null),
       h('span.iw-val', null, meter.value))),
     water.visible ? h('div.iw-bilge', { key: 'water', class: water.warning ? 'iw-low' : '' },
-      h('div.iw-gauge-holder', { html: waterGauge(water.value / 100, patterned) }),
+      h('div.iw-gauge-holder', { hidden: left, html: waterGauge(water.value / 100, patterned) }),
       h('div.iw-bilge-text', null,
         h('b', null, water.label),
         h('span', null, `${water.value}%`, icon(ICON[water.trend], 'iw-trend-holder'), water.trend))) : null,
-    hud.canoeLines.length > 0 ? h('div.iw-canoe-lines', { key: 'canoe' }, hud.canoeLines.map((line, index) =>
+    hud.canoeLines.length > 0 ? h('div.iw-canoe-lines', { key: 'canoe', hidden: left }, hud.canoeLines.map((line, index) =>
       h('div', { key: index, class: `iw-tone-${line.tone}` }, line.text))) : null,
-    hud.crew.length > 1 ? crewView(hud.crew, patterned) : null)];
+    hud.crew.length > 1 ? crewView(hud.crew, patterned, small) : null)];
 }
 
 /**
