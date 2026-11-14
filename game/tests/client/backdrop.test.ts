@@ -101,6 +101,9 @@ describe('the canoe behind the menu is the one of the save played last', () => {
       expect(dressOn(session.backdrop.canoe)).toEqual({
         hullTier: saved.hullTier, attachments: saved.attachments, sailRaised: saved.sailRaised, lanternLit: saved.lanternLit, rainProgress: saved.rainProgress ?? 0,
       });
+      // An old save is brought up to this build's shape in memory only: the text in the slot is as it was saved.
+      expect(storage.writes).toEqual([]);
+      expect(storage.entries.get(`${SAVE_KEY_PREFIX}1`)).toBe(text);
     });
   }
 
