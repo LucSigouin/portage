@@ -26,8 +26,9 @@ export function crewOf(state: GameState): Crew {
 }
 
 /**
- * What a player wears: their own row of the crew marks, by player id. So the one in the blue coat is the
- * same person on every screen, whoever that screen follows.
+ * A player's seat colours: their own row of the crew marks, by player id. Of these a figure wears the toque
+ * colour on its headgear; its coat and trousers are its character's own (`dressAs` in `cast.ts`). So the one
+ * in the red toque is the same person on every screen, whoever that screen follows.
  */
 export function outfitOf(playerId: number): CrewMark {
   return CREW_MARKS[((playerId % CREW_MARKS.length) + CREW_MARKS.length) % CREW_MARKS.length];
