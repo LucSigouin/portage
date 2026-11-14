@@ -48,10 +48,10 @@ const QUARTER: Clip = { x: 360, y: 90, width: 1200, height: 900 };
 /**
  * What the patched hull must show over the leaky one, in a whole 1920x1080 frame, from either view: pixels that differ, and pixels of bark.
  * Set for pen C, the game's bold outline: its wider line covers more of what the mend changes. Astern it measures 8 486 under C, 8 769
- * under the old pen (?pen=today), which this floor of 8 500 was tuned on. A mend that is not drawn measures 0 (the water is held).
- * The floor stays above the 7 168 the hull showed astern before the sheets.
+ * under the old pen (?pen=today), whose floor was 8 500. The patched hull drawn as the leaky one (the break in canoe/tool/breaks.py)
+ * measures 6 581 under C, 6 823 under the old pen: the floor sits at the same point between the two as before, 86% of the way up.
  */
-const DIFFERENT_FLOOR = 8000;
+const DIFFERENT_FLOOR = 8200;
 /** What each attachment must add to the bare long hull. The firebox, the smallest, adds 231 under pen C and 331 under the old pen, whose floor was 250. Missing, it adds 0. */
 const ATTACHMENT_FLOOR = 175;
 const BARK_FLOOR = 2000;
