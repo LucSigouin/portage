@@ -22,7 +22,7 @@
   display: none;
 }
 .iw.iw-vitals-small .iw-vitals .iw-meter {
-  grid-template-columns: 1.5rem 4.2rem 1.8rem;
+  grid-template-columns: 1.5rem 3.2rem 1.8rem;
   gap: 0.35rem;
 }
 .iw.iw-vitals-small .iw-vitals .iw-bilge {
