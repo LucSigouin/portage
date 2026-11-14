@@ -37,9 +37,26 @@ function knowingAll(state: GameState): GameState {
 }
 
 describe('a recipe row says its name once', () => {
-  it('counts only what tells something: one made is nothing, more is "× n"', () => {
-    expect(recipeOutputText(1)).toBe('');
-    expect(recipeOutputText(2)).toBe('× 2');
+  it('a recipe named as its output says the name once: one made is nothing, more is "× n"', () => {
+    expect(recipeOutputText('Rope', 'rope', 1)).toBe('');
+    expect(recipeOutputText('Plank', 'plank', 2)).toBe('× 2');
+    expect(recipeOutputText('Charcoal from driftwood', 'charcoal', 1)).toBe('');
+  });
+
+  it('a recipe named for something else names what it makes: "Boil water" makes Clean water (review r5, finding 2)', () => {
+    expect(recipeOutputText('Boil water', 'clean_water', 1)).toBe('Clean water');
+    expect(recipeOutputText('Boil water', 'clean_water', 3)).toBe('Clean water × 3');
+  });
+
+  it('every recipe\'s row says what it makes and never its name twice', () => {
+    for (const recipeId of RECIPE_IDS) {
+      const recipe = RECIPES[recipeId];
+      const made = ITEMS[recipe.output.itemId].name;
+      const row = `${recipe.name} ${recipeOutputText(recipe.name, recipe.output.itemId, recipe.output.count)}`;
+      expect(row.toLowerCase(), recipeId).toContain(made.toLowerCase());
+      expect(row.toLowerCase().split(made.toLowerCase()).length - 1, recipeId).toBe(1);
+      if (recipe.output.count > 1) expect(row, recipeId).toContain(`× ${recipe.output.count}`);
+    }
   });
 
   for (const [where, stage] of [['at Home Knoll\'s camp', () => inCamp('home_knoll')], ['aboard a canoe with all four stations', afloat]] as const) {
@@ -53,8 +70,9 @@ describe('a recipe row says its name once', () => {
           if (!row.known) continue;
           rows += 1;
           const recipe = RECIPES[row.recipeId];
-          expect(row.outputText, `${menu.name}: ${row.recipeId}`).not.toContain(ITEMS[recipe.output.itemId].name);
-          expect(row.outputText, `${menu.name}: ${row.recipeId}`).toBe(recipe.output.count > 1 ? `× ${recipe.output.count}` : '');
+          const made = ITEMS[recipe.output.itemId].name;
+          expect(`${row.name} ${row.outputText}`.split(made).length - 1, `${menu.name}: ${row.recipeId}`).toBe(1);
+          expect(row.outputText, `${menu.name}: ${row.recipeId}`).toBe(recipeOutputText(recipe.name, recipe.output.itemId, recipe.output.count));
         }
         const panel = panelOf(state, menu.panels);
         expect(collectText(panelView(panel!)), menu.name).not.toMatch(/\b1 x /);
