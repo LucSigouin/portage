@@ -5,7 +5,8 @@
 
 /* In a crew the game runs on behind a sheet: the health card stays, small, in one row at the bottom left beside the
    tool belt, over the sheet's wash and clear of the sheet (edgecards.ts). The bars, their numbers and the water in
-   the hull; no words, no crew list. Nothing moves: it is drawn small or full, never between. */
+   the hull; no words, no crew list. Nothing moves: it is drawn small or full, never between. What the row leaves out
+   takes the hidden attribute (views.ts, vitalsView), so this file holds only the row's own layout. */
 .iw.iw-vitals-small .iw-vitals {
   z-index: 1;
   width: auto;
@@ -13,13 +14,6 @@
   align-items: center;
   gap: 0.95rem;
   padding: 0.4rem 0.85rem 0.35rem;
-}
-.iw.iw-vitals-small .iw-vitals > .iw-tape,
-.iw.iw-vitals-small .iw-vitals > .iw-canoe-lines,
-.iw.iw-vitals-small .iw-vitals > .iw-crew,
-.iw.iw-vitals-small .iw-vitals .iw-meter .iw-lab,
-.iw.iw-vitals-small .iw-vitals .iw-bilge .iw-gauge-holder {
-  display: none;
 }
 .iw.iw-vitals-small .iw-vitals .iw-meter {
   grid-template-columns: 1.5rem 3.2rem 1.8rem;

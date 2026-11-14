@@ -131,6 +131,28 @@ describe('the vitals card', () => {
     expect({ ...crewViews[0]!, children: crewViews[0]!.children.slice(0, -1) }).toEqual(soloViews[0]);
   });
 
+  // Round 5, fix b: the full browser run's layout test reads every text not under [hidden]. The slim row (in a crew,
+  // behind a sheet) leaves out the tape, the meters' words, the gauge, the canoe lines and the crew list: they take the
+  // hidden attribute while small, and lose it when the card is full again.
+  it('small, the parts the slim row leaves out carry hidden; full, none of them does', () => {
+    const hud = hudOf(newGame(7, { crew: 4 }));
+    hud.water = { ...hud.water, visible: true };
+    if (hud.canoeLines.length === 0) hud.canoeLines = [{ tone: 'info', text: '3.0 m/s' }] as HudModel['canoeLines'];
+    const leftOut = ['iw-tape', 'iw-lab', 'iw-gauge-holder', 'iw-canoe-lines', 'iw-crew'];
+    const kept = ['iw-meter', 'iw-bar', 'iw-val', 'iw-bilge', 'iw-bilge-text'];
+    const card = (small: boolean): ViewNode[] => vitalsView(hud, false, small)[0]!.children;
+    const direct = (nodes: ViewNode[], name: string): ViewNode[] => withClass(nodes, name).filter((node) => !withClass(nodes, 'iw-crew').some((crew) => crew !== node && all([crew]).includes(node)));
+    for (const name of leftOut) {
+      const small = direct(card(true), name);
+      expect(small.length, name).toBeGreaterThan(0);
+      for (const node of small) expect(node.attributes.hidden, `${name} small`).toBe(true);
+      for (const node of direct(card(false), name)) expect(node.attributes.hidden ?? false, `${name} full`).toBe(false);
+    }
+    for (const name of kept) for (const node of withClass(card(true), name)) expect(node.attributes.hidden ?? false, `${name} kept`).toBe(false);
+    // Full, the card is the one it always was.
+    expect(vitalsView(hud, false, false)).toEqual(vitalsView(hud, false));
+  });
+
   it('with a crew of two, three and four, hangs a card with that many rows', () => {
     for (const size of [2, 3, 4]) {
       expect(withClass(vitalsView(hudOf(newGame(7, { crew: size })), false), 'iw-mate')).toHaveLength(size);

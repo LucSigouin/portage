@@ -584,8 +584,12 @@ export class InkInterface implements GameInterface {
       this.hudShown = hud !== null;
       this.hud.hidden = !hud;
     }
-    this.draw('vitals', hud ? JSON.stringify([hud.meters, hud.water, hud.canoeLines, model.patternedMeters, hud.crew]) : '',
-      () => vitalsView(hud!, model.patternedMeters));
+    // Which edge cards a sheet leaves up. The health card's slim row is drawn by the view itself: what it leaves out
+    // takes the hidden attribute (views.ts), so it is neither on the screen nor read aloud.
+    const edges = edgeCardsFor(panel, (hud?.crew.length ?? 0) > 1);
+    const vitalsSmall = edges === 'small';
+    this.draw('vitals', hud ? JSON.stringify([hud.meters, hud.water, hud.canoeLines, model.patternedMeters, hud.crew, vitalsSmall]) : '',
+      () => vitalsView(hud!, model.patternedMeters, vitalsSmall));
     this.draw('notes', hud ? JSON.stringify([hud.clockText, hud.night, hud.weatherText, hud.stormWarning, hud.placeText, hud.trackers]) : '',
       () => notesView(hud!));
     // One standing slip under the prompt: the line's trouble when there is any, the tip otherwise.
@@ -609,7 +613,6 @@ export class InkInterface implements GameInterface {
       this.dialogue = panel?.id === 'dialogue';
       part('panel').classList.toggle('iw-veil-clear', this.dialogue);
     }
-    const edges = edgeCardsFor(panel, (hud?.crew.length ?? 0) > 1);
     if (edges !== this.edges) {
       this.edges = edges;
       setEdgeCardsHidden([part('notes'), part('hint'), part('prompt'), this.minimap?.element], edges !== 'shown');

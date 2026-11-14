@@ -47,7 +47,9 @@ describe('the edge cards while a sheet is open', () => {
   it('the small card is one row over the wash, the bars and numbers and the water in the hull, no words', () => {
     const sheet = source('edgecards.css').replace(/\/\*[\s\S]*?\*\//g, '');
     expect(sheet).toMatch(/\.iw\.iw-vitals-small \.iw-vitals \{[^}]*z-index: 1;[^}]*display: flex;/);
-    for (const gone of ['> .iw-crew', '.iw-meter .iw-lab', '.iw-bilge .iw-gauge-holder']) expect(sheet).toContain(`.iw.iw-vitals-small .iw-vitals ${gone}`);
+    // What the row leaves out takes the hidden attribute in the view (crew-hud.test.ts), not display: none here.
+    expect(sheet).not.toMatch(/display: none/);
+    expect(source('interface.ts')).toContain('vitalsView(hud!, model.patternedMeters, vitalsSmall)');
   });
 
   it('nothing fades or slides: no transition and no animation in its style sheet', () => {
