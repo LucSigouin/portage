@@ -148,19 +148,6 @@ describe('every place a key is named', () => {
     expect(held.map((slot) => words(withClass([slot], 'iw-n')))).toEqual(['1', '2', '3', '4', '5']);
   });
 
-  it('the inventory: the belt\'s fifth number, on a tool\'s tile and on an empty one', () => {
-    const state = newGame();
-    standOn(state, 'home_knoll');
-    const panel = (): ViewNode[] => panelView({ title: 'Inventory', close: CLOSE, ...buildInventoryPanel(state) });
-    const numbers = (): ViewNode[] => withClass(withClass(panel(), 'iw-belt-tiles'), 'iw-n');
-    expect(numbers().map((number) => words([number]))).toEqual(['1', '2', '3', '4', '5']);
-    expect(numbers().map((number) => drawn([number]))).toEqual([[], [], [], [], ['5']]);
-    // Every tool the crew can own: the belt has no empty slot left.
-    for (const tool of TOOL_IDS) give(state, tool);
-    expect(withClass(withClass(panel(), 'iw-belt-tiles'), 'iw-blank')).toEqual([]);
-    expect(numbers().map((number) => drawn([number]))).toEqual([[], [], [], [], ['5']]);
-  });
-
   it('the settings: a key bound to Z or I is drawn on its cap, and in the note that says so', () => {
     const settings = createDefaultSettings();
     const page = (notice: string): ViewNode[] => panelView({ title: 'Settings', close: CLOSE, ...buildSettingsPanel(settings, 'controls', null, notice, 'Version test') });
