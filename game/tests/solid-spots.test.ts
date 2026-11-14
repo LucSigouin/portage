@@ -16,6 +16,7 @@ import {
 } from '../src/sim/index.ts';
 import type { GameState, SolidCircle, StepInput } from '../src/sim/index.ts';
 import { canWalk } from '../src/sim/foot.ts';
+import { filedAt } from '../src/sim/solids.ts';
 import { newGame, standOn } from './support.ts';
 import { createRig } from './net/rig.ts';
 
@@ -270,5 +271,45 @@ describe('a guest walking into the rain barrel', () => {
     rig.run(0.5);
     expect(rig.settle()).toBe(true);
     expect(sam.link.mismatches).toBe(0);
+  });
+});
+
+describe('the cost of a step', () => {
+  it('is no more than before these were solid: an ask looks through fewer circles and footprints than it did', () => {
+    // The live game (main at 2857012), measured the same way: 0.8977 circles and 0.0468 footprints filed where a
+    // walker asks, as a mean over a 2 m grid on all the ground of every island (r4-solid/scripts/cost-filed.ts).
+    const BEFORE = { circles: 0.8977, footprints: 0.0468 };
+    let asks = 0;
+    let circles = 0;
+    let footprints = 0;
+    for (const island of ISLANDS) {
+      const reach = Math.max(island.radiusX, island.radiusZ) * 1.2;
+      for (let x = island.center.x - reach; x <= island.center.x + reach; x += 2) {
+        for (let z = island.center.z - reach; z <= island.center.z + reach; z += 2) {
+          if (terrainHeight(x, z) < -TUNING.foot.wadeDepth) continue;
+          const filed = filedAt(x, z);
+          asks += 1;
+          circles += filed.circles;
+          footprints += filed.footprints;
+        }
+      }
+    }
+    expect(asks).toBeGreaterThan(50000);
+    expect(circles / asks).toBeLessThanOrEqual(BEFORE.circles);
+    expect(footprints / asks).toBeLessThanOrEqual(BEFORE.footprints);
+  });
+
+  it('still sees every solid from anywhere a body would touch it: the finer filing loses none', () => {
+    const { circles } = solidIndex();
+    for (const circle of circles) {
+      for (let turn = 0; turn < 8; turn += 1) {
+        const reach = circle.radius + BODY - 0.01;
+        const x = circle.x + Math.sin((turn * Math.PI) / 4) * reach;
+        const z = circle.z - Math.cos((turn * Math.PI) / 4) * reach;
+        expect(bodyBlocked(x, z), `${circle.kind} at ${circle.x.toFixed(1)}, ${circle.z.toFixed(1)}`).toBe(true);
+        // And a body as wide as the filing allows for (a roomy stand, `approachTo`).
+        expect(bodyBlocked(circle.x + Math.sin((turn * Math.PI) / 4) * (circle.radius + 1.19), circle.z - Math.cos((turn * Math.PI) / 4) * (circle.radius + 1.19), 1.2)).toBe(true);
+      }
+    }
   });
 });

@@ -247,8 +247,12 @@ function onFootprint(placedFootprint: PlacedFootprint, x: number, z: number): bo
   return column >= 0 && column < line.length && line.charCodeAt(column) === 35; // '#'
 }
 
-/** Metres a filing cell spans, and how far past its own edge a solid is filed, so any body radius up to it is seen. */
-const FILE_CELL = 8;
+/**
+ * Metres a filing cell spans, and how far past its own edge a solid is filed, so any body radius up to it is seen.
+ * Four metres, not eight: with the scavenge spots solid too (Luc, Round 4) an ask looks at fewer circles than it did
+ * before they were (0.47 an ask over all the ground of the islands, from 0.87), so collisions cost no more a step.
+ */
+const FILE_CELL = 4;
 const FILE_MARGIN = 1.2;
 
 interface SolidIndex {
@@ -298,6 +302,12 @@ export function solidIndex(): SolidIndex {
   });
   built = index;
   return index;
+}
+
+/** How many solids are filed where a point is: the most one ask there looks through. For the tests and the cost's measure. */
+export function filedAt(x: number, z: number): { circles: number; footprints: number } {
+  const entry = solidIndex().cells.get(cellKey(Math.floor(x / FILE_CELL), Math.floor(z / FILE_CELL)));
+  return { circles: entry?.circles.length ?? 0, footprints: entry?.footprints.length ?? 0 };
 }
 
 /** Points round a body's edge that are tried against footprints: its middle and eight round it. */
