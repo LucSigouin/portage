@@ -83,7 +83,7 @@ export const CAST_BUILD: Readonly<Record<CharacterId, CastBuild>> = {
   trapper: {
     scale: [1.07, 1.05, 1.1], top: 0.951, arm: 1.18, leg: 1.12,
     solids: [
-      { name: 'bedroll', from: [-0.304, 0.363, -0.262], to: [0.304, 0.487, -0.262], radius: 0.085 },
+      { name: 'bedroll', from: [-0.319, 0.481, -0.236], to: [0.319, 0.519, -0.236], radius: 0.048 },
       { name: 'beard', from: [0, 0.612, 0.085], to: [0, 0.637, 0.085], radius: 0.095 },
       { name: 'fur hat', from: [0, 0.822, 0], to: [0, 0.875, 0], radius: 0.2 },
     ],
@@ -91,16 +91,16 @@ export const CAST_BUILD: Readonly<Record<CharacterId, CastBuild>> = {
   angler: {
     scale: [0.94, 1.1, 0.94], top: 0.991, arm: 0.88, leg: 0.85,
     solids: [
-      { name: 'back brim', from: [0, 0.835, -0.085], to: [0, 0.77, -0.33], radius: 0.014 },
-      { name: 'back brim, left', from: [0.19, 0.835, -0.085], to: [0.11, 0.79, -0.27], radius: 0.014 },
-      { name: 'back brim, right', from: [-0.19, 0.835, -0.085], to: [-0.11, 0.79, -0.27], radius: 0.014 },
-      { name: 'creel', from: [0.05, 0.22, -0.18], to: [0.15, 0.22, -0.18], radius: 0.055 },
+      { name: 'back brim', from: [0, 0.835, -0.05], to: [0, 0.787, -0.225], radius: 0.014 },
+      { name: 'back brim, left', from: [0.165, 0.835, -0.05], to: [0.1, 0.795, -0.2], radius: 0.014 },
+      { name: 'back brim, right', from: [-0.165, 0.835, -0.05], to: [-0.1, 0.795, -0.2], radius: 0.014 },
+      { name: 'creel', from: [0.05, 0.27, -0.163], to: [0.15, 0.27, -0.163], radius: 0.055 },
     ],
   },
   scout: {
     scale: [0.86, 1, 0.88], top: 0.866, arm: 0.86, leg: 0.85,
     solids: [
-      { name: 'map case', from: [-0.1, 0.63, -0.236], to: [0.02, 0.33, -0.236], radius: 0.045 },
+      { name: 'map case', from: [-0.167, 0.31, -0.19], to: [0.167, 0.37, -0.19], radius: 0.04 },
       { name: 'hood point', from: [0, 0.725, -0.075], to: [0, 0.835, -0.15], radius: 0.035 },
       { name: 'cape, back hem', from: [-0.1, 0.185, -0.19], to: [0.1, 0.185, -0.19], radius: 0.015 },
     ],
@@ -142,15 +142,18 @@ function strap(b: Builder, y: number, radius: number, lean: number, depth: numbe
   b.torus(radius, 0.014, colour, { pos: [0, y, 0], rot: [0, HALF_TURN, lean], order: 'ZYX', scale: [depth / radius, 1, 1], kind: KIND.PLAIN }, 18);
 }
 
-/** Arms and legs of one thickness and the seat's colours: sleeves in the coat's, trousers in the legs'. */
-function plainLimbs(rig: CastRig, seed: number, outfit: CastOutfit, arm: number, leg: number, mitt: { size: number; colour: string }): void {
+/**
+ * Arms and legs of one thickness and the seat's colours: sleeves in the coat's, trousers in the legs'.
+ * `elbow`: the elbow's own thickness, where a heavy arm must still pass what the paddler's does.
+ */
+function plainLimbs(rig: CastRig, seed: number, outfit: CastOutfit, arm: number, leg: number, mitt: { size: number; colour: string }, elbow = arm): void {
   [rig.L, rig.R].forEach((side, index) => {
     const at = seed + index * 10;
     const sleeve = inkOf(side.upper);
     const trouser = inkOf(side.thigh);
-    redraw(side.upper, at, (b) => rod(b, arm, outfit.coat, sleeve));
-    redraw(side.fore, at + 1, (b) => rod(b, arm, outfit.coat, sleeve, arm * 0.94));
-    redraw(side.elbow, at + 2, (b) => ball(b, arm, outfit.coat, sleeve));
+    redraw(side.upper, at, (b) => rod(b, arm, outfit.coat, sleeve, elbow));
+    redraw(side.fore, at + 1, (b) => rod(b, elbow, outfit.coat, sleeve, arm * 0.94));
+    redraw(side.elbow, at + 2, (b) => ball(b, elbow, outfit.coat, sleeve));
     redraw(side.mitt, at + 3, (b) => ball(b, mitt.size, mitt.colour, inkOf(side.mitt)));
     redraw(side.thigh, at + 4, (b) => rod(b, leg, outfit.legs, trouser));
     redraw(side.shin, at + 5, (b) => rod(b, leg, outfit.legs, trouser, leg * 0.94));
@@ -179,9 +182,9 @@ function trapper(rig: CastRig, outfit: CastOutfit): void {
   // the jacket: short and thick over a deep chest and belly, a fur hem, three toggles down the front. It is no
   // deeper behind than the paddler's coat: a kneeler in the next seat lays a paddle across there.
   const jacket = b.sphere(0.2, outfit.coat, { pos: [0, 0.27, 0.04], scale: [1.06, 1.25, 1.1], flat: true }, 12);
-  b.cyl(0.188, 0.19, 0.16, outfit.coat, { pos: [0, 0.08, 0], id: jacket, flat: true }, 10);
+  b.cyl(0.176, 0.178, 0.16, outfit.coat, { pos: [0, 0.08, 0], id: jacket, flat: true }, 10);
   b.sphere(0.2, outfit.coat, { pos: [0, 0.482, 0], scale: [1.56, 0.56, 1], id: jacket, flat: true }, 10);
-  b.torus(0.19, 0.03, FUR, { pos: [0, 0.045, 0], rot: [HALF_TURN, 0, 0], kind: KIND.PLAIN }, 12);
+  b.torus(0.168, 0.022, FUR, { pos: [0, 0.045, 0], rot: [HALF_TURN, 0, 0], kind: KIND.PLAIN }, 12);
   for (const y of [0.2, 0.28, 0.36]) {
     b.box(0.075, 0.02, 0.014, LEATHER_DARK, { pos: [0, y, 0.04 + 0.22 * Math.sqrt(1 - ((y - 0.27) / 0.25) ** 2) + 0.002], id: jacket, flat: true, kind: KIND.PLAIN });
   }
@@ -195,18 +198,21 @@ function trapper(rig: CastRig, outfit: CastOutfit): void {
   // the fur hat: a cloth crown in the seat's colour, a thick fur band rolled up round it, a flap down over each ear
   b.sphere(0.16, outfit.toque, { pos: [0, 0.855, -0.002], scale: [1.03, 0.6, 1.03], flat: true }, 12);
   const band = b.torus(0.162, 0.046, FUR, { pos: [0, 0.822, -0.002], rot: [HALF_TURN + 0.08, 0, 0], kind: KIND.PLAIN }, 14);
-  for (const side of [-1, 1]) b.sphere(1, FUR, { pos: [side * 0.182, 0.712, -0.01], scale: [0.045, 0.12, 0.08], id: band, flat: true, kind: KIND.PLAIN }, 8);
-  // the bedroll across the back, a little askew, two straps round it, hung from a strap over the right shoulder
-  const roll: Triple = [0, 0, HALF_TURN + 0.2];
-  b.cyl(0.085, 0.085, 0.62, BLANKET, { pos: [0, 0.425, -0.262], rot: roll }, 10);
-  for (const along of [-0.17, 0.17]) {
-    b.cyl(0.091, 0.091, 0.04, PAL.rustDark, { pos: [along * Math.cos(0.2), 0.425 + along * Math.sin(0.2), -0.262], rot: roll, kind: KIND.PLAIN }, 10);
+  for (const side of [-1, 1]) b.sphere(1, FUR, { pos: [side * 0.19, 0.7, -0.01], scale: [0.05, 0.14, 0.085], id: band, flat: true, kind: KIND.PLAIN }, 8);
+  // the bedroll across the shoulder blades, a blanket rolled tight, two straps round it, hung from a strap over the
+  // right shoulder. It lies close: a fully fitted canoe leaves under 30 cm behind a seat, and today's stroke
+  // folds the upper hand's elbow in behind the shoulder blade, so it is no thicker than the gap between the two.
+  const roll: Triple = [0, 0, HALF_TURN + 0.06];
+  b.cyl(0.048, 0.048, 0.64, BLANKET, { pos: [0, 0.5, -0.236], rot: roll }, 10);
+  for (const along of [-0.19, 0.19]) {
+    b.cyl(0.054, 0.054, 0.04, PAL.rustDark, { pos: [along * Math.cos(0.06), 0.5 + along * Math.sin(0.06), -0.236], rot: roll, kind: KIND.PLAIN }, 10);
   }
   strap(b, 0.29, 0.275, 0.55, 0.2, LEATHER_DARK);
   finishTorso(rig, b);
 
   const { arm, leg } = CAST_BUILD.trapper;
-  plainLimbs(rig, 600, outfit, arm, leg, { size: 1.1, colour: LEATHER_DARK });
+  // heavy arms, but the elbow is the paddler's own: on a fully fitted canoe a kneeler's elbow passes the map table by a hair
+  plainLimbs(rig, 600, outfit, arm, leg, { size: 1.1, colour: LEATHER_DARK }, 1);
   // heavy boots with a fur top
   [rig.L, rig.R].forEach((side, index) => redraw(side.boot, 608 + index * 10, (boots) => {
     boots.box(0.12, 0.095, 0.21, '#4a3a30', { id: inkOf(side.boot), flat: true, kind: KIND.PLAIN });
@@ -227,16 +233,17 @@ function angler(rig: CastRig, outfit: CastOutfit): void {
   // (the moustache is one soft shape in the face's own ink: two small rods, each with its own line, read as a blot)
   const head = face(b, 0.8, 0.01, 0.122, SKIN_TAN, [0.94, 1.08, 0.96], 0.047);
   b.sphere(0.055, GREY_HAIR, { pos: [0, 0.742, 0.112], scale: [1.5, 0.42, 0.5], id: head, flat: true, kind: KIND.PLAIN }, 8);
-  // the rain hat, all of it the seat's colour: a round crown, the brim short and turned up in front, long and low behind
+  // the rain hat, all of it the seat's colour: a round crown, the brim short and turned up in front, longer and low
+  // behind (24 cm from the middle of the head: more would reach the canopy's hoop behind a kneeler)
   const hat = b.sphere(0.13, outfit.toque, { pos: [0, 0.895, -0.005], scale: [1, 0.74, 1], flat: true }, 12);
-  b.cyl(0.2, 0.208, 0.02, outfit.toque, { pos: [0, 0.835, -0.085], rot: [-0.26, 0, 0], scale: [1, 1, 1.25], id: hat, flat: true }, 16);
+  b.cyl(0.17, 0.178, 0.02, outfit.toque, { pos: [0, 0.835, -0.05], rot: [-0.26, 0, 0], scale: [1, 1, 1.1], id: hat, flat: true }, 16);
   b.torus(0.131, 0.012, PAL.ink, { pos: [0, 0.853, -0.02], rot: [HALF_TURN - 0.26, 0, 0], id: hat, flat: true, kind: KIND.PLAIN }, 12);
   // the creel: a small wicker basket on the left hip, carried high and close at the small of the back (a kneeler
   // behind lays a paddle across at hip height), a lid, a peg, on a strap over the right shoulder
   const turn: Triple = [0, 0.2, 0];
-  b.box(0.17, 0.095, 0.085, WICKER, { pos: [0.1, 0.21, -0.182], rot: turn, kind: KIND.CANE });
-  b.box(0.18, 0.024, 0.095, WICKER_DARK, { pos: [0.1, 0.268, -0.182], rot: turn, kind: KIND.CANE });
-  b.sphere(0.015, PAL.woodLight, { pos: [0.09, 0.248, -0.229], flat: true, kind: KIND.PLAIN }, 6);
+  b.box(0.17, 0.095, 0.085, WICKER, { pos: [0.1, 0.26, -0.165], rot: turn, kind: KIND.CANE });
+  b.box(0.18, 0.024, 0.095, WICKER_DARK, { pos: [0.1, 0.318, -0.165], rot: turn, kind: KIND.CANE });
+  b.sphere(0.015, PAL.woodLight, { pos: [0.09, 0.298, -0.212], flat: true, kind: KIND.PLAIN }, 6);
   strap(b, 0.37, 0.215, 0.52, 0.15, LEATHER);
   finishTorso(rig, b);
 
@@ -276,8 +283,8 @@ function scout(rig: CastRig, outfit: CastOutfit): void {
     const back = Math.max(0, -ahead) ** 1.5;
     const front = Math.max(0, ahead);
     cape[0].push(new THREE.Vector3(across * 0.08, 0.5, ahead * 0.075));
-    cape[1].push(new THREE.Vector3(across * 0.15, 0.48, ahead * (0.11 + 0.04 * back)));
-    cape[2].push(new THREE.Vector3(across * 0.212, 0.435, ahead * (0.14 + 0.05 * back)));
+    cape[1].push(new THREE.Vector3(across * 0.15, 0.48, ahead * 0.11));
+    cape[2].push(new THREE.Vector3(across * 0.212, 0.435, ahead * (0.14 + 0.02 * back)));
     cape[3].push(new THREE.Vector3(across * 0.25, 0.325 + 0.04 * front - 0.155 * back, ahead * (0.155 + 0.045 * back)));
   }
   const cloak = nextId();
@@ -292,16 +299,17 @@ function scout(rig: CastRig, outfit: CastOutfit): void {
   // a braid out of the side of the hood, down the front of the left shoulder, close to the body, tied with a ribbon
   b.tube([[0.118, 0.61, 0.005], [0.14, 0.53, 0.055], [0.132, 0.455, 0.1]], 0.023, RED_HAIR, { id: hair, flat: true, kind: KIND.ROPE, steps: 8 }, 6);
   b.sphere(0.028, PAL.rust, { pos: [0.131, 0.437, 0.106], flat: true, kind: KIND.PLAIN }, 7);
-  // the map case: a leather tube across the back, capped at both ends, its top over one shoulder. It rides on
-  // the cape, well off the spine: today's stroke folds the upper hand's elbow in behind the shoulder blade.
-  const lean = Math.atan2(0.12, 0.3);
+  // the map case: a leather tube slung low across the back, capped at both ends, lying on the cape under the
+  // shoulder blades. Higher, today's stroke folds the upper hand's elbow into it; further out, it reaches the
+  // gear behind a kneeler on a fully fitted canoe.
+  const lean = HALF_TURN + 0.18;
   const tilt: Triple = [0, 0, lean];
   const [dx, dy] = [-Math.sin(lean), Math.cos(lean)];
-  b.cyl(0.04, 0.04, 0.34, LEATHER, { pos: [-0.04, 0.48, -0.236], rot: tilt, kind: KIND.PLAIN }, 9);
+  b.cyl(0.035, 0.035, 0.34, LEATHER, { pos: [0, 0.34, -0.19], rot: tilt, kind: KIND.PLAIN }, 9);
   for (const end of [-1, 1]) {
-    b.cyl(0.045, 0.045, 0.04, LEATHER_DARK, { pos: [-0.04 + dx * end * 0.16, 0.48 + dy * end * 0.16, -0.236], rot: tilt, kind: KIND.PLAIN }, 9);
+    b.cyl(0.04, 0.04, 0.04, LEATHER_DARK, { pos: [dx * end * 0.155, 0.34 + dy * end * 0.155, -0.19], rot: tilt, kind: KIND.PLAIN }, 9);
   }
-  strap(b, 0.325, 0.206, 0.68, 0.19, LEATHER_DARK);
+  strap(b, 0.325, 0.206, 0.68, 0.158, LEATHER_DARK);
   finishTorso(rig, b);
 
   const { arm, leg } = CAST_BUILD.scout;
