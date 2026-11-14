@@ -433,6 +433,26 @@ describe('Back, and what was typed', () => {
   });
 });
 
+describe('a join tried again after it failed', () => {
+  it('keeps the pick: Join goes out again from the join card, no screen (the master review of round 4, finding 8)', async () => {
+    const relay = new FakeRelay();
+    const { host, code } = await hosting(relay);
+    const lost = atJoinScreen(relay, 'QRTWXY', 'Sam');
+    lost.send({ type: 'cast_mark', character: 'scout' });
+    lost.press(lost.panel('character_select').start);
+    await run([host, lost], 0.5);
+    expect(lost.open()).toEqual(['crew_join']);
+    const dials = guestDials(relay);
+    // The right code this time, and Join: straight out, with the scout.
+    lost.type('code', code);
+    lost.press(lost.panel('crew_join').join);
+    expect(lost.open()).toEqual(['crew_join']);
+    expect(guestDials(relay)).toBe(dials + 1);
+    await run([host, lost], 1);
+    expect(picks(host.app.session.game!)).toEqual(['voyageur', 'scout']);
+  });
+});
+
 describe('the pick sticks', () => {
   it('in the save and after a reload: a new browser session on the same storage continues as the same person', () => {
     const storage = new FakeStorage();
