@@ -98,10 +98,10 @@ export const CAST_BUILD: Readonly<Record<CharacterId, CastBuild>> = {
     ],
   },
   scout: {
-    scale: [0.86, 1, 0.88], top: 0.845, arm: 0.86, leg: 0.85,
+    scale: [0.86, 1, 0.88], top: 0.866, arm: 0.86, leg: 0.85,
     solids: [
       { name: 'map case', from: [-0.1, 0.63, -0.236], to: [0.02, 0.33, -0.236], radius: 0.045 },
-      { name: 'hood point', from: [0, 0.72, -0.06], to: [0, 0.83, -0.215], radius: 0.035 },
+      { name: 'hood point', from: [0, 0.725, -0.075], to: [0, 0.835, -0.15], radius: 0.035 },
       { name: 'cape, back hem', from: [-0.1, 0.185, -0.19], to: [0.1, 0.185, -0.19], radius: 0.015 },
     ],
   },
@@ -224,10 +224,10 @@ function angler(rig: CastRig, outfit: CastOutfit): void {
   for (const y of [0.16, 0.28, 0.4]) b.box(0.04, 0.022, 0.012, BRASS, { pos: [0.012, y, 0.171 - y * 0.09], id: coat, flat: true, kind: KIND.PLAIN });
   b.cyl(0.085, 0.105, 0.13, outfit.coat, { pos: [0, 0.615, 0], flat: true }, 10);
   // a long weathered face on a long neck, a grey moustache that droops past the mouth
-  face(b, 0.8, 0.01, 0.122, SKIN_TAN, [0.94, 1.08, 0.96], 0.047);
-  const moustache = nextId();
+  // (the moustache shares the face's ink: two small rods with a line of their own round each read as a blot)
+  const head = face(b, 0.8, 0.01, 0.122, SKIN_TAN, [0.94, 1.08, 0.96], 0.047);
   for (const side of [-1, 1]) {
-    b.beam([side * 0.01, 0.757, 0.128], [side * 0.056, 0.7, 0.112], 0.017, GREY_HAIR, { r2: 0.011, id: moustache, flat: true, kind: KIND.PLAIN }, 6);
+    b.beam([side * 0.008, 0.755, 0.128], [side * 0.062, 0.692, 0.108], 0.02, GREY_HAIR, { r2: 0.013, id: head, flat: true, kind: KIND.PLAIN }, 6);
   }
   // the rain hat, all of it the seat's colour: a round crown, the brim short and turned up in front, long and low behind
   const hat = b.sphere(0.13, outfit.toque, { pos: [0, 0.895, -0.005], scale: [1, 0.74, 1], flat: true }, 12);
@@ -288,9 +288,9 @@ function scout(rig: CastRig, outfit: CastOutfit): void {
   // a small fair face, a red fringe
   face(b, 0.645, 0.01, 0.125, SKIN_FAIR, [1, 1, 1], 0.05);
   const hair = b.sphere(0.06, RED_HAIR, { pos: [0, 0.719, 0.112], scale: [1.55, 0.5, 0.5], flat: true, kind: KIND.PLAIN }, 8);
-  // the hood, up, its point trailing behind
+  // the hood, up, its point standing up and back: it shows from the front
   b.sphere(0.15, outfit.toque, { pos: [0, 0.675, -0.045], scale: [1, 1, 0.95], id: cloak, flat: true }, 12);
-  b.cone(0.085, 0.24, outfit.toque, { pos: [0, 0.775, -0.135], rot: [-0.95, 0, 0], id: cloak, flat: true }, 9);
+  b.cone(0.085, 0.22, outfit.toque, { pos: [0, 0.775, -0.11], rot: [-0.6, 0, 0], id: cloak, flat: true }, 9);
   // a braid out of the hood, forward over the left shoulder, tied with a ribbon
   b.tube([[0.085, 0.6, 0.075], [0.115, 0.525, 0.105], [0.12, 0.465, 0.128]], 0.027, RED_HAIR, { id: hair, flat: true, kind: KIND.ROPE, steps: 8 }, 6);
   b.sphere(0.032, PAL.rust, { pos: [0.12, 0.445, 0.132], flat: true, kind: KIND.PLAIN }, 7);
