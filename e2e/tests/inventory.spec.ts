@@ -87,8 +87,13 @@ async function showInventory(page: Page, boatStacks: number): Promise<void> {
   // wait until the sheet shows the boat as it was just filled, not for a count of frames.
   await page.waitForFunction((wanted) => {
     const panel = (window as any).portage.app.lastModel?.panel;
+    // The bag too: the staged bag (driftwood first) can still be on the sheet when the boat already has its count.
+    // A key pressed then lands on a tile the next draw takes away (the keyboard test's first tile, its menu).
+    const bag = (window as any).portage.session.game.players[0].backpack.map((stack: { itemId: string }) => stack.itemId);
+    const drawnBag = [...document.querySelectorAll<HTMLElement>('.iw-item-pick[data-detail^="backpack:"]')].map((each) => each.dataset.detail!.split(':')[1]);
     return panel?.id === 'inventory' && panel.cargo.slots.filter((slot: { itemId: string | null }) => slot.itemId !== null).length === wanted
-      && document.querySelectorAll('.iw-inv-boat .iw-item-pick').length === wanted;
+      && document.querySelectorAll('.iw-inv-boat .iw-item-pick').length === wanted
+      && JSON.stringify(drawnBag) === JSON.stringify(bag);
   }, boatStacks);
   await frames(page, 2);
 }
@@ -386,7 +391,19 @@ test('a click on a tile opens a small menu beside it, at every tile, and it clos
     return shown!.lines;
   };
   expect(await linesOf('backpack:berries:0')).toEqual(['Eat', 'Stow', 'Drop']);
-  expect(await linesOf('backpack:stone:0')).toEqual(['Stow', 'Drop']);
+  // The staged boat is full of stacks, so stone fits only on the boat's own stone stack. The Stow line says how
+  // many still fit there, and Stow moves that many. The number is counted here from the game's state, not read
+  // off the line: a stack holds 20, and the bag's stone is more than what fits.
+  const stone = await read<{ aboard: number; held: number; free: number }>(page, `({
+    aboard: game.canoe.cargo.filter((each) => each.itemId === 'stone').reduce((sum, each) => sum + each.count, 0),
+    held: player.backpack.find((each) => each.itemId === 'stone').count,
+    free: portage.app.lastModel.panel.cargo.slots.filter((slot) => slot.itemId === null).length,
+  })`);
+  expect(stone.free).toBe(0);
+  expect(stone.aboard).toBeGreaterThan(0);
+  expect(stone.aboard).toBeLessThan(20);
+  expect(stone.held).toBeGreaterThan(20 - stone.aboard);
+  expect(await linesOf('backpack:stone:0')).toEqual([`Stow [Room for ${20 - stone.aboard}]`, 'Drop']);
   const boatKey = await page.evaluate(() => document.querySelector<HTMLElement>('.iw-inv-boat .iw-item-pick')!.dataset.detail!);
   expect((await linesOf(boatKey)).filter((line) => line !== 'Eat' && line !== 'Drink')).toEqual(['Take', 'Drop']);
   expect(await linesOf('belt:hatchet:0')).toEqual(['Hold', 'To 1', 'To 2', 'To 4', 'To 5', 'Drop (off) [Tools stay on the belt. They are never dropped]']);
@@ -428,6 +445,8 @@ test('a click on a tile opens a small menu beside it, at every tile, and it clos
   await frames(page, 4);
   expect(await read(page, 'portage.session.isOpen("inventory")')).toBe(false);
   expect(await page.locator('.iw-tile-menu').count()).toBe(0);
+  // The pointer off the sheet first: a pointer left over the berries' tile would rightly show them again on opening.
+  await page.mouse.move(4, 4);
   await page.keyboard.press('Tab');
   await page.waitForSelector('.iw-panel-inventory');
   await frames(page, 2);
@@ -448,10 +467,19 @@ test('the keyboard alone shows a tile in the info panel, opens its menu, walks i
   });
   // An arrow key puts the keyboard on the sheet, then Tab walks it to the first tile of the bag.
   await page.keyboard.press('ArrowDown');
-  for (let press = 0; press < 12 && !(await held()).startsWith('backpack:'); press += 1) await page.keyboard.press('Tab');
+  const where = (): Promise<string> => page.evaluate(() => {
+    const active = document.activeElement as HTMLElement | null;
+    return active?.dataset.detail ?? `${active?.tagName.toLowerCase() ?? 'nothing'}.${String(active?.getAttribute('class') ?? '').split(' ').slice(0, 2).join('.')}`;
+  });
+  const road: string[] = [await where()];
+  for (let press = 0; press < 12 && !(await held()).startsWith('backpack:'); press += 1) {
+    await page.keyboard.press('Tab');
+    road.push(await where());
+  }
   await frames(page);
   const key = await held();
-  expect(key.startsWith('backpack:')).toBe(true);
+  road.push(await where());
+  expect(key.startsWith('backpack:'), `the keyboard's road: ${road.join(' > ')}`).toBe(true);
   expect((await about(page)).about).toBe(key);
   // Enter opens the menu with the keyboard on its first line, and the arrows and Tab walk its lines and nothing else.
   await page.keyboard.press('Enter');

@@ -86,8 +86,22 @@ async function toTheScreen(page: Page, nth = 0): Promise<void> {
 
 const card = (page: Page, character: string) => page.locator(`${SHEET} .cs-card[data-character="${character}"]`);
 
+/**
+ * The game draws the interface in its own frame, not in the click: a click or a key shows on the sheet at the
+ * game's next frame, and a headless browser asks its question sooner than that. So wait for that frame: the app
+ * builds a new model every frame and draws it in the same step, so a new model means the sheet was drawn again.
+ */
+async function drawn(page: Page): Promise<void> {
+  const before = await page.evaluateHandle(() => (window as unknown as { portage: { app: { lastModel: unknown } } }).portage.app.lastModel);
+  await page.waitForFunction((model) => (window as unknown as { portage: { app: { lastModel: unknown } } }).portage.app.lastModel !== model, before);
+  await before.dispose();
+}
+
 /** The card marked, as a screen reader hears it and as it is drawn. They must agree. */
 async function marked(page: Page): Promise<string> {
+  // The sheet as the game has drawn it since the last click or key (`drawn`), never the frame before.
+  await expect(page.locator(SHEET)).toBeVisible();
+  await drawn(page);
   const seen = await page.evaluate((sheet) => ({
     checked: [...document.querySelectorAll(`${sheet} [role="radio"][aria-checked="true"]`)].map((each) => (each as HTMLElement).dataset.character),
     drawn: [...document.querySelectorAll(`${sheet} .cs-card.cs-marked`)].map((each) => (each as HTMLElement).dataset.character),
@@ -127,6 +141,7 @@ const boxes = (page: Page): Promise<Record<string, number[]>> => page.evaluate((
 function sheetProblems(sheet: string): string[] {
   const problems: string[] = [];
   const page = document.documentElement;
+  const rem = parseFloat(getComputedStyle(page).fontSize);
   if (page.scrollWidth > window.innerWidth || page.scrollHeight > window.innerHeight) problems.push(`the page scrolls: ${page.scrollWidth} x ${page.scrollHeight}`);
   const panel = document.querySelector(sheet);
   if (!panel) return ['the sheet is not on the page'];
@@ -144,7 +159,11 @@ function sheetProblems(sheet: string): string[] {
     }
     if (element.scrollWidth > element.clientWidth + 1 && style.overflowX !== 'visible') problems.push(`cut off sideways: ${name}`);
     const box = element.getBoundingClientRect();
-    if (box.width > 0 && (box.left < edge.left - 1 || box.right > edge.right + 14 || box.top < edge.top - 14 || box.bottom > edge.bottom + 1)) {
+    // The tape stands over the sheet's top edge: 0.5 rem over it and turned 3 or 4 degrees, 0.63 rem in all
+    // (`theme.css`). It is drawn in rem like the rest of the sheet, so its allowance is in rem too: 0.7 rem, which
+    // is the 14 px of before at 1920x1080 at interface size 1, less on a smaller sheet and more on a larger one.
+    const above = element.classList.contains('iw-tape') ? 0.7 * rem : 14;
+    if (box.width > 0 && (box.left < edge.left - 1 || box.right > edge.right + 14 || box.top < edge.top - above || box.bottom > edge.bottom + 1)) {
       // (The tick sits on its card's corner, and the tape on the sheet's edge: both inside this allowance.)
       problems.push(`outside the sheet: ${name}`);
     }
@@ -337,6 +356,18 @@ for (const size of [{ width: 1920, height: 1080 }, { width: 1366, height: 768 },
         session.updateSettings({ ...session.settings, accessibility: { ...session.settings.accessibility, uiScale } });
       }, scale);
       await page.waitForTimeout(250);
+      // A frame of a new size gets its new pictures once the size has held still a quarter of a second
+      // (`SETTLE_MILLISECONDS`, the lobby sketch's rule). Until then the old ones lie in the frames, cut to them.
+      // Wait for the pictures of this size (the game's own rounding, `sketchPixels`), or for none at all.
+      await expect.poll(() => page.evaluate((sheet) => {
+        const seen = (window as unknown as { portage: { cast: { report(): { pictures: number; size: { width: number; height: number } | null } } } }).portage.cast.report();
+        if (seen.pictures === 0 || seen.size === null) return 'no pictures';
+        const box = document.querySelector(`${sheet} .cs-slot`)!.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        const width = Math.floor(Math.floor(box.width + 1e-6) * ratio + 1e-6);
+        const height = Math.floor(Math.floor(box.height + 1e-6) * ratio + 1e-6);
+        return seen.size.width === width && seen.size.height === height ? 'pictures of this size' : `pictures of ${seen.size.width}x${seen.size.height} in frames of ${width}x${height}`;
+      }, SHEET), { message: `interface size ${scale}: the pictures of the new size`, timeout: 5000 }).toMatch(/^(no pictures|pictures of this size)$/);
       expect(await page.evaluate(sheetProblems, SHEET), `interface size ${scale}`).toEqual([]);
       // Every card's words are drawn inside the card.
       const spills = await page.evaluate((sheet) => [...document.querySelectorAll(`${sheet} .cs-card`)].filter((each) => {

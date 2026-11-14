@@ -58,11 +58,16 @@ async function read(page: Page): Promise<Seen> {
 
 /** The camera looks north, as the mouse would put it, and the figure faces north too. */
 async function faceNorth(page: Page): Promise<void> {
-  await page.evaluate(() => {
+  await face(page, 0);
+}
+
+/** The camera looks one way, as the mouse would put it, and the figure faces that way too (0 north, pi/2 east). */
+async function face(page: Page, yaw: number): Promise<void> {
+  await page.evaluate((yaw) => {
     const { app, session } = (window as unknown as { portage: { app: any; session: any } }).portage;
-    app.camera.setOrbit({ yaw: 0 });
-    session.game.players[0].heading = 0;
-  });
+    app.camera.setOrbit({ yaw });
+    session.game.players[0].heading = yaw;
+  }, yaw);
   await frames(page, 2);
 }
 
@@ -70,7 +75,10 @@ const gap = (first: Seen, second: Seen): number => Math.hypot(second.x - first.x
 
 test('W eases in and out: a little on the first frame, a full walk after 0.15 s, standing still within 0.1 s of letting go', async ({ page }) => {
   const problems = await open(page);
-  await faceNorth(page);
+  // East, the way D walks in the next test: open ground. The island shot stands the player beside the first unused
+  // spot, and spots are solid since round 4. Walking north from there brushes that spot's side, and the walker
+  // slides off it 15 degrees and keeps cos(15) of the step (`foot.ts`, `slideAlong`): 0.04186 m, not 0.04333.
+  await face(page, Math.PI / 2);
   const start = await read(page);
   await page.keyboard.down('KeyW');
   await frames(page, 1);
