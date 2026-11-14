@@ -59,12 +59,26 @@ export function drawCastSketches(request: CastSketchRequest): HTMLCanvasElement[
   let post: Post | null = null;
   let cast: Map<CharacterId, Figure> | null = null;
   try {
+    // The figures and the one camera first: they need no graphics chip.
+    cast = standingCast(request.seat);
+    const camera = new THREE.PerspectiveCamera(CAST_VIEW.lens, width / height, 0.05, 200);
+    const metres = castFrame(camera, [...cast.values()]);
+    const scene = new THREE.Scene();
+    scene.add(camera);
+    for (const figure of cast.values()) scene.add(figure.root);
+
+    // Noon on a clear, dry, windless day, whatever the game behind the screen is doing, the sun on the side shown.
+    sketchDaylight();
+    GU.uLightDir.value.copy(sketchLight(new THREE.Vector3(...paletteAt(SKETCH_HOUR, 0, 0).lightDirection), CAST_VIEW));
+    // The pen's scale is the one of a window `sheetHeight` high, and its weight is one all round.
+    unpin = pinUniform(GU.uSc, request.sheetHeight / 1080);
+    uneven = evenPen(CAST_PEN.weight);
+
     // The same chip as the game's own context. preserveDrawingBuffer: each frame is read back after it is drawn.
     renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, depth: false, stencil: false, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
     renderer.autoClear = false;
     renderer.setPixelRatio(1);
     renderer.setSize(width, height, false);
-    const camera = new THREE.PerspectiveCamera(CAST_VIEW.lens, width / height, 0.05, 200);
     post = createPost(renderer, camera);
     // The game's own switches for a still picture (as the lobby's canoe): no line boil, no paper frame, no wash, no grain.
     post.pen.uBoil.value = 0;
@@ -73,21 +87,9 @@ export function drawCastSketches(request: CastSketchRequest): HTMLCanvasElement[
     post.uniforms.uWash.value = 0;
     post.uniforms.uGrain.value = 0;
     post.setSize(width, height, 0.25, 2, width, height, 1);
-
-    cast = standingCast(request.seat);
-    const scene = new THREE.Scene();
-    scene.add(camera);
-    for (const figure of cast.values()) scene.add(figure.root);
-    const metres = castFrame(camera, [...cast.values()]);
-
-    // Noon on a clear, dry, windless day, whatever the game behind the screen is doing, the sun on the side shown.
-    sketchDaylight();
-    GU.uLightDir.value.copy(sketchLight(new THREE.Vector3(...paletteAt(SKETCH_HOUR, 0, 0).lightDirection), CAST_VIEW));
-    // The pen of a window `sheetHeight` high, with no wander and one weight.
+    // The game's pen for a figure this size on that window, with no wander.
     post.pen.uWobble.value = CAST_PEN.wobble;
     post.pen.uLineW.value *= sketchPen(metres, height, request.sheetHeight) * CAST_PEN.width;
-    unpin = pinUniform(GU.uSc, request.sheetHeight / 1080);
-    uneven = evenPen(CAST_PEN.weight);
 
     const water = new THREE.Mesh();
     const pictures: HTMLCanvasElement[] = [];
