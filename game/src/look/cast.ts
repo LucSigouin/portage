@@ -224,11 +224,9 @@ function angler(rig: CastRig, outfit: CastOutfit): void {
   for (const y of [0.16, 0.28, 0.4]) b.box(0.04, 0.022, 0.012, BRASS, { pos: [0.012, y, 0.171 - y * 0.09], id: coat, flat: true, kind: KIND.PLAIN });
   b.cyl(0.085, 0.105, 0.13, outfit.coat, { pos: [0, 0.615, 0], flat: true }, 10);
   // a long weathered face on a long neck, a grey moustache that droops past the mouth
-  // (the moustache shares the face's ink: two small rods with a line of their own round each read as a blot)
+  // (the moustache is one soft shape in the face's own ink: two small rods, each with its own line, read as a blot)
   const head = face(b, 0.8, 0.01, 0.122, SKIN_TAN, [0.94, 1.08, 0.96], 0.047);
-  for (const side of [-1, 1]) {
-    b.beam([side * 0.008, 0.755, 0.128], [side * 0.062, 0.692, 0.108], 0.02, GREY_HAIR, { r2: 0.013, id: head, flat: true, kind: KIND.PLAIN }, 6);
-  }
+  b.sphere(0.055, GREY_HAIR, { pos: [0, 0.742, 0.112], scale: [1.5, 0.42, 0.5], id: head, flat: true, kind: KIND.PLAIN }, 8);
   // the rain hat, all of it the seat's colour: a round crown, the brim short and turned up in front, long and low behind
   const hat = b.sphere(0.13, outfit.toque, { pos: [0, 0.895, -0.005], scale: [1, 0.74, 1], flat: true }, 12);
   b.cyl(0.2, 0.208, 0.02, outfit.toque, { pos: [0, 0.835, -0.085], rot: [-0.26, 0, 0], scale: [1, 1, 1.25], id: hat, flat: true }, 16);
@@ -291,9 +289,9 @@ function scout(rig: CastRig, outfit: CastOutfit): void {
   // the hood, up, its point standing up and back: it shows from the front
   b.sphere(0.15, outfit.toque, { pos: [0, 0.675, -0.045], scale: [1, 1, 0.95], id: cloak, flat: true }, 12);
   b.cone(0.085, 0.22, outfit.toque, { pos: [0, 0.775, -0.11], rot: [-0.6, 0, 0], id: cloak, flat: true }, 9);
-  // a braid out of the hood, forward over the left shoulder, tied with a ribbon
-  b.tube([[0.085, 0.6, 0.075], [0.115, 0.525, 0.105], [0.12, 0.465, 0.128]], 0.027, RED_HAIR, { id: hair, flat: true, kind: KIND.ROPE, steps: 8 }, 6);
-  b.sphere(0.032, PAL.rust, { pos: [0.12, 0.445, 0.132], flat: true, kind: KIND.PLAIN }, 7);
+  // a braid out of the side of the hood, down the front of the left shoulder, close to the body, tied with a ribbon
+  b.tube([[0.118, 0.61, 0.005], [0.14, 0.53, 0.055], [0.132, 0.455, 0.1]], 0.023, RED_HAIR, { id: hair, flat: true, kind: KIND.ROPE, steps: 8 }, 6);
+  b.sphere(0.028, PAL.rust, { pos: [0.131, 0.437, 0.106], flat: true, kind: KIND.PLAIN }, 7);
   // the map case: a leather tube across the back, capped at both ends, its top over one shoulder. It rides on
   // the cape, well off the spine: today's stroke folds the upper hand's elbow in behind the shoulder blade.
   const lean = Math.atan2(0.12, 0.3);
