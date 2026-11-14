@@ -7,9 +7,10 @@
  * - Told apart in solid black: each one's outline against each other one's, and against the three survivors'.
  *   (All four stand on one rig: the arms and the legs are in the same place, so half of any two shapes is shared.)
  * - What each one wears and carries stays out of their own arms, legs and paddle, and out of everyone in the next
- *   seat, on every hull: at rest, through the pull of the stroke, bailing and asleep. Through the recovery and the
- *   change of side the paddler's own hands pass through the paddler's own head and chest today (the stroke is being
- *   redrawn by another builder): there the cast is held to going no deeper than the paddler does.
+ *   seat, on every hull: at rest, through the pull of the stroke, bailing and asleep. Through the whole stroke, the
+ *   recovery included, nothing of their own touches it either, and the paddler's own hands stay off the paddler's
+ *   own head and chest (the stroke was redrawn: its hands went 12.5 cm into the head, and that was this test's
+ *   yardstick). One thing is let through by name: the trapper's forearm brushes the front of his own beard.
  * - Ashore: standing, walking, running, jumping, with each tool in hand, and asleep.
  * - A player who comes back as someone else gets a new figure, and the old one is disposed of.
  */
@@ -274,11 +275,15 @@ describe('aboard, what each one wears and carries stays clear', () => {
   }
 
   /**
-   * The first half of the stroke: the blade in the water and the arms out ahead. From there on today's stroke
-   * draws the lower arm back past the hip and its elbow behind the paddler's own back (Luc's "arms going
-   * backwards"; another builder is redrawing it tonight): that half is the next test's.
+   * The first half of the stroke: the blade in the water and the arms out ahead. This test holds a figure against
+   * everyone beside them there. The whole stroke, each figure against their own things, is the next test's.
    */
   const PULL_ENDS = 0.5;
+  /**
+   * The trapper's beard is hair, and it hangs where the hand on the grip passes the chin: his own forearm goes
+   * this deep into its front through the pull, and no deeper (6.7 cm measured, hull 3, a kneeler, a tenth into the stroke).
+   */
+  const BEARD_BRUSH = 0.07;
 
   it('at rest, through the pull, bailing and asleep: clear of their own arms, legs and paddle and of everyone beside them, on every hull, in every seat', () => {
     const tight = new Map<string, Nearest>();
@@ -295,7 +300,7 @@ describe('aboard, what each one wears and carries stays clear', () => {
     for (const [pair, nearest] of sorted) expect(nearest.clearance, `${pair}: ${nearest.what}`).toBeGreaterThanOrEqual(0);
   });
 
-  it('through the whole stroke, the recovery included, nothing of theirs is hit harder than the paddler\'s own hands hit the paddler\'s own head and chest', () => {
+  it('through the whole stroke, the recovery included, nothing of theirs is hit by their own arms, legs or paddle, and the paddler\'s own hands stay off the paddler\'s own head and chest', () => {
     let paddler = Infinity;
     const cast = new Map<string, Nearest>();
     for (const lineup of SAME) for (let tier = 0; tier < HULL_TIERS.length; tier += 1) for (const side of [1, -1]) {
@@ -310,11 +315,17 @@ describe('aboard, what each one wears and carries stays clear', () => {
         }
       });
     }
-    console.log(`CAST recovery: the paddler's own hands and paddle go ${(-paddler * 100).toFixed(1)} cm into the paddler's own head and chest (today's stroke)`);
+    console.log(`CAST recovery: the paddler's own hands and paddle stay ${(paddler * 100).toFixed(1)} cm clear of the paddler's own head and chest`);
     const sorted = [...cast.entries()].sort((first, second) => first[1].clearance - second[1].clearance);
     for (const [pair, nearest] of sorted.slice(0, 6)) console.log(`CAST recovery: ${(nearest.clearance * 100).toFixed(1)} cm, ${pair} (${nearest.what})`);
-    expect(paddler).toBeLessThan(0);
-    for (const [pair, nearest] of sorted) expect(nearest.clearance, `${pair}: ${nearest.what}`).toBeGreaterThanOrEqual(paddler);
+    // The old stroke put the paddler's hands 12.5 cm into the paddler's own head, and the cast was held to no worse.
+    // The stroke no longer does: the paddler is clear, and so is everything the cast wears and carries.
+    expect(paddler, 'the paddler\'s own hands and paddle against the paddler\'s own head and chest').toBeGreaterThanOrEqual(0);
+    expect(sorted.length).toBeGreaterThan(50);
+    for (const [pair, nearest] of sorted) {
+      const brushed = /^trapper's beard \/ own (left|right) forearm$/.test(pair);
+      expect(nearest.clearance, `${pair}: ${nearest.what}`).toBeGreaterThanOrEqual(brushed ? -BEARD_BRUSH : 0);
+    }
   });
 
   it('a crew of trappers keeps its jackets as slim at the hip as the paddler\'s coat, give or take 3 cm: a kneeler behind lays a paddle there', () => {

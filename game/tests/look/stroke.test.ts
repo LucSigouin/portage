@@ -174,6 +174,63 @@ describe(`${lineup.name}: nothing crosses the hull\'s side where it shows`, () =
 });
 }
 
+// The stroke is drawn for the voyageur's shoulders. A hand its arm cannot reach rides up the shaft toward the grip
+// (`pose` in b2/canoe.js): only as far as it must, so that arm is at full stretch, and never past 3 cm.
+describe('each of the cast holds the paddle where the voyageur holds it, unless an arm is too short to', () => {
+  /** An arm at full stretch, shoulder to hand (upper arm 0.28, forearm 0.27, 2 mm short of dead straight). */
+  const STRETCHED = 0.548;
+  /** Each hand, left then right: how far down the shaft from the grip it is, and how far it is from its shoulder. */
+  const holds = (member: Member): { along: number; arm: number }[] => {
+    const { L, R, paddle } = member.figure.paddler;
+    const axis = new THREE.Vector3(0, -1, 0).applyQuaternion(paddle.quaternion);
+    return [L, R].map((side) => ({ along: side.H.clone().sub(paddle.position).dot(axis), arm: side.S.distanceTo(side.H) }));
+  };
+  for (const lineup of SAME.filter((same) => same.cast[0] !== 'voyageur')) {
+    it(`${lineup.name}: a hand is higher up the shaft than the voyageur's only with its arm at full stretch, and by 3 cm at the most, in any seat of any hull`, () => {
+      let apart = 0;
+      let where = '';
+      let slack = 0;
+      let slackWhere = '';
+      let rides = 0;
+      for (let tier = 0; tier < HULL_TIERS.length; tier += 1) {
+        const theirs = crewPaddling(lineup, tier);
+        const voyageurs = crewPaddling({ name: 'four voyageurs', cast: ['voyageur'] }, tier);
+        const compare = (phase: number): void => {
+          for (const [id, member] of membersOf(theirs.view)) {
+            const [mine, same] = [holds(member), holds(membersOf(voyageurs.view).get(id) as Member)];
+            for (const hand of [0, 1]) {
+              const at = `hull ${tier}, seat ${member.seat}, ${hand ? 'right' : 'left'} hand at phase ${phase.toFixed(2)}`;
+              const off = Math.abs(mine[hand].along - same[hand].along);
+              if (off > apart) [apart, where] = [off, at];
+              if (off < 0.001) continue;
+              rides += 1;
+              // Whoever holds higher (nearer the grip) does so because that arm reaches no further.
+              const higher = mine[hand].along < same[hand].along ? mine[hand] : same[hand];
+              if (STRETCHED - higher.arm > slack) [slack, slackWhere] = [STRETCHED - higher.arm, at];
+            }
+          }
+        };
+        for (let step = 0; step < 100; step += 1) {
+          for (const crew of [theirs, voyageurs]) {
+            setPhase(crew.view, step / 100);
+            crew.view.sync(crew.state, crewOf(crew.state), 0, 0, true, false);
+          }
+          compare(step / 100);
+        }
+        for (let frame = 0; frame < 60 * 15; frame += 1) {
+          for (const crew of [theirs, voyageurs]) crew.view.sync(crew.state, crewOf(crew.state), 1 / 60, frame / 60, true, false);
+          compare((theirs.view as unknown as { phase: number }).phase);
+        }
+      }
+      console.log(`STROKE hold: ${lineup.name} hold the shaft within ${(apart * 1000).toFixed(1)} mm of the voyageurs (${where}), ${rides} hand-frames apart, the higher arm ${(slack * 1000).toFixed(2)} mm short of full stretch at the most`);
+      expect(apart, where).toBeLessThan(0.03);
+      expect(slack, `an arm that rode up with reach to spare: ${slackWhere}`).toBeLessThan(0.0005);
+      // The rule is at work here: a kneeler's lower hand, as the blade swings forward.
+      expect(rides).toBeGreaterThan(0);
+    });
+  }
+});
+
 for (const lineup of ALONE) {
 describe(`${lineup.name}: the stroke pulls the canoe forward`, () => {
   /** One stroke of the stern paddler: the blade's middle and its tip, in the hull's own space, every hundredth. */
