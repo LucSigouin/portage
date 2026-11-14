@@ -6,7 +6,7 @@
   ],
   "title": "Portage",
   "subtitle": "The workbench: every step so far",
-  "updated": "2026-11-14, 11:20",
+  "updated": "2026-11-14, 16:20",
   "ask": "A flooded world and all you have is a canoe. Scavenge islands, craft, and build a crazy impressive canoe.",
   "now": [
     {
@@ -16,19 +16,19 @@
     },
     {
       "label": "Stage",
-      "value": "Round 4 is live: Version 1.0.410"
+      "value": "Round 5 is live: Version 1.0.424"
     },
     {
       "label": "Tests",
-      "value": "2579 unit, 172 in a browser: all pass"
+      "value": "2594 unit, 172 in a browser: all pass"
     },
     {
       "label": "Running",
-      "value": "Nothing. Round 4 is done"
+      "value": "Nothing. Round 5 is done"
     },
     {
       "label": "Live now",
-      "value": "Your notes, four people to pick, outline C"
+      "value": "Your four calls, full screen"
     },
     {
       "label": "Not live yet",
@@ -36,7 +36,7 @@
     },
     {
       "label": "Waiting on you",
-      "value": "Play it, and the calls in the review"
+      "value": "Play it, and your calls"
     }
   ],
   "steps": [
@@ -915,6 +915,55 @@
       ],
       "pictures": [],
       "report": ""
+    },
+    {
+      "when": "Nov 14",
+      "title": "Round 5: four of your open calls",
+      "state": "done",
+      "asked": "Spin a headless opus agent for all of these on high effort. Once done please review the rest and let me know.",
+      "built": [
+        "Crafting rows say the name once. Boil water still says Clean water",
+        "Full screen: a line under Settings, in the lobby and on the pause card",
+        "In a crew, a slim health row stays up behind any open sheet",
+        "Under outline C a paddle is brown wood with a fine edge again",
+        "Kept as they were, on the review's advice: the fire and bench cards in C, and \"Room for 7\""
+      ],
+      "proof": [
+        "2594 unit tests and 172 in a browser pass on the final tree",
+        "Six bot runs reach the Beacon, 0 fails, ending as live does",
+        "Frame rate alone, live against round 5: 59.9 a second both, 12 runs",
+        "Review 9 8 8 8 8: \"put it live as it is\""
+      ],
+      "snags": [
+        "You said go. It went live the same afternoon",
+        "The first review sent it back: the paddle fix cost frames, Boil water lost its words",
+        "The browser run found the slim health row broke the layout test. Fixed in the game, test unchanged",
+        "Under C a figure's arms and legs now take the thin line too. Your call",
+        "A real Esc in full screen can only be tried on your Mac"
+      ],
+      "pictures": [
+        {
+          "src": "../scratch/portage/review-r5/shots/crop-paddle-today-ashore.png",
+          "alt": "Before: the old pen, the paddle brown with a fine edge"
+        },
+        {
+          "src": "../scratch/portage/review-r5/shots/crop-paddle-c-ashore.png",
+          "alt": "Round 5: outline C, the paddle wood again, not a black stick"
+        },
+        {
+          "src": "../scratch/portage/review-r5/shots/l2-craft-fire-1366.png",
+          "alt": "The campfire: each row names its thing once, Boil water says Clean water"
+        },
+        {
+          "src": "../scratch/portage/review-r5/shots/l2-crew-inv-1366.png",
+          "alt": "In a crew, the slim health row bottom left beside the open inventory"
+        },
+        {
+          "src": "../scratch/portage/review-r5/shots/crop-island-c-trees.png",
+          "alt": "Your call: under C a figure's limbs take the thin line, the head the bold one"
+        }
+      ],
+      "report": "review-r5/"
     }
   ],
   "calls": [
@@ -941,7 +990,9 @@
     "As many builders as have separate files",
     "Workers compact at 40% context",
     "Fable 5.2 on high for builders",
-    "Push it live, the Z can wait"
+    "Push it live, the Z can wait",
+    "One headless Opus agent for my open calls, on high effort",
+    "Review the rest, then I look it over before it goes live"
   ],
   "snags": [
     "Wrong model alias at the start. Caught and switched to Fable 5.2",
@@ -960,20 +1011,21 @@
     "The Mac slept in the middle of a test, twice",
     "Claude Code's install broke on Nov 12. No new worker until it is repaired",
     "A builder waited 43 minutes on me: my watcher missed its line. Fixed and tested",
-    "My workbench words ran off a phone screen. The deploy's own check stopped it"
+    "My workbench words ran off a phone screen. The deploy's own check stopped it",
+    "Closing a finished worker can cut a test run it left going. Workers now wait for their own runs"
   ],
   "numbers": [
     {
       "label": "Commits",
-      "value": "410"
+      "value": "424"
     },
     {
       "label": "Worker runs",
-      "value": "127"
+      "value": "135"
     },
     {
       "label": "Unit tests",
-      "value": "2579"
+      "value": "2594"
     },
     {
       "label": "Browser tests",
@@ -989,7 +1041,7 @@
     },
     {
       "label": "Deploys",
-      "value": "13"
+      "value": "14"
     },
     {
       "label": "Agent hours",
@@ -1001,10 +1053,6 @@
     }
   ],
   "left": [
-    {
-      "what": "Your calls from the round 4 review",
-      "hours": "yours"
-    },
     {
       "what": "The Cloudflare rate rule in front of the relay",
       "hours": "yours"
@@ -1023,27 +1071,28 @@
     }
   ],
   "yours": [
-    "C in a camp: keep the fire and bench cards?",
-    "Stow says Room for 7 when only part fits: keep?",
-    "Under outline C the paddles read as black sticks",
-    "Full screen (#7) and the name shown twice (#8)",
+    "Under C, a figure's arms and legs take the thin line beside a bold head",
+    "Full screen: press Esc once, then again, on your Mac",
+    "Boil water reads \"Boil water Clean water\", no colon: fine?",
+    "The map sheet sits 12 px over the tool belt at 1366 (older than round 5)",
     "The arrival card: watch it once, Animated and Still",
     "How walking and the jump feel in your hands",
     "Chests: the names, the costs, and how they sit on the deck",
-    "The lobby canoe sketch: is it big enough?",
     "The ping beam: bold enough by day, far away?",
     "Your line \"sleep is at the campfire not the tent\": built as sleep only at a bed",
     "A spruce hides you while you gather from it",
     "Home Knoll birches give bark now, so the first voyage is optional",
-    "Where feedback notes are kept: a small database on your Cloudflare",
     "Host a crew and send the link to a friend on another computer",
-    "The faster canoe: is it quick enough, and calm to watch?",
     "Storm, sound and motion: still yours to judge"
   ],
   "links": [
     {
       "title": "Play the game",
       "href": "https://sigouin.net/portage/"
+    },
+    {
+      "title": "Round 5 review (home)",
+      "href": "review-r5/"
     },
     {
       "title": "The asset viewer",
