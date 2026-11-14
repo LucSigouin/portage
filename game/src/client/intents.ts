@@ -6,6 +6,7 @@
 import type { InputAction } from '../settings/index.ts';
 import type { Command } from '../sim/index.ts';
 import type { BoatTabId, PanelId, SettingsTabId } from './panels.ts';
+import type { StationId } from '../data/index.ts';
 
 /** Panels the UI may ask to open. Dialogue and confirm dialogs open by themselves. */
 export type OpenablePanelId = Exclude<PanelId, 'dialogue' | 'confirm'>;
@@ -32,6 +33,8 @@ export type InterfaceIntent =
   | { type: 'select_settings_tab'; tab: SettingsTabId }
   /** A click on an icon of the boat's menu: the canoe builder, or a station built on the canoe. */
   | { type: 'select_boat_tab'; tab: BoatTabId }
+  /** A click on a card of the crafting panel: the hands, or a station of the camp the player stands in. */
+  | { type: 'select_craft_tab'; tab: StationId }
   | { type: 'answer_confirm'; accepted: boolean }
   // the rules engine
   | { type: 'command'; command: Command }

@@ -18,6 +18,7 @@ import type { ViewChild, ViewNode } from './dom.ts';
 import type { ItemId } from '../data/index.ts';
 import { ICON, SEAL, itemIcon, logotype, toqueIcon, waterGauge } from './icons.ts';
 import { boatTabsView, elsewhereView } from './stations.ts';
+import { craftDoorsView, craftRestView } from './craftdoors.ts';
 import { inventoryBodyView, inventoryHintView } from './inventoryview.ts';
 import { toastActionView } from './takeback.ts';
 import { keyFace, keyedText } from './keycaps.ts';
@@ -370,13 +371,22 @@ function recipeView(recipe: RecipeRowModel): ViewNode {
       recipe.craftAll ? buttonView(recipe.craftAll, 'button.iw-btn.iw-small', true, 'all') : null));
 }
 
-/** What can be made here, a section a station in reach. A station that is not here is not listed (`stations.ts`). */
+/**
+ * The crafting panel (key C): the hand crafts. In a camp, a row of cards across its top: the hands, and each station
+ * of that camp, whose card shows that station's own menu (`craftdoors.ts`). Each menu's body has its own key, so a
+ * swap writes a fresh body from its top: nothing slides. A station that is not here is not listed (`stations.ts`).
+ */
 function craftingView(panel: Extract<PanelModel, { id: 'crafting' }>): ViewNode[] {
-  return sheet(panel, 'wide', '', h('div.iw-body', { key: 'body' }, panel.stations.map((station) =>
-    h('section', { key: station.name },
-      h('h3', null, station.name),
-      h('ul.iw-grid', null, station.recipes.map(recipeView)))),
-  elsewhereView(panel.elsewhere)));
+  // With nothing to make, the line that says so stands where the list would, straight under the heading.
+  const empty = panel.stations.every((station) => station.recipes.length === 0);
+  const rest = craftRestView(panel.restText);
+  return sheet(panel, 'wide', panel.about, [craftDoorsView(panel.doors), h('div.iw-body', { key: `body-${panel.tab}`, 'data-craft-tab': panel.tab },
+    panel.stations.map((station) => h('section', { key: station.name },
+      panel.tab === 'hands' ? h('h3', null, station.name) : null,
+      station.recipes.length > 0 ? h('ul.iw-grid', null, station.recipes.map(recipeView)) : null)),
+    empty ? rest : null,
+    elsewhereView(panel.elsewhere),
+    empty ? null : rest)]);
 }
 
 function buildRowView(row: BuildRowModel): ViewNode {

@@ -12,7 +12,9 @@ import { pingColour, standingPings } from '../../sim/index.ts';
 import type { Command, GameState, InventoryView, ItemStack, Missing, PlayerId, QuestView, RecipeAvailability } from '../../sim/index.ts';
 import type { InterfaceIntent } from '../intents.ts';
 import type { BoatTabId } from '../panels.ts';
-import { boatStationOf, boatStationsHint, buildBoatTabs, buildCraftElsewhere, stationAbout } from './stations.ts';
+import { boatStationOf, boatStationsHint, buildBoatTabs, stationAbout } from './stations.ts';
+import { buildCraftDoors, buildCraftNotes, craftRestText, craftTabName, craftTabShown, handRecipesShown } from './handcraft.ts';
+import type { CraftTabId } from './handcraft.ts';
 import { DEFAULT_KEY_BINDINGS } from '../../settings/index.ts';
 import type { KeyBindings } from '../../settings/index.ts';
 import { FLAG_SOURCES, capitalise, cardinalName, countedName, distanceText, itemName, needsText, primaryKey } from './format.ts';
@@ -162,24 +164,34 @@ function recipeRow(
 }
 
 /**
- * The crafting panel lists what can be made here and nothing else (Luc's list, Round 3: "dont show the items that
- * need workbench, fire forge"). A station out of reach has no section and its recipes no rows. A recipe that only
- * lacks materials stays. What an open quest needs from a station that is not here gets one line (`elsewhere`).
- * `bindings` are the keys as they are bound now, for the words that name one.
+ * The crafting panel (key C) lists hand crafts only (Luc, Round 4: "The craft menu with c should only show you what
+ * you can craft without the benchs/tools"). A recipe that needs a station is in its station's menu: the boat's (key
+ * B), or, for a station of the camp the player stands in, the menu `tab` names, opened from its card in the row
+ * (`doors`) or with the interact key at the station. A hand recipe that needs a tool is listed once the crew owns
+ * the tool. A recipe that only lacks materials stays. What an open quest needs and the list does not show gets one
+ * line (`elsewhere`). `bindings` are the keys as they are bound now, for the words that name one.
  */
-export function buildCraftingPanel(state: GameState, playerId: PlayerId = 0, bindings: KeyBindings = DEFAULT_KEY_BINDINGS): PanelBody<'crafting'> {
+export function buildCraftingPanel(
+  state: GameState, playerId: PlayerId = 0, bindings: KeyBindings = DEFAULT_KEY_BINDINGS, tab: CraftTabId = 'hands',
+): PanelBody<'crafting'> & { title?: string } {
   const inventory = selectInventory(state, playerId);
   const availability = selectCraftableRecipes(state, playerId);
   const wants = questWants(state);
+  const shown = craftTabShown(state, playerId, tab);
+  const hands = shown === 'hands';
+  const entries = hands ? handRecipesShown(availability) : availability.filter((entry) => RECIPES[entry.recipeId].station === shown);
   return {
     id: 'crafting',
-    stations: STATION_ORDER.filter((stationId) => inventory.stations.includes(stationId)).map((stationId) => ({
-      name: STATIONS[stationId].name,
-      recipes: availability
-        .filter((entry) => RECIPES[entry.recipeId].station === stationId)
-        .map((entry) => recipeRow(entry, inventory, state, wants, bindings)),
-    })),
-    elsewhere: buildCraftElsewhere(state, inventory.stations, STATION_ORDER, wants),
+    ...(hands ? {} : { title: craftTabName(state, playerId, shown) }),
+    tab: shown,
+    about: hands ? '' : stationAbout(shown),
+    doors: buildCraftDoors(state, playerId, shown, wants),
+    stations: [{
+      name: STATIONS[shown].name,
+      recipes: entries.map((entry) => recipeRow(entry, inventory, state, wants, bindings)),
+    }],
+    elsewhere: hands ? buildCraftNotes(state, playerId, availability, STATION_ORDER, wants, bindings) : [],
+    restText: hands ? craftRestText(state, playerId, entries.length, STATION_ORDER, bindings) : '',
   };
 }
 

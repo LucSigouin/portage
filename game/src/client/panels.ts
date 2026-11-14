@@ -4,7 +4,7 @@
  * beached. Pure: `reducePanels` takes a state and an action and returns the
  * next state plus effects for the session to carry out.
  */
-import type { AttachmentId } from '../data/index.ts';
+import type { AttachmentId, StationId } from '../data/index.ts';
 
 export type ScreenId = 'lobby' | 'game';
 
@@ -37,6 +37,11 @@ export interface PanelState {
   settingsTab: SettingsTabId;
   /** The menu the boat's panel shows. Set when the panel opens, and after that only by the player's own click. */
   boatTab: BoatTabId;
+  /**
+   * The menu the crafting panel shows: the hands, or a station of the camp the player stands in (`handcraft.ts`).
+   * The hands when left out. The crafting key always opens on the hands.
+   */
+  craftTab?: StationId;
   /** What the confirm dialog on the stack is asking about. */
   confirm: ConfirmAction | null;
 }
@@ -110,6 +115,7 @@ export type PanelAction =
   | { type: 'escape' }
   | { type: 'select_settings_tab'; tab: SettingsTabId }
   | { type: 'select_boat_tab'; tab: BoatTabId }
+  | { type: 'select_craft_tab'; tab: StationId }
   | { type: 'ask_confirm'; action: ConfirmAction }
   | { type: 'answer_confirm'; accepted: boolean }
   | { type: 'show_screen'; screen: ScreenId }
@@ -170,7 +176,9 @@ function open(state: PanelState, panel: PanelId, context: PanelContext): PanelRe
   if (top === 'dialogue') return refuse('in_dialogue');
   if (rule.needsBeachedCanoe && !context.canoeBeached) return refuse('canoe_not_beached');
   // The boat's panel opens on the menu the context names, and holds it: nothing swaps under the player.
-  const from = panel === 'canoe_builder' ? { ...state, boatTab: context.boatOpensOn ?? 'builder' } : state;
+  const boat = panel === 'canoe_builder' ? { ...state, boatTab: context.boatOpensOn ?? 'builder' } : state;
+  // The crafting panel opens on the hands, whatever it showed last (Luc, Round 4).
+  const from: PanelState = panel === 'crafting' ? { ...boat, craftTab: 'hands' } : boat;
   if (rule.group === 'gameplay' && top !== null && PANEL_RULES[top].group === 'gameplay') {
     return {
       state: { ...from, stack: [...state.stack.slice(0, -1), panel] },
@@ -223,6 +231,8 @@ export function reducePanels(state: PanelState, action: PanelAction, context: Pa
       return { state: { ...state, settingsTab: action.tab }, effects: [{ type: 'tab_changed', tab: action.tab }] };
     case 'select_boat_tab':
       return state.boatTab === action.tab ? unchanged(state) : { state: { ...state, boatTab: action.tab }, effects: [] };
+    case 'select_craft_tab':
+      return (state.craftTab ?? 'hands') === action.tab ? unchanged(state) : { state: { ...state, craftTab: action.tab }, effects: [] };
     case 'ask_confirm':
       if (topPanel(state) === 'confirm') return unchanged(state);
       return {

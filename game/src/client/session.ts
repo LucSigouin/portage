@@ -7,6 +7,7 @@
  * No DOM in here. `main.ts` passes in `localStorage`; tests pass a fake.
  */
 import { MAIN_QUESTS, TUNING } from '../data/index.ts';
+import type { StationId } from '../data/index.ts';
 import { SAVE_SLOT_COUNT, createAutosaver, createSaveStore } from '../save/index.ts';
 import type { AutosaveReason, Autosaver, SaveStore, SlotSummary, StorageLike } from '../save/index.ts';
 import {
@@ -38,6 +39,7 @@ import { HOST_BACK_TEXT, JOIN_PROBLEM_TEXT, LEAVE_TEXT } from './viewmodels/crew
 import { applySettingChange } from './viewmodels/settings.ts';
 import type { Tone } from './viewmodels/types.ts';
 import { boatOpensOn } from './viewmodels/stations.ts';
+import { stationDoor } from './viewmodels/handcraft.ts';
 
 export type SessionStorage = StorageLike & SettingsStorage;
 
@@ -727,6 +729,9 @@ export class Session {
       case 'toggle_panel':
         if (this.screen === 'game') this.applyPanels({ type: 'toggle', panel: outcome.panel });
         break;
+      case 'use_station':
+        if (this.screen === 'game') this.openStation(outcome.station);
+        break;
       case 'escape':
         this.applyPanels({ type: 'escape' });
         break;
@@ -760,6 +765,17 @@ export class Session {
 
   private panelContext(): Parameters<typeof reducePanels>[2] {
     return { canoeBeached: this.game?.canoe.beached ?? false, boatOpensOn: this.game ? boatOpensOn(this.game, this.localPlayerId) : 'builder' };
+  }
+
+  /**
+   * The interact key at a station: its own menu. A camp's station opens in the crafting panel, a part on the canoe
+   * in the boat's menu. With no such station in reach (the rules said there was one) the crafting panel opens.
+   */
+  private openStation(stationId: StationId): void {
+    const door = this.game ? stationDoor(this.game, this.localPlayerId, stationId) : null;
+    this.applyPanels({ type: 'open', panel: door?.panel ?? 'crafting' });
+    if (door?.panel === 'crafting') this.applyPanels({ type: 'select_craft_tab', tab: door.tab });
+    if (door?.panel === 'canoe_builder') this.applyPanels({ type: 'select_boat_tab', tab: door.tab });
   }
 
   private applyPanels(action: PanelAction, quiet = false): void {
@@ -848,6 +864,10 @@ export class Session {
       case 'select_boat_tab':
         if (this.panels.boatTab !== intent.tab) this.sound('tab');
         this.applyPanels({ type: 'select_boat_tab', tab: intent.tab });
+        break;
+      case 'select_craft_tab':
+        if ((this.panels.craftTab ?? 'hands') !== intent.tab) this.sound('tab');
+        this.applyPanels({ type: 'select_craft_tab', tab: intent.tab });
         break;
       case 'answer_confirm':
         this.applyPanels({ type: 'answer_confirm', accepted: intent.accepted });

@@ -41,7 +41,7 @@ export function boatTabsView(tabs: BoatTabModel[], hint: string): ViewNode {
 export function elsewhereView(lines: CraftElsewhereModel[]): ViewNode | null {
   if (lines.length === 0) return null;
   return h('section.iw-elsewhere', { key: 'elsewhere' },
-    h('h3', null, 'For your quests, not here'),
+    h('h3', null, 'For your quests, not in this list'),
     h('ul', null, lines.map((entry) => h('li', { key: entry.stationId, 'data-station': entry.stationId },
       questMark(entry.questText),
       h('i.iw-i.iw-elsewhere-ico', { html: STATION_KIND_ICON[entry.stationId], 'aria-hidden': 'true' }),

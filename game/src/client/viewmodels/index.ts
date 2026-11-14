@@ -32,6 +32,7 @@ export * from './takeback.ts';
 export * from './arrival.ts';
 export * from './gamepanels.ts';
 export * from './stations.ts';
+export * from './handcraft.ts';
 export * from './menus.ts';
 export * from './crew.ts';
 export * from './feedback.ts';
@@ -114,7 +115,7 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
     case 'inventory':
       return game ? { ...frame, ...buildInventoryPanel(game, playerId, input.settings.controls.keyBindings) } : null;
     case 'crafting':
-      return game ? { ...frame, ...buildCraftingPanel(game, playerId, input.settings.controls.keyBindings) } : null;
+      return game ? { ...frame, ...buildCraftingPanel(game, playerId, input.settings.controls.keyBindings, input.panels.craftTab) } : null;
     case 'canoe_builder':
       return game ? { ...frame, ...buildCanoeBuilderPanel(game, playerId, input.panels.boatTab, input.settings.controls.keyBindings) } : null;
     case 'quest_log':

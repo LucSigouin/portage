@@ -64,9 +64,14 @@ export const STATION_ICON_IDS = Object.keys(STATION_ICONS) as AttachmentId[];
 /** The icon of a tab of the boat's menu: the canoe builder, or a crafting attachment. */
 export const stationIcon = (tab: 'builder' | AttachmentId): string => (tab === 'builder' ? BUILDER_ICON : STATION_ICONS[tab] ?? BUILDER_ICON);
 
+/** An open hand, for what is made with no station at all (the crafting panel, Round 4). */
+const HAND = 'M9.500 21v-3.600L6.600 13.800c-.800-1.100.700-2.300 1.600-1.400l1.500 1.500V6c0-1.300 1.900-1.300 1.900 0v5.200V4.300c0-1.300 1.900-1.300 1.900 0v6.900V4.900'
+  + 'c0-1.300 1.900-1.300 1.900 0v6.500V7.200c0-1.300 1.900-1.300 1.900 0v7.600c0 2.500-.500 4.400-1.300 6.200Z';
+const HAND_ICON = drawn(line(HAND), line(HAND), OCHRE);
+
 /** The same marks for the crafting panel's lines about a station that is not here: a fire, a bench, a smoker, a forge. */
 export const STATION_KIND_ICON: Record<'hands' | 'fire' | 'bench' | 'smoker' | 'forge', string> = {
-  hands: BUILDER_ICON,
+  hands: HAND_ICON,
   fire: STATION_ICONS.firebox!,
   bench: STATION_ICONS.workbench!,
   smoker: STATION_ICONS.smoker!,

@@ -106,6 +106,12 @@ export function buildPausePanel(summary: string, crew: CrewView | null = null, g
  * holds the two together). It is fixed, like the key that takes a drop back.
  */
 export const HOW_TO_PLAY_DROP_KEY = 'Q';
+
+/**
+ * How to Play's line for the crafting key (Luc, Round 4: the key lists hand crafts only). A camp's stations are
+ * cards on that panel; the canoe's have the next line, on the boat's key.
+ */
+export const HOW_TO_PLAY_CRAFT_LABEL = "Crafting by hand. A camp's fire and bench are on it too";
 const NUMBER_WORDS = ['no', 'one', 'two', 'three', 'four', 'five'];
 
 /** The rules in a page, with the keys as they are bound right now. */
@@ -159,7 +165,8 @@ export function buildHowToPlayPanel(settings: Settings): PanelBody<'how_to_play'
           { label: 'A stack to the other side', keys: 'Shift+click' },
           { label: 'Pointer on a stack: drop it', keys: HOW_TO_PLAY_DROP_KEY },
           { label: `Take a drop back, within ${TOAST_SECONDS.warning} s`, keys: keyLabel(TAKE_BACK_KEY_CODE) },
-          control('Crafting', 'craft'),
+          // Round 4: the crafting key lists hand crafts. A camp's stations are cards on it; the canoe's are the next line.
+          control(HOW_TO_PLAY_CRAFT_LABEL, 'craft'),
           control('The canoe: its builder (beached), its stations (afloat too)', 'canoeBuilder'),
           control(`Quest log: track up to ${NUMBER_WORDS[MAXIMUM_TRACKED] ?? MAXIMUM_TRACKED} quests`, 'questLog'),
           control('Map: a click marks a spot for the crew', 'map'),

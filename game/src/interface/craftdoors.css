@@ -1,0 +1,78 @@
+/*
+ * The crafting panel's row of cards (the hands, and each station of the camp the player stands in), and its line
+ * about where the rest is made. The cards are drawn as the boat menu's are (`stations.css`), so the two rows read as
+ * one hand. Nothing in this file moves: no transition, no animation, and a card pressed does not shift.
+ */
+/*
+ * With the row of cards, the crafting panel hangs from its top edge, as the boat's panel does. The campfire's eight
+ * recipes make a longer sheet than the hands' two: the sheet ends lower, and the row of cards stays where it was,
+ * under the pointer. Away from a camp there is no row, and the sheet sits where it always did.
+ */
+.iw-panel-crafting:has(.iw-craft-doors) {
+  align-self: start;
+  margin-top: 5vh;
+}
+.iw-craft-doors {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.5rem;
+  margin: 0.9rem 0 0;
+  padding: 0 0.3rem 0.6rem;
+  border-bottom: 0.115rem solid var(--iw-ink);
+}
+.iw .iw-craft-door {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto;
+  justify-items: center;
+  align-content: start;
+  gap: 0.1rem;
+  min-width: 6.4rem;
+  padding: 0.4rem 0.8rem 0.3rem;
+  font-size: 1rem;
+  line-height: 1.15;
+  color: var(--iw-ink-soft);
+  background: var(--iw-paper-deep);
+  border: 0.115rem solid var(--iw-ink-faint);
+  border-radius: 0.6rem 0.4rem 0.7rem 0.36rem;
+}
+.iw-craft-door .iw-craft-ico .iw-ico {
+  width: 3rem;
+  height: 3rem;
+}
+.iw .iw-craft-door.iw-on {
+  color: var(--iw-ink);
+  background: var(--iw-paper);
+  border-color: var(--iw-ink);
+}
+/* The open menu's card is underlined in rust, as the boat menu's is. */
+.iw-craft-door.iw-on::after {
+  content: '';
+  position: absolute;
+  left: 0.9rem;
+  right: 0.9rem;
+  bottom: 0.14rem;
+  height: 0.14rem;
+  background: var(--iw-rust);
+  border-radius: 50%;
+}
+.iw-craft-door .iw-quest-mark {
+  position: absolute;
+  top: 0.1rem;
+  right: 0.4rem;
+  font-family: var(--iw-hand);
+  font-weight: 700;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--iw-rust-deep);
+}
+/* Where the rest is made: one quiet line under the hand crafts. */
+.iw-craft-rest {
+  margin: 0.7rem 0 0;
+  font-family: var(--iw-hand);
+  font-size: 0.98rem;
+  line-height: 1.3;
+  color: var(--iw-ink-soft);
+}

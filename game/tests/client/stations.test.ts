@@ -24,6 +24,7 @@ import { createDefaultSettings } from '../../src/settings/index.ts';
 import { addPlayer, dispatch, islandAt } from '../../src/sim/index.ts';
 import type { GameState } from '../../src/sim/index.ts';
 import { FakeStorage, build, floatCanoeAt, give, newGame, standOn, teleport, teleportToCamp } from '../support.ts';
+import { craftMenus, craftRows } from './craftmenus.ts';
 
 // The project has no Node types, and Vite hands a test an emptied stylesheet: read the file itself, as icons.test.ts does.
 const fileSystemModule = 'node:fs';
@@ -61,6 +62,9 @@ const craftingIds = (state: GameState, playerId = 0): string[] =>
 
 const recipesOf = (stationId: StationId): string[] => RECIPE_IDS.filter((recipeId) => RECIPES[recipeId].station === stationId);
 
+/** Every recipe on every menu the player can open where they stand: C, a camp's cards, the boat's stations (Round 4). */
+const menuIds = (state: GameState, playerId = 0): string[] => craftRows(state, playerId).map((recipe) => recipe.recipeId);
+
 const tabsOf = (state: GameState, playerId = 0, tab: BoatTabId = 'builder'): string[] =>
   buildCanoeBuilderPanel(state, playerId, tab).tabs.map((entry) => entry.tab);
 
@@ -84,6 +88,8 @@ describe('hidden, not greyed: a recipe whose station is out of reach is not list
   it('lists only what hands can make on a beach with no station, and nothing marked "not in reach"', () => {
     const state = newGame();
     standOn(state, 'cabin_roofs');
+    // With the knife on the belt every hand recipe is listed (Round 4 hides one whose tool the crew does not own).
+    give(state, 'stone_knife');
     expect(buildCraftingPanel(state).stations.map((station) => station.name)).toEqual(['Hands']);
     expect(craftingIds(state)).toEqual(recipesOf('hands'));
     expect(craftingIds(state)).not.toContain('pitch');
@@ -93,30 +99,35 @@ describe('hidden, not greyed: a recipe whose station is out of reach is not list
     for (const name of ['Pitch', 'Plank', 'Smoked fish', 'Metal sheet']) expect(collectText(drawn), name).not.toContain(name);
   });
 
-  it('lists a station\'s recipes once the station is in reach: a camp fire, then the firebox aboard', () => {
+  it('lists a station\'s recipes once the station is in reach, on that station\'s own menu: a camp fire, then the firebox aboard', () => {
     const state = newGame();
+    give(state, 'stone_knife');
     standOn(state, 'home_knoll');
-    expect(craftingIds(state)).not.toContain('pitch');
+    expect(menuIds(state)).not.toContain('pitch');
     teleportToCamp(state, 'home_knoll');
-    expect(buildCraftingPanel(state).stations.map((station) => station.name)).toEqual(['Hands', 'Fire', 'Bench']);
-    expect(craftingIds(state)).toEqual([...recipesOf('hands'), ...recipesOf('fire'), ...recipesOf('bench')]);
+    // Round 4: C lists the hands alone. The camp's fire and its bench each have a menu of their own, on a card of C.
+    expect(buildCraftingPanel(state).stations.map((station) => station.name)).toEqual(['Hands']);
+    expect(craftMenus(state).map((menu) => menu.name)).toEqual(['C: Hands', 'C: Campfire', 'C: Stump bench']);
+    expect(craftMenus(state).map((menu) => menu.recipes.map((recipe) => recipe.recipeId))).toEqual([recipesOf('hands'), recipesOf('fire'), recipesOf('bench')]);
 
     const aboard = afloat();
-    expect(craftingIds(aboard)).not.toContain('pitch');
+    give(aboard, 'stone_knife');
+    expect(menuIds(aboard)).not.toContain('pitch');
     build(aboard, 'firebox');
-    expect(craftingIds(aboard)).toEqual([...recipesOf('hands'), ...recipesOf('fire')]);
+    expect(craftMenus(aboard).map((menu) => menu.name)).toEqual(['C: Hands', 'B: Firebox']);
+    expect(menuIds(aboard)).toEqual([...recipesOf('hands'), ...recipesOf('fire')]);
   });
 
   it('keeps a recipe that only lacks materials, with its crosses and its Make button off', () => {
     const state = newGame();
     standOn(state, 'home_knoll');
     teleportToCamp(state, 'home_knoll');
-    const pitch = buildCraftingPanel(state).stations.find((station) => station.name === 'Fire')!.recipes.find((recipe) => recipe.recipeId === 'pitch')!;
+    const pitch = buildCraftingPanel(state, 0, undefined, 'fire').stations[0].recipes.find((recipe) => recipe.recipeId === 'pitch')!;
     expect(pitch.craft.enabled).toBe(false);
     expect(pitch.missingText).toBe('Needs 2 more spruce gum, 1 more driftwood');
     expect(pitch.inputs.map((input) => input.enough)).toEqual([false, false]);
-    // And one that lacks only a tool, or only a survivor's word, stays too.
-    expect(craftingIds(state)).toEqual(expect.arrayContaining(['plank', 'sailcloth']));
+    // And one that lacks only a tool, or only a survivor's word, stays too, at its station.
+    expect(menuIds(state)).toEqual(expect.arrayContaining(['plank', 'sailcloth']));
   });
 
   it('never strands a quest: what an open quest needs from a station that is not here gets one line, with where to go', () => {
@@ -136,11 +147,11 @@ describe('hidden, not greyed: a recipe whose station is out of reach is not list
     // The line is not a recipe: nothing to press.
     expect(find(lines, (node) => node.tag === 'button')).toEqual([]);
 
-    // At a fire the recipe itself is back, with its red !, and the line is gone.
+    // At a fire the recipe itself is back, on the campfire's menu, with its red !, and the line is gone.
     standOn(state, 'home_knoll');
     teleportToCamp(state, 'home_knoll');
     const camp = buildCraftingPanel(state);
-    expect(camp.stations.flatMap((station) => station.recipes).find((recipe) => recipe.recipeId === 'pitch')!.questText).toBe('For Stop the leak');
+    expect(buildCraftingPanel(state, 0, undefined, 'fire').stations[0].recipes.find((recipe) => recipe.recipeId === 'pitch')!.questText).toBe('For Stop the leak');
     expect(camp.elsewhere).toEqual([]);
     expect(find(panelView({ ...camp, title: 'Crafting', close: CLOSE }), hasClass('iw-elsewhere'))).toEqual([]);
   });
@@ -253,7 +264,12 @@ describe('the boat\'s menu: one menu per station', () => {
     const state = atQuest(afloat('firebox'), 'stop_the_leak');
     give(state, 'spruce_gum', 2, 'cargo');
     const inBoat = buildCanoeBuilderPanel(state, 0, 'firebox').station!.recipes.find((recipe) => recipe.recipeId === 'pitch')!;
-    const inCrafting = buildCraftingPanel(state).stations.find((station) => station.name === 'Fire')!.recipes.find((recipe) => recipe.recipeId === 'pitch')!;
+    // The same row as a camp fire's own menu gives, in the crafting panel (Round 4: C itself lists the hands alone).
+    const camp = atQuest(newGame(), 'stop_the_leak');
+    standOn(camp, 'home_knoll');
+    teleportToCamp(camp, 'home_knoll');
+    give(camp, 'spruce_gum', 2);
+    const inCrafting = buildCraftingPanel(camp, 0, undefined, 'fire').stations[0].recipes.find((recipe) => recipe.recipeId === 'pitch')!;
     expect(inBoat).toEqual(inCrafting);
     expect(inBoat.questText).toBe('For Stop the leak');
     expect(inBoat.inputs.map((input) => [input.name, input.have, input.need, input.enough])).toEqual([['Spruce gum', 2, 2, true], ['Driftwood', 0, 1, false]]);
