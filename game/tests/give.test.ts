@@ -97,7 +97,7 @@ describe('give: a stack goes to a crewmate standing close', () => {
   it('adds no field to the save', () => {
     const state = crew();
     state.players[0].backpack = [{ itemId: 'plank', count: 5 }];
-    const keys = (): string[][] => (JSON.parse(serialize(state)) as { state: GameState }).state.players.map((player) => Object.keys(player).sort());
+    const keys = (): string[][] => (JSON.parse(serialize(state, 1)) as { state: GameState }).state.players.map((player) => Object.keys(player).sort());
     const before = keys();
     give(state, 1, 'plank', 5);
     drainEvents(state);
