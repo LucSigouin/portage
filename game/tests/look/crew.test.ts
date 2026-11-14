@@ -13,7 +13,9 @@ import { makeHullShape } from '../../src/look/b2/canoe.js';
 import type { Crew as Figure } from '../../src/look/b2/canoe.js';
 import { HERO_PEN, heroPen } from '../../src/look/b2/post.js';
 import { CanoeView } from '../../src/look/canoe.ts';
+import { CAST_BUILD } from '../../src/look/cast.ts';
 import { crewOf, setLocalPlayerId } from '../../src/look/crew.ts';
+import { LINEUPS, SAME, castAs } from './cast-lineups.ts';
 
 const FRAME = 1 / 60;
 
@@ -63,6 +65,9 @@ function bodyOf(view: CanoeView, playerId: number): THREE.Mesh[] {
   return meshes;
 }
 
+/** A figure's torso mesh: the body, the head, and whatever is worn or carried on them. */
+const torsoOf = (view: CanoeView, playerId: number): THREE.Mesh => figureOf(view, playerId).root.children[0].children[0] as THREE.Mesh;
+
 afterEach(() => setLocalPlayerId(0));
 
 describe('outfits', () => {
@@ -101,14 +106,15 @@ describe('outfits', () => {
 });
 
 describe('seats', () => {
-  for (let tier = 0; tier < HULL_TIERS.length; tier += 1) {
-    it(`a crew of four sits at the rules engine's seats on hull tier ${tier}, nobody inside another or the hull`, () => {
-      const state = createGame(7, { crew: 4 });
+  for (const lineup of LINEUPS) for (let tier = 0; tier < HULL_TIERS.length; tier += 1) {
+    it(`${lineup.name}: a crew of four sits at the rules engine's seats on hull tier ${tier}, nobody inside another or the hull`, () => {
+      const state = castAs(createGame(7, { crew: 4 }), lineup);
       state.canoe.hullTier = tier;
       const view = new CanoeView();
       view.sync(state, crewOf(state), 0, 0, true, true);
       const figures = view.figures();
       expect(figures.length).toBe(4);
+      expect(figures.map((figure) => figure.character)).toEqual(lineup.cast);
       for (const figure of figures) {
         const seat = seatTransformForHull(tier, state.players[figure.id].seat as number).position;
         expect(figure.seat).toBe(state.players[figure.id].seat);
@@ -118,11 +124,16 @@ describe('seats', () => {
         // Seats 0 and 1 sit on the cane seats. Seats 2 and 3 kneel between them.
         expect(figure.kneeling).toBe(figure.seat! >= 2);
       }
-      // No part of one body is inside a part of another's.
+      // No part of one body is inside a part of another's. A box round a whole torso is a box round the paddler's
+      // torso: the same for all four (what the others wear and carry on it is measured exactly, piece by piece, in
+      // cast.test.ts). So the crew is held here as it was before there was a cast, mesh against mesh.
+      const coarse = lineup === SAME[0];
       for (const first of figures) for (const second of figures) {
         if (first.id >= second.id) continue;
         for (const one of bodyOf(view, first.id)) for (const other of bodyOf(view, second.id)) {
-          expect(boxOf(view, one).intersectsBox(boxOf(view, other)), `players ${first.id} and ${second.id}`).toBe(false);
+          const torsos = one === torsoOf(view, first.id) || other === torsoOf(view, second.id);
+          if (torsos && !coarse) continue;
+          expect(boxOf(view, one).intersectsBox(boxOf(view, other)), `players ${first.id} (${first.character}) and ${second.id} (${second.character})`).toBe(false);
         }
       }
       // Nobody is through the hull: every body is above the keel, and every leg is inside the planking.
@@ -134,7 +145,23 @@ describe('seats', () => {
         for (const side of [limbs.L, limbs.R]) for (const mesh of [side.thigh, side.knee, side.shin, side.boot]) {
           const box = boxOf(view, mesh);
           const station = (box.min.z + box.max.z) / 2;
-          expect(Math.max(Math.abs(box.min.x), Math.abs(box.max.x))).toBeLessThan(shape.halfBeamAt(station) - 0.02);
+          expect(Math.max(Math.abs(box.min.x), Math.abs(box.max.x)), `${figure.character} in seat ${figure.seat}`).toBeLessThan(shape.halfBeamAt(station) - 0.02);
+        }
+        // What a figure wears and carries (a bedroll, a creel, a brim, a map case) is inside the planking wherever
+        // it is below the gunwale, and never under the floor.
+        const torso = figureOf(view, figure.id).root.children[0];
+        const scale = CAST_BUILD[figure.character].scale;
+        const toHull = new THREE.Matrix4().copy(view.figureOf(0)!.parent!.matrixWorld).invert().multiply(torso.matrixWorld)
+          .multiply(new THREE.Matrix4().makeScale(1 / scale[0], 1 / scale[1], 1 / scale[2]));
+        for (const solid of CAST_BUILD[figure.character].solids) {
+          for (const end of [solid.from, solid.to]) {
+            const point = new THREE.Vector3(...end).applyMatrix4(toHull);
+            const gunwale = shape.sheerAt(point.z) - dimensions.draft;
+            expect(point.y - solid.radius, `${figure.character}'s ${solid.name} in seat ${figure.seat}: above the floor`).toBeGreaterThan(shape.HULL.floor - dimensions.draft);
+            if (point.y - solid.radius < gunwale) {
+              expect(Math.abs(point.x) + solid.radius, `${figure.character}'s ${solid.name} in seat ${figure.seat}: inside the planking`).toBeLessThan(shape.halfBeamAt(point.z));
+            }
+          }
         }
       }
     });

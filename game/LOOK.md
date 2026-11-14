@@ -216,6 +216,25 @@ PORTAGE_URL=http://localhost:5221 npm --prefix e2e test       # browser: bot, ke
 
 `PORTAGE_LOOK_BREAK='&hero=0'` (or `&rung=11`, `&boil=1`, `&bench=24`, `&heropen=0`, `&hullwater=1`) makes the matching checks fail. Run it when you change them. The crew checks have no switch: break the line in `canoe.ts` they guard (the outfit, the seat, the flag) and watch them fail. The weather checks likewise: feed the rain real time instead of paint time, dip `uDark` every 20th frame, pulse `uWet`, hand `weatherGoals` a clear sky, never light the lantern, snap `easeWeather`, zero `ahead`, swap rung 1, leave the copy of a hero window's depth out of `behind` (or leave `uBehind` at 1 there, or drop the world's depth test from the stroke's shader), drop the line that draws the ripple strokes in lamp light, set `capMid = 1.`.
 
+## The cast
+
+Four people a player can be (`data/cast.ts`). Who a player is drawn as is `characterOf(player)`: their pick, or one by player id when nobody picked. `CanoeView.member()` builds the figure for that, and builds it again when the pick changes (the old one is taken out and its drawings freed; the shared ink material stays).
+
+- **One rig.** All four are `createPaddler` in `b2/canoe.js`. It calls `dressAs` (`look/cast.ts`) once, which redraws the torso's mesh and each limb's mesh. The joints, limb lengths, poses and mesh count are the paddler's, so every pose works for all four. `b2/canoe.js` holds five lines of this: nothing in `pose`, `ik` or the stroke.
+- **The voyageur is the paddler, untouched.** `dressAs` returns at once for it. Proof: `tests/look/cast.test.ts` (vertex for vertex in every seat's colours), and a staged view before and after with 0 pixels different.
+- **Build without touching a pose**: `CAST_BUILD[id].scale` scales the torso group (the pose reads the shoulders through the torso's matrix), and limb thickness is drawn into each limb's unit mesh. Drawings are written in real metres from the hips. Lower shoulders than the paddler's fail today's stroke: go narrower or taller.
+- **Told apart by outline first**, the way the survivors are. Trapper: fur hat with ear flaps, beard, short thick jacket, bedroll across the back. Angler: rain hat with the brim longer behind, coat to the knee, tall boots, creel at the small of the back. Scout: pointed hood, short cape, fringe and braid, map case low across the back.
+- **Colours follow the seat on all four**: coat colour on the main garment, legs on the trousers, and `CREW_MARKS[seat].toque` on the headgear. The HUD's colour still finds a player by the head.
+- **What sticks out is listed**: `CAST_BUILD[id].solids` are capsules for the bedroll, creel, brims, map case, hood point. `tests/look/cast-clearance.ts` holds them clear of the figure's own arms, legs and paddle and of the crew, on every hull and seat. If you move a carried thing, move its capsule with it.
+- **Tight places**, all three found by tests:
+  - The kneeler in seat 3 is 0.65 m behind the bow paddler, so nothing stands further back at hip height than the paddler's own coat.
+  - On the fully fitted long canoe there is 23 to 30 cm from a spine back to the gear behind a seat. Nothing carried reaches past 24 cm (`tests/look/cast-fitted.test.ts`: each of the four in every seat, by points on the figure's own surface).
+  - Today's stroke folds the upper hand's elbow in behind the shoulder blade late in the pull. So the bedroll is thin and the map case lies low, under the shoulder blades.
+- **Nothing moves by itself**: no cloth swings, no braid sways.
+- **The pick screen's pictures**: `drawCastSketches` in `look/cast-sketch.ts`. One 3D context a call, one camera for all four (`castFrame`: one scale, feet on one line), the game's frame pipeline, see-through. The line has no wander (`uWobble` 0) and one weight (`evenPen`: the look's noise is one flat value while the ink buffer is drawn). No change to the pen. `tests/look/cast-sketch.test.ts` reads the pen's two lines of shader and fails if they change: look at the cards again then.
+- **To see them**: `&cast=<id>` dresses a staged game's local player, `&cast=mix` makes a crew of four with one of each (`?shot=island&cast=mix`).
+- New character: add the id in `data/cast.ts`, a drawing and a `CAST_BUILD` row in `look/cast.ts`. The looped tests (`cast`, `cast-fitted`, `crew`, `stroke`, `jump`, `ashore`, `outline`) pick it up from `CHARACTER_IDS`.
+
 ## Debug switches
 
 | Switch | Does |
@@ -232,6 +251,7 @@ PORTAGE_URL=http://localhost:5221 npm --prefix e2e test       # browser: bot, ke
 | `&hullwater=1` | Leave the world's water inside the hull, as it was. Only to prove the floor check can fail |
 | `&floor=N` | Draw the hull's floor N metres above the keel (today: 5 cm above the waterline). For the floor check, and to try a lower floor |
 | `?crew=N` | The client's switch, not the look's: a real crew of N (2 to 4), the extra players idle |
+| `&cast=<id>`, `&cast=mix` | The client's switch: the local player of a staged game as one of the cast, or a crew of four with one of each |
 | `&stall=N` | Hold every frame N milliseconds: a slow spell, to watch the ladder |
 | `&boil=1` | Line boil on. Only to prove the steadiness test can fail |
 | `window.portage.worldView.probe()` | World and canvas size, ladder rung and history (`ladder.chipTest`: what the test at load timed and chose), hero windows, canoe and water heights. `hero.figures`: each crew figure's seat, place, pose and clothes as drawn. `hero.pen`: the pen's share on the local figure |

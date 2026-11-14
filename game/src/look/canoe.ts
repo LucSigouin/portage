@@ -5,7 +5,8 @@
  * game's canoe space. Attachments sit at their mount transforms.
  *
  * Every player is drawn from their own state, the local one included:
- * - dressed by player id (`outfitOf`), so a person looks the same on every screen;
+ * - drawn as who they are (`characterOf`: one of the cast, `look/cast.ts`) and dressed by player id (`outfitOf`),
+ *   so a person looks the same on every screen;
  * - aboard, at the rules engine's seat for them (`seatTransformForHull`): seats 0 and 1 sit, 2 and 3 kneel;
  * - paddling, bailing, asleep or at rest by their own flags, never by the canoe's speed;
  * - ashore, standing where the state puts them, walking by their own change in position, the tool they picked in
@@ -14,8 +15,8 @@
  * window's full size (see LOOK.md).
  */
 import * as THREE from 'three';
-import { HULL_TIERS } from '../data/index.ts';
-import type { ToolId } from '../data/index.ts';
+import { HULL_TIERS, characterOf } from '../data/index.ts';
+import type { CharacterId, ToolId } from '../data/index.ts';
 import { airborne, attachmentTransformForHull, leapHeight, seatTransformForHull } from '../sim/index.ts';
 import { outfitOf } from './crew.ts';
 import type { Crew } from './crew.ts';
@@ -23,6 +24,7 @@ import type { GameState } from '../sim/index.ts';
 import { buildAttachment } from './attachments.ts';
 import type { AttachmentPiece } from './attachments.ts';
 import { STROKE_PULL, buildBilge, buildHull, buildStarterKit, createCrew, makeHullShape } from './b2/canoe.js';
+import { inkMaterial } from './b2/palette.js';
 import { CREW_LAYER } from './b2/post.js';
 import type { Crew as Figure, HullShape, SeatedPose } from './b2/canoe.js';
 import { deckInner, deckSpan, sparsAlong } from './canoe/deck-parts.ts';
@@ -75,6 +77,8 @@ type CrewMember = Crew['local'];
 /** One player's figure, and what it is in the middle of. */
 interface Member {
   figure: Figure;
+  /** Who the figure is drawn as. When the player's own changes, the figure is made again. */
+  character: CharacterId;
   /** Seat aboard, null ashore. */
   seat: number | null;
   /** 0 to 1 each: the stroke, the bailing, asleep, the walk. They ease toward the player's flags. */
@@ -107,6 +111,8 @@ interface Member {
 /** What `figures()` says of one crew figure: what is drawn, not what the state asked for. */
 export interface FigureReport {
   id: number;
+  /** Who it is drawn as: one of the cast. */
+  character: CharacterId;
   /** Seat aboard (0 to 3), null ashore. */
   seat: number | null;
   /** Where the figure is: in canoe space aboard, in the world ashore. */
@@ -179,21 +185,44 @@ export class CanoeView {
     this.member(0);
   }
 
-  /** The figure for a player, in their own colours. Made the first time the player is seen. */
-  private member(playerId: number): Member {
+  /**
+   * The figure for a player: who they are (`character`, one of the cast), in their seat's colours. Made the first
+   * time the player is seen. A player who comes back as someone else gets a new figure: the old one is taken out
+   * of the picture and disposed of, and the new one carries on where the old one was (seat, stride, paddle side).
+   * `character` left out: whoever the figure already is, or the one their number stands for.
+   */
+  private member(playerId: number, character?: CharacterId): Member {
     let member = this.members.get(playerId);
-    if (!member) {
+    const before = member && character !== undefined && member.character !== character ? member : null;
+    if (before) this.discard(before);
+    if (!member || before) {
       const { coat, toque, legs } = outfitOf(playerId);
-      const figure = createCrew({ coat, toque, legs });
+      const who = character ?? characterOf({ id: playerId });
+      const figure = createCrew({ coat, toque, legs }, who);
       figure.root.rotation.order = 'YXZ';
-      member = {
-        figure, seat: null, effort: 0, bailing: 0, asleep: 0, moving: 0, bailPhase: 0.6, side: 1, stride: 0, lastX: 0, lastZ: 0, afoot: false, seated: false,
+      member = before ? { ...before, figure, character: who, seated: false, tools: new Map(), holding: null } : {
+        figure, character: who, seat: null, effort: 0, bailing: 0, asleep: 0, moving: 0, bailPhase: 0.6, side: 1, stride: 0, lastX: 0, lastZ: 0, afoot: false, seated: false,
         lastSeat: null, restSide: 1, berth: new THREE.Group(), tools: new Map(), holding: null, lift: 0,
       };
       member.berth.rotation.order = 'YXZ';
       this.members.set(playerId, member);
     }
     return member;
+  }
+
+  /** Take a figure out of the picture for good: its body, its paddle wherever it lies, its tin and its tools. */
+  private discard(member: Member): void {
+    const { root, paddler } = member.figure;
+    root.removeFromParent();
+    paddler.paddle.removeFromParent();
+    for (const part of [root, paddler.paddle]) {
+      part.traverse((object) => {
+        if (!(object instanceof THREE.Mesh)) return;
+        object.geometry.dispose();
+        // Every piece is drawn with the look's one shared material: that one stays. Anything else of the figure's own goes.
+        for (const material of [object.material].flat()) if (material !== inkMaterial) material.dispose();
+      });
+    }
   }
 
   /** The hull this tier draws. Built the first time the tier is seen. */
@@ -312,7 +341,8 @@ export class CanoeView {
     const ease = (value: number, wanted: number, rate: number): number => (snap ? wanted : value + (wanted - value) * Math.min(1, seconds * rate));
     let working = 0;
     for (const player of players) {
-      const member = this.member(player.id);
+      // Who each one is comes from their own state: a friend who comes back as someone else is drawn again.
+      const member = this.member(player.id, characterOf(player));
       member.seat = seatOf(player);
       const aboard = member.seat !== null;
       member.effort = aboard ? ease(member.effort, player.paddling ? 1 : 0, 4) : 0;
@@ -538,6 +568,7 @@ export class CanoeView {
         const { x, y, z } = member.figure.root.position;
         return {
           id,
+          character: member.character,
           seat: member.seat,
           position: member.seat === null ? [x, y, z] : [-x, y, -z],
           paddling: member.effort,

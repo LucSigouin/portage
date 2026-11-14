@@ -17,6 +17,9 @@ import { CREW_LAYER, createPost } from '../../src/look/b2/post.js';
 import type { Crew as Figure } from '../../src/look/b2/canoe.js';
 import { CanoeView } from '../../src/look/canoe.ts';
 import { crewOf } from '../../src/look/crew.ts';
+import { THIN } from '../../src/look/b2/geo.js';
+import { MIXED, SAME, castAs } from './cast-lineups.ts';
+import type { Lineup } from './cast-lineups.ts';
 
 /** The pen's shared switches, as the passes set them. */
 const PEN = GU as unknown as Record<'uHero' | 'uPass', THREE.IUniform<number>>;
@@ -49,8 +52,8 @@ function standIn(): { renderer: THREE.WebGLRenderer; draws: Draw[] } {
 }
 
 /** The world and the heroes as the world view hands them over: a canoe with a crew of four, one of them ashore. */
-function staged(): { view: CanoeView; state: GameState; scene: THREE.Scene; heroes: THREE.Group; water: THREE.Mesh } {
-  const state = createGame(7, { crew: 4 });
+function staged(lineup: Lineup = MIXED[0]): { view: CanoeView; state: GameState; scene: THREE.Scene; heroes: THREE.Group; water: THREE.Mesh } {
+  const state = castAs(createGame(7, { crew: 4 }), lineup);
   state.players[1].bailing = true;
   Object.assign(state.players[3], { mode: 'foot', seat: null, selectedTool: 'hatchet', position: { x: state.canoe.position.x + 4, y: 1, z: state.canoe.position.z } });
   const view = new CanoeView();
@@ -63,9 +66,11 @@ function staged(): { view: CanoeView; state: GameState; scene: THREE.Scene; hero
   return { view, state, scene, heroes, water };
 }
 
-describe('the crew is on its own layer', () => {
+// The crew as it was (four voyageurs), four of each of the others, and one of each.
+for (const lineup of [...SAME, MIXED[0]]) {
+describe(`${lineup.name}: the crew is on its own layer`, () => {
   it('every piece of every figure: its body, its paddle, the tin and the tool in its hands', () => {
-    const { view } = staged();
+    const { view } = staged(lineup);
     let pieces = 0;
     for (const id of [0, 1, 2, 3]) {
       const figure = figureOf(view, id);
@@ -87,7 +92,7 @@ describe('the crew is on its own layer', () => {
   });
 
   it('nothing else: the hull, the kit and what is bolted on stay on the world\'s layer alone', () => {
-    const { view } = staged();
+    const { view } = staged(lineup);
     const crew = new Set<THREE.Object3D>();
     for (const id of [0, 1, 2, 3]) {
       const figure = figureOf(view, id);
@@ -102,7 +107,26 @@ describe('the crew is on its own layer', () => {
     });
     expect(others).toBeGreaterThan(3);
   });
+  it('every piece that makes a figure\'s outline has an ink id the pen can outline: none is drawn as a bare line', () => {
+    const { view } = staged(lineup);
+    for (const id of [0, 1, 2, 3]) {
+      const figure = figureOf(view, id);
+      figure.root.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        // A tool may carry a true line (a fishing line, a wire bail): the figure itself and its paddle never.
+        if (!mesh.isMesh || mesh.name.startsWith('tool:')) return;
+        const info = mesh.geometry.getAttribute('aInfo');
+        for (let index = 0; index < info.count; index += 1) {
+          const ink = Math.round(info.getX(index) * 2048);
+          expect(ink, `player ${id} (${view.figures()[id].character})`).not.toBe(Math.round(THIN * 2048));
+          // Solid, in the pen's own range: the shared counter's ids, 16 to 2018 of 2048.
+          expect(ink >= 16 && ink <= 2018, `player ${id}: ink ${ink}`).toBe(true);
+        }
+      });
+    }
+  });
 });
+}
 
 describe('the hero pass marks the crew in its ink buffer', () => {
   it('draws the heroes, then the crew alone again with the crew mark, then puts the camera and the mark back', () => {

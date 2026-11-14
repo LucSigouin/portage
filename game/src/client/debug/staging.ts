@@ -11,12 +11,14 @@ import {
   ATTACHMENT_IDS, ISLANDS_BY_ID, MAIN_QUESTS, NODES_BY_ISLAND, NPCS, TUNING, WEATHER, isStackable, spotPosition,
 } from '../../data/index.ts';
 import type { IslandId, ItemId, QuestId, WeatherKind } from '../../data/index.ts';
+import { CHARACTER_IDS } from '../../data/cast.ts';
 import {
   FIXED_STEP, NEUTRAL_INPUT, addPlayer, clearSpot, createGame, dispatch, drainEvents, freeSpotNear, landingBerth, setConnected, step, terrainHeight,
 } from '../../sim/index.ts';
 import type { GameState, StepInput } from '../../sim/index.ts';
 import type { OpenablePanelId } from '../intents.ts';
-import type { ShotName } from './parameters.ts';
+import { parseDebugParameters } from './parameters.ts';
+import type { DebugParameters, ShotName } from './parameters.ts';
 
 export interface StagedShot {
   /** The game to show, or null for the lobby. */
@@ -43,8 +45,11 @@ export function gameAfterQuest(seed: number, questId: QuestId | null): GameState
  * Fill a staged game up to `crew` players. The extra ones are away stand-ins
  * beside player 0: in the canoe when player 0 is aboard, standing in a row
  * next to them when they are ashore.
+ *
+ * Every staged game comes through here, so this is also where `&cast=` dresses it (`stageCast`): left out, the
+ * address the page was opened with says who, and away from a browser nobody is changed.
  */
-export function addIdleCrew(state: GameState, crew: number): GameState {
+export function addIdleCrew(state: GameState, crew: number, cast: DebugParameters['cast'] = castOfAddress()): GameState {
   const lead = state.players[0];
   while (state.players.length < crew) {
     const extra = addPlayer(state);
@@ -65,6 +70,21 @@ export function addIdleCrew(state: GameState, crew: number): GameState {
     const spot = clearSpot(state, extra, terrainHeight(x, z) >= 0 ? { x, z } : lead.position);
     extra.position = { x: spot.x, y: terrainHeight(spot.x, spot.z), z: spot.z };
   }
+  return stageCast(state, cast);
+}
+
+/** `&cast=` of the address this page was opened with. Null where there is no address (the unit tests, the bot). */
+function castOfAddress(): DebugParameters['cast'] {
+  return typeof location === 'undefined' ? null : parseDebugParameters(location.search).cast;
+}
+
+/**
+ * Who a staged game's players are drawn as. An id: the local player (player 0) is that one of the cast, the
+ * rest as they were. `mix`: each player is the next of the four, so a crew of four is one of each. Null: nothing.
+ */
+export function stageCast(state: GameState, cast: DebugParameters['cast']): GameState {
+  if (cast === 'mix') state.players.forEach((player, index) => { player.character = CHARACTER_IDS[index % CHARACTER_IDS.length]; });
+  else if (cast !== null && state.players[0]) state.players[0].character = cast;
   return state;
 }
 

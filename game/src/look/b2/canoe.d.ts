@@ -1,4 +1,5 @@
 import type { Group, Mesh, Object3D, Vector3 } from 'three';
+import type { CharacterId } from '../../data/cast.ts';
 
 export interface HullDimensions { length: number; beam: number; depth: number; draft: number }
 
@@ -20,7 +21,7 @@ export function buildBilge(shape: HullShape): Mesh;
 export function buildStarterKit(shape: HullShape, crewed?: boolean): Mesh;
 
 /** One side of a figure: the arm and leg meshes, and the hand's place. */
-export interface Limbs { upper: Mesh; thigh: Mesh; shin: Mesh; knee: Mesh; boot: Mesh; H: Vector3; /** The shoulder and the elbow, in the figure's space. */ S: Vector3; E: Vector3 }
+export interface Limbs { upper: Mesh; fore: Mesh; elbow: Mesh; mitt: Mesh; thigh: Mesh; shin: Mesh; knee: Mesh; boot: Mesh; H: Vector3; /** The shoulder and the elbow, in the figure's space. */ S: Vector3; E: Vector3 }
 
 /** What a seated figure does besides paddle. */
 export interface SeatedPose {
@@ -65,4 +66,5 @@ export interface Crew {
 }
 /** A crew member's colours. Left out, they are B2's paddler: ochre coat, red toque, blue-grey legs. */
 export interface Outfit { coat?: string; toque?: string; legs?: string }
-export function createCrew(outfit?: Outfit): Crew;
+/** character: who to draw (`data/cast.ts`). Left out, the voyageur: the paddler the game has always drawn. */
+export function createCrew(outfit?: Outfit, character?: CharacterId): Crew;
