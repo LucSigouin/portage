@@ -54,16 +54,32 @@ export function keyFace(label: string): ViewChild {
 
 /** A lone Z or I: no letter, digit, apostrophe, plus or hyphen on either side. */
 const KEY_LETTER = /(?<![A-Za-z0-9'’+-])([ZI])(?![A-Za-z0-9'’+-])/;
+/** Someone's own words, in quotation marks, closed or running to the end of the line. */
+const QUOTED = /("[^"]*"?|“[^”]*”?)/;
 
 /**
  * A sentence in the hand that names keys ("Hold Z to bail.", "Paddling on. Q, W or Z to stop."): the same words,
  * with each lone Z or I drawn. The words and their order do not change. A digit is left to the hand: in a sentence
- * a number is nearly always a count ("5 stone"), read beside its word.
+ * a number is nearly always a count ("5 stone"), read beside its word. So is whatever stands in quotation marks:
+ * a letter out of a bottle says "I am putting one of these in every morning", and that I is no key.
  */
 export function keyedText(text: string): ViewChild {
   if (!text.includes('Z') && !text.includes('I')) return text;
-  const parts = text.split(KEY_LETTER);
-  if (parts.length === 1) return text;
-  // `split` with one group: words, letter, words, letter, words.
-  return parts.map((part, index) => (index % 2 === 1 ? drawnSign(part) : part)).filter((part) => part !== '');
+  const pieces: (string | ViewNode)[] = [];
+  let drew = false;
+  const say = (words: string): void => {
+    if (words === '') return;
+    if (typeof pieces.at(-1) === 'string') pieces[pieces.length - 1] += words;
+    else pieces.push(words);
+  };
+  // `split` with one group: said, quoted, said, quoted, said. And within what is said: words, letter, words.
+  text.split(QUOTED).forEach((passage, place) => {
+    if (place % 2 === 1) return say(passage);
+    passage.split(KEY_LETTER).forEach((part, index) => {
+      if (index % 2 === 0) return say(part);
+      pieces.push(drawnSign(part));
+      drew = true;
+    });
+  });
+  return drew ? pieces : text;
 }

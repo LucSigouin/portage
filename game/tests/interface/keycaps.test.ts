@@ -10,7 +10,7 @@ import type { PanelModel, ToastModel } from '../../src/client/contracts.ts';
 import { buildHowToPlayPanel, buildHudModel, buildInventoryPanel } from '../../src/client/viewmodels/index.ts';
 import { buildSettingsPanel } from '../../src/client/viewmodels/settings.ts';
 import { takeBackAction } from '../../src/client/viewmodels/takeback.ts';
-import { TOOL_IDS } from '../../src/data/index.ts';
+import { BOTTLES, TOOL_IDS } from '../../src/data/index.ts';
 import { createDefaultSettings } from '../../src/settings/index.ts';
 import { collectText } from '../../src/interface/dom.ts';
 import type { ViewChild, ViewNode } from '../../src/interface/dom.ts';
@@ -198,6 +198,31 @@ describe('a sentence that names keys', () => {
       ['Shift+Z and Z+click are words, like Left-I.', []],
       ["I'm told it's Z's turn.", []],
       ['', []],
+    ];
+    for (const [sentence, letters] of sentences) {
+      const view = wrap(keyedText(sentence));
+      expect(drawn(view), sentence).toEqual(letters);
+      expect(words(view), sentence).toBe(sentence);
+    }
+  });
+
+  it('leaves what stands in quotation marks to the hand: a letter out of a bottle names no key', () => {
+    // The note of a bottle found, as the client words it: the bottle's name, its count, then the letter in quotation marks.
+    for (const bottle of Object.values(BOTTLES)) {
+      const note = `${bottle.name} (3 of 10): "${bottle.text}"`;
+      expect(keyedText(note), bottle.name).toBe(note);
+      const toast: ToastModel = { id: 1, text: note, tone: 'good', itemId: null, life: 1 };
+      expect(drawn(toastsView([toast])), bottle.name).toEqual([]);
+    }
+    // At least one of those letters says "I": the rule is not idle.
+    expect(Object.values(BOTTLES).some((bottle) => /(^|[^A-Za-z])I[^A-Za-z']/.test(bottle.text))).toBe(true);
+    const sentences: [string, string[]][] = [
+      ['"I went into the Fog four times."', []],
+      ['Press Z. The note said "I held the bow dead north" and no more.', ['Z']],
+      ['The note said "Z marks it." Hold I to bail.', ['I']],
+      ['\u201cI am going to paddle toward it.\u201d Hold Z.', ['Z']],
+      // A mark that is never closed: the rest of the line is the quote.
+      ['Hold Z. "I did not, once', ['Z']],
     ];
     for (const [sentence, letters] of sentences) {
       const view = wrap(keyedText(sentence));
