@@ -3,15 +3,17 @@
     "The only file to edit. Then run: node hub/build.mjs && node hub/check.mjs",
     "status: three lists of short lines. An empty list shows as 'Nothing.' A line is plain text, or { text, href } to make it a link (href: a site path, or #play, #sound, #looks, #docs).",
     "sections > groups > links. Every href and thumb is relative to the site root (hub/site/).",
-    "link fields: title, href, see (one line: what you will see). Optional: keys, thumb, also, from.",
+    "link fields: title, href, see (one line: what you will see). Optional: keys, thumb, also, from, page.",
     "keys: lines like 'W, S, A, D: paddle and walk'. Keys before the colon, comma-separated.",
     "thumb: a picture in shots/. The build makes game-<name>.jpg and look-<a|b|b2|c>-<name>.jpg.",
     "also: extra small links under a thumbnail, each with title and href.",
-    "from: a markdown file (path from the portage folder). The build renders it to the href, which must be docs/<name>.html."
+    "from: a markdown file (path from the portage folder). The build renders it to the href, which must be docs/<name>.html.",
+    "page: a finished HTML page with its own pictures (path from the portage folder). The build copies it, its pictures and the pages beside it that it links to. The href must be pages/<name>/<the same file name>.",
+    "After a change to words, reports or pages only: node hub/build.mjs --words && node hub/check.mjs (seconds, no test lock)."
   ],
   "name": "Portage",
   "pitch": "A browser survival-crafting game. The valley flooded. You have a leaky canoe, and you bolt what you build onto it.",
-  "updated": "2026-11-13, morning",
+  "updated": "2026-11-13, evening",
   "status": {
     "done": [
       "Rules engine. Runs with no screen. 179 tests pass. A bot finishes the whole main quest.",
@@ -42,15 +44,18 @@
       "Live on Nov 12: everything built that day, at https://sigouin.net/portage/ .",
       "A faster canoe: paddle 3.2 m/s (was 2.2), power stroke 4.2 (was 3.2), with rough water raised by the same share. Doubling was tried first and broke the sail and the rough-water gates. 1131 unit tests pass. The browser tests ran that night: all 119 pass.",
       "Friends by a link, live: the relay runs on Cloudflare at sigouin.net/portage/relay, and the live lobby has Host a crew and Join a crew. A host and a guest met through it (52 ms there and back). Every deploy ends with two browsers in one canoe on the live site. Not yet tried on two real computers.",
-      "Overnight on Nov 13: a fresh reviewer scored the three low points again (first minutes 7 to 8, solid 6 to 7, canoe stays 7). Three small fixes are on main: an honest chip timing at load, a steadier speed test, a refused autosave that says so. 1146 tests pass, plus 119 browser tests. The two that change the game are not live: they wait for a push."
+      "Overnight on Nov 13: a fresh reviewer scored the three low points again (first minutes 7 to 8, solid 6 to 7, canoe stays 7). Three small fixes are on main: an honest chip timing at load, a steadier speed test, a refused autosave that says so. 1146 tests pass, plus 119 browser tests. The two that change the game are not live: they wait for a push.",
+      "Evening of Nov 13: your whole bugfix list is live, all 34 items, as Version 1.0.320. 1864 unit tests, 87 relay tests and 163 browser tests pass in one run. A second reviewer scored it 8, 9, 9, 8, 8 and 8. The relay has its dial limit, and the Feedback menu keeps its notes on your Cloudflare."
     ],
-    "running": [
-      "Build payoff and a first hull upgrade you can see. A dial limit on the relay. Then one master review."
-    ],
+    "running": [],
     "waiting": [
       {
         "text": "The workbench: every step so far, in point form. Made for your phone.",
         "href": "workbench.html"
+      },
+      {
+        "text": "The review of your whole bugfix list: two scores, the pictures that matter, and your calls.",
+        "href": "pages/review-r3/review.html"
       },
       {
         "text": "The review: six scores and sixteen fixes, worst first.",
@@ -60,12 +65,12 @@
         "text": "The re-score: 8, 7 and 7 on the three low points, and nine findings.",
         "href": "docs/report-rescore.html"
       },
-      "Luc: your calls. Build payoff, the first hull upgrade, trees hiding the player, a dial limit on the relay (it is live without one), crafts made early.",
+      "Luc: your calls from that review. Sleep only at a bed, the ping beam by day, the spruce that hides you, Home Knoll's birches, a Cloudflare rate rule in front of the relay.",
       {
         "text": "Luc: the starting canoe is weathered grey, not red. Keep or bring the red back?",
         "href": "game/?shot=play"
       },
-      "Luc: the game is live with the Nov 12 work. Your old save continues. Play it and say what feels wrong.",
+      "Luc: the game is live with your whole bugfix list (Version 1.0.320). Your old save continues. Play it and say what feels wrong.",
       "Luc: host a crew on the live game and send the link to a friend. Two real computers is the one thing no test here covers."
     ]
   },
@@ -861,6 +866,30 @@
               "href": "docs/report-savenote.html",
               "see": "A refused save: 3,601 tries became 1, and the player is told.",
               "from": "../scratch/portage/fix-savenote-report.md"
+            },
+            {
+              "title": "Review page: your whole bugfix list, scored twice",
+              "href": "pages/review-r3/review.html",
+              "see": "Put it live or not, six scores first and second, the pictures that matter, and your calls.",
+              "page": "../scratch/portage/review-r3/review.html"
+            },
+            {
+              "title": "Report: the master review of the bugfix list",
+              "href": "docs/report-review-r3.html",
+              "see": "All 34 lines of your list judged in the game, six scores, eleven findings worst first.",
+              "from": "../scratch/portage/review-r3-report.md"
+            },
+            {
+              "title": "Report: the fix round after the master review",
+              "href": "docs/report-fix-review.html",
+              "see": "Each finding closed with its test, the take-back on Z, and where the review was wrong.",
+              "from": "../scratch/portage/fix-review-report.md"
+            },
+            {
+              "title": "Report: the second score",
+              "href": "docs/report-rescore-r3.html",
+              "see": "A fresh reviewer: every finding closed or not, the take-back attacked, two things still open.",
+              "from": "../scratch/portage/rescore-r3-report.md"
             }
           ]
         }

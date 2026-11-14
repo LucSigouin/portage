@@ -6,7 +6,7 @@
   ],
   "title": "Portage",
   "subtitle": "The workbench: every step so far",
-  "updated": "2026-11-13, 18:03",
+  "updated": "2026-11-13, 20:15",
   "ask": "A flooded world and all you have is a canoe. Scavenge islands, craft, and build a crazy impressive canoe.",
   "now": [
     {
@@ -857,8 +857,7 @@
         "Done: every test again on the fixed tree: 1864 unit, 87 relay, 163 browser, 0 red",
         "Done: the second score. List 8, look 9, together 9, plays 8, solid 8, friends 8",
         "The reviewer says: put it live",
-        "You said yes. It went live the same evening",
-        "Then one ask: merge into main, push, deploy"
+        "You said yes. It went live the same evening"
       ],
       "proof": [
         "Three of the 19 were game bugs. Each is fixed, with a unit test",
@@ -876,7 +875,7 @@
         "Second review: a drop just before a capsize dodges the capsize. Not fixed yet"
       ],
       "pictures": [],
-      "report": ""
+      "report": "pages/review-r3/review.html"
     }
   ],
   "calls": [
@@ -927,7 +926,7 @@
   "numbers": [
     {
       "label": "Commits",
-      "value": "320"
+      "value": "321"
     },
     {
       "label": "Worker runs",

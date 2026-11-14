@@ -2,6 +2,9 @@
 //
 // HOW TO
 //   Rebuild:  node /Users/ls/Claude-Workspace/personal/portage/hub/build.mjs
+//   Words:    node /Users/ls/Claude-Workspace/personal/portage/hub/build.mjs --words
+//             (after a change to hub.json, workbench.json, a report or a report page: it leaves the vite apps, the
+//             thumbnails and the comparison page as they are, so it takes seconds and needs no test lock)
 //   Check:    node /Users/ls/Claude-Workspace/personal/portage/hub/check.mjs     (exit 1 = something is broken)
 //   Serve:    python3 /Users/ls/Claude-Workspace/personal/portage/hub/serve.py   (not `python3 -m http.server`: it drops requests under load)
 //             (start it from a CNVS shell node, page 3, never as a background process)
@@ -19,13 +22,14 @@
 //   review.html    copy of art-r1/review.html, its three localhost addresses turned into links to looks/
 //   shots/         thumbnails, downscaled to JPEG with sips
 //   docs/          every hub.json link that has "from": that markdown file rendered to HTML
+//   pages/         every hub.json link that has "page": that finished HTML page, with its pictures as JPEGs
 //   index.html     the hub page: hub.json poured into src/hub.html with src/style.css inlined
 //   workbench.html the debrief page for a phone: workbench.json poured into src/workbench.html (see workbench.mjs)
 //
 // No dependencies of its own. It borrows vite from each project's node_modules.
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { escapeHtml, firstHeading, renderMarkdown } from './src/markdown.mjs';
 import { buildWorkbench } from './workbench.mjs';
@@ -342,6 +346,80 @@ function buildDocs(css) {
   say(`docs/ ${count} pages`);
 }
 
+// ---------------------------------------------------------------- report pages
+
+/** Pictures on a report page: sharp enough to read the game's small lettering, light enough for a phone. */
+const PAGE_PICTURE_LONG_SIDE = 1920;
+const PAGE_PICTURE_QUALITY = 85;
+
+/** The longer side of a picture in pixels, as sips reads it. */
+function longSide(file) {
+  const facts = execFileSync('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', file], { encoding: 'utf8' });
+  const sides = [...facts.matchAll(/pixel(?:Width|Height): (\d+)/g)].map((found) => Number(found[1]));
+  if (sides.length !== 2) throw new Error(`report page: sips could not read the size of ${file}.`);
+  return Math.max(...sides);
+}
+
+/**
+ * A hub.json link with "page" is a finished HTML page in scratch that brings its own pictures (a review page).
+ * It lands at the link's href: pages/<name>/<the page's own file name>. Each picture it names comes along as a JPEG.
+ * Each page it links to in its own folder comes along the same way. A named file that is missing stops the build.
+ */
+function copyPages() {
+  clearSiteFolder('pages');
+  let pages = 0;
+  let pictures = 0;
+  for (const link of allLinks.filter((each) => each.page)) {
+    const source = resolve(ROOT, link.page);
+    const sourceFolder = dirname(source);
+    if (!/^pages\/[\w-]+\/[\w-]+\.html$/.test(link.href) || basename(link.href) !== basename(source)) {
+      throw new Error(`hub.json: "${link.title}" has "page", so its href must be pages/<name>/${basename(source)}, not ${link.href}`);
+    }
+    const targetFolder = dirname(join(SITE, link.href));
+    mkdirSync(targetFolder, { recursive: true });
+    const waiting = [basename(source)];
+    const copied = new Set();
+    while (waiting.length > 0) {
+      const name = waiting.shift();
+      if (copied.has(name)) continue;
+      copied.add(name);
+      const file = join(sourceFolder, name);
+      if (!existsSync(file)) throw new Error(`hub.json: "${link.title}" needs ${file}, which does not exist.`);
+      let html = read(file).replace(/\b(src|href)="([^"#][^"]*)"/g, (whole, attribute, path) => {
+        if (/^[a-z][a-z0-9+.-]*:/i.test(path)) return whole; // a web address or a data: picture stays as it is
+        const named = resolve(sourceFolder, path);
+        if (relative(sourceFolder, named).startsWith('..')) throw new Error(`report page: ${file} names "${path}", which is outside its own folder.`);
+        if (!existsSync(named)) throw new Error(`report page: ${file} names "${path}", which is missing.`);
+        if (/^[\w-]+\.html$/.test(path)) {
+          waiting.push(path);
+          return whole;
+        }
+        if (!/\.(?:png|jpe?g)$/i.test(path)) throw new Error(`report page: ${file} names "${path}". A report page may name pictures (png, jpg) and pages beside it, nothing else.`);
+        const picture = path.replace(/\.\w+$/, '.jpg');
+        const target = join(targetFolder, picture);
+        if (!existsSync(target)) {
+          mkdirSync(dirname(target), { recursive: true });
+          // sips -Z also enlarges a small picture, so it is asked only to shrink.
+          const shrink = longSide(named) > PAGE_PICTURE_LONG_SIDE ? ['-Z', String(PAGE_PICTURE_LONG_SIDE)] : [];
+          execFileSync('sips', [
+            ...shrink, '-s', 'format', 'jpeg', '-s', 'formatOptions', String(PAGE_PICTURE_QUALITY),
+            named, '--out', target,
+          ], { stdio: ['ignore', 'ignore', 'inherit'] });
+          pictures++;
+        }
+        return `${attribute}="${picture}"`;
+      });
+      // The workbench is the way back: a report page has no navigation of its own.
+      html = html.replace(/<body([^>]*)>/, '<body$1><p style="margin:0;padding:8px 16px;font:14px system-ui,sans-serif"><a href="../../workbench.html" style="color:inherit">&larr; Portage workbench</a></p>');
+      const left = (html.match(/localhost|127\.0\.0\.1|file:\/\//g) ?? []).length;
+      if (left) say(`WARNING: ${link.href.replace(/[^/]+$/, name)} still holds ${left} localhost or file:// mentions`);
+      writeFileSync(join(targetFolder, name), html);
+      pages++;
+    }
+  }
+  say(`pages/ ${pages} pages, ${pictures} pictures`);
+}
+
 // ---------------------------------------------------------------- hub page
 
 function keysHtml(keys) {
@@ -429,13 +507,18 @@ function buildHubPage(css) {
 
 // ---------------------------------------------------------------- run
 
+// --words: see "Words" at the top. The comparison page keeps its pictures in shots/, so it stays with the thumbnails.
+const wordsOnly = process.argv.includes('--words');
 mkdirSync(SITE, { recursive: true });
-for (const app of APPS) await buildApp(app);
-copyReview();
-makeThumbnails();
+if (!wordsOnly) {
+  for (const app of APPS) await buildApp(app);
+  copyReview();
+  makeThumbnails();
+}
 const css = read(join(HUB, 'src/style.css')).trim();
-buildCompare(css);
+if (!wordsOnly) buildCompare(css);
 buildDocs(css);
+copyPages();
 buildHubPage(css);
 buildWorkbench(SITE, { say });
 say(`done in ${((Date.now() - startedAt) / 1000).toFixed(1)} s: ${SITE}`);
