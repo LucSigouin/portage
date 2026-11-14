@@ -17,12 +17,15 @@ import type { Settings } from '../settings/index.ts';
 import { bearingBetween, regionAt, selectTimeOfDay, terrainHeight, waterRoughnessAt, waveHeight } from '../sim/index.ts';
 import type { GameEvent, GameState } from '../sim/index.ts';
 import type { CameraPose, CanoeBounds, FrameInfo, StageName, WorldView } from '../client/contracts.ts';
+import { parseDebugParameters } from '../client/debug/parameters.ts';
 import { crewOf } from './crew.ts';
 import { KIND } from './b2/detail.js';
 import { Builder, THIN } from './b2/geo.js';
 import { GU, PAL, inkMaterial } from './b2/palette.js';
 import { createPost, heroPen } from './b2/post.js';
 import type { Post } from './b2/post.js';
+import { DEFAULT_PEN } from './b2/pens.js';
+import type { PenName } from './b2/pens.js';
 import { createSky } from './b2/sky.js';
 import { SHORE_ISLANDS, createWater } from './b2/water.js';
 import type { Water } from './b2/water.js';
@@ -163,6 +166,8 @@ export interface LookProbe {
   puffs: number;
   /** Columns of light standing: one for each ping the crew has on the map. */
   beams: number;
+  /** The pen's sample the picture is drawn with: 'bold' (C) unless `?pen=` or `setPen` picked another (`b2/pens.js`). */
+  penName: PenName;
 }
 
 /** What the chip test at load found. */
@@ -208,6 +213,8 @@ export class InkWashWorldView implements WorldView {
   private readonly rain = new Rain();
   /** `&rain=0` leaves the rain's strokes out (the rings, the wet and the sky stay): to prove that in rain the land changes only where a stroke is drawn. */
   private rainStrokes = true;
+  /** `?pen=<name>` (or `setPen(name)`) draws with one of the pen's samples (`b2/pens.js`). C, `bold`, unless asked. */
+  private penName: PenName = DEFAULT_PEN;
   private readonly islands: IslandView[] = [];
   private readonly beacon = new THREE.Group();
   private readonly matrix = new THREE.Matrix4();
@@ -278,7 +285,9 @@ export class InkWashWorldView implements WorldView {
     this.stallMilliseconds = Math.max(0, Number(switches.get('stall')) || 0);
     this.rainStrokes = switches.get('rain') !== '0';
 
-    const post = createPost(renderer, this.camera);
+    // ?pen=<name> draws with one of the pen's samples. Without it, the game's pen: C (round 4). ?pen=today is the old one.
+    this.penName = parseDebugParameters(window.location.search).pen;
+    const post = createPost(renderer, this.camera, this.penName);
     this.post = post;
     // ?boil=1 turns B2's line boil on, on real time. It exists so the steadiness test can be seen to fail. Never on otherwise.
     post.pen.uBoil.value = this.boil ? 1 : 0;
@@ -855,6 +864,13 @@ export class InkWashWorldView implements WorldView {
     if (this.post) Object.assign(this.post.bench, { draws: Math.max(1, Math.min(64, draws)), pass });
   }
 
+  /** Draw with one of the pen's samples (`b2/pens.js`): C, or another for a before-and-after. The same as `?pen=<name>`. */
+  setPen(name: PenName): void {
+    if (!this.post || name === this.penName) return;
+    this.post.setPen(name);
+    this.penName = name;
+  }
+
   /** Test hook: land on the rules' weather at the next frame, without easing. For a staged view that is held still. */
   settle(): void {
     this.settleDue = true;
@@ -963,6 +979,7 @@ export class InkWashWorldView implements WorldView {
       islandsDrawn: this.islands.filter((island) => island.group.visible).length,
       puffs: this.effects.active,
       beams: this.beams.beams.length,
+      penName: this.penName,
     };
   }
 

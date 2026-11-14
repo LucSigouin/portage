@@ -1,4 +1,5 @@
 import type { Camera, IUniform, Mesh, Object3D, PerspectiveCamera, Scene, Texture, Vector2, WebGLRenderer } from 'three';
+import type { PenName } from './pens.js';
 
 /** A rectangle of the canvas in pixels, from the bottom left. */
 export interface PostWindow { x: number; y: number; w: number; h: number }
@@ -19,6 +20,8 @@ export interface Post {
     heroRoomW: number; heroRoomH: number; heroInkScale: number; heroWindows: PostWindow[]; heroFine: number;
     /** Pixels of hero colour buffer drawn for the last hero window of the last frame. 0 when none was. */
     heroDrawnW: number; heroDrawnH: number;
+    /** The pen's sample both pens are drawn with. The one `createPost` was given ('bold' unless asked), then the last `setPen`. */
+    pen: PenName;
   };
   /**
    * `?bench=N` draws every pass N times, `&benchpass=<name>` only that pass (reflection, colour, ink, composite, hero).
@@ -27,6 +30,8 @@ export interface Post {
   bench: { draws: number; pass: string; discard: boolean };
   /** `?hullwater=1`: `keep` leaves the world's water inside the hull, painted over the floor, as it was. Only to prove the floor check can fail. */
   hullWater: { keep: boolean };
+  /** Draw with one of the pen's samples (`pens.js`, `?pen=`), or with today's pen again. Both pens take it: the world's and the heroes'. */
+  setPen(name: PenName): void;
   /**
    * width, height: the world's drawing size. reflectionScale: reflection size against the drawing.
    * inkMaximum: most ink texels per pixel, each way. sheetWidth, sheetHeight: the canvas. fine: the world's fine strokes.
@@ -43,7 +48,8 @@ export interface Post {
   ): void;
   dispose(): void;
 }
-export function createPost(renderer: WebGLRenderer, camera: Camera): Post;
+/** `pen`: the pen's sample both pens start with. The game's own (`DEFAULT_PEN`, C) unless asked. */
+export function createPost(renderer: WebGLRenderer, camera: Camera, pen?: PenName): Post;
 
 /**
  * The pen on a small hero. `start`: metres of world across the window's height at the hero's depth, up to which
