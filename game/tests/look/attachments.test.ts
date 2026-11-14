@@ -348,17 +348,20 @@ describe('the fully fitted long canoe with a crew of four', () => {
     expect(told(inTheWay), inTheWay.map((hit) => `${hit.part} ${hit.limb}`).join('; ')).toEqual([]);
   });
 
-  it('knows what the drawing cannot solve on the ribbed hull: with three or four aboard, the aft kneeler is inside five pieces', () => {
+  it('knows what the drawing cannot solve on the ribbed hull: with three or four aboard, the aft kneeler is inside four pieces', () => {
     // The rules spread the seats with the hull's length and leave the mounts amidships where they are. On the long
     // hull the aft kneeler has 32 cm between their back and the stern paddler's knees, for the map table, the
     // canopy's hoop and the outriggers' aft spar. On the ribbed hull they have 4 cm. In the report, with the numbers.
     // The fishing rig is clear since the stroke in an outrigger's well keeps the hands ahead of the shoulders.
-    const kneeler = ['seat 2 in canopy', 'seat 2 in cargo_rack', 'seat 2 in map_table', 'seat 2 in outrigger_port', 'seat 2 in outrigger_starboard'];
+    // Four pieces since the paddle rests on the side it works on (it was five: the port outrigger too).
+    const kneeler = ['seat 2 in canopy', 'seat 2 in cargo_rack', 'seat 2 in map_table', 'seat 2 in outrigger_starboard'];
+    const seen: Record<number, string[]> = {};
     for (const crew of [3, 4]) {
       const found = hits(2, ['rest', 'paddle', 'stopstart', 'bail', 'sleep'], false, crew);
-      // The fourth, kneeling forward, has the mast's foot at their back as well.
-      expect([...new Set(found.map((hit) => `seat ${hit.seat} in ${hit.part}`))].sort(), `crew of ${crew}`).toEqual(['seat 1 in firebox', ...kneeler, ...(crew === 4 ? ['seat 3 in mast_sail'] : [])]);
+      seen[crew] = [...new Set(found.map((hit) => `seat ${hit.seat} in ${hit.part}`))].sort();
     }
+    // The fourth, kneeling forward, has the mast's foot at their back as well.
+    expect(seen).toEqual({ 3: ['seat 1 in firebox', ...kneeler], 4: ['seat 1 in firebox', ...kneeler, 'seat 3 in mast_sail'] });
   });
 
   it('on the ribbed hull, three or four paddles are clear of every piece as well', () => {
@@ -432,8 +435,10 @@ describe('a kneeler beside an outrigger deck', () => {
 });
 
 describe('changing sides', () => {
-  it('happens early in the recovery, with the hands drawn back: never across the catch', () => {
-    const state = fitted(3, 4);
+  /** Twenty seconds of paddling with two hard turns: the stroke clock at every frame a paddle changed sides. */
+  function changesOf(tier: number, crew: number, attachments: AttachmentId[]): { changes: number[]; view: CanoeView } {
+    const state = fitted(tier, crew);
+    state.canoe.attachments = attachments;
     for (const player of state.players) player.paddling = true;
     const view = new CanoeView();
     view.sync(state, crewOf(state), 0, 0, true, true);
@@ -449,14 +454,26 @@ describe('changing sides', () => {
       if (now.some((side, index) => side !== sides[index])) changes.push(phaseOf());
       sides = now;
     }
-    // Every third stroke, and the two turns.
-    expect(changes.length).toBeGreaterThanOrEqual(4);
-    // The recovery starts where the pull ends (STROKE_PULL); the change is made in its first 0.08 of the stroke.
-    for (const phase of changes) {
-      expect(phase).toBeGreaterThanOrEqual(STROKE_PULL);
-      expect(phase).toBeLessThanOrEqual(STROKE_PULL + 0.08 + 0.78 / 30);
+    return { changes, view };
+  }
+
+  it('alone or two aboard it happens late in the recovery, the blade carried forward clear of the water: never across the catch', () => {
+    for (const crew of [1, 2]) {
+      const { changes } = changesOf(3, crew, []);
+      // Every third stroke, and the two turns.
+      expect(changes.length, `crew of ${crew}`).toBeGreaterThanOrEqual(4);
+      // The recovery starts where the pull ends (STROKE_PULL) and the blade drops in from 0.96. The stroke waits at
+      // 0.87 (CHANGE_AT in canoe.ts) while the paddle is carried across.
+      for (const phase of changes) {
+        expect(phase, `crew of ${crew}`).toBeGreaterThan(STROKE_PULL + 0.2);
+        expect(phase, `crew of ${crew}`).toBeLessThan(0.9);
+      }
     }
-    // Neighbours along the hull still work opposite sides.
+  });
+
+  it('a crew of four keeps its sides: there is no room to carry a paddle across low, and neighbours work opposite sides', () => {
+    const { changes, view } = changesOf(3, 4, fitted(3, 4).canoe.attachments);
+    expect(changes).toEqual([]);
     const side = (seat: number): number => view.figures().find((figure) => figure.seat === seat)!.side;
     expect([side(0), side(2), side(3), side(1)]).toEqual([side(0), -side(0), side(0), -side(0)]);
   });

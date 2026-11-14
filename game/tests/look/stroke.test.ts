@@ -6,7 +6,7 @@
  *   the blade, changing sides included (below the waterline the water hides the outside and the floor the inside);
  * - the stroke pulls the canoe forward: the blade goes in ahead, moves only toward the stern while in the water,
  *   and comes out behind, then is carried forward clear of the water, quicker than it was pulled;
- * - going astern it is the same stroke played backwards: the blade goes in behind and is pushed toward the bow.
+ * - going astern the stroke's clock runs backwards: the blade goes in behind and is pushed toward the bow.
  */
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
@@ -207,33 +207,35 @@ describe('the stroke pulls the canoe forward', () => {
     }
   });
 
-  it('going astern it is the same stroke played backwards: the blade goes in behind and is pushed toward the bow', () => {
+  it('going astern the stroke runs the other way round: the clock counts down and the wet blade is pushed toward the bow', () => {
+    // The key's own turn (S while the canoe still runs ahead) is tested with the real rules in stroke-astern.test.ts.
     for (let tier = 0; tier < HULL_TIERS.length; tier += 1) {
-      const ahead = strokeOf(tier, false);
-      const astern = strokeOf(tier, true);
-      let toStern = 0;
-      for (let index = 1; index < astern.length; index += 1) {
-        if (astern[index].blade.y < 0 && astern[index - 1].blade.y < 0) toStern = Math.max(toStern, astern[index - 1].blade.z - astern[index].blade.z);
+      const { state, view } = crewPaddling(tier, 1, true);
+      const member = [...membersOf(view).values()][0];
+      const phaseOf = (): number => (view as unknown as { phase: number }).phase;
+      let [toStern, down, wetFrames] = [0, 0, 0];
+      let before: THREE.Vector3 | null = null;
+      let last = phaseOf();
+      for (let frame = 1; frame <= 240; frame += 1) {
+        view.sync(state, crewOf(state), 1 / 60, frame / 60, true, false);
+        const blade = poseOf(member).down(BLADE);
+        if (before && blade.y < 0 && before.y < 0) {
+          wetFrames += 1;
+          toStern = Math.max(toStern, before.z - blade.z);
+        }
+        if ((((last - phaseOf()) % 1) + 1) % 1 < 0.5 && last !== phaseOf()) down += 1;
+        [before, last] = [blade, phaseOf()];
       }
+      // Of 240 frames: the clock waits 0.9 s while the paddle changes sides.
+      expect(down, `tier ${tier}: frames the clock ran backwards`).toBeGreaterThan(150);
+      expect(wetFrames, `tier ${tier}`).toBeGreaterThan(60);
       expect(toStern, `tier ${tier}`).toBeLessThan(0.005);
-      // The very same poses, in the other order.
-      for (let step = 1; step < 100; step += 1) expect(astern[step].blade.distanceTo(ahead[100 - step].blade), `tier ${tier} step ${step}`).toBeLessThan(1e-9);
     }
   });
 
-  it('the look turns to back strokes when the canoe goes astern, and back when it goes ahead again', () => {
-    const { state, view } = crewPaddling(0, 1);
-    const astern = (): boolean => (view as unknown as { astern: boolean }).astern;
-    expect(astern()).toBe(false);
-    state.canoe.speed = -0.4;
-    view.sync(state, crewOf(state), 1 / 60, 0, true, false);
-    expect(astern()).toBe(true);
-    // Drifting near standstill changes nothing.
-    state.canoe.speed = 0.02;
-    view.sync(state, crewOf(state), 1 / 60, 0, true, false);
-    expect(astern()).toBe(true);
-    state.canoe.speed = 0.6;
-    view.sync(state, crewOf(state), 1 / 60, 0, true, false);
-    expect(astern()).toBe(false);
+  it('a game handed over with the canoe going astern shows back strokes from its first frame, and one going ahead does not', () => {
+    const astern = (view: CanoeView): boolean => (view as unknown as { astern: boolean }).astern;
+    expect(astern(crewPaddling(0, 1).view)).toBe(false);
+    expect(astern(crewPaddling(0, 1, true).view)).toBe(true);
   });
 });

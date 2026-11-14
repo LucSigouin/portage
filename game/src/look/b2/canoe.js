@@ -552,6 +552,9 @@ const STROKE_KEYS = [
 // The elbow of the arm whose hand is on the grip bends forward, out ahead of the chest, a little down and to its
 // own side: that arm reaches across the body and has to pass in front of it. [x for the left arm, y, z].
 const TOP_ELBOW = [0.25, -0.3, 1];
+// The lower arm's elbow bends out, back and this much down: a touch higher than straight down, so the upper arm
+// rides over the ribbed hull's gunwale at the exit (it was 2 mm into it).
+const LOW_ELBOW_DOWN = -1;
 // The hull's half beam the keys are drawn for, and the lower hand's place down the shaft from the grip.
 const STROKE_BEAM = 0.38;
 const STROKE_LOW_HAND = 0.5;
@@ -575,11 +578,11 @@ const REST_HOLD = [0.22, 0.78];
 // A paddle laid across the gunwales lies this high above the figure's seat, and at least this far over the rail
 // where it crosses it (a bow seat's rail stands higher than a stern seat's).
 const REST_HEIGHT = 0.14;
-const REST_OVER_RAIL = 0.02;
+const REST_OVER_RAIL = 0.035;
 /** The resting paddle's grip and blade ends, for a figure whose rail is `rail` above its origin (left out: low). */
 const restHeight = (rail) => Math.max(REST_HEIGHT, (rail ?? 0) + REST_OVER_RAIL);
 // Half way between resting and working, the paddle is lifted this much: over the gunwale, not through it.
-const REST_LIFT = 0.07;
+const REST_LIFT = 0.1;
 // A change of sides carries the paddle across the bow, low: halfway it lies level and points straight ahead, the
 // grip at the lap this far above the figure's origin and this far ahead of it, the blade a touch higher than the grip.
 const CARRY_HEIGHT = 0.44;
@@ -587,6 +590,8 @@ const CARRY_AHEAD = 0.26;
 const CARRY_ELEVATION = 0.03;
 // For each metre the paddle is carried higher than the lap, the grip is held this much further ahead.
 const CARRY_AHEAD_HIGHER = 0.6;
+// Carried across while it is being laid down or taken up, the paddle lies lower: the further hand holds this much nearer the grip.
+const CARRY_HOLD_IN = 0.06;
 // The hands change places on the shaft as it lies ahead: each passes on its own side of it, this far apart.
 const CARRY_PASS = 0.11;
 // The blade's middle, down the shaft from the grip.
@@ -784,7 +789,8 @@ export function createCrew(outfit) {
       // Carried across the bow the paddle points ahead: no hand is further down it than an arm reaches.
       const upper = REST_HOLD[0] * (1 - working);
       const settled = REST_HOLD[1] + (STROKE_LOW_HAND - higher - REST_HOLD[1]) * working;
-      const lower = settled + (Math.min(settled, STROKE_LOW_HAND - higher) - settled) * carried;
+      // The hold is drawn in early in the carry: at half effort a hand was 9 cm off the shaft, at arm's length.
+      const lower = settled + (Math.min(settled, STROKE_LOW_HAND - higher - CARRY_HOLD_IN * (1 - working)) - settled) * smooth(0, 0.4, carried);
       const top = s >= 0 ? handR : handL;
       const low = s >= 0 ? handL : handR;
       if (cross < 1) {
@@ -803,8 +809,8 @@ export function createCrew(outfit) {
       // elbow forward; the other pulls, its elbow out, down and back. Changing sides, the two trade places.
       const gripR = effort * (s >= 0 ? eased : 1 - eased);
       const gripL = effort * (s >= 0 ? 1 - eased : eased);
-      elbowL.set(0.5 + (TOP_ELBOW[0] - 0.5) * gripL, -1 + (TOP_ELBOW[1] + 1) * gripL, -0.45 + (TOP_ELBOW[2] + 0.45) * gripL);
-      elbowR.set(-0.5 - (TOP_ELBOW[0] - 0.5) * gripR, -1 + (TOP_ELBOW[1] + 1) * gripR, -0.45 + (TOP_ELBOW[2] + 0.45) * gripR);
+      elbowL.set(0.5 + (TOP_ELBOW[0] - 0.5) * gripL, LOW_ELBOW_DOWN + (TOP_ELBOW[1] - LOW_ELBOW_DOWN) * gripL, -0.45 + (TOP_ELBOW[2] + 0.45) * gripL);
+      elbowR.set(-0.5 - (TOP_ELBOW[0] - 0.5) * gripR, LOW_ELBOW_DOWN + (TOP_ELBOW[1] - LOW_ELBOW_DOWN) * gripR, -0.45 + (TOP_ELBOW[2] + 0.45) * gripR);
       const reach = key[7];
       let lean = 0.1 + effort * (0.06 + 0.12 * reach);
       let twist = -lead * effort * (0.34 * (reach - 0.5));
