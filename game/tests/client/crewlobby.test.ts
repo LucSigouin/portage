@@ -90,6 +90,20 @@ async function run(clients: Client[], seconds: number): Promise<void> {
 const lobbyLabels = (each: Client): string[] => each.model().lobby!.buttons.map((button) => button.label);
 const lobbyButton = (each: Client, label: string): ButtonModel => each.model().lobby!.buttons.find((button) => button.label === label)!;
 
+/** A new game by the menu's own door: the slot, then the pick screen, then its one button. */
+function startNewGame(each: Client, slot = 0): void {
+  // From the room card the way to a slot is its "New Game", which opens the save slots.
+  if (each.model().panel?.id === 'crew_host') each.send({ type: 'open_panel', panel: 'save_slots' });
+  each.send({ type: 'new_game', slot });
+  each.press(each.panel('character_select').start);
+}
+
+/** Join by the join card: its Join, then the pick screen, then its one button. Only then is anything dialled. */
+function pressJoin(each: Client): void {
+  each.press(each.panel('crew_join').join);
+  each.press(each.panel('character_select').start);
+}
+
 /** A host with an open room and a game under way, named Luc. */
 async function hosting(relay: FakeRelay, options: { codes?: string[] } = {}): Promise<{ host: Client; code: string }> {
   const host = client(relay, options);
@@ -98,7 +112,7 @@ async function hosting(relay: FakeRelay, options: { codes?: string[] } = {}): Pr
   host.press(host.panel('crew_host').actions[0]);
   await run([host], 0.2);
   const code = readRoomCode(host.panel('crew_host').room!.code)!;
-  host.send({ type: 'new_game', slot: 0 });
+  startNewGame(host);
   return { host, code };
 }
 
@@ -106,7 +120,7 @@ async function joining(relay: FakeRelay, code: string, name: string, others: Cli
   const guest = client(relay, { invite: code, storage });
   guest.send({ type: 'open_panel', panel: 'crew_join' });
   guest.type('name', name);
-  guest.press(guest.panel('crew_join').join);
+  pressJoin(guest);
   await run([...others, guest], 1);
   return guest;
 }
@@ -124,7 +138,7 @@ describe('a game built without a relay', () => {
     solo.type('name', 'Luc');
     expect(solo.app.session.onShare).toBeNull();
     expect(solo.app.session.guest).toBeNull();
-    solo.send({ type: 'new_game', slot: 0 });
+    startNewGame(solo);
     expect(solo.app.session.host).toBeNull();
     solo.send({ type: 'open_panel', panel: 'pause' });
     expect(solo.panel('pause').buttons.map((button) => button.label)).toEqual(['Resume', 'Settings', 'How to Play', 'Feedback', 'Save and quit to the lobby']);
@@ -174,7 +188,7 @@ describe('hosting a crew', () => {
 
     host.press(panel.actions[1]);
     expect(host.model().openPanels).toEqual(['crew_host', 'save_slots']);
-    host.send({ type: 'new_game', slot: 0 });
+    startNewGame(host);
     const session = host.app.session;
     expect(session.screen).toBe('game');
     expect(session.host).not.toBeNull();
@@ -191,7 +205,7 @@ describe('hosting a crew', () => {
   it('opens a room in the middle of a game, from the pause menu', async () => {
     const relay = new FakeRelay();
     const host = client(relay);
-    host.send({ type: 'new_game', slot: 0 });
+    startNewGame(host);
     expect(host.app.session.host).toBeNull();
     host.send({ type: 'open_panel', panel: 'pause' });
     const crewButton = host.panel('pause').buttons[1]!;
@@ -266,6 +280,9 @@ describe('joining a crew', () => {
     expect(panel.status).toBe('');
     guest.type('name', 'Sam');
     guest.press(panel.join);
+    // The pick screen stands between Join and the join: nothing is dialled until its button is pressed.
+    expect(relay.dials.filter((dial) => dial.address.includes('role=guest'))).toEqual([]);
+    guest.press(guest.panel('character_select').start);
     panel = guest.panel('crew_join');
     expect(panel).toMatchObject({ status: 'Connecting to the relay…' });
     expect([panel.code.enabled, panel.name.enabled, panel.join.enabled, panel.cancel?.label]).toEqual([false, false, false, 'Cancel']);
@@ -297,7 +314,7 @@ describe('joining a crew', () => {
     expect(guest.panel('crew_join')).toMatchObject({ status: 'Found the crew. Waiting for the host to start the game…', statusTone: 'good' });
     expect(lobbyButton(host, 'Host a crew').note).toBe(`Room ${code.slice(0, 3)}-${code.slice(3)} is open`);
     expect(host.panel('crew_host').status).toBe('One friend is in the room.');
-    host.send({ type: 'new_game', slot: 0 });
+    startNewGame(host);
     await run([host, guest], 1);
     expect(guest.app.session.screen).toBe('game');
     expect(guest.app.session.game!.players.map((player) => player.name)).toEqual(['Luc', 'Sam']);
@@ -311,7 +328,7 @@ describe('joining a crew', () => {
     guest.send({ type: 'open_panel', panel: 'crew_join' });
     guest.type('name', '  Samantha the Bold  ');
     expect(guest.panel('crew_join').name.value).toBe('Samantha the');
-    guest.press(guest.panel('crew_join').join);
+    pressJoin(guest);
     await run([host, guest], 1);
     const name = host.app.session.game!.players[1]!.name;
     expect(name).toBe('Samantha the');
@@ -350,7 +367,7 @@ describe('joining a crew', () => {
     const lost = client(relay, { invite: 'QRTWXY' });
     lost.send({ type: 'open_panel', panel: 'crew_join' });
     lost.type('name', 'Sam');
-    lost.press(lost.panel('crew_join').join);
+    pressJoin(lost);
     await run([host, lost], 0.5);
     expect(lost.panel('crew_join')).toMatchObject({ status: 'No crew with that code. Check it with whoever sent it.', statusTone: 'danger' });
     expect(lost.panel('crew_join').join.enabled).toBe(true);
@@ -381,7 +398,7 @@ describe('joining a crew', () => {
     const cut = client(relay, { invite: code });
     cut.send({ type: 'open_panel', panel: 'crew_join' });
     cut.type('name', 'Eve');
-    cut.press(cut.panel('crew_join').join);
+    pressJoin(cut);
     await run([cut], 4);
     expect(cut.panel('crew_join')).toMatchObject({
       status: 'The relay cannot be reached. Check your connection and try again.', statusTone: 'danger',

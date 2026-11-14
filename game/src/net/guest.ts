@@ -14,6 +14,8 @@
  *   what a solo session does with the rules engine, done over the wire.
  * - `update(seconds)`: call once a frame. Runs the clock, the resends and the pings.
  */
+import { CHARACTER_IDS } from '../data/index.ts';
+import type { CharacterId } from '../data/index.ts';
 import { airborne, blendLeap, hashState } from '../sim/index.ts';
 import type { Command, CommandResult, GameEvent, GameState, PlayerId, PlayerState, StepInput } from '../sim/index.ts';
 import { PROTOCOL_VERSION, readHostMessage } from './messages.ts';
@@ -27,6 +29,11 @@ export interface GuestOptions {
   name: string;
   /** This guest's secret for the room: 8 to 64 letters, digits, `_` or `-`. The same key gets the same player back. */
   key: string;
+  /**
+   * Who this guest picked to be (the pick screen). The lobby's join always says. Left out (a test, a tool): the
+   * first of the cast, since a join must name one.
+   */
+  character?: CharacterId;
   /** How far behind the newest state the view runs, in steps of 1/60 s. Default 6 (a tenth of a second). */
   delaySteps?: number;
   /**
@@ -169,6 +176,7 @@ export class GuestLink {
   private readonly transport: Transport;
   private readonly name: string;
   private readonly key: string;
+  private readonly character: CharacterId;
   private readonly delaySteps: number;
   private session: number | null = null;
   private sitting: number | null = null;
@@ -213,6 +221,7 @@ export class GuestLink {
     this.transport = transport;
     this.name = options.name;
     this.key = options.key;
+    this.character = options.character ?? CHARACTER_IDS[0];
     this.delaySteps = options.delaySteps ?? 6;
     this.predictWalk = options.predictWalk ?? true;
     transport.receive((raw) => this.onMessage(raw), () => this.end('closed', 'closed'));
@@ -225,7 +234,7 @@ export class GuestLink {
 
   private sendJoin(): void {
     this.joinSentAt = this.clock;
-    this.send({ v: PROTOCOL_VERSION, type: 'join', name: this.name, key: this.key });
+    this.send({ v: PROTOCOL_VERSION, type: 'join', name: this.name, key: this.key, character: this.character });
   }
 
   private end(status: 'closed' | 'refused', reason: LeaveReason): void {

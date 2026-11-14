@@ -1,3 +1,4 @@
+import { isCharacterId } from '../data/cast.ts';
 import type { Difficulty } from '../data/types.ts';
 import { TUNING } from '../data/tuning.ts';
 import { ISLANDS, START } from '../data/world.ts';
@@ -78,6 +79,15 @@ export function cleanPlayerName(name: unknown): string {
 export function setPlayerName(state: GameState, playerId: PlayerId, name: unknown): void {
   const player = state.players.find((candidate) => candidate.id === playerId);
   if (player) player.name = cleanPlayerName(name);
+}
+
+/**
+ * Say who a player is: one of the four of the cast (`data/cast.ts`), and nothing else. Anything else changes nothing.
+ * Only the drawing reads it. No rule does, and a new game sets none.
+ */
+export function setPlayerCharacter(state: GameState, playerId: PlayerId, character: unknown): void {
+  const player = state.players.find((candidate) => candidate.id === playerId);
+  if (player && isCharacterId(character)) player.character = character;
 }
 
 /**

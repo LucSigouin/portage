@@ -13,6 +13,8 @@ import { createSilentAudio } from './client/contracts.ts';
 import type { AudioEngine } from './client/contracts.ts';
 import { parseDebugParameters } from './client/debug/parameters.ts';
 import { createGameInterface } from './interface/index.ts';
+import { withCastPictures } from './interface/cast-host.ts';
+import { drawCastSketches } from './look/cast-sketch.ts';
 import { createWorldView } from './look/index.ts';
 import { setLocalPlayerId } from './look/crew.ts';
 import { CrewLobby } from './client/crewlobby.ts';
@@ -89,7 +91,8 @@ function boot(): void {
   // `?perf=1`: the performance readout. It plays in a storage that forgets, so saves and settings are never touched.
   const perf = new URLSearchParams(window.location.search).get('perf') === '1';
   const worldView = createWorldView();
-  const gameInterface = createGameInterface();
+  // The pick screen shows the four of the cast (`interface/cast-host.ts`): the interface, with that added.
+  const gameInterface = withCastPictures(createGameInterface(), { draw: drawCastSketches });
   const audio = createAudio();
   let loop: FrameLoop | null = null;
 
@@ -235,12 +238,13 @@ function boot(): void {
 
   const start = (): void => {
     // A handle for the console and for browser tests.
-    (window as unknown as { portage: unknown }).portage = { app, session, worldView, loop, followVisibility };
+    (window as unknown as { portage: unknown }).portage = { app, session, worldView, loop, followVisibility, cast: gameInterface.cast };
     loop?.start();
     if (perf) void import('./client/debug/index.ts').then((debug) => debug.runPerfReadout(app, worldView, loop));
     // `?join=ROOM&name=...`: ask the host tab for a seat. The lobby shows until it answers.
     if (parameters.join !== null) {
-      session.joinGame(joinTabRoom(parameters.join, randomHex(8)), { name: parameters.name, key: crewKey(parameters.join, parameters.name) });
+      // A tester's door: no pick screen. It joins as whoever this browser last picked, or the first of the cast.
+      session.joinGame(joinTabRoom(parameters.join, randomHex(8)), { name: parameters.name, key: crewKey(parameters.join, parameters.name), character: session.keptCharacter() });
     }
   };
 

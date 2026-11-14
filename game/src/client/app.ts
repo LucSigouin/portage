@@ -240,6 +240,7 @@ export class App {
       progressText: session.progressText(),
       crew: session.crew?.view() ?? null,
       feedback: session.feedback,
+      cast: session.cast,
       built: built ? builtWords(built.piece) : null,
       arrival: this.arrivals.model(),
       debug: showFrameRate || debugLines.length > 0 ? {

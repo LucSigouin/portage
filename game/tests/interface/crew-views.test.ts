@@ -114,7 +114,7 @@ describe('the join card', () => {
       [{ phase: 'failed', problem: 'no-name' }, 'Type a name first.'],
       [{ phase: 'failed', leave: 'full' }, 'That crew is full.'],
       [{ phase: 'failed', leave: 'closed' }, 'The host closed the game.'],
-      [{ phase: 'failed', leave: 'version' }, 'The host runs another version of the game. Reload the page.'],
+      [{ phase: 'failed', leave: 'version' }, 'The host runs another version of the game. Reload the page, both of you.'],
     ];
     for (const [join, sentence] of words) {
       const status = find(joinCard(crewView({ join })), (node) => node.attributes.role === 'status');

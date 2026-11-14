@@ -19,6 +19,8 @@ export { NPCS, NPC_IDS } from './dialogue.ts';
 export { BOTTLES, BOTTLE_IDS } from './bottles.ts';
 export { CREW_MARKS } from './crew.ts';
 export type { CrewMark } from './crew.ts';
+export { CAST, CHARACTER_IDS, characterOf, isCharacterId } from './cast.ts';
+export type { CastEntry, CharacterId } from './cast.ts';
 export { WEATHER, WEATHER_KINDS } from './weather.ts';
 export { FLORA_PRESETS, floraMixFor, floraPresetFor } from './flora.ts';
 export type { FloraMix, FloraPresetId } from './flora.ts';

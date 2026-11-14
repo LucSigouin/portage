@@ -257,6 +257,8 @@ test('the sound engine starts on the first click in the lobby, so the first key 
   await page.getByRole('button', { name: 'New Game' }).click();
   expect(await built()).not.toBeNull();
   await page.getByRole('button', { name: 'New game here' }).first().click();
+  // The pick screen: start as whoever is marked.
+  await page.locator('.iw-panel-character_select .cs-start').click();
   await page.waitForFunction(() => (window as unknown as { portage: { session: { screen: string } } }).portage.session.screen === 'game');
   const inPlayAt = await page.evaluate(() => performance.now());
   expect(await built()).toBeLessThan(inPlayAt);

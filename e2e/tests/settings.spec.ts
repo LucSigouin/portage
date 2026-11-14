@@ -75,6 +75,8 @@ test('sliders, checkboxes and pickers change the game and persist', async ({ pag
   expect(reloaded.graphics).toMatchObject({ qualityPreset: 'low', showFps: true, fpsCap: 60 });
   await page.getByRole('button', { name: 'New Game' }).click();
   await page.getByRole('button', { name: 'New game here' }).first().click();
+  // The pick screen, at the largest interface size: start as whoever is marked.
+  await page.locator('.iw-panel-character_select .cs-start').click();
   await expect(page.locator('.iw-meter .iw-bar.iw-stripes')).toHaveCount(1);
   await expect(page.locator('.iw-debug')).toContainText('fps');
 });

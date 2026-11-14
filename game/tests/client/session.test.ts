@@ -106,6 +106,9 @@ describe('lobby and save slots', () => {
   it('starts a new game in a slot with a fresh seed each time, and saves it at once', () => {
     const { session, storage, signals } = harness();
     session.handleIntent({ type: 'new_game', slot: 1 });
+    // The pick screen first (`tests/client/cast.test.ts`): the game starts from its button.
+    expect(session.screen).toBe('lobby');
+    session.handleIntent({ type: 'cast_confirm' });
     expect(session.screen).toBe('game');
     expect(session.slot).toBe(1);
     const first = session.game!;
@@ -115,6 +118,7 @@ describe('lobby and save slots', () => {
     session.handleIntent({ type: 'quit_to_lobby' });
     session.handleIntent({ type: 'answer_confirm', accepted: true });
     session.handleIntent({ type: 'new_game', slot: 2 });
+    session.handleIntent({ type: 'cast_confirm' });
     expect(session.game!.seed).not.toBe(first.seed);
     expect(session.slotSummaries().map((summary) => summary.empty)).toEqual([true, false, false]);
     expect(session.newGame(3)).toBe(false); // there is no fourth slot
@@ -178,10 +182,16 @@ describe('lobby and save slots', () => {
     expect(session.slotSummaries()[0].empty).toBe(true);
 
     session.newGame(0);
+    const replaced = savedState(storage, 0).seed;
     session.quitToLobby();
     session.handleIntent({ type: 'new_game', slot: 0 });
     session.handleIntent({ type: 'answer_confirm', accepted: true });
+    // Yes to starting over leads to the pick screen: the old game is still in the slot until its button is pressed.
+    expect(session.screen).toBe('lobby');
+    expect(savedState(storage, 0).seed).toBe(replaced);
+    session.handleIntent({ type: 'cast_confirm' });
     expect(session.screen).toBe('game');
+    expect(savedState(storage, 0).seed).not.toBe(replaced);
     expect(savedState(storage, 0).seed).not.toBe(original);
   });
 

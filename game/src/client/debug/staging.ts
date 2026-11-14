@@ -148,6 +148,9 @@ export function stageShot(name: ShotName, seed: number = BOT_SEED): StagedShot {
   switch (name) {
     case 'lobby':
       return { state: null, panel: null, camera: null };
+    // The pick screen over the save slots, as a new game meets it. The session opens it (`debug/index.ts`): it has no menu line.
+    case 'cast':
+      return { state: null, panel: 'save_slots', camera: null };
     case 'settings':
       return { state: null, panel: 'settings', camera: null };
     case 'play': {

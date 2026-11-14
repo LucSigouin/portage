@@ -10,7 +10,7 @@
  *
  * | From | Type | Says |
  * |---|---|---|
- * | guest | `join` | I am `name`. `key` is my secret for this room: the same key gets the same player back. |
+ * | guest | `join` | I am `name`, and I look like `character` (one of the cast). `key` is my secret for this room: the same key gets the same player back. |
  * | host | `welcome` | You are player `playerId`. Here is the whole state, snapshot `id`. Commands count from 1 in this `sitting`. |
  * | guest | `input` | What I hold this step (`StepInput`), numbered `seq`. Also what I have: snapshot `have`, `events` so far. And my walking: I have taken `step` steps of 1/60 s, and `walk` is what I held on the last few stretches of them. |
  * | guest | `command` | Do this for me (`Command`), numbered `id`, once you have walked me through my step `at`. Sent again until its result comes. |
@@ -20,7 +20,8 @@
  * | guest | `ping` | Still here, and what I have. The host sends it straight back. |
  * | both | `leave` | Going, or (from the host) why you cannot stay. |
  */
-import { ATTACHMENTS, ITEMS, NPCS, QUESTS, RECIPES, TOOL_IDS } from '../data/index.ts';
+import { ATTACHMENTS, ITEMS, NPCS, QUESTS, RECIPES, TOOL_IDS, isCharacterId } from '../data/index.ts';
+import type { CharacterId } from '../data/index.ts';
 import type { Command, CommandResult, GameEvent, GameState, PlayerId, StepInput } from '../sim/index.ts';
 import { WALK_RUNS_SENT, readWalkRun } from './walk.ts';
 import type { WireRun } from './walk.ts';
@@ -32,11 +33,16 @@ import type { WireRun } from './walk.ts';
  * 4: the jump key (`input.input.jump`, and 2 added to the keys of a stretch in `input.walk`).
  * 5: a guest may send `ping` and `clear_ping` (an older host would drop them unanswered, and the guest's next commands with them).
  * 6: a guest may send `take_back`, for the same reason.
- * 7: a guest may send `give` (a stack handed to a crewmate close by), for the same reason.
+ * 7: `join` says who the guest is (`join.character`, the pick screen): an older host would refuse the whole join for the field, unanswered.
+ *    And a guest may send `give` (a stack handed to a crewmate close by), for the same reason as 5 and 6.
  */
 export const PROTOCOL_VERSION = 7;
 
-export interface JoinMessage { v: number; type: 'join'; name: string; key: string }
+export interface JoinMessage {
+  v: number; type: 'join'; name: string; key: string;
+  /** Who the guest picked to be: one of the four of the cast (`data/cast.ts`). Only the drawing reads it. */
+  character: CharacterId;
+}
 export interface InputMessage {
   v: number; type: 'input'; seq: number; have: number; events: number; input: StepInput;
   /** Steps of 1/60 s this guest has taken in this sitting. `walk` says what it held on them. */
@@ -232,6 +238,16 @@ export function isOtherVersion(raw: unknown): boolean {
 }
 
 /**
+ * The version to answer a message of another version in: its own, so the tab that sent it reads the answer. A tab
+ * reads nothing that is not of its own version (`readHostMessage`), so a `leave` in this build's version never
+ * reached an old tab: it was dropped, and the friend was told the crew let them go, not to reload.
+ * This build's own version when theirs is not a plain small number.
+ */
+export function answerVersion(raw: unknown): number {
+  return isRecord(raw) && isWhole(raw.v, 0, 9999) ? raw.v : PROTOCOL_VERSION;
+}
+
+/**
  * A guest's message, checked field by field. Null when it is not exactly one
  * of the five a guest may send: wrong version, unknown type, a missing or
  * extra field (a `playerId`, say), a number that is not one.
@@ -241,10 +257,12 @@ export function readClientMessage(raw: unknown): ClientMessage | null {
   const v = PROTOCOL_VERSION;
   switch (raw.type) {
     case 'join':
-      if (!hasOnly(raw, ['v', 'type', 'name', 'key'])) return null;
+      if (!hasOnly(raw, ['v', 'type', 'name', 'key', 'character'])) return null;
       if (typeof raw.name !== 'string' || raw.name.length > 200) return null;
       if (typeof raw.key !== 'string' || !KEY_PATTERN.test(raw.key)) return null;
-      return { v, type: 'join', name: raw.name, key: raw.key };
+      // One of the four, or the whole join is refused: no default, no guess.
+      if (!isCharacterId(raw.character)) return null;
+      return { v, type: 'join', name: raw.name, key: raw.key, character: raw.character };
     case 'input': {
       if (!hasOnly(raw, ['v', 'type', 'seq', 'have', 'events', 'input', 'step', 'walk'])) return null;
       const input = readInput(raw.input);
@@ -284,6 +302,10 @@ export function readClientMessage(raw: unknown): ClientMessage | null {
  * right version, a known type, the numbers it steers by.
  */
 export function readHostMessage(raw: unknown): HostMessage | null {
+  // "Another version" is read whatever version says it: it is the one thing a host of another version has to tell.
+  if (isRecord(raw) && raw.type === 'leave' && raw.reason === 'version' && typeof raw.v === 'number') {
+    return { v: PROTOCOL_VERSION, type: 'leave', reason: 'version' };
+  }
   if (!isRecord(raw) || raw.v !== PROTOCOL_VERSION) return null;
   const whole = (value: unknown): boolean => isWhole(value, 0, Number.MAX_SAFE_INTEGER);
   switch (raw.type) {

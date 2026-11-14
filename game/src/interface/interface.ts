@@ -23,6 +23,7 @@ import { toastKeyIntent } from './takeback.ts';
 import type { ViewNode } from './dom.ts';
 import { MapChart, MinimapCard } from './chart.ts';
 import { feedbackInputIntent, focusFeedbackNote } from './feedback.ts';
+import { castKeyDown, focusMarkedCard } from './cast.ts';
 import { FILTER_DEFINITIONS, ICON, toqueIcon } from './icons.ts';
 import { paperTexture, tornPageOutline } from './paper.ts';
 import {
@@ -436,6 +437,12 @@ export class InkInterface implements GameInterface {
     }
     const surface = this.topSurface();
     if (!surface) return;
+    // The pick screen (cast.ts): Left and Right move its mark, Enter presses its one button.
+    if (this.surface === 'panel:character_select' && this.lastPanel?.id === 'character_select'
+      && castKeyDown(surface, this.lastPanel, event, (intent) => this.emit(intent))) {
+      this.setKeyboardNavigation(true);
+      return;
+    }
     // A box of several lines (the Feedback card's) keeps its arrows, its Enter and its Space, as a line does.
     const inField = target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement;
     const onControl = target !== null && surface.contains(target) && (inField || target instanceof HTMLButtonElement);
@@ -638,6 +645,8 @@ export class InkInterface implements GameInterface {
       // A card with a line to type on opens with the caret on the first empty one.
       else if (surface.startsWith('panel:crew_')) this.focusEmptyField();
       else if (surface === 'panel:feedback') focusFeedbackNote(this.topSurface());
+      // The pick screen opens with the keyboard on the marked card, not the first one.
+      else if (surface === 'panel:character_select' && this.keyboardNavigation) focusMarkedCard(this.topSurface());
       else if (this.keyboardNavigation) this.focusableControls()[0]?.focus();
     } else if (this.pendingTab && this.pendingTab.stack === stack) {
       this.setKeyboardNavigation(true);

@@ -20,7 +20,8 @@ const button = (label: string, intent: InterfaceIntent, enabled = true, note: st
 /** Why the host let a guest go, in words. */
 export const LEAVE_TEXT: Readonly<Record<LeaveReason, string>> = {
   full: 'That crew is full.',
-  version: 'The host runs another version of the game. Reload the page.',
+  // Either tab may be the old one, and only the old one's reload cures it.
+  version: 'The host runs another version of the game. Reload the page, both of you.',
   replaced: 'You joined this game from another window.',
   closed: 'The host closed the game.',
 };

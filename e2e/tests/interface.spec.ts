@@ -93,6 +93,8 @@ const MENUS: View[] = [
     name: 'inventory, a boat tile\'s menu open', query: '?shot=inventory', shows: '.iw-tile-menu[data-for^="cargo:"]',
     steps: [{ click: '.iw-inv-pack .iw-item-pick >> nth=-1' }, { click: '.iw-inv-boat .iw-item-pick' }],
   },
+  // The pick screen, as a new game's first slot leads to it. Words only until the figures are drawn.
+  { name: 'pick who you are', query: '?shot=cast', shows: '.iw-panel-character_select' },
   // The room card with its code and its link. This one dials the relay: set PORTAGE_RELAY_UP=1 when it is running (relay/, npm run dev).
   ...(process.env.PORTAGE_RELAY_UP ? [{
     name: 'host a crew, the room open', query: '', shows: '.iw-code',
@@ -681,10 +683,13 @@ test('by keyboard alone: a settings change and a key rebind work end to end and 
   await page.keyboard.press('Escape');
   await expect(page.locator('.iw-panel-settings')).toHaveCount(0);
 
-  // New Game, slot 1, all by keyboard. Then the rebound key paddles and the old one does not.
+  // New Game, slot 1, who you are, all by keyboard. Then the rebound key paddles and the old one does not.
   await focusOn(page, (focused) => focused.label.startsWith('New Game'));
   await page.keyboard.press('Enter');
   await expect.poll(async () => (await page.evaluate(focusState)).focused.label).toBe('New game here');
+  await page.keyboard.press('Enter');
+  // The pick screen: the keyboard is on the marked card, and Enter starts as that one.
+  await expect(page.locator('.iw-panel-character_select .cs-card.cs-marked')).toBeFocused();
   await page.keyboard.press('Enter');
   await expect.poll(() => session(page, 'portage.session.screen')).toBe('game');
   await expect(page.locator('.iw-meter .iw-bar.iw-stripes')).toHaveCount(1);

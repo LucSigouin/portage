@@ -134,6 +134,8 @@ function intentsOf(value: unknown, into: InterfaceIntent[] = []): InterfaceInten
 const IDENTIFIER_KEYS = new Set([
   'id', 'kind', 'tone', 'type', 'setting', 'action', 'tab', 'panel', 'pattern', 'screen', 'questId', 'toolId', 'itemId',
   'recipeId', 'islandId', 'openPanels', 'value', 'cardinal',
+  // The pick screen: which door it was opened from, and which of the four a card is (`data/cast.ts` ids).
+  'door', 'character',
 ]);
 
 /** Every word the model holds for the player, with the parts the interface leaves out on purpose removed first. */
@@ -220,7 +222,7 @@ describe('the Ink & Wash views', () => {
     expect(models.length).toBe(SHOT_NAMES.length + 3 + 5 + 3);
     const panels = new Set(models.map(({ model }) => model.panel?.id).filter(Boolean));
     expect([...panels].sort()).toEqual([
-      'canoe_builder', 'crafting', 'credits', 'dialogue', 'how_to_play', 'inventory', 'map', 'pause', 'quest_log',
+      'canoe_builder', 'character_select', 'crafting', 'credits', 'dialogue', 'how_to_play', 'inventory', 'map', 'pause', 'quest_log',
       'save_slots', 'settings',
     ]);
     expect(models.some(({ model }) => model.confirm !== null)).toBe(true);

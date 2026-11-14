@@ -9,6 +9,7 @@
  *
  * No DOM in here. `main.ts` hands in the socket and the page's address.
  */
+import type { CharacterId } from '../data/index.ts';
 import { MAXIMUM_NAME_LENGTH, cleanPlayerName } from '../sim/index.ts';
 import type { GuestLink, LeaveReason } from '../net/index.ts';
 import { RelayGuestWire, RelayHostRoom, makeRoomCode, readRoomCode } from '../net/relay.ts';
@@ -218,19 +219,30 @@ export class CrewLobby {
 
   // --- Joining ----------------------------------------------------------------
 
-  /** Join the room in the code field, under the name in the name field. */
-  join(): void {
-    if (this.joining || this.room) return;
+  /**
+   * Is there a room code and a name to join with? Says why not on the join card, exactly as `join` does. Nothing
+   * is dialled and nothing is sent: the session asks this before it shows the pick screen.
+   */
+  readyToJoin(): boolean {
+    if (this.joining || this.room) return false;
     this.joinLeave = null;
     const code = readRoomCode(this.code);
     const name = this.playerName;
     this.joinProblem = code === null ? 'bad-code' : name === '' ? 'no-name' : null;
+    return code !== null && name !== '';
+  }
+
+  /** Join the room in the code field, under the name in the name field, as `character` (the pick screen's). */
+  join(character?: CharacterId): void {
+    if (!this.readyToJoin()) return;
+    const code = readRoomCode(this.code);
+    const name = this.playerName;
     if (code === null || name === '') return;
     const wire = new RelayGuestWire({ address: this.options.address, code, open: this.options.open, onChange: () => this.tell() });
     this.wire = wire;
     // Back after a drop: ask for the seat again at once, with the same key.
     wire.onBack = () => this.session.guest?.knock();
-    this.link = this.session.joinGame(wire, { name, key: this.seatKey(code, name) });
+    this.link = this.session.joinGame(wire, { name, key: this.seatKey(code, name), ...(character ? { character } : {}) });
   }
 
   /** True while the session is this lobby's guest, asking or playing. */

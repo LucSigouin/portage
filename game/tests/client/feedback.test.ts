@@ -399,6 +399,7 @@ describe('Feedback in the menus', () => {
     expect(each.model().panel).toBeNull();
 
     each.send({ type: 'new_game', slot: 0 });
+    each.send({ type: 'cast_confirm' });
     // Not from the game itself: only from the pause card.
     each.send({ type: 'open_panel', panel: 'feedback' });
     expect(each.model().openPanels).not.toContain('feedback');
@@ -416,6 +417,7 @@ describe('Feedback in the menus', () => {
   it('types into the note and never into the game: no key written in the box opens a panel or closes the card', () => {
     const each = client(relayDoor().fetch);
     each.send({ type: 'new_game', slot: 0 });
+    each.send({ type: 'cast_confirm' });
     each.send({ type: 'open_panel', panel: 'pause' });
     each.press(named(each.panel('pause').buttons, 'Feedback'));
     // What the interface sends for each character typed (`feedbackInputIntent`), and the game's keys for the same letters.
@@ -474,6 +476,7 @@ describe('what the panel says is sent is what is sent, and only that', () => {
     const door = relayDoor();
     const each = client(door.fetch);
     each.send({ type: 'new_game', slot: 0 });
+    each.send({ type: 'cast_confirm' });
     each.send({ type: 'open_panel', panel: 'pause' });
     each.press(named(each.panel('pause').buttons, 'Feedback'));
     each.send({ type: 'feedback_field', field: 'note', value: 'The paddle sticks after a storm. <b>Really.</b>' });

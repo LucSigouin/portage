@@ -57,3 +57,70 @@ export function lastPlayedDress(latestSlot: number | null, load: (slot: number) 
     return null;
   }
 }
+
+// The three below serve any still picture drawn once into a frame on the page. The lobby's canoe sketch is gone (r4-lobby);
+// the pick screen's four figures (`interface/cast-host.ts`) still size, place and time their pictures with them.
+/**
+ * The picture's size in real pixels, for a frame of `cssWidth` by `cssHeight` CSS pixels on a screen of
+ * `devicePixelRatio`: whole pixels, never wider or taller than the frame, so one picture pixel is one screen pixel.
+ * The frame's size is cut to whole CSS pixels first, then to whole screen pixels.
+ * Null when the frame is too small to draw in.
+ */
+export function sketchPixels(cssWidth: number, cssHeight: number, devicePixelRatio: number): { width: number; height: number } | null {
+  const ratio = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
+  // Whole CSS pixels first: on a 2x or 3x screen the picture is then a whole number of them wide, which every
+  // browser places on whole screen pixels however it rounds.
+  const width = Math.floor(Math.floor(cssWidth + 1e-6) * ratio + 1e-6);
+  const height = Math.floor(Math.floor(cssHeight + 1e-6) * ratio + 1e-6);
+  if (!(width >= MINIMUM_SKETCH_PIXELS && height >= MINIMUM_SKETCH_PIXELS)) return null;
+  return { width: Math.min(width, MAXIMUM_SKETCH_PIXELS), height: Math.min(height, MAXIMUM_SKETCH_PIXELS) };
+}
+
+/** Under this many pixels a side there is nothing to see; over the other, a frame that size is a mistake. */
+export const MINIMUM_SKETCH_PIXELS = 24;
+export const MAXIMUM_SKETCH_PIXELS = 2048;
+
+/**
+ * How far to nudge a picture so its corner lands on a whole screen pixel: `at` is where it is, in CSS pixels.
+ * A picture that starts between two screen pixels is smeared over both.
+ */
+export function pixelNudge(at: number, devicePixelRatio: number): number {
+  const ratio = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
+  return Math.round(at * ratio) / ratio - at;
+}
+
+/** The picture is never drawn before this frame of the page's life: the first frame times the chip (`look/quality.ts`), and nothing may be in its way. */
+export const FIRST_DRAW_FRAME = 3;
+/** A window being dragged to a new size gets its new picture once it has held still this long, milliseconds. */
+export const SETTLE_MILLISECONDS = 250;
+
+/** The picture on the page: what it shows and its size in real pixels. */
+export interface DrawnPicture {
+  key: string;
+  width: number;
+  height: number;
+}
+
+/**
+ * Whether to draw the picture now. Each picture is drawn once: again only for another canoe (at once) or
+ * another size (once the size has held still). A canoe that could not be drawn (`failedKey`) is not tried again.
+ */
+export function drawDue(input: {
+  /** Frames of the page's life so far, this one included. */
+  frame: number;
+  /** The canoe to show, or null for none. */
+  wantedKey: string | null;
+  /** The size to show it at, or null when the frame is not on the page. */
+  size: { width: number; height: number } | null;
+  drawn: DrawnPicture | null;
+  failedKey: string | null;
+  /** When the size last changed, and now: milliseconds on one clock. */
+  sizeChangedAt: number;
+  now: number;
+}): boolean {
+  const { wantedKey, size, drawn } = input;
+  if (wantedKey === null || size === null || input.frame < FIRST_DRAW_FRAME || input.failedKey === wantedKey) return false;
+  if (drawn === null || drawn.key !== wantedKey) return true;
+  if (drawn.width === size.width && drawn.height === size.height) return false;
+  return input.now - input.sizeChangedAt >= SETTLE_MILLISECONDS;
+}

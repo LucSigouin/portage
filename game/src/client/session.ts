@@ -6,8 +6,8 @@
  *
  * No DOM in here. `main.ts` passes in `localStorage`; tests pass a fake.
  */
-import { MAIN_QUESTS, TUNING } from '../data/index.ts';
-import type { StationId } from '../data/index.ts';
+import { MAIN_QUESTS, TUNING, isCharacterId } from '../data/index.ts';
+import type { CharacterId, StationId } from '../data/index.ts';
 import { SAVE_SLOT_COUNT, createAutosaver, createSaveStore } from '../save/index.ts';
 import type { AutosaveReason, Autosaver, SaveStore, SlotSummary, StorageLike } from '../save/index.ts';
 import {
@@ -16,7 +16,7 @@ import {
 import type { InputAction, Settings, SettingsStorage } from '../settings/index.ts';
 import {
   FIXED_STEP, NEUTRAL_INPUT, beltOf, connectedPlayers, createGame, dispatch, drainEvents, playerOf, selectInteractable,
-  setConnected, setPlayerName, step,
+  setConnected, setPlayerCharacter, setPlayerName, step,
 } from '../sim/index.ts';
 import type { Command, CommandResult, GameEvent, GameState, PlayerId, StepInput } from '../sim/index.ts';
 import { standClear } from '../sim/index.ts';
@@ -37,6 +37,8 @@ import type { Transport } from '../net/index.ts';
 import type { CrewLobby } from './crewlobby.ts';
 import type { FeedbackDesk } from './feedback.ts';
 import { HOST_BACK_TEXT, JOIN_PROBLEM_TEXT, LEAVE_TEXT } from './viewmodels/crew.ts';
+import { keepCharacter, keptCharacter } from './viewmodels/cast.ts';
+import type { CastDoor, CastView } from './viewmodels/cast.ts';
 import { applySettingChange } from './viewmodels/settings.ts';
 import type { Tone } from './viewmodels/types.ts';
 import { boatOpensOn } from './viewmodels/stations.ts';
@@ -134,6 +136,11 @@ export class Session {
   crew: CrewLobby | null = null;
   /** The feedback desk: a play tester's note for Luc (`feedback.ts`). Null until `main.ts` makes one: then the panel does not open. */
   feedback: FeedbackDesk | null = null;
+  /**
+   * The pick screen, while it is open: the door it was opened from and the card marked (`viewmodels/cast.ts`).
+   * Null the rest of the time. Nothing is started, saved or sent while it stands.
+   */
+  cast: CastView | null = null;
   /** The slot the game autosaves into. Null for a staged game that never saves. */
   slot: number | null = null;
   /** The scene behind the lobby: a game nobody plays. */
@@ -257,11 +264,15 @@ export class Session {
 
   // --- Games and save slots ---------------------------------------------------
 
-  /** Start a new game in a slot, replacing whatever was there. */
-  newGame(slot: number): boolean {
+  /**
+   * Start a new game in a slot, replacing whatever was there. `character` is who this screen's player picked to be
+   * (the pick screen): it is on the player before the game is saved, shared or shown. Left out: nobody was picked.
+   */
+  newGame(slot: number, character?: CharacterId): boolean {
     if (!Number.isInteger(slot) || slot < 0 || slot >= SAVE_SLOT_COUNT) return false;
     const state = createGame(this.randomSeed(), { difficulty: this.settings.gameplay.difficulty, crew: this.crewSize });
     this.onlyLocalPlayerPresent(state);
+    if (character) setPlayerCharacter(state, playerOf(state, this.localPlayerId).id, character);
     this.enterGame(state, slot);
     this.saveNow();
     return true;
@@ -286,6 +297,36 @@ export class Session {
   /** Everyone but the player this screen plays is away, until someone joins as them. */
   private onlyLocalPlayerPresent(state: GameState): void {
     for (const player of state.players) setConnected(state, player.id, player.id === playerOf(state, this.localPlayerId).id, true);
+  }
+
+  // --- The pick screen ----------------------------------------------------------
+
+  /** Who this browser's player was last time, or the first of the cast. */
+  keptCharacter(): CharacterId {
+    return keptCharacter(this.storage);
+  }
+
+  /** Show the pick screen for a door, with last time's pick marked. Nothing else happens until the player picks. */
+  private openCast(door: CastDoor): void {
+    if (this.game) return;
+    this.cast = { door, marked: this.keptCharacter() };
+    // If the panel did not open (a menu in the way), `applyPanels` lets go of the screen again.
+    this.applyPanels({ type: 'open', panel: 'character_select' });
+  }
+
+  /** The player pressed the screen's one button: keep the pick for next time, then start, or join. */
+  private confirmCast(): void {
+    const cast = this.cast;
+    if (!cast) return;
+    keepCharacter(this.storage, cast.marked);
+    if (cast.door.kind === 'new_game') {
+      if (this.newGame(cast.door.slot, cast.marked)) this.sound('click');
+      return;
+    }
+    // Back on the join card, which says how the line is doing, as it always has. The join goes out now, with the pick.
+    this.applyPanels({ type: 'close' }, true);
+    this.crew?.join(cast.marked);
+    this.sound('click');
   }
 
   /** Load the newest save. */
@@ -369,7 +410,7 @@ export class Session {
    * it sends its keys and its commands and shows the host's state. It stays in
    * the lobby until the host answers.
    */
-  joinGame(transport: Transport, options: { name: string; key: string }): GuestLink {
+  joinGame(transport: Transport, options: { name: string; key: string; character?: CharacterId }): GuestLink {
     if (this.game) this.quitToLobby();
     this.guest?.close();
     this.guest = new GuestLink(transport, options);
@@ -785,6 +826,8 @@ export class Session {
     const result = reducePanels(this.panels, action, this.panelContext());
     const opened = result.state.stack.length > this.panels.stack.length;
     this.panels = result.state;
+    // The pick screen is only ever its panel: closed, backed out of or swept away with the lobby, it is over.
+    if (this.cast && !isPanelOpen(this.panels, 'character_select')) this.cast = null;
     if (opened) this.input.releaseAll();
     for (const effect of result.effects) this.applyPanelEffect(effect, quiet);
   }
@@ -822,7 +865,8 @@ export class Session {
         this.notice(`Slot ${action.slot + 1} deleted.`);
         break;
       case 'overwrite_save':
-        this.newGame(action.slot);
+        // Yes, start over: who as? The game starts from the pick screen.
+        this.openCast({ kind: 'new_game', slot: action.slot });
         break;
       case 'quit_to_lobby':
         this.quitToLobby();
@@ -853,6 +897,8 @@ export class Session {
         // The crew panels belong to the crew lobby: without one they do not open.
         if ((intent.panel === 'crew_host' || intent.panel === 'crew_join') && !this.crew) break;
         if (intent.panel === 'feedback' && !this.feedback) break;
+        // The pick screen has two doors, a new game and a join, and no menu line.
+        if (intent.panel === 'character_select') break;
         this.applyPanels({ type: 'open', panel: intent.panel });
         break;
       case 'close_panel':
@@ -902,7 +948,8 @@ export class Session {
       case 'new_game': {
         const summary = this.slotSummaries().find((entry) => entry.slot === intent.slot);
         if (summary && !summary.empty) this.applyPanels({ type: 'ask_confirm', action: { type: 'overwrite_save', slot: intent.slot } });
-        else if (this.newGame(intent.slot)) this.sound('click');
+        // An empty slot: the pick screen first, and the game starts from there (`cast_confirm`).
+        else if (Number.isInteger(intent.slot) && intent.slot >= 0 && intent.slot < SAVE_SLOT_COUNT) this.openCast({ kind: 'new_game', slot: intent.slot });
         break;
       }
       case 'load_game':
@@ -949,8 +996,18 @@ export class Session {
         break;
       case 'crew_join':
         if (!this.crew) break;
-        this.crew.join();
-        this.sound('click');
+        // The name and the code as always; what is wrong with them is said on the card. Then the pick screen: nothing
+        // is dialled and nothing is sent until the player has picked (`cast_confirm`).
+        if (this.crew.readyToJoin()) this.openCast({ kind: 'join' });
+        else this.sound('click');
+        break;
+      case 'cast_mark':
+        if (!this.cast || !isCharacterId(intent.character) || this.cast.marked === intent.character) break;
+        this.cast = { ...this.cast, marked: intent.character };
+        this.sound('tab');
+        break;
+      case 'cast_confirm':
+        this.confirmCast();
         break;
       case 'crew_cancel_join':
         if (!this.crew) break;

@@ -14,6 +14,7 @@ import type {
 } from '../client/contracts.ts';
 import { control, h } from './dom.ts';
 import { feedbackView } from './feedback.ts';
+import { castView } from './cast.ts';
 import type { ViewChild, ViewNode } from './dom.ts';
 import type { ItemId } from '../data/index.ts';
 import { ICON, SEAL, itemIcon, logotype, toqueIcon, waterGauge } from './icons.ts';
@@ -577,6 +578,7 @@ export function panelView(panel: PanelModel, shown: InventoryShown = NOTHING_SHO
     case 'crew_host': return crewHostView(panel);
     case 'crew_join': return crewJoinView(panel);
     case 'feedback': return feedbackView(panel);
+    case 'character_select': return castView(panel);
   }
 }
 

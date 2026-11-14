@@ -14,7 +14,9 @@ export type PanelId =
   /** Hosting a room on the relay, and joining one. Only reachable in a game built with a relay address. */
   | 'crew_host' | 'crew_join'
   /** A note for Luc from a play tester (`feedback.ts`). In every build: without a relay the panel says feedback is off. */
-  | 'feedback';
+  | 'feedback'
+  /** Who you are, one of four (`viewmodels/cast.ts`). Opened by the session from a new game or a join, never by a menu line. */
+  | 'character_select';
 
 export type SettingsTabId = 'audio' | 'graphics' | 'controls' | 'gameplay' | 'accessibility';
 
@@ -84,6 +86,8 @@ export const PANEL_RULES: Readonly<Record<PanelId, PanelRule>> = {
   crew_host: { group: 'menu', parents: { lobby: ['root'], game: ['pause'] }, pausesSimulation: true, needsBeachedCanoe: false },
   crew_join: { group: 'menu', parents: { lobby: ['root'] }, pausesSimulation: true, needsBeachedCanoe: false },
   feedback: { group: 'menu', parents: { lobby: ['root'], game: ['pause'] }, pausesSimulation: true, needsBeachedCanoe: false },
+  // The pick screen sits on the door it came from, so Back is back there: the save slots, or the join card. The lobby only.
+  character_select: { group: 'menu', parents: { lobby: ['root', 'save_slots', 'crew_join'] }, pausesSimulation: true, needsBeachedCanoe: false },
   pause: { group: 'menu', parents: GAME_ROOT, pausesSimulation: true, needsBeachedCanoe: false },
   inventory: { group: 'gameplay', parents: GAME_ROOT, pausesSimulation: true, needsBeachedCanoe: false },
   crafting: { group: 'gameplay', parents: GAME_ROOT, pausesSimulation: true, needsBeachedCanoe: false },

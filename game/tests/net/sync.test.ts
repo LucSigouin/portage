@@ -106,10 +106,11 @@ describe('joining', () => {
     rig.host.accept(pair.host);
     const heard: unknown[] = [];
     pair.guest.receive((message) => void heard.push(message));
-    pair.guest.send({ v: v + 1, type: 'join', name: 'Old', key: key('Old') });
+    pair.guest.send({ v: v + 1, type: 'join', name: 'Old', key: key('Old'), character: 'voyageur' });
     pair.advance(0);
     pair.advance(0);
-    expect(heard).toEqual([{ v, type: 'leave', reason: 'version' }]);
+    // Said in the sender's own version: a tab reads nothing else (`tests/net/cast.test.ts` has the whole story).
+    expect(heard).toEqual([{ v: v + 1, type: 'leave', reason: 'version' }]);
     expect(rig.game.players).toHaveLength(1);
   });
 });
@@ -247,7 +248,7 @@ describe('events and commands over a bad line', () => {
     const heard: { type: string; id?: number; playerId?: number }[] = [];
     rig.host.accept(pair.host);
     pair.guest.receive((message) => void heard.push(message as { type: string }));
-    pair.guest.send({ v, type: 'join', name, key: key(name) });
+    pair.guest.send({ v, type: 'join', name, key: key(name), character: 'voyageur' });
     pair.advance(0);
     pair.advance(0);
     const playerId = heard.find((message) => message.type === 'welcome')!.playerId!;
@@ -393,18 +394,18 @@ describe('the host is the truth', () => {
     };
     const refused = rig.host.stats.refused;
     // One wire asks three times, each time as somebody new.
-    for (const name of ['first', 'second', 'third']) say({ v, type: 'join', name: 'x', key: key(name) });
+    for (const name of ['first', 'second', 'third']) say({ v, type: 'join', name: 'x', key: key(name), character: 'voyageur' });
     expect(rig.game.players.map((player) => [player.id, player.connected])).toEqual([[0, true], [1, true]]);
     expect(welcomed).toEqual([1]);
     expect(rig.host.guests).toEqual([1]);
     expect(rig.host.stats.refused).toBe(refused + 2);
     // Leaving first does not open the door either: the wire still has the one key it came with.
     say({ v, type: 'leave' });
-    say({ v, type: 'join', name: 'y', key: key('fourth') });
+    say({ v, type: 'join', name: 'y', key: key('fourth'), character: 'voyageur' });
     expect(rig.game.players.map((player) => [player.id, player.connected])).toEqual([[0, true], [1, false]]);
     expect(rig.host.stats.refused).toBe(refused + 3);
     // The same key on the same wire is still the same guest coming back.
-    say({ v, type: 'join', name: 'x', key: key('first') });
+    say({ v, type: 'join', name: 'x', key: key('first'), character: 'voyageur' });
     expect(welcomed).toEqual([1, 1]);
     expect(rig.game.players[1].connected).toBe(true);
     // Two seats are left, and two friends get them.
@@ -433,7 +434,7 @@ describe('the host is the truth', () => {
     rig.host.accept(pair.host);
     // Bo listens to everything the host sends on Bo's wire.
     pair.guest.receive((message) => void heard.push(JSON.stringify(message)));
-    pair.guest.send({ v, type: 'join', name: 'Bo', key: key('Bo') });
+    pair.guest.send({ v, type: 'join', name: 'Bo', key: key('Bo'), character: 'voyageur' });
     rig.join('Ann');
     for (let frame = 0; frame < 120; frame += 1) {
       pair.advance(FIXED_STEP);
