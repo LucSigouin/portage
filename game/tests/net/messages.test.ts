@@ -10,7 +10,7 @@ const KEY = 'key-sam-0123456789';
 
 describe('a guest\'s message', () => {
   it('is read when it is exactly one of the five', () => {
-    expect(readClientMessage({ v, type: 'join', name: 'Sam', key: KEY })).toEqual({ v, type: 'join', name: 'Sam', key: KEY });
+    expect(readClientMessage({ v, type: 'join', name: 'Sam', key: KEY, character: 'trapper' })).toEqual({ v, type: 'join', name: 'Sam', key: KEY, character: 'trapper' });
     expect(readClientMessage({ v, type: 'input', seq: 3, have: -1, events: 0, input: { ...NEUTRAL_INPUT, paddle: 1 }, step: 0, walk: [] }))
       .toMatchObject({ type: 'input', seq: 3, input: { paddle: 1 } });
     expect(readClientMessage({ v, type: 'command', id: 1, command: { type: 'board' }, at: 0 })).toEqual({ v, type: 'command', id: 1, command: { type: 'board' }, at: 0 });
@@ -25,7 +25,7 @@ describe('a guest\'s message', () => {
     expect(readClientMessage({ v, type: 'command', id: 1, command: { type: 'board' }, at: 0, playerId: 0 })).toBeNull();
     expect(readClientMessage({ v, type: 'command', id: 1, command: { type: 'board', playerId: 0 }, at: 0 })).toBeNull();
     expect(readClientMessage({ v, type: 'command', id: 1, command: { type: 'eat', itemId: 'berries', as: 2 }, at: 0 })).toBeNull();
-    expect(readClientMessage({ v, type: 'join', name: 'Sam', key: KEY, playerId: 0 })).toBeNull();
+    expect(readClientMessage({ v, type: 'join', name: 'Sam', key: KEY, character: 'trapper', playerId: 0 })).toBeNull();
     expect(readClientMessage({ v, type: 'leave', playerId: 1 })).toBeNull();
     expect(readClientMessage({ v, type: 'ping', time: 0, have: 0, events: 0, playerId: 1 })).toBeNull();
   });
@@ -51,10 +51,12 @@ describe('a guest\'s message', () => {
       expect(readClientMessage({ v, type: 'command', id, command: { type: 'board' }, at: 0 })).toBeNull();
     }
     for (const key of ['', 'short', 'has spaces in it!!', 'x'.repeat(65), 7, null]) {
-      expect(readClientMessage({ v, type: 'join', name: 'Sam', key })).toBeNull();
+      expect(readClientMessage({ v, type: 'join', name: 'Sam', key, character: 'trapper' })).toBeNull();
     }
-    expect(readClientMessage({ v, type: 'join', name: 7, key: KEY })).toBeNull();
-    expect(readClientMessage({ v, type: 'join', name: 'x'.repeat(201), key: KEY })).toBeNull();
+    expect(readClientMessage({ v, type: 'join', name: 7, key: KEY, character: 'trapper' })).toBeNull();
+    expect(readClientMessage({ v, type: 'join', name: 'x'.repeat(201), key: KEY, character: 'trapper' })).toBeNull();
+    // The longest name a join may carry is read: it was the name, not anything else, that refused the one above.
+    expect(readClientMessage({ v, type: 'join', name: 'x'.repeat(200), key: KEY, character: 'trapper' })).not.toBeNull();
   });
 });
 
@@ -152,7 +154,7 @@ describe('a host\'s message, as a guest reads it', () => {
 
   it('is dropped when it is anything else', () => {
     for (const junk of [null, 5, {}, { v: v + 1, type: 'leave', reason: 'full' }, { v, type: 'leave', reason: 'because' }, { v, type: 'state', id: 'x' },
-      { v, type: 'welcome', session: 1, sitting: 1, playerId: 9, hostId: 0, id: 1, step: 1, hash: 'a', state: { players: [] }, events: 0, walked: 0 }, { v, type: 'join', name: 'x', key: 'y' }]) {
+      { v, type: 'welcome', session: 1, sitting: 1, playerId: 9, hostId: 0, id: 1, step: 1, hash: 'a', state: { players: [] }, events: 0, walked: 0 }, { v, type: 'join', name: 'x', key: 'y', character: 'voyageur' }]) {
       expect(readHostMessage(junk)).toBeNull();
     }
   });

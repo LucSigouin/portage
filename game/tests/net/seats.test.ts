@@ -261,7 +261,7 @@ describe('one wire, one seat, in a full canoe too', () => {
     });
     const refused = rig.host.stats.refused;
     for (const name of ['first', 'second', 'third']) {
-      pair.guest.send({ v, type: 'join', name: 'x', key: key(name) });
+      pair.guest.send({ v, type: 'join', name: 'x', key: key(name), character: 'voyageur' });
       pair.advance(0);
       pair.advance(0);
     }

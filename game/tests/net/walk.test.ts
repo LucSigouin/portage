@@ -370,7 +370,7 @@ describe('the host stays in charge', () => {
     const pair = createLoopbackPair();
     rig.host.accept(pair.host);
     pair.guest.receive(() => {});
-    pair.guest.send({ v, type: 'join', name: 'Mal', key: key('Mal') });
+    pair.guest.send({ v, type: 'join', name: 'Mal', key: key('Mal'), character: 'voyageur' });
     pair.advance(0);
     seatByFire(rig.game);
     const player = rig.game.players[1]!;

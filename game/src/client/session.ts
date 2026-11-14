@@ -7,6 +7,7 @@
  * No DOM in here. `main.ts` passes in `localStorage`; tests pass a fake.
  */
 import { MAIN_QUESTS, TUNING } from '../data/index.ts';
+import type { CharacterId } from '../data/index.ts';
 import { SAVE_SLOT_COUNT, createAutosaver, createSaveStore } from '../save/index.ts';
 import type { AutosaveReason, Autosaver, SaveStore, SlotSummary, StorageLike } from '../save/index.ts';
 import {
@@ -361,7 +362,7 @@ export class Session {
    * it sends its keys and its commands and shows the host's state. It stays in
    * the lobby until the host answers.
    */
-  joinGame(transport: Transport, options: { name: string; key: string }): GuestLink {
+  joinGame(transport: Transport, options: { name: string; key: string; character?: CharacterId }): GuestLink {
     if (this.game) this.quitToLobby();
     this.guest?.close();
     this.guest = new GuestLink(transport, options);

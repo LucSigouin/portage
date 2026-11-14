@@ -25,10 +25,10 @@
  * for each step of the host: so its own screen can show the same walk at once
  * and be right. The host still takes no position from anyone.
  */
-import { addPlayer, dispatch, hashState, setConnected, setPlayerName, cleanPlayerName, NEUTRAL_INPUT } from '../sim/index.ts';
+import { addPlayer, dispatch, hashState, setConnected, setPlayerCharacter, setPlayerName, cleanPlayerName, NEUTRAL_INPUT } from '../sim/index.ts';
 import type { CommandResult, GameEvent, GameState, PlayerId, StepInput } from '../sim/index.ts';
-import { PROTOCOL_VERSION, isOtherVersion, readClientMessage } from './messages.ts';
-import type { ClientMessage, HostMessage, LeaveReason } from './messages.ts';
+import { PROTOCOL_VERSION, answerVersion, isOtherVersion, readClientMessage } from './messages.ts';
+import type { ClientMessage, HostMessage, JoinMessage, LeaveReason } from './messages.ts';
 import type { Transport } from './transport.ts';
 import { WalkTimeline } from './walk.ts';
 
@@ -188,8 +188,8 @@ export class HostLink {
     this.leftAt.set(playerId, this.leavings);
   }
 
-  private turnAway(connection: Connection, reason: LeaveReason): void {
-    this.send(connection, { v: PROTOCOL_VERSION, type: 'leave', reason });
+  private turnAway(connection: Connection, reason: LeaveReason, version = PROTOCOL_VERSION): void {
+    this.send(connection, { v: version, type: 'leave', reason });
     connection.open = false;
     connection.playerId = null;
     connection.transport.close();
@@ -201,12 +201,13 @@ export class HostLink {
     const message = readClientMessage(raw);
     if (!message) {
       this.stats.refused += 1;
-      if (isOtherVersion(raw)) this.turnAway(connection, 'version');
+      // Said in the sender's own version: an old tab reads nothing else, and this is what tells it to reload.
+      if (isOtherVersion(raw)) this.turnAway(connection, 'version', answerVersion(raw));
       return;
     }
     connection.heardAt = this.clock;
     if (message.type === 'join') {
-      this.join(connection, message.name, message.key);
+      this.join(connection, message.name, message.key, message.character);
       return;
     }
     // Before joining, a wire is nobody: it moves no one and asks for nothing.
@@ -331,7 +332,7 @@ export class HostLink {
     return longest;
   }
 
-  private join(connection: Connection, rawName: string, key: string): void {
+  private join(connection: Connection, rawName: string, key: string, character: JoinMessage['character']): void {
     // One wire, one seat. A wire that asks again under another key would be handed a second player, and a third:
     // every seat in the canoe, each one counted as here for as long as that one wire talks.
     if (connection.key !== null && connection.key !== key) {
@@ -387,6 +388,9 @@ export class HostLink {
     }
     connection.playerId = playerId;
     if (name !== '') setPlayerName(game, playerId, name);
+    // Who they picked to be, in every case above: a new seat, a seat had back (as someone else, if they like), a seat
+    // taken over. Before the welcome below and before the crew's next state, so nobody sees one figure turn into another.
+    setPlayerCharacter(game, playerId, character);
     if (joined) game.events.push({ type: 'crew_changed', who: playerId, change: 'joined' });
     else setConnected(game, playerId, true);
 
