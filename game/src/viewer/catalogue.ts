@@ -4,7 +4,7 @@
  * up here without anyone editing this file. The only things written by hand are the questions each group asks
  * (which tier, how many aboard) and where to find the file that draws a thing.
  */
-import { ATTACHMENTS, ATTACHMENT_IDS, CREW_MARKS, HULL_TIERS, ISLANDS, ITEMS, ITEM_IDS, NODE_TYPES, NPCS, NPC_IDS } from '../data/index.ts';
+import { ATTACHMENTS, ATTACHMENT_IDS, CAST, CREW_MARKS, HULL_TIERS, ISLANDS, ITEMS, ITEM_IDS, NODE_TYPES, NPCS, NPC_IDS, characterOf } from '../data/index.ts';
 import type { AttachmentId, LandmarkKind, NodeTypeId } from '../data/index.ts';
 import { LANDMARK_KINDS } from '../look/landmarks.ts';
 import { NODE_TYPE_IDS } from '../look/nodes.ts';
@@ -148,8 +148,9 @@ function crew(): Entry[] {
       id: `crew/player-${index + 1}`,
       group: 'crew',
       name: mark.label,
-      description: `Wears the ${index + 1}${['st', 'nd', 'rd', 'th'][index] ?? 'th'} crew colours: coat ${mark.coat}, toque ${mark.toque}, legs ${mark.legs}.`,
-      source: ['src/look/b2/canoe.js (createCrew)', 'src/look/canoe.ts (CanoeView.sync: seats, poses)', 'src/look/crew.ts (outfitOf)', 'src/data/crew.ts (CREW_MARKS)'],
+      // With nobody's character picked, a player is drawn as one of the cast by their number: the four here are the four.
+      description: `Drawn as ${CAST[characterOf({ id: index })].name}. Wears the ${index + 1}${['st', 'nd', 'rd', 'th'][index] ?? 'th'} crew colours: coat ${mark.coat}, toque ${mark.toque}, legs ${mark.legs}.`,
+      source: ['src/look/b2/canoe.js (createCrew)', 'src/look/cast.ts (dressAs: the four people)', 'src/look/canoe.ts (CanoeView.sync: seats, poses)', 'src/look/crew.ts (outfitOf)', 'src/data/crew.ts (CREW_MARKS)'],
       controls,
       flat: false,
       build: (options) => {
