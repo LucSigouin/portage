@@ -131,7 +131,13 @@ test('C lists hand crafts only: a camp\'s stations are cards on it, the canoe\'s
   await open(page, '?shot=crafting&live=1');
   await expect(sections).toHaveText(['Hands']);
   await expect(page.locator('.iw-panel-crafting .iw-entry')).toHaveCount(4);
-  await expect(doors).toHaveText(['Hands', 'Campfire', 'Stump bench']);
+  // Each card's name. The red ! on a card is not part of its name: it marks the station an open quest needs.
+  await expect(doors.locator('.iw-label')).toHaveText(['Hands', 'Campfire', 'Stump bench']);
+  // Here the open quest is made at the stump bench: that card alone carries the mark, and the mark names the quest.
+  expect(await doors.evaluateAll((cards) => cards.map((each) => [...each.querySelectorAll('.iw-quest-mark')].map((mark) => mark.textContent)))).toEqual([[], [], ['!']]);
+  await expect(doors.nth(2).locator('.iw-quest-mark')).toHaveAttribute('title', /^For \S/);
+  // And a card holds nothing but its name and that mark.
+  expect(await doors.evaluateAll((cards) => cards.map((each) => each.textContent))).toEqual(['Hands', 'Campfire', 'Stump bench!']);
   await expect(page.locator('.iw-panel-crafting')).not.toContainText('not in reach');
   for (const name of ['Pitch', 'Plank', 'Smoked fish', 'Metal sheet']) await expect(page.locator('.iw-panel-crafting'), name).not.toContainText(name);
   // The campfire's card shows the campfire's own menu: its eight recipes, under its name.
