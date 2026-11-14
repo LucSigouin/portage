@@ -118,8 +118,12 @@ describe('the lobby\'s camera frames the canoe the look drew', () => {
     frames(app, 5);
     const game = app.session.game!;
     expect(drawn.at(-1)!.state).toBe(game);
-    const pose = poses.at(-1)!;
-    expect(Math.hypot(pose.position.x - pose.target.x, pose.position.y - pose.target.y, pose.position.z - pose.target.z)).toBeLessThan(LOBBY_DISTANCE - 1);
+    // Every frame of the game, its first too: that one draws another canoe than the lobby did, and is still not framed as the lobby's.
+    const played = poses.filter((_, index) => drawn[index]!.state === game);
+    expect(played).toHaveLength(5);
+    for (const pose of played) {
+      expect(Math.hypot(pose.position.x - pose.target.x, pose.position.y - pose.target.y, pose.position.z - pose.target.z)).toBeLessThan(LOBBY_DISTANCE - 1);
+    }
   });
 });
 
