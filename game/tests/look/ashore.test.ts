@@ -7,6 +7,8 @@
  * - The tool the player picked is drawn in the right hand, each crewmate their own; none when none is picked, none
  *   aboard (the paddle wins), none asleep.
  * - Standing still is still: two frames apart draw the figure the same.
+ *
+ * All of it for each of the cast (`look/cast.ts`): the whole crew drawn as that one person.
  */
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
@@ -19,6 +21,7 @@ import type { Crew as Figure } from '../../src/look/b2/canoe.js';
 import { CanoeView } from '../../src/look/canoe.ts';
 import { crewOf } from '../../src/look/crew.ts';
 import { HAND_TOOLS, buildHandTool, toolInkIds } from '../../src/look/hand-tools.ts';
+import { SAME, castAs } from './cast-lineups.ts';
 
 const FRAME = 1 / 60;
 
@@ -72,9 +75,10 @@ function worldBox(mesh: THREE.Object3D): THREE.Box3 {
   return new THREE.Box3().setFromObject(mesh, true);
 }
 
-describe('ashore, the paddle stays in the canoe', () => {
+for (const lineup of SAME) {
+describe(`${lineup.name}: ashore, the paddle stays in the canoe`, () => {
   it('stepping out, the paddle is no longer carried: it lies across the gunwales at the seat, and comes back aboard', () => {
-    const state = createGame(7);
+    const state = castAs(createGame(7), lineup);
     const view = new CanoeView();
     run(view, state, 0.5);
     const figure = figureOf(view, 0);
@@ -106,7 +110,7 @@ describe('ashore, the paddle stays in the canoe', () => {
   });
 
   it('a crew ashore leave one paddle each, at their own seats, and a seat someone sits in has none', () => {
-    const state = createGame(7, { crew: 4 });
+    const state = castAs(createGame(7, { crew: 4 }), lineup);
     const view = new CanoeView();
     run(view, state, 0.2);
     for (const id of [0, 1, 2, 3]) ashore(state, id, 3 + id);
@@ -126,7 +130,7 @@ describe('ashore, the paddle stays in the canoe', () => {
   });
 
   it('a figure standing on its own, as the asset viewer draws one walking, carries no paddle; seated, it has it again', () => {
-    const figure = createCrew();
+    const figure = createCrew(undefined, lineup.cast[0]);
     figure.paddle(1, 0.2, 1, 1);
     expect(figure.paddler.paddle.visible).toBe(true);
     figure.stand(0, 1.4, 1, 0);
@@ -136,7 +140,7 @@ describe('ashore, the paddle stays in the canoe', () => {
   });
 
   it('the paddle left aboard is hidden with the crew, as a staged picture without the paddlers wants', () => {
-    const state = createGame(7);
+    const state = castAs(createGame(7), lineup);
     ashore(state, 0);
     const view = new CanoeView();
     view.sync(state, crewOf(state), 0, 0, false, true);
@@ -144,7 +148,7 @@ describe('ashore, the paddle stays in the canoe', () => {
   });
 });
 
-describe('ashore, the picked tool is in the hand', () => {
+describe(`${lineup.name}: ashore, the picked tool is in the hand`, () => {
   it('every tool there is has a drawing, bigger than the fist round it, and no two drawings the same shape', () => {
     expect([...HAND_TOOLS].sort()).toEqual([...TOOL_IDS].sort());
     const looks = HAND_TOOLS.map((tool) => {
@@ -166,7 +170,7 @@ describe('ashore, the picked tool is in the hand', () => {
   });
 
   it('shows the picked tool in the right hand, each one in turn, and nothing with none picked', () => {
-    const state = createGame(7);
+    const state = castAs(createGame(7), lineup);
     ashore(state, 0);
     const view = new CanoeView();
     state.players[0].selectedTool = null;
@@ -191,7 +195,7 @@ describe('ashore, the picked tool is in the hand', () => {
   });
 
   it('each crewmate holds their own, with their own ink: two tools side by side are two outlines', () => {
-    const state = createGame(7, { crew: 4 });
+    const state = castAs(createGame(7, { crew: 4 }), lineup);
     const picks: (ToolId | null)[] = ['hatchet', 'fishing_rod', null, 'hatchet'];
     picks.forEach((tool, id) => {
       ashore(state, id, 3 + id);
@@ -240,7 +244,7 @@ describe('ashore, the picked tool is in the hand', () => {
   });
 
   it('puts nothing in the hand aboard, where the paddle wins, nor asleep', () => {
-    const state = createGame(7);
+    const state = castAs(createGame(7), lineup);
     state.players[0].selectedTool = 'hatchet';
     const view = new CanoeView();
     run(view, state, 0.2);
@@ -256,7 +260,7 @@ describe('ashore, the picked tool is in the hand', () => {
 
   it('carries the tool clear of the legs, standing', () => {
     for (const tool of TOOL_IDS) {
-      const state = createGame(7);
+      const state = castAs(createGame(7), lineup);
       ashore(state, 0);
       state.players[0].selectedTool = tool;
       const view = new CanoeView();
@@ -272,10 +276,10 @@ describe('ashore, the picked tool is in the hand', () => {
   });
 });
 
-describe('standing still is still', () => {
+describe(`${lineup.name}: standing still is still`, () => {
   it('two frames 0.3 s apart draw a figure standing ashore the same, empty-handed or holding a tool', () => {
     for (const tool of [null, 'stone_knife'] as (ToolId | null)[]) {
-      const state = createGame(7);
+      const state = castAs(createGame(7), lineup);
       ashore(state, 0);
       state.players[0].selectedTool = tool;
       const view = new CanoeView();
@@ -286,3 +290,4 @@ describe('standing still is still', () => {
     }
   });
 });
+}

@@ -2,7 +2,7 @@
  * The jump as it is drawn (Luc's list, Round 3: "character need to jump"): the figure lifted by the rules' own
  * height, a rise with the legs trailing, the knees drawn up over the top, a fall, and a landing where the knees give.
  * All of it from the state's count of steps, so it is the same on every screen, the tool stays in the hand, and a
- * figure nobody is jumping with stands as still as it stood.
+ * figure nobody is jumping with stands as still as it stood. Each of the cast jumps the same jump (`look/cast.ts`).
  */
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
@@ -13,13 +13,16 @@ import { CREW_LAYER } from '../../src/look/b2/post.js';
 import { CanoeView } from '../../src/look/canoe.ts';
 import { crewOf } from '../../src/look/crew.ts';
 import { NO_JUMP, jumpPose } from '../../src/look/jump-pose.ts';
+import { CHARACTER_IDS } from '../../src/data/index.ts';
+import type { CharacterId } from '../../src/data/index.ts';
 import { teleport } from '../support.ts';
 
 const DONE = LEAP_AIR_STEPS + LEAP_LAND_STEPS;
 
-/** A player standing on open ground on Home Knoll, facing north. */
-function ashore(tool: GameState['players'][number]['selectedTool'] = null): GameState {
+/** A player standing on open ground on Home Knoll, facing north, drawn as `who`. */
+function ashore(who: CharacterId, tool: GameState['players'][number]['selectedTool'] = null): GameState {
   const state = createGame(7);
+  state.players[0].character = who;
   teleport(state, 'home_knoll', -2.5, 1150);
   Object.assign(state.players[0], { heading: 0, selectedTool: tool, hunger: 100, thirst: 100, energy: 100 });
   state.weather.secondsRemaining = 99999;
@@ -107,9 +110,11 @@ describe('how a figure holds itself through a jump', () => {
   });
 });
 
-describe('the figure in a jump', () => {
+// The same jump for each of the four.
+for (const who of CHARACTER_IDS) {
+describe(`the ${who} in a jump`, () => {
   it('is lifted by the rules\' own height on every frame, and stands on the ground again after', () => {
-    const state = ashore();
+    const state = ashore(who);
     const view = new CanoeView();
     for (let count = 0; count < 30; count += 1) frame(view, state);
     const ground = view.figureOf(0)!.position.y;
@@ -131,7 +136,7 @@ describe('the figure in a jump', () => {
   });
 
   it('holds itself differently at the push, the top, the fall and the landing: knees and hands move, in the figure\'s own limbs', () => {
-    const state = ashore();
+    const state = ashore(who);
     const view = new CanoeView();
     for (let count = 0; count < 30; count += 1) frame(view, state);
     const figure = figureOf(view);
@@ -178,7 +183,7 @@ describe('the figure in a jump', () => {
   });
 
   it('keeps the tool in the hand and every piece on the crew\'s pen all through', () => {
-    const state = ashore('stone_knife');
+    const state = ashore(who, 'stone_knife');
     const view = new CanoeView();
     for (let count = 0; count < 30; count += 1) frame(view, state);
     const figure = figureOf(view);
@@ -195,7 +200,7 @@ describe('the figure in a jump', () => {
       expect(tool!.position.distanceTo(figure.paddler.R.H)).toBe(0);
     }
     // The hand with the tool is thrown up less than the free one.
-    const state2 = ashore('stone_knife');
+    const state2 = ashore(who, 'stone_knife');
     const view2 = new CanoeView();
     for (let count = 0; count < 30; count += 1) frame(view2, state2);
     for (let count = 1; count <= LEAP_RISE_STEPS; count += 1) frame(view2, state2, { jump: count <= 3 });
@@ -205,7 +210,7 @@ describe('the figure in a jump', () => {
 
   it('is drawn from the state alone: a screen that sees the jump only now draws it as one that watched it all', () => {
     for (const tool of [null, 'hatchet'] as const) {
-      const state = ashore(tool);
+      const state = ashore(who, tool);
       const watched = new CanoeView();
       for (let count = 0; count < 30; count += 1) frame(watched, state);
       for (let count = 1; count <= 12; count += 1) frame(watched, state, { jump: count <= 3 });
@@ -217,7 +222,7 @@ describe('the figure in a jump', () => {
   });
 
   it('a running jump keeps the stride it took off with: the legs do not run on in the air', () => {
-    const state = ashore();
+    const state = ashore(who);
     const view = new CanoeView();
     const run: Partial<StepInput> = { moveY: 1, cameraYaw: 0, run: true };
     for (let count = 0; count < 90; count += 1) frame(view, state, run);
@@ -233,9 +238,9 @@ describe('the figure in a jump', () => {
   });
 });
 
-describe('nothing moves by itself', () => {
+describe(`the ${who}: nothing moves by itself`, () => {
   it('a figure standing ashore is drawn the same 0.3 s apart: before any jump, after one, and with the key still held down', () => {
-    const state = ashore('hammer');
+    const state = ashore(who, 'hammer');
     const view = new CanoeView();
     let time = 0;
     const still = (input: Partial<StepInput> = {}): void => {
@@ -257,7 +262,7 @@ describe('nothing moves by itself', () => {
   });
 
   it('aboard and asleep there is no lift, whatever the state carries', () => {
-    const state = ashore();
+    const state = ashore(who);
     const view = new CanoeView();
     state.players[0].leap = { steps: 10, held: false, again: false };
     Object.assign(state.players[0], { mode: 'canoe', seat: 0 });
@@ -265,3 +270,4 @@ describe('nothing moves by itself', () => {
     expect(view.figures()[0].lift).toBe(0);
   });
 });
+}

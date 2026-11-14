@@ -7,6 +7,7 @@ import { Builder, piece, setSpan, nextId, THIN } from './geo.js';
 import { PAL } from './palette.js';
 import { KIND } from './detail.js';
 import { CREW_LAYER } from './post.js';
+import { dressAs } from '../cast.ts';
 
 const B2_LENGTH = 5.6;
 
@@ -425,7 +426,8 @@ function ik(a, c, l1, l2, hint, elbow, hand) {
 }
 
 // outfit: { coat, toque, legs } colours, so each of a crew of four reads as their own person
-export function createPaddler({ coat: coatColor = PAL.ochre, toque = '#a9483a', legs = '#57697b' } = {}) {
+// character: who this is (data/cast.ts). Left out, or 'voyageur': the paddler below, as ever.
+export function createPaddler({ coat: coatColor = PAL.ochre, toque = '#a9483a', legs = '#57697b' } = {}, character = 'voyageur') {
   const root = new THREE.Group();
   const torso = new THREE.Group();
   root.add(torso);
@@ -522,6 +524,8 @@ export function createPaddler({ coat: coatColor = PAL.ochre, toque = '#a9483a', 
     paddle.position.copy(G);
   }
 
+  // Anyone but the voyageur: look/cast.ts redraws the torso, the head and the limbs' sizes and colours on this rig.
+  dressAs(character, { torso, L, R }, { coat: coatColor, toque, legs });
   // every piece of a figure is the crew's: the pen draws its edge against anything else as a contour
   root.traverse((object) => object.layers.enable(CREW_LAYER));
   return { root, pose, setPaddle, paddle, L, R };
@@ -599,8 +603,8 @@ function strokeAt(phase) {
 }
 
 // The paddler and the paddle, posed for the canoe or for the shore. The model faces +z.
-export function createCrew(outfit) {
-  const paddler = createPaddler(outfit);
+export function createCrew(outfit, character) {
+  const paddler = createPaddler(outfit, character);
 
   // working vectors for the stroke
   const G = new THREE.Vector3();

@@ -7,6 +7,8 @@
  * - the stroke pulls the canoe forward: the blade goes in ahead, moves only toward the stern while in the water,
  *   and comes out behind, then is carried forward clear of the water, quicker than it was pulled;
  * - going astern it is the same stroke played backwards: the blade goes in behind and is pushed toward the bow.
+ *
+ * All of it for each of the cast (`look/cast.ts`): four of one person in the four seats, and one of each.
  */
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
@@ -17,6 +19,8 @@ import { makeHullShape } from '../../src/look/b2/canoe.js';
 import type { Crew as Figure } from '../../src/look/b2/canoe.js';
 import { CanoeView } from '../../src/look/canoe.ts';
 import { crewOf } from '../../src/look/crew.ts';
+import { ALONE, MIXED, SAME, castAs } from './cast-lineups.ts';
+import type { Lineup } from './cast-lineups.ts';
 
 const BLADE = 1.19;
 const TIP = 1.485;
@@ -25,8 +29,8 @@ interface Member { figure: Figure; seat: number }
 const membersOf = (view: CanoeView): Map<number, Member> => (view as unknown as { members: Map<number, Member> }).members;
 const setPhase = (view: CanoeView, phase: number): void => { (view as unknown as { phase: number }).phase = phase; };
 
-function crewPaddling(tier: number, crew = 4, astern = false, decks = false): { state: GameState; view: CanoeView } {
-  const state = createGame(7, { crew });
+function crewPaddling(lineup: Lineup, tier: number, crew = 4, astern = false, decks = false): { state: GameState; view: CanoeView } {
+  const state = castAs(createGame(7, { crew }), lineup);
   state.canoe.hullTier = tier;
   if (astern) state.canoe.speed = -1;
   if (decks) state.canoe.attachments.push('outrigger_port', 'outrigger_starboard');
@@ -92,10 +96,12 @@ function hullOf(tier: number) {
 const run = (from: THREE.Vector3, to: THREE.Vector3, steps: number): THREE.Vector3[] =>
   Array.from({ length: steps + 1 }, (_, step) => from.clone().lerp(to, step / steps));
 
-describe('the paddler\'s hands and arms', () => {
+// Each of the four in every seat, and one of each side by side.
+for (const lineup of [...SAME, MIXED[0]]) {
+describe(`${lineup.name}: the paddler\'s hands and arms`, () => {
   for (let tier = 0; tier < HULL_TIERS.length; tier += 1) {
     it(`stay on the paddle, and out of the canoe, at every seat of hull tier ${tier}: paddling and changing sides`, () => {
-      const { state, view } = crewPaddling(tier);
+      const { state, view } = crewPaddling(lineup, tier);
       const hull = hullOf(tier);
       let offShaft = 0;
       let lowest = Infinity;
@@ -117,10 +123,10 @@ describe('the paddler\'s hands and arms', () => {
   }
 });
 
-describe('nothing crosses the hull\'s side where it shows', () => {
+describe(`${lineup.name}: nothing crosses the hull\'s side where it shows`, () => {
   for (let tier = 0; tier < HULL_TIERS.length; tier += 1) {
     it(`on hull tier ${tier}: no arm, shaft or blade passes through it between the waterline and the gunwale`, () => {
-      const { state, view } = crewPaddling(tier);
+      const { state, view } = crewPaddling(lineup, tier);
       const hull = hullOf(tier);
       let lowest = Infinity;
       let where = '';
@@ -147,7 +153,7 @@ describe('nothing crosses the hull\'s side where it shows', () => {
     // A kneeler between deck and hull has 24 cm of well on the long hull. Below the gunwale by up to 1.5 cm is what
     // the drawing cannot avoid there (it was 13 cm before the stroke was redrawn); the bow and stern paddlers stay clear.
     for (const tier of [2, 3]) {
-      const { state, view } = crewPaddling(tier, 4, false, true);
+      const { state, view } = crewPaddling(lineup, tier, 4, false, true);
       const hull = hullOf(tier);
       const lowest = { kneelers: Infinity, others: Infinity };
       let offShaft = 0;
@@ -166,11 +172,13 @@ describe('nothing crosses the hull\'s side where it shows', () => {
     }
   });
 });
+}
 
-describe('the stroke pulls the canoe forward', () => {
+for (const lineup of ALONE) {
+describe(`${lineup.name}: the stroke pulls the canoe forward`, () => {
   /** One stroke of the stern paddler: the blade's middle and its tip, in the hull's own space, every hundredth. */
   function strokeOf(tier: number, astern: boolean): { blade: THREE.Vector3; tip: THREE.Vector3 }[] {
-    const { state, view } = crewPaddling(tier, 1, astern);
+    const { state, view } = crewPaddling(lineup, tier, 1, astern);
     const member = [...membersOf(view).values()][0];
     const frames: { blade: THREE.Vector3; tip: THREE.Vector3 }[] = [];
     for (let step = 0; step < 100; step += 1) {
@@ -222,7 +230,7 @@ describe('the stroke pulls the canoe forward', () => {
   });
 
   it('the look turns to back strokes when the canoe goes astern, and back when it goes ahead again', () => {
-    const { state, view } = crewPaddling(0, 1);
+    const { state, view } = crewPaddling(lineup, 0, 1);
     const astern = (): boolean => (view as unknown as { astern: boolean }).astern;
     expect(astern()).toBe(false);
     state.canoe.speed = -0.4;
@@ -237,3 +245,4 @@ describe('the stroke pulls the canoe forward', () => {
     expect(astern()).toBe(false);
   });
 });
+}
