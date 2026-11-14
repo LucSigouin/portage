@@ -282,6 +282,23 @@ void main(){
     if (!plain) wOwn = max(wOwn, wNear);
     float zOwn = 1. / max(wOwn, 1. / uFar);
     gFull = 1. - smoothstep(PEN_FROM, PEN_TO, zOwn);
+    // A thing narrower on screen than the full pen (a paddle, a rod) would be all line, its two edges meeting in one
+    // black stick. Where the pen sits on one, or beside one, it keeps today's line: brown wood with a fine edge.
+    float rSlim = rBase * mix(.62, 1.3, 1. - smoothstep(5., 110., zOwn)) * (.52 + .74 * PEN_WEIGHT) * PEN_WIDTH;
+    float slim = 0.;
+    for (int i = 0; i < 4; i++) {
+      vec2 o = OFFS[i] * rSlim * apx;
+      float ip = textureLod(tAux, inWindow(aUv + o), 0.).a;
+      float im = textureLod(tAux, inWindow(aUv - o), 0.).a;
+      // on it: the thing is gone again within the pen's reach on both sides
+      if (!plain && abs(ip - aux.a) > .0003 && abs(im - aux.a) > .0003) slim = 1.;
+      // beside it: a tap lands on a thing, and twice as far the pixel's own ground is back
+      float ip2 = textureLod(tAux, inWindow(aUv + 2. * o), 0.).a;
+      float im2 = textureLod(tAux, inWindow(aUv - 2. * o), 0.).a;
+      if (solid(ip) && abs(ip - aux.a) > .0003 && abs(ip2 - aux.a) <= .0003) slim = 1.;
+      if (solid(im) && abs(im - aux.a) > .0003 && abs(im2 - aux.a) <= .0003) slim = 1.;
+    }
+    gFull *= 1. - slim;
     wob *= 1. - gFull;
     weight = mix(weight, PEN_WEIGHT, gFull);
 #endif
