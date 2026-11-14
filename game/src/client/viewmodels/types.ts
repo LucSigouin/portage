@@ -224,6 +224,8 @@ export interface ToastModel {
   life: number;
   /** What the note offers while it stands: a dropped stack's way back (`takeback.ts`). Absent or null: nothing. */
   action?: ToastActionModel | null;
+  /** Words in it a player typed (a crewmate's name): never drawn as a key. Absent: none. */
+  said?: string[];
 }
 
 /** A button on a note, and the key that presses it (`keyCode` null: the button only). */

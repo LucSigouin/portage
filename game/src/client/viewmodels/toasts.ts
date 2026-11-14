@@ -19,9 +19,16 @@ export interface ToastInput {
   takeBack?: number;
   /** The drops this note says are back: their own notes go. */
   undoes?: number[];
+  /** Words in it a player typed (crewmates' names): the view never draws a key box in them (`keyedText`). */
+  said?: string[];
 }
 
 const toast = (text: string, tone: Tone = 'info', itemId?: ItemId): ToastInput => (itemId ? { text, tone, itemId } : { text, tone });
+/** A note that names crewmates, by the names they typed. */
+const naming = (input: ToastInput, ...names: (string | null)[]): ToastInput => {
+  const said = names.filter((name): name is string => name !== null && name !== 'You');
+  return said.length > 0 ? { ...input, said } : input;
+};
 
 /**
  * True for an event whose note belongs to the whole crew, whoever caused it. Tools and key items
@@ -49,20 +56,26 @@ export function toastForEvent(event: GameEvent, state: GameState, readerId: Play
     case 'item_gained': {
       const finder = isCrewNote(event) ? finderName(event, state, readerId) : null;
       if (event.container === 'belt') {
-        return toast(finder
+        return naming(toast(finder
           ? `${finder} ${made ? 'made' : 'found'} a new tool: ${itemName(event.itemId)}`
-          : `New tool: ${itemName(event.itemId)}`, 'good', event.itemId);
+          : `New tool: ${itemName(event.itemId)}`, 'good', event.itemId), finder);
       }
       if (event.container === 'key_items') {
-        return toast(`${finder ? `${finder} found` : 'Found'}: ${itemName(event.itemId)}`, 'good', event.itemId);
+        return naming(toast(`${finder ? `${finder} found` : 'Found'}: ${itemName(event.itemId)}`, 'good', event.itemId), finder);
       }
       // Handed over by a crewmate (`sim/give.ts`): the note says who.
-      if (event.givenBy !== undefined) return toast(`${crewName(state, event.givenBy)} gave you ${countedName(event.itemId, event.count)}`, 'good', event.itemId);
+      if (event.givenBy !== undefined) {
+        const giver = crewName(state, event.givenBy);
+        return naming(toast(`${giver} gave you ${countedName(event.itemId, event.count)}`, 'good', event.itemId), giver);
+      }
       return toast(`+${event.count} ${itemName(event.itemId)}`, 'info', event.itemId);
     }
     case 'item_lost': {
       // Given to a crewmate: nothing was lost, and there is nothing to take back.
-      if (event.givenTo !== undefined) return toast(`You gave ${crewName(state, event.givenTo)} ${countedName(event.itemId, event.count)}`, 'info', event.itemId);
+      if (event.givenTo !== undefined) {
+        const taker = crewName(state, event.givenTo);
+        return naming(toast(`You gave ${taker} ${countedName(event.itemId, event.count)}`, 'info', event.itemId), taker);
+      }
       const lost = toast(`-${event.count} ${itemName(event.itemId)}`, 'warning', event.itemId);
       return event.dropId === undefined ? lost : { ...lost, takeBack: event.dropId };
     }
@@ -136,12 +149,14 @@ export function toastForEvent(event: GameEvent, state: GameState, readerId: Play
       return toast('The Beacon is lit.', 'good');
     case 'spot_marked':
       // Your own mark is on your map already: the note is for the rest of the crew.
-      return event.who === readerId ? null : toast(`${crewName(state, event.who)} marked a spot on the map`);
+      if (event.who === readerId) return null;
+      const marker = crewName(state, event.who);
+      return naming(toast(`${marker} marked a spot on the map`), marker);
     case 'crew_changed': {
       // Your own coming and going is no news to you.
       if (event.who === readerId) return null;
       const name = crewName(state, event.who);
-      return toast({ joined: `${name} joined the crew`, away: `${name} is away`, back: `${name} is back` }[event.change]);
+      return naming(toast({ joined: `${name} joined the crew`, away: `${name} is away`, back: `${name} is back` }[event.change]), name);
     }
     // The HUD, the prompt, the dialogue panel or the arrival card (`arrival.ts`) already shows these.
     case 'place_reached':
@@ -215,7 +230,7 @@ export const MAXIMUM_TOASTS = 6;
 
 /** The toasts on screen. Runs on real time, so they fade while the game is paused too. */
 export class ToastQueue {
-  private entries: { id: number; text: string; tone: Tone; itemId: ItemId | null; seconds: number; total: number; takeBack: number | null }[] = [];
+  private entries: { id: number; text: string; tone: Tone; itemId: ItemId | null; seconds: number; total: number; takeBack: number | null; said?: string[] }[] = [];
   private nextId = 1;
 
   add(input: ToastInput): void {
@@ -231,6 +246,7 @@ export class ToastQueue {
     const total = TOAST_SECONDS[input.tone];
     this.entries.push({
       id: this.nextId, text: input.text, tone: input.tone, itemId: input.itemId ?? null, seconds: total, total, takeBack: input.takeBack ?? null,
+      ...(input.said ? { said: input.said } : {}),
     });
     this.nextId += 1;
     if (this.entries.length > MAXIMUM_TOASTS) this.entries.splice(0, this.entries.length - MAXIMUM_TOASTS);
@@ -259,6 +275,7 @@ export class ToastQueue {
     return this.entries.map((entry) => ({
       id: entry.id, text: entry.text, tone: entry.tone, itemId: entry.itemId,
       life: Math.round((entry.seconds / entry.total) * 10) / 10,
+      ...(entry.said ? { said: entry.said } : {}),
       ...(entry.takeBack !== null && offering.includes(entry) ? { action: takeBackAction(entry.takeBack, entry === newest) } : {}),
     }));
   }
