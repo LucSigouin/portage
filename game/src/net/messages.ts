@@ -32,8 +32,9 @@ import type { WireRun } from './walk.ts';
  * 4: the jump key (`input.input.jump`, and 2 added to the keys of a stretch in `input.walk`).
  * 5: a guest may send `ping` and `clear_ping` (an older host would drop them unanswered, and the guest's next commands with them).
  * 6: a guest may send `take_back`, for the same reason.
+ * 7: a guest may send `give` (a stack handed to a crewmate close by), for the same reason.
  */
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 
 export interface JoinMessage { v: number; type: 'join'; name: string; key: string }
 export interface InputMessage {
