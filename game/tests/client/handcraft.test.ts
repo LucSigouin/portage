@@ -465,6 +465,18 @@ describe('where the rest is made', () => {
     expect(find(drawn, hasClass('iw-grid'))).toEqual([]);
     expect(find(drawn, hasClass('iw-entry'))).toEqual([]);
   });
+
+  it('puts that line where the list would be, before the quest lines; with a list, the quiet line comes last', () => {
+    const order = (panel: ReturnType<typeof buildCraftingPanel>): string[] => find(draw(panel), hasClass('iw-body'))[0].children
+      .map((child) => child.classes.split(' ').find((name) => name === 'iw-craft-rest' || name === 'iw-elsewhere') ?? child.tag);
+    // A quest that wants pitch, a firebox aboard: a quest line and the line about the boat, under two hand recipes.
+    const listed = buildCraftingPanel(atQuest(afloat('firebox'), 'stop_the_leak'));
+    expect(listed.stations[0].recipes.length).toBeGreaterThan(0);
+    expect(order(listed)).toEqual(['section', 'iw-elsewhere', 'iw-craft-rest']);
+    // The same panel with nothing to make by hand.
+    const empty = { ...listed, stations: [{ name: 'Hands', recipes: [] }], restText: 'Nothing to make by hand yet. The firebox has its own menu on the boat (B).' };
+    expect(order(empty)).toEqual(['section', 'iw-craft-rest', 'iw-elsewhere']);
+  });
 });
 
 describe('the words that send a player to C or to a station stay true', () => {

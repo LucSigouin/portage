@@ -378,12 +378,16 @@ function recipeView(recipe: RecipeRowModel): ViewNode {
  * swap writes a fresh body from its top: nothing slides. A station that is not here is not listed (`stations.ts`).
  */
 function craftingView(panel: Extract<PanelModel, { id: 'crafting' }>): ViewNode[] {
+  // With nothing to make, the line that says so stands where the list would, straight under the heading.
+  const empty = panel.stations.every((station) => station.recipes.length === 0);
+  const rest = craftRestView(panel.restText);
   return sheet(panel, 'wide', panel.about, [craftDoorsView(panel.doors), h('div.iw-body', { key: `body-${panel.tab}`, 'data-craft-tab': panel.tab },
     panel.stations.map((station) => h('section', { key: station.name },
       panel.tab === 'hands' ? h('h3', null, station.name) : null,
       station.recipes.length > 0 ? h('ul.iw-grid', null, station.recipes.map(recipeView)) : null)),
+    empty ? rest : null,
     elsewhereView(panel.elsewhere),
-    craftRestView(panel.restText))]);
+    empty ? null : rest)]);
 }
 
 function buildRowView(row: BuildRowModel): ViewNode {
