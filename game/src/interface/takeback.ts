@@ -8,6 +8,7 @@ import './takeback.css';
 import type { InterfaceIntent, ToastModel } from '../client/contracts.ts';
 import { control, h } from './dom.ts';
 import type { ViewNode } from './dom.ts';
+import { keyFace } from './keycaps.ts';
 
 type ToastAction = NonNullable<ToastModel['action']>;
 
@@ -16,7 +17,7 @@ export function toastActionView(action: ToastAction): ViewNode {
   return control(h('button.iw-toast-act', {
     type: 'button', tabindex: -1, 'aria-label': action.keyLabel ? `${action.label} (${action.keyLabel})` : action.label,
   },
-  action.keyLabel ? h('kbd.iw-toast-key', null, action.keyLabel) : null,
+  action.keyLabel ? h('kbd.iw-toast-key', null, keyFace(action.keyLabel)) : null,
   h('span', null, action.label)), action.intent);
 }
 
