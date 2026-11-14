@@ -33,12 +33,12 @@ export interface SeatedPose {
   bailPhase?: number;
   /** 0..1: slumped forward asleep. */
   sleep?: number;
-  /** -1 lays the resting paddle with its blade out to the figure's right. Left out, to its left. */
-  restSide?: number;
   /** The hull's half beam along the stroke, metres. A wider hull takes the blade further out. Left out, 0.38. */
   beam?: number;
   /** The gunwale's highest above the figure's origin along the stroke, metres. Higher takes the lower hand up the shaft. Left out, 0.1. */
   gunwale?: number;
+  /** The gunwale above the figure's origin where a paddle laid across it lies, metres: the resting paddle clears it. Left out, low. */
+  rail?: number;
   /** Beside an outrigger's deck: how far out from the figure's centre the paddle's tip may reach. Left out, no limit. */
   well?: number;
   /** How far behind (negative) and ahead the blade may reach, metres from the figure. Left out, the full stroke. */
@@ -56,7 +56,7 @@ export interface Crew {
   root: Group;
   /** The limbs, for reading what the figure wears and where its hands are. `H` is the hand, in the figure's space. */
   paddler: { L: Limbs; R: Limbs; paddle: Mesh };
-  /** Seated stroke. phase 0..1, effort 0..1 (0 rests the paddle across the gunwales), side +1 or -1. */
+  /** Seated stroke. phase 0..1, effort 0..1 (0 rests the paddle across the gunwales, its blade out on `side`), side +1 or -1. */
   paddle(seconds: number, phase: number, effort: number, side: number, more?: SeatedPose | null): { inWater: boolean; blade: Vector3; pull: number };
   /**
    * Ashore, without the paddle: it stays in the canoe. time: kept for callers, unused (standing still is still).
@@ -65,7 +65,7 @@ export interface Crew {
    */
   stand(time: number, stride?: number, moving?: number, lying?: number, holding?: boolean, jump?: { trail: number; tuck: number; arms: number; crouch: number } | null): void;
   /** The paddle left in the canoe: laid across the gunwales in `holder`, a group placed as the seated figure would be. */
-  leave(holder: Object3D, restSide?: number): void;
+  leave(holder: Object3D, restSide?: number, rail?: number): void;
 }
 /** A crew member's colours. Left out, they are B2's paddler: ochre coat, red toque, blue-grey legs. */
 export interface Outfit { coat?: string; toque?: string; legs?: string }

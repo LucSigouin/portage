@@ -5,8 +5,8 @@
  */
 import * as THREE from 'three';
 import { HULL_TIERS } from '../../src/data/index.ts';
-import { createGame } from '../../src/sim/index.ts';
-import type { GameState } from '../../src/sim/index.ts';
+import { NEUTRAL_INPUT, addPlayer, createGame, step } from '../../src/sim/index.ts';
+import type { GameState, StepInput } from '../../src/sim/index.ts';
 import { makeHullShape } from '../../src/look/b2/canoe.js';
 import type { Crew as Figure } from '../../src/look/b2/canoe.js';
 import { CanoeView } from '../../src/look/canoe.ts';
@@ -17,7 +17,7 @@ export const BLADE = 1.19;
 export const TIP = 1.485;
 
 export interface Member { figure: Figure; seat: number | null; side: number; cross: number; carry: number; effort: number }
-interface Inside { members: Map<number, Member>; phase: number; side: number; strokes: number }
+interface Inside { members: Map<number, Member>; phase: number; side: number; strokes: number; astern: boolean }
 export const inside = (view: CanoeView): Inside => view as unknown as Inside;
 export const membersOf = (view: CanoeView): Member[] => [...inside(view).members.values()].filter((member) => member.seat !== null);
 
@@ -33,11 +33,31 @@ export function afloat(tier: number, crew = 1, attachments: string[] = []): { st
   return { state, view };
 }
 
+/**
+ * A canoe out on open water in clear, still weather, at rest, with `crew` aboard and no key held: for runs with
+ * the real rules (`play`).
+ */
+export function onOpenWater(tier: number, crew = 1, attachments: string[] = []): { state: GameState; view: CanoeView } {
+  const state = createGame(7, { crew: 1 });
+  Object.assign(state.players[0], { position: { x: -40, y: 0, z: 1085 }, heading: -1.2 });
+  Object.assign(state.canoe, { position: { x: -40, y: 0, z: 1085 }, heading: -1.2, speed: 0, beached: false, hullTier: tier });
+  Object.assign(state.weather, { kind: 'clear', stormLevel: 0, windSpeed: 0, windTarget: 0 });
+  while (state.players.length < crew) addPlayer(state);
+  (state.canoe.attachments as string[]).push(...attachments);
+  const view = new CanoeView();
+  view.sync(state, crewOf(state), 0, 0, true, true);
+  return { state, view };
+}
+
 export interface Frame {
   member: Member;
   /** Seconds since the run began, and the crew's stroke clock. */
   time: number;
   phase: number;
+  /** The same hands and elbows in the trunk's own space: +z out ahead of the chest, +y up the spine. */
+  chest: Record<'handL' | 'handR' | 'elbowL' | 'elbowR', THREE.Vector3>;
+  /** How far each forearm and hand is from the head and the toque (negative: through them). */
+  headGap: { L: number; R: number };
   /** In the figure's own space: +x its left, +y up from its seat, +z ahead. */
   own: Record<'handL' | 'handR' | 'elbowL' | 'elbowR' | 'shoulderL' | 'shoulderR' | 'grip' | 'blade' | 'tip', THREE.Vector3>;
   /** The same points in the hull's space. */
@@ -70,7 +90,53 @@ export function frameOf(member: Member, time: number, phase: number): Frame {
   torso.updateMatrix();
   const spine = [new THREE.Vector3(0, 0.05, 0), new THREE.Vector3(0, 0.72, 0)].map((point) => point.applyMatrix4(torso.matrix));
   const bodyGap = segmentGap(own.grip.clone().addScaledVector(axis, 0.08), own.tip, spine[0], spine[1]);
-  return { member, time, phase, own, hull, axis, bodyGap };
+  const toTrunk = torso.matrix.clone().invert();
+  const chest = Object.fromEntries((['handL', 'handR', 'elbowL', 'elbowR'] as const).map((name) => [name, own[name].clone().applyMatrix4(toTrunk)])) as Frame['chest'];
+  // The head is a ball of 13.5 cm and the toque one of 14.3 cm, as the figure is built; a forearm is 5 cm thick, a mitt 6.2 cm.
+  const headGapOf = (elbow: THREE.Vector3, hand: THREE.Vector3): number => {
+    let least = Infinity;
+    for (let step = 0; step <= 10; step += 1) {
+      const point = elbow.clone().lerp(hand, step / 10);
+      least = Math.min(least, Math.min(point.distanceTo(HEAD) - 0.135, point.distanceTo(TOQUE) - 0.143) - (step === 10 ? 0.062 : 0.05));
+    }
+    return least;
+  };
+  const headGap = { L: headGapOf(chest.elbowL, chest.handL), R: headGapOf(chest.elbowR, chest.handR) };
+  return { member, time, phase, own, hull, axis, bodyGap, chest, headGap };
+}
+const HEAD = new THREE.Vector3(0, 0.69, 0.008);
+const TOQUE = new THREE.Vector3(0, 0.772, -0.014);
+
+/** What one player holds at a moment of a run: the rules' own input, nothing pressed where left out. */
+export type Held = Partial<StepInput>;
+
+/**
+ * Run the rules and the view together at `fps` for `seconds`, as the game does: `keys(time, player)` is what each
+ * player holds. The view's paint time follows the rules' clock. Every figure's frame goes to `each`; the marks the
+ * paddles leave on the water come back, with their times.
+ */
+export function play(
+  view: CanoeView, state: GameState, fps: number, seconds: number, keys: (time: number, player: number) => Held,
+  each: (frame: Frame, before: Frame | null) => void, start = 0,
+): { time: number; x: number; z: number }[] {
+  const last = new Map<Member, Frame>();
+  const marks: { time: number; x: number; z: number }[] = [];
+  let stateTime = state.time;
+  let paint = start;
+  for (let frame = 1; frame <= Math.round(fps * seconds); frame += 1) {
+    const time = start + frame / fps;
+    step(state, state.players.map((_, player) => ({ ...NEUTRAL_INPUT, ...keys(time, player) })), 1 / fps);
+    const painted = Math.max(0, Math.min(1 / fps, state.time - stateTime));
+    stateTime = state.time;
+    paint += painted;
+    for (const mark of view.sync(state, crewOf(state), painted, paint, true, false)) marks.push({ time, x: mark.x, z: mark.z });
+    for (const member of membersOf(view)) {
+      const now = frameOf(member, time, inside(view).phase);
+      each(now, last.get(member) ?? null);
+      last.set(member, now);
+    }
+  }
+  return marks;
 }
 
 /** Run the view's own loop at `fps` for `seconds`, as the game does, and hand every figure's frame to `each`. */
