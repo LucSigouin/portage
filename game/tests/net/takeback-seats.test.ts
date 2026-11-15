@@ -92,18 +92,21 @@ describe('a seat that changes hands', () => {
     // Away, Ann's drops still stand: they are hers to come back to.
     expect([1, 2].map((dropId) => standingDrop(rig.game, 1, dropId)?.count)).toEqual([9, 12]);
 
-    // The canoe is full and Ann is the only one away: Dee is handed her seat, pack and all.
+    // The canoe is full and Ann is the only one away: Dee is handed her seat, with the starting kit: Ann's pack is in Ann's browser.
     const dee = rig.join('Dee');
     rig.run(0.5);
     expect(dee.link.playerId).toBe(1);
-    expect(player).toMatchObject({ name: 'Dee', connected: true, backpack: [{ itemId: 'clay', count: 4 }] });
+    expect(player).toMatchObject({ name: 'Dee', connected: true, backpack: [] });
     for (const dropId of [1, 2]) {
       expect(standingDrop(rig.game, 1, dropId), String(dropId)).toBeNull();
       expect(ask(rig, dee, { type: 'take_back', drop: dropId }), String(dropId)).toMatchObject(NOTHING);
     }
-    expect(player.backpack).toEqual([{ itemId: 'clay', count: 4 }]);
+    expect(player.backpack).toEqual([]);
     expect(countIn(rig.game.canoe.cargo, 'driftwood')).toBe(0);
     expect(rig.game.playedSeconds - played).toBeLessThan(5);
+    // Dee finds some clay of her own.
+    player.backpack.push({ itemId: 'clay', count: 4 });
+    rig.run(0.2);
 
     // Dee's own drops count on from Ann's: a number never names two drops in one seat.
     expect(ask(rig, dee, { type: 'discard', from: 'backpack', itemId: 'clay', count: 4 })).toMatchObject({ ok: true });

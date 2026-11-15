@@ -23,6 +23,7 @@ import { standClear } from '../sim/index.ts';
 import { BackdropCanoe } from './backdrop.ts';
 import { BUILT_VIEW_FRAME_CAP, BUILT_VIEW_SECONDS, BUILT_VIEW_WAIT_SECONDS, builtPieceOf, isBuildCommand, showsPiece } from './builtview.ts';
 import type { BuiltPiece, BuiltView } from './builtview.ts';
+import { CarryStore } from './carrystore.ts';
 import { InputController } from './input.ts';
 import type { InputOutcome, InputSnapshot } from './input.ts';
 import type { InterfaceIntent, InterfaceSound } from './intents.ts';
@@ -425,7 +426,8 @@ export class Session {
   joinGame(transport: Transport, options: { name: string; key: string; character?: CharacterId }): GuestLink {
     if (this.game) this.quitToLobby();
     this.guest?.close();
-    this.guest = new GuestLink(transport, options);
+    // The guest's own pack and meters, kept in this browser under the name it plays as.
+    this.guest = new GuestLink(transport, { ...options, carry: new CarryStore(options.name, this.storage) });
     return this.guest;
   }
 

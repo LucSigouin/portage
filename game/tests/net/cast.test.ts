@@ -200,31 +200,31 @@ describe('the host puts the pick on the player', () => {
   });
 });
 
-describe('version 7, and a tab of another version', () => {
-  it('is version 7', () => {
-    expect(PROTOCOL_VERSION).toBe(7);
+describe('version 8, and a tab of another version', () => {
+  it('is version 8', () => {
+    expect(PROTOCOL_VERSION).toBe(8);
   });
 
   it('an old tab that joins is answered in its own version, the only one it reads: it is told to reload', () => {
     const rig = createRig();
     const wire = rawWire(rig);
-    // What the live build (wire version 6) sends: no character, and a 6.
-    wire.say({ v: 6, type: 'join', name: 'Old', key: key('Old') });
-    expect(wire.heard).toEqual([{ v: 6, type: 'leave', reason: 'version' }]);
+    // What the live build (wire version 7) sends: no carry, and a 7.
+    wire.say({ v: 7, type: 'join', name: 'Old', key: key('Old'), character: 'scout' });
+    expect(wire.heard).toEqual([{ v: 7, type: 'leave', reason: 'version' }]);
     expect(rig.game.players).toHaveLength(1);
-    // The old tab shows these words for it (they were the same in version 6), and they fit: its own reload is the cure.
+    // The old tab shows these words for it (they were the same in versions 6 and 7), and they fit: its own reload is the cure.
     expect(LEAVE_TEXT.version).toMatch(/^The host runs another version of the game\. Reload the page/);
     // A tab from the future is answered the same way, and a version that is no number in this build's own.
     const next = rawWire(rig);
-    next.say({ v: 8, type: 'join', name: 'New', key: key('New'), character: 'scout' });
-    expect(next.heard).toEqual([{ v: 8, type: 'leave', reason: 'version' }]);
+    next.say({ v: 9, type: 'join', name: 'New', key: key('New'), character: 'scout' });
+    expect(next.heard).toEqual([{ v: 9, type: 'leave', reason: 'version' }]);
     const odd = rawWire(rig);
     odd.say({ v: 1e99, type: 'leave' });
     expect(odd.heard).toEqual([{ v, type: 'leave', reason: 'version' }]);
   });
 
   it('this build joining an older or a newer host is told so, whatever version the host says it in', () => {
-    for (const hostVersion of [6, 8, v]) {
+    for (const hostVersion of [7, 9, v]) {
       const pair = createLoopbackPair();
       // A host of another version: it answers the join the one way it can.
       pair.host.receive(() => pair.host.send({ v: hostVersion, type: 'leave', reason: 'version' }));

@@ -89,7 +89,7 @@ describe('a full canoe gives a seat back', () => {
     expect(crew(game)).toEqual([[0, '', 'here'], [1, 'Eve', 'here'], [2, 'Dee', 'here'], [3, 'Fay', 'here']]);
   });
 
-  it('hands the seat over as it stands: the pack, the meters and the place go to the newcomer, under the newcomer\'s name', () => {
+  it('hands the seat over with its place, but the starting pack and meters: the old holder\'s things stay theirs', () => {
     const { rig, ann } = fullRig();
     const player = rig.game.players[1]!;
     player.backpack.push({ itemId: 'driftwood', count: 7 });
@@ -102,13 +102,13 @@ describe('a full canoe gives a seat back', () => {
     rig.run(0.5);
     expect(dee.link.playerId).toBe(1);
     expect(rig.game.players).toHaveLength(4);
-    expect(player).toMatchObject({ id: 1, name: 'Dee', connected: true, backpack: [{ itemId: 'driftwood', count: 7 }], ...place });
-    expect(player.hunger).toBeGreaterThan(40.9);
-    expect(player.hunger).toBeLessThanOrEqual(41);
+    expect(player).toMatchObject({ id: 1, name: 'Dee', connected: true, backpack: [], ...place });
+    expect(player.hunger).toBeGreaterThan(79.9);
+    expect(player.hunger).toBeLessThanOrEqual(80);
     // The crew reads "Dee joined the crew", not "Dee is back".
     expect(rig.hostEvents.filter((event) => event.type === 'crew_changed')).toEqual([{ type: 'crew_changed', who: 1, change: 'joined' }]);
     expect(rig.settle()).toBe(true);
-    expect(dee.link.truth!.players[1]).toMatchObject({ name: 'Dee', backpack: [{ itemId: 'driftwood', count: 7 }] });
+    expect(dee.link.truth!.players[1]).toMatchObject({ name: 'Dee', backpack: [] });
   });
 
   it('leaves no old name on a seat that a guest with no name takes', () => {
