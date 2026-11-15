@@ -117,6 +117,8 @@ export class HostLink {
   private readonly connections: Connection[] = [];
   /** What the room remembers: which player each key is. Never sent to anyone. */
   private readonly keys = new Map<string, PlayerId>();
+  /** Keys of players the host took out, this session only: a knock under one is told so. Never saved. */
+  private readonly removedKeys = new Set<string>();
   /**
    * When each player last went away, as a count of leavings: 1 for the first this host saw, 2 for the next.
    * A player with no number was already away when this host started. Read only for players who are away.
@@ -204,7 +206,10 @@ export class HostLink {
       if (connection.playerId === playerId) this.turnAway(connection, 'removed');
     }
     for (const [key, holder] of this.keys) {
-      if (holder === playerId) this.keys.delete(key);
+      if (holder === playerId) {
+        this.keys.delete(key);
+        this.removedKeys.add(key);
+      }
     }
     this.leftAt.delete(playerId);
     return lost;
@@ -361,6 +366,7 @@ export class HostLink {
       this.stats.refused += 1;
       return;
     }
+    const askedBefore = connection.key === key;
     connection.key = key;
     const game = this.game;
     const name = cleanPlayerName(rawName);
@@ -371,6 +377,13 @@ export class HostLink {
     let ownSeatByKey = true;
     if (playerId === undefined || !game.players.some((player) => player.id === playerId)) {
       ownSeatByKey = false;
+      // This wire was seated under this key, and the key has since been forgotten: the seat went to someone else, or
+      // the host took them out. Reseating them would hand them the starting kit, which their browser would then keep.
+      // Let go, their leave writes the carry kept on hiding, and their next join by the link brings it.
+      if (askedBefore) {
+        this.turnAway(connection, this.removedKeys.has(key) ? 'removed' : 'full');
+        return;
+      }
       const free = (player: { id: PlayerId; connected: boolean }): boolean =>
         !player.connected && player.id !== this.hostPlayerId && !this.bound(player.id);
       // Someone who played under this name before the host last started, a new seat, or a stand-in nobody named.
@@ -401,6 +414,7 @@ export class HostLink {
       joined = taken !== returning && taken.connected;
       playerId = taken.id;
       this.keys.set(key, playerId);
+      this.removedKeys.delete(key);
     }
     // The same key on a new wire: the old wire is let go.
     for (const other of [...this.connections]) {

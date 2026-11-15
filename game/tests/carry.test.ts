@@ -410,3 +410,57 @@ describe('the carry where the host takes a crewmate out, and where a tab is hidd
     expect(rig.settle()).toBe(true);
   });
 });
+
+describe('the third review: a seat that went to someone else, and a key forgotten on removal', () => {
+  it('full canoe: Sam hidden and marked away, his seat goes to Dee, his knock is turned away and his browser keeps his pack', () => {
+    const rig = createRig({ host: { silenceSeconds: 2 } });
+    const storage = browserWith('Sam', null);
+    const sam = joinWith(rig, 'Sam', storage);
+    rig.join('Ann');
+    const bo = rig.join('Bo');
+    rig.run(1);
+    const samId = sam.link.playerId;
+    seatOf(rig, sam).backpack = [{ itemId: 'stone', count: 5 }];
+    rig.run(1);
+    sam.link.keepCarry();
+    hostAlone(rig, sam, 4);
+    expect(rig.game.players.find((player) => player.id === samId)!.connected).toBe(false);
+    // Dee brings her own things: none of them may end up in Sam's browser.
+    const dee = joinWith(rig, 'Dee', browserWith('Dee', { ...good(), backpack: [{ itemId: 'clay', count: 3 }] }));
+    rig.run(1);
+    expect(dee.link.playerId).toBe(samId);
+    sam.link.knock();
+    rig.run(1);
+    expect(sam.link.status).not.toBe('playing');
+    expect(sam.link.leaveReason).toBe('full');
+    expect(dee.link.status).toBe('playing');
+    expect(readCarry(JSON.parse(storage.getItem(carrySlot('Sam'))!))).toMatchObject({ backpack: [{ itemId: 'stone', count: 5 }] });
+    // Bo leaves, and Sam comes back by the link: his own pack, on Bo's seat.
+    bo.link.close();
+    rig.run(1);
+    const back = joinWith(rig, 'Sam', storage);
+    rig.run(1);
+    expect(back.link.status).toBe('playing');
+    expect(seatOf(rig, back).backpack).toEqual([{ itemId: 'stone', count: 5 }]);
+    expect(rig.settle()).toBe(true);
+  });
+
+  it('removed while hidden: the knock is told "removed", and the browser keeps the pack it had', () => {
+    const rig = createRig({ host: { silenceSeconds: 2 } });
+    const storage = browserWith('Sam', null);
+    const sam = joinWith(rig, 'Sam', storage);
+    rig.run(1);
+    const samId = sam.link.playerId;
+    seatOf(rig, sam).backpack = [{ itemId: 'stone', count: 5 }];
+    rig.run(1);
+    sam.link.keepCarry();
+    hostAlone(rig, sam, 4);
+    expect(rig.host.remove(samId)).toBe(0);
+    sam.link.knock();
+    rig.run(1);
+    expect(sam.link.status).not.toBe('playing');
+    expect(sam.link.leaveReason).toBe('removed');
+    expect(readCarry(JSON.parse(storage.getItem(carrySlot('Sam'))!))).toMatchObject({ backpack: [{ itemId: 'stone', count: 5 }] });
+  });
+
+});
