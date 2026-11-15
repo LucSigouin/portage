@@ -167,7 +167,8 @@ if (scriptRan) {
     if (after.jobsSeen !== want.jobs) filterFaults.push(`after "handled": ${after.jobsSeen} of ${want.jobs} job cards show: the filter must leave the plan alone`);
     const target = `#note-${job.notes[0]}`;
     const link = `#job-${job.id} .job-notes a[href="${target}"]`;
-    const lands = () => page.evaluate((selector) => { const note = document.querySelector(selector); return Boolean(note) && !note.hidden && note.getClientRects().length > 0 && location.hash === selector; }, target);
+    // The browser tells the page of a new hash a moment after the press, so the look waits a little.
+    const lands = () => page.waitForFunction((selector) => { const note = document.querySelector(selector); return Boolean(note) && !note.hidden && note.getClientRects().length > 0 && location.hash === selector; }, target, { timeout: 3000 }).then(() => true, () => false);
     const follow = (time) => page.click(link, { timeout: 5000 }).then(lands, () => false).then((landed) => { if (!landed) filterFaults.push(`after "handled": the ${time} press of job "${job.id}"'s link did not land on ${target}`); });
     await follow('first');
     if (await press('handled')) await follow('second');
