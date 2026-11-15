@@ -18,6 +18,8 @@ import { CHARACTER_IDS } from '../data/index.ts';
 import type { CharacterId } from '../data/index.ts';
 import { airborne, blendLeap, hashState } from '../sim/index.ts';
 import type { Command, CommandResult, GameEvent, GameState, PlayerId, PlayerState, StepInput } from '../sim/index.ts';
+import { carryOf } from './carry.ts';
+import type { CarryKeeper } from './carry.ts';
 import { PROTOCOL_VERSION, readHostMessage } from './messages.ts';
 import type { ClientMessage, LeaveReason } from './messages.ts';
 import type { Transport } from './transport.ts';
@@ -34,6 +36,8 @@ export interface GuestOptions {
    * first of the cast, since a join must name one.
    */
   character?: CharacterId;
+  /** Where this guest keeps its own pack and meters between crews. Left out: nothing is brought or kept. */
+  carry?: CarryKeeper;
   /** How far behind the newest state the view runs, in steps of 1/60 s. Default 6 (a tenth of a second). */
   delaySteps?: number;
   /**
@@ -177,6 +181,7 @@ export class GuestLink {
   private readonly name: string;
   private readonly key: string;
   private readonly character: CharacterId;
+  private readonly carryKeeper: CarryKeeper | null;
   private readonly delaySteps: number;
   private session: number | null = null;
   private sitting: number | null = null;
@@ -224,6 +229,7 @@ export class GuestLink {
     this.name = options.name;
     this.key = options.key;
     this.character = options.character ?? CHARACTER_IDS[0];
+    this.carryKeeper = options.carry ?? null;
     this.delaySteps = options.delaySteps ?? 6;
     this.predictWalk = options.predictWalk ?? true;
     transport.receive((raw) => this.onMessage(raw), () => this.end('closed', 'closed'));
@@ -236,13 +242,18 @@ export class GuestLink {
 
   private sendJoin(): void {
     this.joinSentAt = this.clock;
-    this.send({ v: PROTOCOL_VERSION, type: 'join', name: this.name, key: this.key, character: this.character });
+    // The guest's own things, as kept, on the way in. Asking again once this host has seated it (a knock, a line
+    // back): none, since the host's seat is newer than anything this guest holds, and sending ours would undo its last steps.
+    const carry = this.truth ? null : this.carryKeeper?.read() ?? null;
+    this.send({ v: PROTOCOL_VERSION, type: 'join', name: this.name, key: this.key, character: this.character, ...(carry ? { carry } : {}) });
   }
 
   private end(status: 'closed' | 'refused', reason: LeaveReason): void {
     if (this.status === 'closed' || this.status === 'refused') return;
     this.status = status;
     this.leaveReason = reason;
+    // Another tab took this seat: that tab keeps the carry from here on.
+    if (reason !== 'replaced') this.carryKeeper?.flush();
     this.transport.close();
   }
 
@@ -364,6 +375,9 @@ export class GuestLink {
     this.held.push(entry);
     if (this.held.length > HISTORY) this.held.shift();
     this.base = null;
+    // Only what the host confirmed is kept as this guest's own things.
+    const me = this.carryKeeper ? entry.state.players.find((player) => player.id === this.playerId) : undefined;
+    if (me) this.carryKeeper!.note(carryOf(me, this.session ?? undefined), this.clock);
   }
 
   /** True while this guest's walk must stand: a command that holds the player was asked and is not settled. */
@@ -531,10 +545,16 @@ export class GuestLink {
     return this.events.splice(0, count).map((entry) => entry.event);
   }
 
+  /** Write the waiting carry now, staying in the game: the page went hidden and may never say it is closing. */
+  keepCarry(): void {
+    this.carryKeeper?.flush();
+  }
+
   /** Leave the game: tell the host and close the wire. */
   close(): void {
     if (this.status === 'closed' || this.status === 'refused') return;
     this.send({ v: PROTOCOL_VERSION, type: 'leave' });
+    this.carryKeeper?.flush();
     this.status = 'closed';
     this.transport.close();
   }

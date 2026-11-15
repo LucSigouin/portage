@@ -25,6 +25,8 @@
  * for each step of the host: so its own screen can show the same walk at once
  * and be right. The host still takes no position from anyone.
  */
+import { applyCarry, freshCarry } from './carry.ts';
+import type { Carry } from './carry.ts';
 import { addPlayer, dispatch, hashState, removePlayer, setConnected, setPlayerCharacter, setPlayerName, cleanPlayerName, NEUTRAL_INPUT } from '../sim/index.ts';
 import type { CommandResult, GameEvent, GameState, PlayerId, StepInput } from '../sim/index.ts';
 import { PROTOCOL_VERSION, answerVersion, isOtherVersion, readClientMessage } from './messages.ts';
@@ -115,6 +117,8 @@ export class HostLink {
   private readonly connections: Connection[] = [];
   /** What the room remembers: which player each key is. Never sent to anyone. */
   private readonly keys = new Map<string, PlayerId>();
+  /** Keys of players the host took out, this session only: a knock under one is told so. Never saved. */
+  private readonly removedKeys = new Set<string>();
   /**
    * When each player last went away, as a count of leavings: 1 for the first this host saw, 2 for the next.
    * A player with no number was already away when this host started. Read only for players who are away.
@@ -202,7 +206,10 @@ export class HostLink {
       if (connection.playerId === playerId) this.turnAway(connection, 'removed');
     }
     for (const [key, holder] of this.keys) {
-      if (holder === playerId) this.keys.delete(key);
+      if (holder === playerId) {
+        this.keys.delete(key);
+        this.removedKeys.add(key);
+      }
     }
     this.leftAt.delete(playerId);
     return lost;
@@ -227,7 +234,7 @@ export class HostLink {
     }
     connection.heardAt = this.clock;
     if (message.type === 'join') {
-      this.join(connection, message.name, message.key, message.character);
+      this.join(connection, message.name, message.key, message.character, message.carry);
       return;
     }
     // Before joining, a wire is nobody: it moves no one and asks for nothing.
@@ -352,24 +359,40 @@ export class HostLink {
     return longest;
   }
 
-  private join(connection: Connection, rawName: string, key: string, character: JoinMessage['character']): void {
+  private join(connection: Connection, rawName: string, key: string, character: JoinMessage['character'], carry?: Carry): void {
     // One wire, one seat. A wire that asks again under another key would be handed a second player, and a third:
     // every seat in the canoe, each one counted as here for as long as that one wire talks.
     if (connection.key !== null && connection.key !== key) {
       this.stats.refused += 1;
       return;
     }
+    const askedBefore = connection.key === key;
     connection.key = key;
     const game = this.game;
     const name = cleanPlayerName(rawName);
     let playerId = this.keys.get(key);
     let joined = false;
+    let takenOver = false;
+    // Their own seat back by key: this host has not restarted and nobody took the seat over.
+    let ownSeatByKey = true;
     if (playerId === undefined || !game.players.some((player) => player.id === playerId)) {
+      ownSeatByKey = false;
+      // This wire was seated under this key, and the key has since been forgotten: the seat went to someone else, or
+      // the host took them out. Reseating them would hand them the starting kit, which their browser would then keep.
+      // Let go, their leave writes the carry kept on hiding, and their next join by the link brings it.
+      if (askedBefore) {
+        this.turnAway(connection, this.removedKeys.has(key) ? 'removed' : 'full');
+        return;
+      }
       const free = (player: { id: PlayerId; connected: boolean }): boolean =>
         !player.connected && player.id !== this.hostPlayerId && !this.bound(player.id);
       // Someone who played under this name before the host last started, a new seat, or a stand-in nobody named.
       const returning = name === '' ? undefined : game.players.find((player) => free(player) && player.name === name);
-      const room = returning ?? addPlayer(game) ?? game.players.find((player) => free(player) && player.name === '');
+      const added = returning ?? addPlayer(game);
+      const standIn = added ? undefined : game.players.find((player) => free(player) && player.name === '');
+      const room = added ?? standIn;
+      // A stand-in holds nobody's things: whoever sits there starts as on a seat taken over.
+      if (standIn) takenOver = true;
       // The canoe is full: the seat of whoever has been away the longest. All four here: no seat.
       const taken = room ?? this.longestAway();
       if (!taken) {
@@ -377,7 +400,8 @@ export class HostLink {
         return;
       }
       if (!room) {
-        // The seat changes hands, as it stands: pack, meters, spot. Whoever held it is a new guest if they come back,
+        takenOver = true;
+        // The seat changes hands with its spot. Its pack and meters do not: see the carry below. Whoever held it is a new guest if they come back,
         // so their key is forgotten and their name comes off. The crew is told someone joined, not that someone is back.
         for (const [held, holder] of this.keys) {
           if (holder === taken.id) this.keys.delete(held);
@@ -390,6 +414,7 @@ export class HostLink {
       joined = taken !== returning && taken.connected;
       playerId = taken.id;
       this.keys.set(key, playerId);
+      this.removedKeys.delete(key);
     }
     // The same key on a new wire: the old wire is let go.
     for (const other of [...this.connections]) {
@@ -413,6 +438,13 @@ export class HostLink {
     // Who they picked to be, in every case above: a new seat, a seat had back (as someone else, if they like), a seat
     // taken over. Before the welcome below and before the crew's next state, so nobody sees one figure turn into another.
     setPlayerCharacter(game, playerId, character);
+    // The guest's own pack and meters, from its own browser, in every case above. A seat taken over by someone who
+    // brings nothing gets the starting kit: never the old holder's things, which are in the old holder's browser.
+    // One exception: their own seat back by key with a carry this same host session sent. The seat is as new or newer
+    // (a pickup in the last moment before the tab closed), so it stands and the carry is ignored.
+    if (carry && ownSeatByKey && carry.confirmedBy === this.session) carry = undefined;
+    const seat = game.players.find((player) => player.id === playerId);
+    if (seat && (carry || takenOver)) applyCarry(seat, carry ?? freshCarry());
     if (joined) game.events.push({ type: 'crew_changed', who: playerId, change: 'joined' });
     else setConnected(game, playerId, true);
 

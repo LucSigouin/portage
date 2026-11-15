@@ -28,6 +28,9 @@ export const NEUTRAL_INPUT: Readonly<StepInput> = Object.freeze({
   moveX: 0, moveY: 0, run: false, cameraYaw: 0,
 });
 
+/** The meters a new player starts with. Their pack starts empty. */
+export const STARTING_METERS: Readonly<Pick<PlayerState, 'hunger' | 'thirst' | 'energy'>> = Object.freeze({ hunger: 80, thirst: 75, energy: 90 });
+
 /**
  * Put one more player in the canoe, in the lowest free seat, with the
  * starting kit. Returns them, or null when the crew is already four.
@@ -45,9 +48,7 @@ export function addPlayer(state: GameState): PlayerState | null {
     seat: freeSeat(state),
     position: { ...canoe.position },
     heading: canoe.heading,
-    hunger: 80,
-    thirst: 75,
-    energy: 90,
+    ...STARTING_METERS,
     backpack: [],
     selectedTool: null,
     islandId: null,

@@ -24,6 +24,8 @@ import { ATTACHMENTS, ITEMS, NPCS, QUESTS, RECIPES, TOOL_IDS, isCharacterId } fr
 import type { CharacterId } from '../data/index.ts';
 import type { Command, CommandResult, GameEvent, GameState, PlayerId, StepInput } from '../sim/index.ts';
 import { WALK_RUNS_SENT, readWalkRun } from './walk.ts';
+import { readCarry } from './carry.ts';
+import type { Carry } from './carry.ts';
 import type { WireRun } from './walk.ts';
 
 /**
@@ -35,13 +37,17 @@ import type { WireRun } from './walk.ts';
  * 6: a guest may send `take_back`, for the same reason.
  * 7: `join` says who the guest is (`join.character`, the pick screen): an older host would refuse the whole join for the field, unanswered.
  *    And a guest may send `give` (a stack handed to a crewmate close by), for the same reason as 5 and 6.
+ * 8: `join` may bring the guest's own pack and meters (`join.carry`, `net/carry.ts`), for the same reason as 7.
+ *    And the host may tell a guest it was taken out of the crew (`leave.reason` 'removed'): an older guest would drop that leave unread.
  */
-export const PROTOCOL_VERSION = 7;
+export const PROTOCOL_VERSION = 8;
 
 export interface JoinMessage {
   v: number; type: 'join'; name: string; key: string;
   /** Who the guest picked to be: one of the four of the cast (`data/cast.ts`). Only the drawing reads it. */
   character: CharacterId;
+  /** The guest's own pack and meters, kept in its own browser. Left out: nothing kept, or a carry the host could not read. */
+  carry?: Carry;
 }
 export interface InputMessage {
   v: number; type: 'input'; seq: number; have: number; events: number; input: StepInput;
@@ -67,6 +73,7 @@ export type ClientMessage = JoinMessage | InputMessage | CommandMessage | PingMe
  * - `version`: the guest speaks another `PROTOCOL_VERSION`.
  * - `replaced`: the same key joined on another connection.
  * - `closed`: the host stopped sharing the game.
+ * - `removed`: the host took this player out of the game.
  */
 export type LeaveReason = 'full' | 'version' | 'replaced' | 'closed' | 'removed';
 
@@ -257,12 +264,16 @@ export function readClientMessage(raw: unknown): ClientMessage | null {
   const v = PROTOCOL_VERSION;
   switch (raw.type) {
     case 'join':
-      if (!hasOnly(raw, ['v', 'type', 'name', 'key', 'character'])) return null;
+      if (!hasOnly(raw, ['v', 'type', 'name', 'key', 'character'], ['carry'])) return null;
       if (typeof raw.name !== 'string' || raw.name.length > 200) return null;
       if (typeof raw.key !== 'string' || !KEY_PATTERN.test(raw.key)) return null;
       // One of the four, or the whole join is refused: no default, no guess.
       if (!isCharacterId(raw.character)) return null;
-      return { v, type: 'join', name: raw.name, key: raw.key, character: raw.character };
+      {
+        // A carry that does not read is dropped, not the join: the guest comes in as one who brings nothing.
+        const carry = Object.hasOwn(raw, 'carry') ? readCarry(raw.carry) : null;
+        return { v, type: 'join', name: raw.name, key: raw.key, character: raw.character, ...(carry ? { carry } : {}) };
+      }
     case 'input': {
       if (!hasOnly(raw, ['v', 'type', 'seq', 'have', 'events', 'input', 'step', 'walk'])) return null;
       const input = readInput(raw.input);
