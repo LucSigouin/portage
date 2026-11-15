@@ -24,7 +24,7 @@ import { Builder, THIN } from './b2/geo.js';
 import { GU, PAL, inkMaterial } from './b2/palette.js';
 import { createPost, heroPen } from './b2/post.js';
 import type { Post } from './b2/post.js';
-import { DEFAULT_PEN } from './b2/pens.js';
+import { DEFAULT_PEN, PENS } from './b2/pens.js';
 import type { PenName } from './b2/pens.js';
 import { createSky } from './b2/sky.js';
 import { SHORE_ISLANDS, createWater } from './b2/water.js';
@@ -966,7 +966,7 @@ export class InkWashWorldView implements WorldView {
         fine: drawn?.heroFine ?? 0,
         crew: this.canoe.figuresShown(),
         figures: state && this.stage !== 'lobby' ? this.canoe.figures() : [],
-        pen: thinned ? heroPen(2 * Math.tan((this.camera.fov * Math.PI) / 360) * depth) : 1,
+        pen: thinned ? heroPen(2 * Math.tan((this.camera.fov * Math.PI) / 360) * depth, PENS[this.penName]?.hero) : 1,
         subject: figure && { x: figure.x / ratio, y: (this.canvasHeight - figure.y - figure.h) / ratio, width: figure.w / ratio, height: figure.h / ratio },
       },
       weather: {

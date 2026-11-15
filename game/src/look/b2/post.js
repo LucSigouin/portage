@@ -49,11 +49,13 @@ export const HERO_PEN = { start: 16.5, fall: 37, floor: 0.3 };
 export const CREW_LAYER = 1;
 
 // The share of its full width the pen keeps on a hero, where the window's height covers `span` metres of world.
-// The shader's heroPen() is this, with the same numbers.
-export function heroPen(span) {
-  const past = Math.max(0, span / HERO_PEN.start - 1);
-  const fallen = HERO_PEN.fall * past * past;
-  return 1 - ((1 - HERO_PEN.floor) * fallen) / (1 + fallen);
+// The shader's heroPen() is this, with the same numbers. `numbers`: a pen-far sample's own (pens.js: `hero`, as the
+// game's pen calm-hull has), or HERO_PEN for C and the older pens. The cards and the lobby's canoe (canoe-sketch.ts)
+// are drawn by the world's pen alone and keep HERO_PEN, so they look as they did.
+export function heroPen(span, numbers = HERO_PEN) {
+  const past = Math.max(0, span / numbers.start - 1);
+  const fallen = numbers.fall * past * past;
+  return 1 - ((1 - numbers.floor) * fallen) / (1 + fallen);
 }
 
 const COMPOSITE = /* glsl */ `

@@ -12,7 +12,7 @@ import { parseDebugParameters } from '../../src/client/debug/parameters.ts';
 import { DEFAULT_PEN, PENS, PEN_NAMES, penDefines, penFrom, penReach } from '../../src/look/b2/pens.js';
 import type { PenName } from '../../src/look/b2/pens.js';
 import { terrainMaterialFor } from '../../src/look/b2/palette.js';
-import { createPost } from '../../src/look/b2/post.js';
+import { createPost, heroPen } from '../../src/look/b2/post.js';
 import { CAST_PEN, castPenWidth } from '../../src/look/cast-sketch.ts';
 
 /** The pen's shader on `main` at 2857012, before this round: its SHA-256 and its length (tools/pen-hash.mjs). */
@@ -74,6 +74,19 @@ describe('with no switch the pen is calm-hull, Luc\'s pick (round pen-far)', () 
     expect(upClose).toEqual(PENS.bold);
     expect(penDefines('calm-hull')).toMatchObject({ PEN_FULL: 1, PEN_WIDTH: '1.6', PEN_SEAM: '0.8', PEN_FAR: 1, PEN_HSTART: '6.', PEN_HFALL: '1.2', PEN_HFLOOR: '0.3', PEN_CALM: '1.', PEN_KEEL: '1.', PEN_KEELW: '0.' });
     expect(penReach('calm-hull')).toBe(penReach('bold'));
+  });
+
+  it('a small hero\'s pen thins from 6 m of world across the window (C: from 16.5), down to the same floor', () => {
+    const hero = PENS['calm-hull']!.hero!;
+    expect(hero).toEqual({ start: 6, fall: 1.2, floor: 0.3 });
+    for (const span of [0, 3, 5.8, 6]) expect(heroPen(span, hero), `${span} m`).toBe(1);
+    // the staged island view, 8 m away at 60 degrees: 9.2 m across. C's pen is whole there, the game's is not
+    expect(heroPen(9.2)).toBe(1);
+    expect(heroPen(9.2, hero)).toBeLessThan(0.85);
+    expect(heroPen(9.2, hero)).toBeGreaterThan(0.7);
+    for (const span of [7, 9.2, 12, 16.5, 20]) expect(heroPen(span, hero), `${span} m`).toBeLessThan(heroPen(span));
+    expect(heroPen(4000, hero)).toBeGreaterThan(0.3);
+    expect(heroPen(4000, hero)).toBeLessThan(0.31);
   });
 
   it('C is still there by name, as it was: bold has none of the pen-far settings', () => {
