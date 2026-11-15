@@ -413,7 +413,7 @@ describe('leaving and coming back', () => {
     expect(host.models.at(-1)!.hud!.crew.map((row) => [row.label, row.away])).toEqual([['Luc', false], ['Sam', true]]);
   });
 
-  it('the host takes a guest out: a yes is asked first, then the guest is gone, told why, and their things are in the canoe', () => {
+  it('the host takes a guest out: a yes is asked first, then the guest is gone, told why, and their things are not in the canoe', () => {
     const { host, guest, game, tick } = table();
     tick(1);
     game.players[1].backpack.push({ itemId: 'driftwood', count: 3 });
@@ -437,8 +437,8 @@ describe('leaving and coming back', () => {
     host.app.session.handleIntent({ type: 'answer_confirm', accepted: true });
     tick(0.5);
     expect(game.players.map((player) => player.name)).toEqual(['Luc']);
-    expect(countIn(game.canoe.cargo, 'driftwood')).toBe(cargoBefore + 3);
-    expect(host.toasts()).toContain('Sam is out of the crew. Their things are in the canoe.');
+    expect(countIn(game.canoe.cargo, 'driftwood')).toBe(cargoBefore);
+    expect(host.toasts()).toContain('Sam is out of the crew. Their things go with them.');
     expect(host.models.at(-1)!.hud!.crew.map((row) => row.label)).not.toContain('Sam');
     expect(guest.app.session.screen).toBe('lobby');
     expect(guest.app.session.game).toBeNull();
