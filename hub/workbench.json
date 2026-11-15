@@ -6,7 +6,7 @@
   ],
   "title": "Portage",
   "subtitle": "The workbench: every step so far",
-  "updated": "2026-11-14, 16:20",
+  "updated": "2026-11-14, 19:55",
   "ask": "A flooded world and all you have is a canoe. Scavenge islands, craft, and build a crazy impressive canoe.",
   "now": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "label": "Stage",
-      "value": "Round 5 is live: Version 1.0.424"
+      "value": "Round 5 is live: Version 1.0.426"
     },
     {
       "label": "Tests",
@@ -28,7 +28,7 @@
     },
     {
       "label": "Live now",
-      "value": "Your four calls, full screen"
+      "value": "Four calls, loading card, tab icon"
     },
     {
       "label": "Not live yet",
