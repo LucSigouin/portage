@@ -18,7 +18,7 @@
   "updated": "2026-11-15, 10:40",
   "intro": "Every note play testers have sent from the game’s Feedback menu, newest first. A note that is crossed out is fixed and live. Each open note names its planned fix.",
   "plan": {
-    "heading": "What we would do",
+    "heading": "The plan",
     "intro": "Every open note, sorted into jobs. Each job says what was asked, the fix, and where it stands. Luc said yes to twelve of them on 2026-11-15: those are being built now.",
     "sizes": {
       "small": "Small",
@@ -164,7 +164,7 @@
         "title": "A place to track bugs and ideas",
         "notes": [31],
         "asked": "A way to log and track bugs and ideas, sorted and marked by how much they matter.",
-        "fix": "This page is that place now. Every open note has a job, a size and what it waits on. A fixed note is crossed out with the version that fixed it.",
+        "fix": "This page is that place now. Every open note has a job, a size and where it stands. A fixed note is crossed out with the version that fixed it.",
         "size": "answered",
         "waits": "Nothing."
       }

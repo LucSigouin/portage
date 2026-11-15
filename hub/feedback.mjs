@@ -75,7 +75,7 @@ const WORDS = {
   planned: 'Planned fix:',
   asked: 'Asked',
   fix: 'The fix',
-  waits: 'Waits on',
+  waits: 'Where it stands',
   note: 'Note',
   jobs: ['job', 'jobs'],
   jobs_for: 'for',
