@@ -72,6 +72,13 @@ describe('the host reads a carry strictly', () => {
     });
   });
 
+  it('lifts a meter just above 0 too, and keeps one at the floor where effort is still allowed', () => {
+    const floor = TUNING.survival.minimumEnergyToExert;
+    expect(readCarry({ ...good(), hunger: 0.3, thirst: floor - 0.1, energy: floor })).toMatchObject({
+      hunger: TUNING.survival.failMeterValue, thirst: TUNING.survival.failMeterValue, energy: floor,
+    });
+  });
+
   it('a join with a bad carry still joins, as one who brings nothing', () => {
     const join = { v, type: 'join', name: 'Sam', key: key('Sam'), character: 'scout' };
     expect(readClientMessage({ ...join, carry: good() })).toEqual({ ...join, carry: good() });

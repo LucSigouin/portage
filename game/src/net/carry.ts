@@ -54,13 +54,14 @@ export function applyCarry(player: PlayerState, carry: Carry): void {
 
 /**
  * A meter from somebody else's browser: a finite number, held to 0 to 100. A
- * meter at 0 comes in at the value a fail wakes a player at, so somebody who
- * left while down does not join only to fail again at once.
+ * meter at 0, or so near it that the rules already refuse effort (under
+ * `minimumEnergyToExert`), comes in at the value a fail wakes a player at, so
+ * somebody who left while down does not join only to fail again at once.
  */
 function readMeter(raw: unknown): number | null {
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
   const held = Math.min(METER_TOP, Math.max(0, raw));
-  return held <= 0 ? TUNING.survival.failMeterValue : held;
+  return held < TUNING.survival.minimumEnergyToExert ? TUNING.survival.failMeterValue : held;
 }
 
 /**
