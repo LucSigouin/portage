@@ -55,8 +55,8 @@ export interface DebugParameters {
   invite: string | null;
   /** The pen's sample the look draws with: 'bold' (C) unless the address asks for another. It replaces no game: never a sandbox. */
   pen: PenName;
-  /** `&cam=<distance>,<pitch>`: a staged shot's camera at this distance (metres) and pitch (radians). For pen pictures. */
-  cam: { distance: number; pitch: number } | null;
+  /** `&cam=<distance>,<pitch>[,<yaw>]`: a staged shot's camera at this distance (metres), pitch and yaw off the bow (radians). For pen pictures. */
+  cam: { distance: number; pitch: number; yaw: number | null } | null;
   /** True when a switch replaces the normal game: saves stay untouched. */
   sandbox: boolean;
 }
@@ -98,7 +98,7 @@ export function parseDebugParameters(query: string): DebugParameters {
     name: (values.get('name') ?? '').slice(0, 40),
     invite: /^[A-Za-z0-9-]{6,9}$/.test(values.get('invite') ?? '') ? values.get('invite') : null,
     pen: penFrom(values.get('pen')),
-    cam: /^\d+(\.\d+)?,\d+(\.\d+)?$/.test(values.get('cam') ?? '') ? (([distance, pitch]) => ({ distance, pitch }))((values.get('cam') as string).split(',').map(Number)) : null,
+    cam: /^\d+(\.\d+)?,\d+(\.\d+)?(,\d+(\.\d+)?)?$/.test(values.get('cam') ?? '') ? (([distance, pitch, yaw]) => ({ distance, pitch, yaw: yaw ?? null }))((values.get('cam') as string).split(',').map(Number)) : null,
     sandbox: bot || atQuest !== null || shot !== null || crew > 1 || host !== null || join !== null,
   };
 }
