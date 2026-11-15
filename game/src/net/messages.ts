@@ -38,6 +38,7 @@ import type { WireRun } from './walk.ts';
  * 7: `join` says who the guest is (`join.character`, the pick screen): an older host would refuse the whole join for the field, unanswered.
  *    And a guest may send `give` (a stack handed to a crewmate close by), for the same reason as 5 and 6.
  * 8: `join` may bring the guest's own pack and meters (`join.carry`, `net/carry.ts`), for the same reason as 7.
+ *    And the host may tell a guest it was taken out of the crew (`leave.reason` 'removed'): an older guest would drop that leave unread.
  */
 export const PROTOCOL_VERSION = 8;
 
@@ -72,8 +73,9 @@ export type ClientMessage = JoinMessage | InputMessage | CommandMessage | PingMe
  * - `version`: the guest speaks another `PROTOCOL_VERSION`.
  * - `replaced`: the same key joined on another connection.
  * - `closed`: the host stopped sharing the game.
+ * - `removed`: the host took this player out of the game.
  */
-export type LeaveReason = 'full' | 'version' | 'replaced' | 'closed';
+export type LeaveReason = 'full' | 'version' | 'replaced' | 'closed' | 'removed';
 
 export interface WelcomeMessage {
   v: number;
@@ -333,7 +335,7 @@ export function readHostMessage(raw: unknown): HostMessage | null {
     case 'ping':
       return typeof raw.time === 'number' ? raw as unknown as PongMessage : null;
     case 'leave':
-      return raw.reason === 'full' || raw.reason === 'version' || raw.reason === 'replaced' || raw.reason === 'closed'
+      return raw.reason === 'full' || raw.reason === 'version' || raw.reason === 'replaced' || raw.reason === 'closed' || raw.reason === 'removed'
         ? raw as unknown as HostLeaveMessage : null;
     default:
       return null;

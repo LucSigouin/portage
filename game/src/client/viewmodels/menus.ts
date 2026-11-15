@@ -211,13 +211,16 @@ export function buildCreditsPanel(completed: boolean): PanelBody<'credits'> {
   };
 }
 
-const CONFIRM_TEXT: Record<ConfirmAction['type'], (slot: number) => { title: string; message: string; accept: string }> = {
+const CONFIRM_TEXT: Record<ConfirmAction['type'], (slot: number, name: string) => { title: string; message: string; accept: string }> = {
   delete_save: (slot) => ({ title: 'Delete this save?', message: `Slot ${slot + 1} will be gone for good.`, accept: 'Delete' }),
   overwrite_save: (slot) => ({
     title: 'Start over in this slot?', message: `Slot ${slot + 1} already holds a game. A new game replaces it.`, accept: 'Start new game',
   }),
   quit_to_lobby: () => ({ title: 'Quit to the lobby?', message: 'The game is saved first.', accept: 'Save and quit' }),
   reset_key_bindings: () => ({ title: 'Reset every key?', message: 'All key bindings go back to their defaults.', accept: 'Reset keys' }),
+  remove_player: (_slot, name) => ({
+    title: `Take ${name} out of the crew?`, message: 'They leave the game for good. What they carried goes into the canoe.', accept: 'Take out',
+  }),
 };
 
 /** What quitting is to a guest: nothing is saved here, and the seat waits in the host's game. */
@@ -225,7 +228,7 @@ const LEAVE_CREW_TEXT = { title: 'Leave the crew?', message: 'Your seat is kept.
 
 /** `guest` is true on the screen of a guest in someone else's game: quitting is leaving, and says so. */
 export function buildConfirmModel(action: ConfirmAction, guest = false): ConfirmModel {
-  const text = guest && action.type === 'quit_to_lobby' ? LEAVE_CREW_TEXT : CONFIRM_TEXT[action.type]('slot' in action ? action.slot : 0);
+  const text = guest && action.type === 'quit_to_lobby' ? LEAVE_CREW_TEXT : CONFIRM_TEXT[action.type]('slot' in action ? action.slot : 0, 'name' in action ? action.name : '');
   return {
     title: text.title,
     message: text.message,

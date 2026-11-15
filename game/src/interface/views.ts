@@ -553,6 +553,11 @@ function crewHostView(panel: Extract<PanelModel, { id: 'crew_host' }>): ViewNode
           room.copy.note ? h('small.iw-note', null, room.copy.note) : null), room.copy.intent))) : null,
     crewStatusView(panel.status, panel.statusTone),
     panel.lines.map((line, index) => h('p.iw-crew-line', { key: `line-${index}` }, line)),
+    panel.roster.length > 0 ? h('ul.iw-roster', { key: 'roster', 'aria-label': 'Crewmates' },
+      panel.roster.map((mate) => h('li.iw-roster-mate', { key: mate.playerId },
+        h('span.iw-roster-name', null, mate.name),
+        h('span.iw-roster-state', null, mate.here ? 'Here' : 'Away'),
+        buttonView(mate.remove, 'button.iw-btn.iw-small', true, 'remove')))) : null,
   ], panel.actions, panel.stop);
 }
 

@@ -5,10 +5,12 @@
  */
 import type { SlotSummary } from '../../save/index.ts';
 import { MAXIMUM_NAME_LENGTH } from '../../sim/index.ts';
+import type { GameState, PlayerId } from '../../sim/index.ts';
 import type { LeaveReason } from '../../net/index.ts';
 import type { RelayFailure } from '../../net/relay.ts';
 import type { CrewView, JoinProblem } from '../crewlobby.ts';
 import type { InterfaceIntent } from '../intents.ts';
+import { crewName } from './hud.ts';
 import type { ButtonModel, PanelModel, TextFieldModel, Tone } from './types.ts';
 
 type PanelBody<Id extends PanelModel['id']> = Omit<Extract<PanelModel, { id: Id }>, 'title' | 'close'>;
@@ -24,6 +26,7 @@ export const LEAVE_TEXT: Readonly<Record<LeaveReason, string>> = {
   version: 'The host runs another version of the game. Reload the page, both of you.',
   replaced: 'You joined this game from another window.',
   closed: 'The host closed the game.',
+  removed: 'The host took you out of the crew.',
 };
 
 /** Why a guest's line to the crew is closed, in words. */
@@ -85,7 +88,18 @@ const nameField = (crew: CrewView, enabled: boolean): TextFieldModel => ({
 const friendsText = (count: number): string =>
   (count === 0 ? 'The room is open. Nobody has come in yet.' : count === 1 ? 'One friend is in the room.' : `${count} friends are in the room.`);
 
-export function buildCrewHostPanel(crew: CrewView, summaries: readonly SlotSummary[], latestSlot: number | null): PanelBody<'crew_host'> {
+/** Everyone the host may take out of the game: every player but its own. Nobody on a guest's screen or with no game on. */
+const rosterOf = (game: GameState | null, playerId: PlayerId, guest: boolean): PanelBody<'crew_host'>['roster'] =>
+  (game === null || guest ? [] : game.players.filter((player) => player.id !== playerId).map((player) => ({
+    playerId: player.id,
+    name: crewName(game, player.id),
+    here: player.connected,
+    remove: button('Take out', { type: 'crew_remove', playerId: player.id }),
+  })));
+
+export function buildCrewHostPanel(
+  crew: CrewView, summaries: readonly SlotSummary[], latestSlot: number | null, game: GameState | null = null, playerId: PlayerId = 0, guest = false,
+): PanelBody<'crew_host'> {
   const host = crew.host;
   const hasRoom = host.phase === 'open' || host.phase === 'reconnecting';
   const latest = summaries.find((summary) => summary.slot === latestSlot);
@@ -129,6 +143,7 @@ export function buildCrewHostPanel(crew: CrewView, summaries: readonly SlotSumma
   }
   return {
     id: 'crew_host',
+    roster: rosterOf(crew.inGame ? game : null, playerId, guest),
     phase: host.phase,
     name: nameField(crew, host.phase === 'idle' || host.phase === 'failed'),
     status,

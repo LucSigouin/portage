@@ -30,7 +30,9 @@ export type ConfirmAction =
   | { type: 'delete_save'; slot: number }
   | { type: 'overwrite_save'; slot: number }
   | { type: 'quit_to_lobby' }
-  | { type: 'reset_key_bindings' };
+  | { type: 'reset_key_bindings' }
+  /** The host takes a crewmate out of the game. `name` is theirs as the dialog says it. */
+  | { type: 'remove_player'; playerId: number; name: string };
 
 export interface PanelState {
   screen: ScreenId;

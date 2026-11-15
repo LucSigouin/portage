@@ -138,7 +138,7 @@ export function buildPanelModel(panel: PanelId, input: InterfaceModelInput): Pan
       return body ? { ...frame, ...body } : null;
     }
     case 'crew_host':
-      return input.crew ? { ...frame, ...buildCrewHostPanel(input.crew, input.slots, input.latestSlot) } : null;
+      return input.crew ? { ...frame, ...buildCrewHostPanel(input.crew, input.slots, input.latestSlot, game, playerId, isGuestScreen(input)) } : null;
     case 'crew_join':
       return input.crew ? { ...frame, ...buildCrewJoinPanel(input.crew) } : null;
     case 'confirm':
