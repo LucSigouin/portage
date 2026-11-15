@@ -246,6 +246,8 @@ function boot(): void {
     // A handle for the console and for browser tests.
     (window as unknown as { portage: unknown }).portage = { app, session, worldView, loop, followVisibility, cast: gameInterface.cast };
     loop?.start();
+    // The loading card of `index.html` goes once the game has drawn: two frames on, so the lobby is under it.
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => document.querySelector('#loading')?.remove()));
     if (perf) void import('./client/debug/index.ts').then((debug) => debug.runPerfReadout(app, worldView, loop));
     // `?join=ROOM&name=...`: ask the host tab for a seat. The lobby shows until it answers.
     if (parameters.join !== null) {
