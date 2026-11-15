@@ -113,7 +113,9 @@ export interface LookProbe {
     crew: number;
     /** Each crew figure in the picture, by player id: its seat, what it is drawn doing, what it wears. */
     figures: FigureReport[];
-    /** The share of its full width the pen keeps on the local player's figure: 1 at every normal play distance, less as the figure gets small. */
+    /** Metres of world the window's height covers at the local player's depth: what the pen's thinning goes by. */
+    span: number;
+    /** The share of its full width the pen keeps on the local player's figure: 1 with the camera all the way in, less as the figure gets small (the game's pen thins from 6 m of world). */
     pen: number;
     /** The local player's figure on the page, in CSS pixels from the top left. Null when off screen. */
     subject: { x: number; y: number; width: number; height: number } | null;
@@ -954,6 +956,8 @@ export class InkWashWorldView implements WorldView {
     // The pen on the local figure: from how much of the world the window's height covers at the figure's depth, as the shader does per pixel.
     const depth = -this.probePoint.setFromMatrixPosition(local.matrixWorld).applyMatrix4(this.camera.matrixWorldInverse).z;
     const thinned = this.heroPass && this.post?.heroPen.value === 1;
+    // Metres of world the window's height covers at the local player's depth: what the pen's thinning goes by.
+    const span = 2 * Math.tan((this.camera.fov * Math.PI) / 360) * depth;
     return {
       drawingWidth: drawn?.w ?? 0,
       drawingHeight: drawn?.h ?? 0,
@@ -966,7 +970,8 @@ export class InkWashWorldView implements WorldView {
         fine: drawn?.heroFine ?? 0,
         crew: this.canoe.figuresShown(),
         figures: state && this.stage !== 'lobby' ? this.canoe.figures() : [],
-        pen: thinned ? heroPen(2 * Math.tan((this.camera.fov * Math.PI) / 360) * depth, PENS[this.penName]?.hero) : 1,
+        span,
+        pen: thinned ? heroPen(span, PENS[this.penName]?.hero) : 1,
         subject: figure && { x: figure.x / ratio, y: (this.canvasHeight - figure.y - figure.h) / ratio, width: figure.w / ratio, height: figure.h / ratio },
       },
       weather: {
