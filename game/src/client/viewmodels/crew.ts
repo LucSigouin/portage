@@ -29,6 +29,14 @@ export const LEAVE_TEXT: Readonly<Record<LeaveReason, string>> = {
   removed: 'The host took you out of the crew.',
 };
 
+/** For a guest who was playing and is told `full`: their seat went to a newcomer while their window was away. */
+export const SEAT_TAKEN_TEXT = 'Your seat went to someone else. Join again by the link.';
+
+/** The host's reason in words. Seats may have emptied since a seated guest lost theirs, so that one is never told "full". */
+export function leaveText(reason: LeaveReason, wasSeated: boolean): string {
+  return reason === 'full' && wasSeated ? SEAT_TAKEN_TEXT : LEAVE_TEXT[reason];
+}
+
 /** Why a guest's line to the crew is closed, in words. */
 export const JOIN_PROBLEM_TEXT: Readonly<Record<JoinProblem, string>> = {
   unreachable: 'The relay cannot be reached. Check your connection and try again.',
@@ -183,7 +191,7 @@ export function buildCrewJoinPanel(crew: CrewView): PanelBody<'crew_join'> {
       statusTone = 'good';
       break;
     case 'failed':
-      status = join.problem !== null ? JOIN_PROBLEM_TEXT[join.problem] : LEAVE_TEXT[join.leave ?? 'closed'];
+      status = join.problem !== null ? JOIN_PROBLEM_TEXT[join.problem] : leaveText(join.leave ?? 'closed', join.wasSeated ?? false);
       statusTone = join.problem === 'no-name' || join.problem === 'bad-code' ? 'warning' : 'danger';
       break;
     case 'idle':

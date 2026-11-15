@@ -38,7 +38,7 @@ import type { Transport } from '../net/index.ts';
 import type { CrewLobby } from './crewlobby.ts';
 import type { FeedbackDesk } from './feedback.ts';
 import type { FullscreenSwitch } from './fullscreen.ts';
-import { HOST_BACK_TEXT, JOIN_PROBLEM_TEXT, LEAVE_TEXT } from './viewmodels/crew.ts';
+import { HOST_BACK_TEXT, JOIN_PROBLEM_TEXT, leaveText } from './viewmodels/crew.ts';
 import { crewName } from './viewmodels/hud.ts';
 import { keepCharacter, keptCharacter } from './viewmodels/cast.ts';
 import type { CastDoor, CastView } from './viewmodels/cast.ts';
@@ -564,9 +564,11 @@ export class Session {
     if (guest.status === 'refused' || guest.status === 'closed') {
       const reason = guest.leaveReason ?? 'closed';
       // When it was the line that went and not the host's doing, the crew lobby knows why.
-      const lineFailure = this.crew?.guestEnded(guest.leaveReason) ?? null;
+      // A link told no before it was ever seated ends `refused`: one that ends `closed` was playing in this crew.
+      const wasSeated = guest.status === 'closed';
+      const lineFailure = this.crew?.guestEnded(guest.leaveReason, wasSeated) ?? null;
       this.leaveHost();
-      this.notice(lineFailure !== null ? JOIN_PROBLEM_TEXT[lineFailure] : LEAVE_TEXT[reason], 'warning');
+      this.notice(lineFailure !== null ? JOIN_PROBLEM_TEXT[lineFailure] : leaveText(reason, wasSeated), 'warning');
     }
     const view = this.guest?.status === 'playing' ? this.guest.view() : null;
     if (!view) {
