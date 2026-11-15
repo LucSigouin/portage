@@ -189,6 +189,21 @@ function depleted(state: GameState, node: NodeDefinition): boolean {
     && nodeState.readyAt.every((readyAt) => readyAt === null || readyAt > state.time);
 }
 
+/** The most rules steps between two frames of one game: a second of them. More is a cut (a line that stalled, a guest's view snapped ahead). */
+const CARRY_ON_STEPS = 60;
+
+/**
+ * True when `state` is the game `previous` was, a moment on: the picture carries on, nothing is cut. A host's game
+ * is one object for as long as it is played. A guest's view of it is a new object on most frames (placed between two
+ * of the host's states, with the guest's own figure where its own walk has it), and is still the same game.
+ */
+export function carriesOn(previous: GameState | null, state: GameState): boolean {
+  if (previous === state) return true;
+  if (previous === null || previous.seed !== state.seed) return false;
+  const steps = state.tick - previous.tick;
+  return steps >= 0 && steps <= CARRY_ON_STEPS;
+}
+
 export class InkWashWorldView implements WorldView {
   private renderer: THREE.WebGLRenderer | null = null;
   private post: Post | null = null;
@@ -480,7 +495,7 @@ export class InkWashWorldView implements WorldView {
   sync(state: GameState, frame: FrameInfo): void {
     // Paint time follows the simulation's clock, capped at real time: a paused game is perfectly still,
     // a fast replay or a night's sleep does not make the water race.
-    const jumped = state !== this.state;
+    const jumped = !carriesOn(this.state, state);
     this.paintSeconds = jumped || frame.paused ? 0 : Math.max(0, Math.min(frame.frameSeconds, state.time - this.lastStateTime));
     this.paintTime += this.paintSeconds;
     this.lastStateTime = state.time;
