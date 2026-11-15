@@ -11,7 +11,7 @@
 // (tests/look/pens.test.ts holds the text that is left against the text before round 4).
 
 /** The samples by name, in the order they are shown. The letters a to d are read too. */
-export const PEN_NAMES = ['today', 'full', 'bold', 'near', 'soon', 'calm', 'fine'];
+export const PEN_NAMES = ['today', 'full', 'bold', 'near', 'soon', 'calm', 'fine', 'calm-keel'];
 // Luc's pick (round 4, 2026-11-14): "full border on the outline i think it was C". C is the game's pen.
 export const DEFAULT_PEN = 'bold';
 
@@ -39,6 +39,8 @@ export const PENS = {
   calm: { width: 1.6, weight: 0.5, seam: 0.8, from: null, to: null, hero: { start: 6, fall: 1.2, floor: 0.3 }, calm: 1 },
   // fine: calm, thinner further out (floor .2, faster fall).
   fine: { width: 1.6, weight: 0.5, seam: 0.8, from: null, to: null, hero: { start: 6, fall: 2.5, floor: 0.2 }, calm: 1 },
+  // calm-keel: calm, and the ink contour carries on along the waterline under the white foam line (run 3).
+  'calm-keel': { width: 1.6, weight: 0.5, seam: 0.8, from: null, to: null, hero: { start: 6, fall: 1.2, floor: 0.3 }, calm: 1, keel: 1 },
 };
 // C's own hero thinning (post.js HERO_PEN), for samples that keep it.
 const HERO_TODAY = { start: 16.5, fall: 37, floor: 0.3 };
@@ -70,6 +72,7 @@ export function penDefines(name) {
     PEN_HFALL: glsl((pen.hero ?? HERO_TODAY).fall),
     PEN_HFLOOR: glsl((pen.hero ?? HERO_TODAY).floor),
     PEN_CALM: glsl(pen.calm ?? 0),
+    PEN_KEEL: glsl(pen.keel ?? 0),
   };
 }
 

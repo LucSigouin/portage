@@ -64,7 +64,7 @@ try {
   const big = [];
   for (const distance of [7, 10]) for (const pitch of [0.07, 0.34]) for (const yaw of [0, 1.57, 3.14, 4.71]) big.push(['bold', distance, pitch, yaw, '']);
   for (const yaw of [0, 1.57, 3.14, 4.71]) big.push(['calm', 10, 0.07, yaw, '']);
-  for (const pen of ['bold', 'calm']) for (const distance of [7, 10]) big.push([pen, distance, 0.07, 1.57, '&rung=0&hold=1']);
+  for (const pen of ['bold', 'calm', 'calm-keel']) for (const distance of [7, 10]) big.push([pen, distance, 0.07, 1.57, '&rung=0&hold=1']);
   for (const pen of ['bold', 'calm']) big.push([pen, 10, 0.07, 1.57, '&rung=11&hold=1']);
   for (const [pen, distance, pitch, yaw, pin] of big) {
     const file = `big-${pen}-d${distance}-p${pitch}-y${yaw}${pin ? '-rung' + pin.match(/rung=(\d+)/)[1] : ''}.png`;
@@ -85,7 +85,7 @@ try {
   page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
   for (const pitch of [0.34, 0.07]) {
     let box = null;
-    for (const pen of ['bold', 'bold2', 'soon', 'calm', 'fine']) {
+    for (const pen of ['bold', 'bold2', 'soon', 'calm', 'fine', 'calm-keel']) {
       const file = `near-${pen}-p${pitch}.png`;
       await load(page, `pen=${pen === 'bold2' ? 'bold' : pen}&cam=4,${pitch},1.57&rung=0&hold=1`, 2500);
       const probe = await probeOf(page);

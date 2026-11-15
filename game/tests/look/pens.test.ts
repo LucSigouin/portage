@@ -163,7 +163,7 @@ describe('the pick screen\'s cards draw with the game\'s pen', () => {
 
 describe('one switch: ?pen=<name>', () => {
   it('reads a name or its letter, in any case', () => {
-    expect(PEN_NAMES).toEqual(['today', 'full', 'bold', 'near', 'soon', 'calm', 'fine']);
+    expect(PEN_NAMES).toEqual(['today', 'full', 'bold', 'near', 'soon', 'calm', 'fine', 'calm-keel']);
     for (const name of PEN_NAMES) expect(penFrom(name)).toBe(name);
     expect(['a', 'b', 'c', 'd'].map(penFrom)).toEqual(['today', 'full', 'bold', 'near']);
     expect(penFrom(' Bold ')).toBe('bold');
@@ -201,7 +201,7 @@ describe('the samples', () => {
   it('every setting reaches the shader as a number it can read (a float, never a bare integer)', () => {
     for (const name of samples) {
       const defines = penDefines(name);
-      expect(Object.keys(defines).sort()).toEqual(['PEN_CALM', 'PEN_FROM', 'PEN_FULL', 'PEN_HFALL', 'PEN_HFLOOR', 'PEN_HSTART', 'PEN_SEAM', 'PEN_TO', 'PEN_WEIGHT', 'PEN_WIDTH']);
+      expect(Object.keys(defines).sort()).toEqual(['PEN_CALM', 'PEN_FROM', 'PEN_FULL', 'PEN_HFALL', 'PEN_HFLOOR', 'PEN_HSTART', 'PEN_KEEL', 'PEN_SEAM', 'PEN_TO', 'PEN_WEIGHT', 'PEN_WIDTH']);
       for (const key of ['PEN_FROM', 'PEN_HFALL', 'PEN_HFLOOR', 'PEN_HSTART', 'PEN_SEAM', 'PEN_TO', 'PEN_WEIGHT', 'PEN_WIDTH']) {
         expect(String(defines[key]), `${name} ${key}`).toMatch(/^\d*\.\d*$/);
         expect(Number(defines[key])).toBeGreaterThan(0);

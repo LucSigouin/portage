@@ -154,6 +154,10 @@ vec4 penAt(vec2 uv, vec2 apx, float r, vec4 de, float inner, float weight, float
       bool waterT = t.a < .002;
       bool skyT = t.a > .998;
       bool thin = thinC || abs(t.a - THIN) < .0015;
+#ifdef PEN_FULL
+      // calm-keel: where a thing meets the water under its white foam line, the contour carries on along it
+      if (waterC != waterT && (waterC ? t.b : aux.b) > .48 && !(skyC || skyT) && !thin) inkS += PEN_KEEL;
+#endif
       if (waterC != waterT) {
         float nw = waterC ? t.b : aux.b;
         if (nw > .48) { if (waterC) foam += 1.; }
