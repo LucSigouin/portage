@@ -485,7 +485,8 @@ void main(){
 // frame (the camera turning, a paddle swinging) does not rebuild it.
 const roomFor = (room, need) => (need > room || need < room * 0.4 ? Math.ceil((need * 1.2) / 64) * 64 : room);
 
-// pen: the pen's sample both pens start with (pens.js). The game's own unless asked: C, `bold`.
+// pen: the pen's sample both pens start with (pens.js). The game's own unless asked: `calm-hull` (DEFAULT_PEN).
+// (The shader's own comment above PEN_FULL still says "C (bold) by default": that text is hash-pinned to main's, so it stays.)
 export function createPost(renderer, camera, pen = DEFAULT_PEN) {
   // colour: 4x multisampled, resolved by the renderer when the pass ends
   const color = new THREE.WebGLRenderTarget(4, 4, {

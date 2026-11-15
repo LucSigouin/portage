@@ -166,7 +166,7 @@ export interface LookProbe {
   puffs: number;
   /** Columns of light standing: one for each ping the crew has on the map. */
   beams: number;
-  /** The pen's sample the picture is drawn with: 'bold' (C) unless `?pen=` or `setPen` picked another (`b2/pens.js`). */
+  /** The pen's sample the picture is drawn with: 'calm-hull' (`DEFAULT_PEN`) unless `?pen=` or `setPen` picked another (`b2/pens.js`). */
   penName: PenName;
 }
 
@@ -228,7 +228,7 @@ export class InkWashWorldView implements WorldView {
   private readonly rain = new Rain();
   /** `&rain=0` leaves the rain's strokes out (the rings, the wet and the sky stay): to prove that in rain the land changes only where a stroke is drawn. */
   private rainStrokes = true;
-  /** `?pen=<name>` (or `setPen(name)`) draws with one of the pen's samples (`b2/pens.js`). C, `bold`, unless asked. */
+  /** `?pen=<name>` (or `setPen(name)`) draws with one of the pen's samples (`b2/pens.js`). The game's own, `calm-hull`, unless asked. */
   private penName: PenName = DEFAULT_PEN;
   private readonly islands: IslandView[] = [];
   private readonly beacon = new THREE.Group();
@@ -879,7 +879,7 @@ export class InkWashWorldView implements WorldView {
     if (this.post) Object.assign(this.post.bench, { draws: Math.max(1, Math.min(64, draws)), pass });
   }
 
-  /** Draw with one of the pen's samples (`b2/pens.js`): C, or another for a before-and-after. The same as `?pen=<name>`. */
+  /** Draw with one of the pen's samples (`b2/pens.js`): the game's own, or another for a before-and-after. The same as `?pen=<name>`. */
   setPen(name: PenName): void {
     if (!this.post || name === this.penName) return;
     this.post.setPen(name);

@@ -83,7 +83,7 @@ export function drawCastSketches(request: CastSketchRequest): HTMLCanvasElement[
     renderer.autoClear = false;
     renderer.setPixelRatio(1);
     renderer.setSize(width, height, false);
-    // The game's pen: C unless the address names another (the same switch the world view reads).
+    // The game's pen (`DEFAULT_PEN`, calm-hull) unless the address names another (the same switch the world view reads).
     const pen = parseDebugParameters(window.location.search).pen;
     post = createPost(renderer, camera, pen);
     // The game's own switches for a still picture (as the lobby's canoe): no line boil, no paper frame, no wash, no grain.
@@ -155,9 +155,11 @@ export const CAST_VIEW = { yaw: 24, pitch: 5, lens: 20, margin: 0.05, light: 38 
 export const CAST_PEN = { wobble: 0, weight: 1, width: 0.8 } as const;
 
 /**
- * The cards' pen width against the game's. Under a full pen (C, the game's own) it is the game's: 1, since the full
- * pen already keeps one weight and no wander, and its own width (1.6) is in its shader. Under `?pen=today`, the
- * old cards' `CAST_PEN.width`, so the old look stays exactly as it was.
+ * The cards' pen width against the game's. Under a full pen (C, and the game's own calm-hull, which is C on a card)
+ * it is the game's: 1, since the full pen already keeps one weight and no wander, and its own width (1.6) is in its
+ * shader. Under `?pen=today`, the old cards' `CAST_PEN.width`, so the old look stays exactly as it was.
+ * A card is drawn by the world's pen alone (no hero window), so calm-hull's thinning and calming, which live in the
+ * heroes' pen, never touch it: what is left of calm-hull there is the waterline ink, and a card has no water.
  */
 export function castPenWidth(pen: PenName): number {
   return pen === 'today' ? CAST_PEN.width : 1;

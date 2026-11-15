@@ -4,16 +4,20 @@
 // half off the edge it follows, and where a thing stands on the ground its edge is a grey seam, not a line. These
 // samples are a fuller pen: the line sits on the true edge, keeps one weight along it, and closes at the ground.
 //
-// Luc picked C (`bold`): with no switch the game draws with it, everywhere (the world, the crew, the canoe, the
-// pick screen's cards). One switch picks another: the address parameter `?pen=<name>` (client/debug/parameters.ts),
-// or `setPen(name)` on the look's world view. `?pen=today` is the old pen, to the letter: the samples are
+// Luc picked C (`bold`) in round 4, then `calm-hull` in round pen-far (2026-11-14): C up close, and a canoe or figure
+// that is small on screen gets a thinner, steadier line. With no switch the game draws with it, everywhere (the
+// world, the crew, the canoe, the pick screen's cards). One switch picks another: the address parameter
+// `?pen=<name>` (client/debug/parameters.ts), or `setPen(name)` on the look's world view. `?pen=bold` is C as it was
+// live before the pick, to the letter. `?pen=today` is the pen before C, to the letter: the samples are
 // `#ifdef PEN_FULL` blocks in the pen's shader (post.js), and today's pen is drawn with none of them defined
 // (tests/look/pens.test.ts holds the text that is left against the text before round 4).
 
 /** The samples by name, in the order they are shown. The letters a to d are read too. */
 export const PEN_NAMES = ['today', 'full', 'bold', 'near', 'soon', 'calm', 'fine', 'calm-keel', 'calm-hull'];
-// Luc's pick (round 4, 2026-11-14): "full border on the outline i think it was C". C is the game's pen.
-export const DEFAULT_PEN = 'bold';
+// Luc's pick (round 4, 2026-11-14): "full border on the outline i think it was C". Then, the same day, of C away from
+// the closest zoom: "as soon as you zoom out a bit or you change the angle the outline gets all weird". His pick for
+// that is `calm-hull`: C with a small hero's pen thinned early and calmed, and ink along a hero's waterline.
+export const DEFAULT_PEN = 'calm-hull';
 
 // width: the line's width against the middle of today's (today's runs from .52 to 1.26 of it along one edge).
 // weight: the one weight the line keeps, 0 to 1 on today's scale. .5 is the middle: full ink, as today's is there.
@@ -41,7 +45,7 @@ export const PENS = {
   fine: { width: 1.6, weight: 0.5, seam: 0.8, from: null, to: null, hero: { start: 6, fall: 2.5, floor: 0.2 }, calm: 1 },
   // calm-keel: calm, and the ink contour carries on along the waterline under the white foam line (run 3).
   'calm-keel': { width: 1.6, weight: 0.5, seam: 0.8, from: null, to: null, hero: { start: 6, fall: 1.2, floor: 0.3 }, calm: 1, keel: 1, keelWorld: 1 },
-  // calm-hull: calm-keel with the waterline ink on heroes alone (the canoe, its floats, a figure in the water): the
+  // calm-hull, the game's pen: calm-keel with the waterline ink on heroes alone (the canoe, its floats, a figure in the water): the
   // world's shores, rocks and docks keep today's foam line, untouched (run 4, review fault 1).
   'calm-hull': { width: 1.6, weight: 0.5, seam: 0.8, from: null, to: null, hero: { start: 6, fall: 1.2, floor: 0.3 }, calm: 1, keel: 1, keelWorld: 0 },
 };
@@ -51,7 +55,7 @@ export const PENS = {
 
 const LETTERS = { a: 'today', b: 'full', c: 'bold', d: 'near' };
 
-/** The sample an address parameter names: a name or its letter, in any case. Anything else, or nothing: the game's pen (C). */
+/** The sample an address parameter names: a name or its letter, in any case. Anything else, or nothing: the game's pen (`DEFAULT_PEN`). */
 export function penFrom(text) {
   const word = typeof text === 'string' ? text.trim().toLowerCase() : '';
   if (PEN_NAMES.includes(word)) return word;

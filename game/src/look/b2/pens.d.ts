@@ -3,7 +3,7 @@ export type PenName = 'today' | 'full' | 'bold' | 'near' | 'soon' | 'calm' | 'fi
 
 /** The samples by name, in the order they are shown. */
 export const PEN_NAMES: readonly PenName[];
-/** The game's pen: C, `bold` (Luc's pick, round 4). */
+/** The game's pen: `calm-hull` (Luc's pick, round pen-far): C up close, a thinner and steadier line on a small canoe or figure. `bold` is C as it was. */
 export const DEFAULT_PEN: PenName;
 
 /**
@@ -17,7 +17,7 @@ export interface PenSample { width: number; weight: number; seam: number; from: 
 /** Today's pen has no settings: null. */
 export const PENS: Record<PenName, PenSample | null>;
 
-/** The sample an address parameter names (a name, or a letter a to d). Anything else, or nothing: the game's pen, `DEFAULT_PEN` (C). */
+/** The sample an address parameter names (a name, or a letter a to d). Anything else, or nothing: the game's pen, `DEFAULT_PEN`. */
 export function penFrom(text: string | null | undefined): PenName;
 /** What the pen's shader is compiled with for a sample. Today's pen: an empty object. */
 export function penDefines(name: PenName): Record<string, string | number>;

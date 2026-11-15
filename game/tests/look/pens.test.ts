@@ -59,21 +59,35 @@ const sampleDefines = (material: PenMaterial): Record<string, string | number> =
 /** The shader with every block of the samples taken out: what the graphics card compiles with no sample picked. */
 const withoutSamples = (text: string): string => text.replace(/#ifdef PEN_(FULL|FAR)\n[\s\S]*?#endif\n/g, '');
 
-describe('with no switch the pen is C, Luc\'s pick', () => {
-  it('the game\'s pen is bold, and both pens start with it: the world\'s and the heroes\'', () => {
-    expect(DEFAULT_PEN).toBe('bold');
+describe('with no switch the pen is calm-hull, Luc\'s pick (round pen-far)', () => {
+  it('the game\'s pen is calm-hull, and both pens start with it: the world\'s and the heroes\'', () => {
+    expect(DEFAULT_PEN).toBe('calm-hull');
     const { world, hero, state } = pens(null);
-    expect(state).toBe('bold');
-    expect(sampleDefines(world)).toEqual(penDefines('bold'));
-    expect(sampleDefines(hero)).toEqual(penDefines('bold'));
-    expect(hero.defines).toEqual({ HERO: 1, ...penDefines('bold') });
-    expect(penDefines('bold')).toMatchObject({ PEN_FULL: 1, PEN_WIDTH: '1.6', PEN_SEAM: '0.8' });
+    expect(state).toBe('calm-hull');
+    expect(sampleDefines(world)).toEqual(penDefines('calm-hull'));
+    expect(sampleDefines(hero)).toEqual(penDefines('calm-hull'));
+    expect(hero.defines).toEqual({ HERO: 1, ...penDefines('calm-hull') });
   });
 
-  it('the address with no pen, or one it does not know, is C too', () => {
-    expect(parseDebugParameters('').pen).toBe('bold');
-    expect(parseDebugParameters('?pen=nonsense').pen).toBe('bold');
-    expect(penFrom(null)).toBe('bold');
+  it('it is C up close: C\'s width, weight and seam, and nothing eased by distance from the eye', () => {
+    const { hero: _hero, calm: _calm, keel: _keel, keelWorld: _keelWorld, ...upClose } = PENS['calm-hull']!;
+    expect(upClose).toEqual(PENS.bold);
+    expect(penDefines('calm-hull')).toMatchObject({ PEN_FULL: 1, PEN_WIDTH: '1.6', PEN_SEAM: '0.8', PEN_FAR: 1, PEN_HSTART: '6.', PEN_HFALL: '1.2', PEN_HFLOOR: '0.3', PEN_CALM: '1.', PEN_KEEL: '1.', PEN_KEELW: '0.' });
+    expect(penReach('calm-hull')).toBe(penReach('bold'));
+  });
+
+  it('C is still there by name, as it was: bold has none of the pen-far settings', () => {
+    expect(penDefines('bold')).toMatchObject({ PEN_FULL: 1, PEN_WIDTH: '1.6', PEN_SEAM: '0.8' });
+    expect(penDefines('bold').PEN_FAR).toBeUndefined();
+    expect(sampleDefines(pens('bold').world)).toEqual(penDefines('bold'));
+    expect(pens(null, 'bold').state).toBe('bold');
+  });
+
+  it('the address with no pen, or one it does not know, is the game\'s pen too', () => {
+    expect(parseDebugParameters('').pen).toBe('calm-hull');
+    expect(parseDebugParameters('?pen=nonsense').pen).toBe('calm-hull');
+    expect(parseDebugParameters('?pen=bold').pen).toBe('bold');
+    expect(penFrom(null)).toBe('calm-hull');
   });
 });
 
@@ -190,9 +204,10 @@ describe('?pen=today is the old pen, to the letter', () => {
 });
 
 describe('the pick screen\'s cards draw with the game\'s pen', () => {
-  it('under C a card\'s line is the game\'s width; under ?pen=today the old cards\' own', () => {
+  it('under C and the game\'s pen a card\'s line is the game\'s width; under ?pen=today the old cards\' own', () => {
     expect(castPenWidth('bold')).toBe(1);
     expect(castPenWidth(DEFAULT_PEN)).toBe(1);
+    expect(castPenWidth('calm-hull')).toBe(1);
     expect(castPenWidth('today')).toBe(CAST_PEN.width);
     expect(CAST_PEN).toEqual({ wobble: 0, weight: 1, width: 0.8 });
   });
@@ -207,15 +222,15 @@ describe('one switch: ?pen=<name>', () => {
     expect(penFrom('C')).toBe('bold');
   });
 
-  it('anything else, or nothing, is the game\'s pen: C', () => {
-    for (const text of [null, undefined, '', 'e', 'thick', '1', 'full;bold', 'constructor', '__proto__', 'toString']) expect(penFrom(text), String(text)).toBe('bold');
+  it('anything else, or nothing, is the game\'s pen: calm-hull', () => {
+    for (const text of [null, undefined, '', 'e', 'thick', '1', 'full;bold', 'constructor', '__proto__', 'toString']) expect(penFrom(text), String(text)).toBe('calm-hull');
   });
 
   it('the address parameter hands it over, and replaces no game: saves stay in use', () => {
-    expect(parseDebugParameters('').pen).toBe('bold');
+    expect(parseDebugParameters('').pen).toBe('calm-hull');
     expect(parseDebugParameters('?pen=today')).toMatchObject({ pen: 'today', sandbox: false, shot: null });
     expect(parseDebugParameters('?shot=island&pen=d')).toMatchObject({ pen: 'near', shot: 'island', sandbox: true });
-    expect(parseDebugParameters('?pen=nonsense').pen).toBe('bold');
+    expect(parseDebugParameters('?pen=nonsense').pen).toBe('calm-hull');
   });
 });
 

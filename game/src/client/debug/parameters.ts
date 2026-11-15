@@ -13,7 +13,7 @@
  * - `?host=ROOM`: start a game that other tabs of this site can join. `&name=...` names the host.
  * - `?join=ROOM&name=...`: join it, from another tab or window on the same computer.
  *   A tester's door (a channel between tabs, no server), not the lobby's.
- * - `&pen=today` (or `full`, `near`, `bold`): draw with one of the pen's samples (`look/b2/pens.js`). The game's own is `bold` (C); `today` is the old pen. Saves stay as they are.
+ * - `&pen=bold` (or `today`, `full`, `near`, and the samples `soon`, `calm`, `fine`, `calm-keel`): draw with one of the pen's samples (`look/b2/pens.js`). The game's own is `calm-hull`; `bold` is C, the pen before it; `today` the pen before C. Saves stay as they are.
  *
  * And one that is not for testing: `?invite=CODE` is the link a host sends. It opens the lobby's
  * join panel with the code filled in. It touches nothing else: the player's own saves stay as they are.
