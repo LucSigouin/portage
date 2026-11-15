@@ -133,8 +133,9 @@ describe('the seat gets the carry, in each case of join', () => {
     expect(rig.game.players[1]!.backpack).toEqual([{ itemId: 'stone', count: 3 }]);
     bare.link.close();
     rig.run(0.5);
-    // With one: what the guest brings, even if the host's copy says otherwise.
+    // With one another host sent (they played elsewhere in between): what the guest brings, even if the host's copy says otherwise.
     rig.game.players[1]!.backpack = [];
+    storage.setItem(carrySlot('Sam'), JSON.stringify({ ...JSON.parse(storage.getItem(carrySlot('Sam'))!), confirmedBy: 7 }));
     const back = joinWith(rig, 'Sam', storage);
     rig.run(0.5);
     expect(back.link.playerId).toBe(1);
@@ -159,6 +160,63 @@ describe('the seat gets the carry, in each case of join', () => {
     expect(rig.game.players[1]!.hunger).toBeCloseTo(80, 0);
     expect(rig.game.players[1]!.thirst).toBeCloseTo(75, 0);
     expect(rig.settle()).toBe(true);
+  });
+});
+
+describe('the same host\'s seat is newer', () => {
+  it('their own seat back by key at the same host: a thing added after the last confirmed state stays', () => {
+    const rig = createRig();
+    const storage = browserWith('Sam', null);
+    const sam = joinWith(rig, 'Sam', storage);
+    rig.run(0.5);
+    rig.game.players[1]!.backpack.push({ itemId: 'stone', count: 3 });
+    rig.run(0.5);
+    // A pickup the guest never hears of: the window closes first.
+    rig.game.players[1]!.backpack.push({ itemId: 'driftwood', count: 2 });
+    sam.link.close();
+    expect(readCarry(JSON.parse(storage.getItem(carrySlot('Sam'))!))).toMatchObject({ backpack: [{ itemId: 'stone', count: 3 }], confirmedBy: 42 });
+    rig.run(0.5);
+    const back = joinWith(rig, 'Sam', storage);
+    rig.run(0.5);
+    expect(back.link.playerId).toBe(1);
+    expect(rig.game.players[1]!.backpack).toEqual([{ itemId: 'stone', count: 3 }, { itemId: 'driftwood', count: 2 }]);
+  });
+
+  it('back at host A after playing at host B: the seat gets what B sent', () => {
+    const storage = browserWith('Sam', null);
+    const hostA = createRig();
+    const atA = joinWith(hostA, 'Sam', storage);
+    hostA.run(0.5);
+    hostA.game.players[1]!.backpack.push({ itemId: 'stone', count: 3 });
+    hostA.run(0.5);
+    atA.link.close();
+    hostA.run(0.5);
+    const hostB = createRig({ host: { session: 77 } });
+    const atB = joinWith(hostB, 'Sam', storage);
+    hostB.run(0.5);
+    hostB.game.players[atB.link.playerId]!.backpack.push({ itemId: 'clay', count: 4 });
+    hostB.run(0.5);
+    atB.link.close();
+    expect(readCarry(JSON.parse(storage.getItem(carrySlot('Sam'))!))).toMatchObject({ confirmedBy: 77 });
+    // Host A never stopped: Sam's key still holds seat 1 there.
+    const back = joinWith(hostA, 'Sam', storage);
+    hostA.run(0.5);
+    expect(back.link.playerId).toBe(1);
+    expect(hostA.game.players[1]!.backpack).toEqual([{ itemId: 'stone', count: 3 }, { itemId: 'clay', count: 4 }]);
+  });
+
+  it('a carry with a bad confirmedBy is refused whole, and the join still goes through', () => {
+    for (const confirmedBy of [-1, 1.5, '42', null, Number.MAX_SAFE_INTEGER + 2, Number.NaN]) {
+      expect(readCarry({ ...good(), confirmedBy }), String(confirmedBy)).toBeNull();
+    }
+    expect(readCarry({ ...good(), confirmedBy: 42 })).toEqual({ ...good(), confirmedBy: 42 });
+    const join = { v, type: 'join', name: 'Sam', key: key('Sam'), character: 'scout' };
+    expect(readClientMessage({ ...join, carry: { ...good(), confirmedBy: -1 } })).toEqual(join);
+    const rig = createRig();
+    const sam = joinWith(rig, 'Sam', browserWith('Sam', { ...good(), confirmedBy: 'host' } as unknown as Carry));
+    rig.run(0.5);
+    expect(sam.link.playerId).toBe(1);
+    expect(rig.game.players[1]!.backpack).toEqual([]);
   });
 });
 

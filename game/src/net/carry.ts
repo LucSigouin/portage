@@ -19,6 +19,8 @@ export interface Carry {
   hunger: number;
   thirst: number;
   energy: number;
+  /** The host session (`welcome.session`) that last sent this carry. Absent: no host known. */
+  confirmedBy?: number;
 }
 
 /** The highest a meter goes. */
@@ -29,14 +31,15 @@ export function freshCarry(): Carry {
   return { v: CARRY_VERSION, backpack: [], hunger: 80, thirst: 75, energy: 90 };
 }
 
-/** A player's own things, copied: what a guest keeps of the host's record of them. */
-export function carryOf(player: PlayerState): Carry {
+/** A player's own things, copied: what a guest keeps of the host's record of them, and which host session sent it. */
+export function carryOf(player: PlayerState, confirmedBy?: number): Carry {
   return {
     v: CARRY_VERSION,
     backpack: player.backpack.map((stack) => ({ itemId: stack.itemId, count: stack.count })),
     hunger: player.hunger,
     thirst: player.thirst,
     energy: player.energy,
+    ...(confirmedBy === undefined ? {} : { confirmedBy }),
   };
 }
 
@@ -69,8 +72,12 @@ export function readCarry(raw: unknown): Carry | null {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
   const record = raw as Record<string, unknown>;
   const fields = ['v', 'backpack', 'hunger', 'thirst', 'energy'];
-  if (Object.keys(record).length !== fields.length || !fields.every((field) => Object.hasOwn(record, field))) return null;
+  const hasConfirmedBy = Object.hasOwn(record, 'confirmedBy');
+  if (Object.keys(record).length !== fields.length + (hasConfirmedBy ? 1 : 0) || !fields.every((field) => Object.hasOwn(record, field))) return null;
   if (record.v !== CARRY_VERSION) return null;
+  // A host session is a whole number, as `welcome.session` is read.
+  const confirmedBy = record.confirmedBy;
+  if (hasConfirmedBy && (typeof confirmedBy !== 'number' || !Number.isSafeInteger(confirmedBy) || confirmedBy < 0)) return null;
   const stacks = record.backpack;
   if (!Array.isArray(stacks) || stacks.length > TUNING.inventory.backpackSlots) return null;
   const backpack: ItemStack[] = [];
@@ -87,7 +94,7 @@ export function readCarry(raw: unknown): Carry | null {
   const thirst = readMeter(record.thirst);
   const energy = readMeter(record.energy);
   if (hunger === null || thirst === null || energy === null) return null;
-  return { v: CARRY_VERSION, backpack, hunger, thirst, energy };
+  return { v: CARRY_VERSION, backpack, hunger, thirst, energy, ...(hasConfirmedBy ? { confirmedBy: confirmedBy as number } : {}) };
 }
 
 /** Where a guest keeps its carry (`client/carrystore.ts`). The link reads it at the door and tells it what the host confirmed. */

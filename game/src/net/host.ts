@@ -348,7 +348,10 @@ export class HostLink {
     let playerId = this.keys.get(key);
     let joined = false;
     let takenOver = false;
+    // Their own seat back by key: this host has not restarted and nobody took the seat over.
+    let ownSeatByKey = true;
     if (playerId === undefined || !game.players.some((player) => player.id === playerId)) {
+      ownSeatByKey = false;
       const free = (player: { id: PlayerId; connected: boolean }): boolean =>
         !player.connected && player.id !== this.hostPlayerId && !this.bound(player.id);
       // Someone who played under this name before the host last started, a new seat, or a stand-in nobody named.
@@ -400,6 +403,9 @@ export class HostLink {
     setPlayerCharacter(game, playerId, character);
     // The guest's own pack and meters, from its own browser, in every case above. A seat taken over by someone who
     // brings nothing gets the starting kit: never the old holder's things, which are in the old holder's browser.
+    // One exception: their own seat back by key with a carry this same host session sent. The seat is as new or newer
+    // (a pickup in the last moment before the tab closed), so it stands and the carry is ignored.
+    if (carry && ownSeatByKey && carry.confirmedBy === this.session) carry = undefined;
     const seat = game.players.find((player) => player.id === playerId);
     if (seat && (carry || takenOver)) applyCarry(seat, carry ?? freshCarry());
     if (joined) game.events.push({ type: 'crew_changed', who: playerId, change: 'joined' });

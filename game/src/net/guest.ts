@@ -374,7 +374,7 @@ export class GuestLink {
     this.base = null;
     // Only what the host confirmed is kept as this guest's own things.
     const me = this.carryKeeper ? entry.state.players.find((player) => player.id === this.playerId) : undefined;
-    if (me) this.carryKeeper!.note(carryOf(me), this.clock);
+    if (me) this.carryKeeper!.note(carryOf(me, this.session ?? undefined), this.clock);
   }
 
   /** True while this guest's walk must stand: a command that holds the player was asked and is not settled. */

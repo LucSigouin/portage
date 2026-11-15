@@ -427,8 +427,6 @@ describe('joining a crew', () => {
     let guest = await joining(relay, code, 'Sam', [host], storage);
     host.app.session.game!.players[1]!.backpack.push({ itemId: 'driftwood', count: 3 });
     const seat = host.app.session.game!.players[1]!.seat;
-    // The guest hears of it from the host: what it brings back is what the host last told it.
-    await run([host, guest], 0.5);
     // The window is closed.
     guest.app.session.pageClosing();
     await run([host], 0.5);
