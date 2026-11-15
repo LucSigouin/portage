@@ -301,3 +301,25 @@ describe('?crew=N', () => {
     expect(addIdleCrew(state, 9).players).toHaveLength(4);
   });
 });
+
+describe('the host\'s list of crewmates', () => {
+  it('names everyone but the host, here or away, each with a button that asks to take them out; a guest gets none', async () => {
+    const { buildCrewHostPanel } = await import('../../src/client/viewmodels/crew.ts');
+    const { newGame } = await import('../support.ts');
+    const game = newGame(7, { crew: 3 });
+    game.players[1]!.name = 'Sam';
+    game.players[2]!.connected = false;
+    const crew = {
+      name: 'Luc', code: '', inGame: true,
+      host: { phase: 'open' as const, code: 'FHJK3M', link: 'https://example.test/?crew=FHJK3M', guests: 1, failure: null, copied: false },
+      join: { phase: 'idle' as const, problem: null, leave: null, hostHere: true },
+    };
+    const roster = buildCrewHostPanel(crew, [], null, game, 0, false).roster;
+    expect(roster.map((mate) => [mate.playerId, mate.name, mate.here, mate.remove.intent])).toEqual([
+      [1, 'Sam', true, { type: 'crew_remove', playerId: 1 }],
+      [2, expect.any(String), false, { type: 'crew_remove', playerId: 2 }],
+    ]);
+    expect(buildCrewHostPanel(crew, [], null, game, 1, true).roster).toEqual([]);
+    expect(buildCrewHostPanel({ ...crew, inGame: false }, [], null, game, 0, false).roster).toEqual([]);
+  });
+});

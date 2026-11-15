@@ -551,6 +551,8 @@ export type PanelModel = { title: string; close: ButtonModel } & (
     /** What to do next: open the room, try again, start a game. The first is the one Enter presses. */
     actions: ButtonModel[];
     stop: ButtonModel | null;
+    /** The crewmates the host may take out of the game: everyone but the host, here or away. Empty on any other screen. */
+    roster: { playerId: number; name: string; here: boolean; remove: ButtonModel }[];
   }
   | {
     id: 'crew_join';

@@ -186,6 +186,8 @@ export class GuestLink {
   private clock = 0;
   private heardAt = 0;
   private joinSentAt = -Infinity;
+  /** True from a `knock` until the host's welcome: nothing but the join is sent meanwhile. */
+  private knocking = false;
   private pingSentAt = 0;
   private inputSeq = 0;
   private inputSentAt = -Infinity;
@@ -302,6 +304,7 @@ export class GuestLink {
           this.keep({ id: message.id, step: message.step, state: message.state, walked: message.walked }, message.hash);
         }
         this.status = 'playing';
+        this.knocking = false;
         break;
       }
       case 'state': {
@@ -379,9 +382,14 @@ export class GuestLink {
   /**
    * Ask to join again, now. Harmless while still seated; the way back in at
    * once for a guest whose screen was hidden long enough to be marked away.
+   * Until the host answers, this guest says nothing else: if it was marked away the answer starts a new sitting, and
+   * an input still counted in the old one would be taken for the new one's (the host would count the walk as walked
+   * that far, and the guest would stand for as long as it had played).
    */
   knock(): void {
-    if (this.status === 'playing') this.sendJoin();
+    if (this.status !== 'playing') return;
+    this.knocking = true;
+    this.sendJoin();
   }
 
   /** Once a frame: run the clock, send again what was not answered, keep the host knowing this guest is here. */
@@ -390,10 +398,10 @@ export class GuestLink {
     this.clock += frameSeconds;
     this.frameSeconds = frameSeconds;
     this.base = null;
-    if (this.status === 'joining' || !this.hostHeard) {
+    if (this.status === 'joining' || this.knocking || !this.hostHeard) {
       if (this.clock - this.joinSentAt >= JOIN_RESEND_SECONDS) this.sendJoin();
     }
-    if (this.status !== 'playing') return;
+    if (this.status !== 'playing' || this.knocking) return;
 
     for (const entry of this.pending) {
       if (this.clock - entry.sentAt < COMMAND_RESEND_SECONDS) continue;
@@ -423,7 +431,7 @@ export class GuestLink {
    * camera turns or the figure is in the air, and 20 times a second while nothing does.
    */
   sendInput(input: StepInput): void {
-    if (this.status !== 'playing') return;
+    if (this.status !== 'playing' || this.knocking) return;
     const truth = this.held.at(-1);
     if (truth) this.walk.advance(this.frameSeconds, input, !this.walkHeld, truth.state, this.playerId, truth.walked);
     this.frameSeconds = 0;
