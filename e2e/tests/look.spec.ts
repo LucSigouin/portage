@@ -84,6 +84,8 @@ interface Probe {
     fine: number;
     crew: number;
     figures: Figure[];
+    /** Metres of world the window's height covers at the local player's depth. */
+    span: number;
     pen: number;
     subject: { x: number; y: number; width: number; height: number } | null;
   };
@@ -147,6 +149,27 @@ async function differingPixels(page: Page, first: Buffer, second: Buffer): Promi
 }
 
 /** Roll the mouse wheel until the camera is as far out as it goes. */
+/**
+ * The game's pen on a small hero, written out a second time so the tests hold the law and not only its echo:
+ * the numbers are `PENS['calm-hull'].hero` in game/src/look/b2/pens.js, the law is `heroPen` in b2/post.js.
+ * All of the width while the window's height covers up to `start` metres of world at the hero's depth, then
+ * less, gently (`fall`), never under `floor`.
+ */
+const GAME_PEN = { start: 6, fall: 1.2, floor: 0.3 };
+function penShareAt(spanMetres: number): number {
+  const past = Math.max(0, spanMetres / GAME_PEN.start - 1);
+  const fallen = GAME_PEN.fall * past * past;
+  return 1 - ((1 - GAME_PEN.floor) * fallen) / (1 + fallen);
+}
+/** The most the law itself can lose in one turn of the wheel that takes the camera `ratio` times further out. */
+function steepestPenStep(ratio: number): number {
+  let steepest = 0;
+  for (let span = GAME_PEN.start; span < 60; span *= 1.002) steepest = Math.max(steepest, penShareAt(span) - penShareAt(span * ratio));
+  return steepest;
+}
+/** The closest the wheel takes the camera: `minimumDistance` in game/src/client/camera.ts, on foot and afloat. */
+const CLOSEST = { foot: 2.5, canoe: 4 };
+
 async function zoomFullyOut(page: Page): Promise<void> {
   const size = page.viewportSize()!;
   await page.mouse.move(size.width / 2, size.height / 2);
@@ -652,20 +675,32 @@ for (const [width, height] of [[1920, 1080], [5120, 2160]] as const) {
     await page.setViewportSize({ width, height });
     const shares: Record<string, { ink: number; coat: number; scarf: number }> = {};
     const pen: Record<string, number> = {};
+    const span: Record<string, number> = {};
     for (const [name, query, zoomOut] of [['near', '', false], ['far', '', true], ['far, full pen', '&heropen=0', true]] as const) {
       await open(page, `shot=island&rung=11&hold=1${query}`);
       if (zoomOut) await zoomFullyOut(page);
       shares[name] = await paintShares(page, await playerCrop(page));
-      pen[name] = (await probe(page)).hero.pen;
+      const look = await probe(page);
+      pen[name] = look.hero.pen;
+      span[name] = look.hero.span;
     }
     const [near, far, full] = [shares.near, shares.far, shares['far, full pen']];
     console.log(`${width}×${height}, zoomed fully out: pen ${pen.far.toFixed(2)} of its width (near ${pen.near}); ink ${(far.ink * 100).toFixed(1)}% of the figure's crop `
       + `against ${(full.ink * 100).toFixed(1)}% with the full pen and ${(near.ink * 100).toFixed(1)}% near; scarf ${(far.scarf * 100).toFixed(2)}% against ${(full.scarf * 100).toFixed(2)}%; `
       + `coat ${(far.coat * 100).toFixed(1)}% against ${(full.coat * 100).toFixed(1)}%`);
-    // At the normal play distance the pen is whole. Fully out it is about half.
-    expect(pen.near).toBe(1);
+    // At the normal play distance (the staged camera: the window's height covers about 10 m of world at the figure)
+    // the game's pen has begun to thin and keeps about three quarters of its width: the law's own value for that
+    // much world, from the pen's numbers. Fully out (18 m away, about 21 m of world) the law gives 0.38.
+    expect(span.near).toBeGreaterThan(9);
+    expect(span.near).toBeLessThan(11);
+    expect(pen.near).toBeCloseTo(penShareAt(span.near), 9);
+    expect(pen.near).toBeGreaterThan(0.7);
+    expect(pen.near).toBeLessThan(0.85);
+    expect(pen.far).toBeCloseTo(penShareAt(span.far), 9);
     expect(pen.far).toBeLessThan(0.6);
     expect(pen.far).toBeGreaterThan(0.3);
+    // With the full pen everywhere (&heropen=0) the far figure's pen is whole: the blob the thinning is there to cure.
+    expect(pen['far, full pen']).toBe(1);
     // Far less ink round the figure than the full pen leaves, and no more than half again what a near figure carries for its size.
     expect(far.ink).toBeLessThan(full.ink * 0.75);
     expect(far.ink).toBeLessThan(near.ink * 1.5);
@@ -675,49 +710,93 @@ for (const [width, height] of [[1920, 1080], [5120, 2160]] as const) {
   });
 }
 
-test('the thin pen leaves the near views alone', async ({ page }) => {
-  // Every staged near view, with the thin pen and with the full pen everywhere: the same picture, pixel for pixel.
-  for (const shot of ['island', 'play', 'upgraded']) {
+test('the thin pen leaves the closest views alone, and the staged views get the share the law gives', async ({ page }) => {
+  // The pen is whole where the window's height covers no more than 6 m of world: with the camera all the way in.
+  // There, with the thin pen and with the full pen everywhere, the picture is the same one, pixel for pixel.
+  // The canoe is seen side on, so that the whole hull is at the closest distance and none of it runs off into the thinning.
+  for (const [shot, camera] of [['island', `${CLOSEST.foot},0.34`], ['play', `${CLOSEST.canoe},0.07,1.57`], ['upgraded', `${CLOSEST.canoe},0.07,1.57`]] as const) {
     const captures: Buffer[] = [];
     for (const query of ['', '&heropen=0']) {
-      await open(page, `shot=${shot}&hold=1${query}`);
+      await open(page, `shot=${shot}&hold=1&cam=${camera}${query}`);
       await page.addStyleTag({ content: '#interface { visibility: hidden !important; }' });
-      expect((await probe(page)).hero.pen).toBe(1);
+      const look = await probe(page);
+      expect(look.hero.span, `shot=${shot}, camera all the way in`).toBeLessThan(GAME_PEN.start);
+      expect(look.hero.pen, `shot=${shot}, camera all the way in`).toBe(1);
       captures.push(await page.screenshot());
     }
     const changed = await differingPixels(page, captures[0], captures[1]);
-    console.log(`shot=${shot}: ${changed.different} of ${changed.total} pixels differ between the thin pen and the full pen`);
-    expect(changed.different).toBe(0);
+    console.log(`shot=${shot}, camera all the way in: ${changed.different} of ${changed.total} pixels differ between the thin pen and the full pen`);
+    // The figure ashore and the plain canoe are whole: not one pixel. The upgraded canoe is wider than the pen's
+    // whole range: its far float is 2 m further from the camera, past 6 m of world, and is thinned a little
+    // (473 pixels when this was written). The paddler and the hull are whole; under a thousandth of the picture moves.
+    if (shot === 'upgraded') expect(changed.different).toBeLessThan(changed.total / 1000);
+    else expect(changed.different).toBe(0);
+  }
+  // The staged cameras stand further back than 6 m of world, so the game's pen has begun to thin in each of them:
+  // about three quarters of its width on the figure ashore, more on the paddler seen from behind, about half on
+  // the upgraded canoe (its camera is 10.5 m out). Each is the law's value for the world its window covers,
+  // and the same view with the full pen everywhere (&heropen=0) is no longer the same picture.
+  const expected = { island: [0.72, 0.8], play: [0.83, 0.92], upgraded: [0.47, 0.57] } as const;
+  for (const shot of ['island', 'play', 'upgraded'] as const) {
+    const captures: Buffer[] = [];
+    const pens: number[] = [];
+    for (const query of ['', '&heropen=0']) {
+      await open(page, `shot=${shot}&hold=1${query}`);
+      await page.addStyleTag({ content: '#interface { visibility: hidden !important; }' });
+      const look = await probe(page);
+      pens.push(look.hero.pen);
+      if (query === '') expect(look.hero.pen, `shot=${shot}`).toBeCloseTo(penShareAt(look.hero.span), 9);
+      captures.push(await page.screenshot());
+    }
+    const changed = await differingPixels(page, captures[0], captures[1]);
+    console.log(`shot=${shot}: pen ${pens[0].toFixed(3)} of its width; ${changed.different} of ${changed.total} pixels differ from the full pen`);
+    expect(pens[0], `shot=${shot}`).toBeGreaterThan(expected[shot][0]);
+    expect(pens[0], `shot=${shot}`).toBeLessThan(expected[shot][1]);
+    expect(pens[1], `shot=${shot}, full pen`).toBe(1);
+    expect(changed.different, `shot=${shot}`).toBeGreaterThan(0);
   }
 });
 
 test('the pen thins smoothly through a zoom: no pop', async ({ page }) => {
-  await open(page, 'shot=island&hold=1');
+  // From the camera all the way in, where the pen is whole, so that the sweep crosses the point where thinning starts.
+  await open(page, `shot=island&hold=1&cam=${CLOSEST.foot},0.34`);
   await page.mouse.move(960, 540);
   const pens: number[] = [];
+  const spans: number[] = [];
   const inks: number[] = [];
-  // 40 small turns of the wheel, 3% further out each, from the staged 8 m to the camera's limit.
-  for (let step = 0; step < 40; step += 1) {
+  // 75 small turns of the wheel, 3% further out each, from the closest 2.5 m to the camera's limit of 18 m (reached after 67).
+  for (let step = 0; step < 75; step += 1) {
     const look = await probe(page);
     pens.push(look.hero.pen);
+    spans.push(look.hero.span);
     inks.push((await paintShares(page, await playerCrop(page))).ink * look.hero.subject!.width * look.hero.subject!.height);
     await page.mouse.wheel(0, 30);
     await page.waitForTimeout(80);
   }
   let largestStep = 0;
   let largestInkStep = 0;
+  let largestTurn = 1;
   for (let index = 1; index < pens.length; index += 1) {
     // Never back up, never a jump.
     expect(pens[index]).toBeLessThanOrEqual(pens[index - 1]);
     largestStep = Math.max(largestStep, pens[index - 1] - pens[index]);
     largestInkStep = Math.max(largestInkStep, Math.abs(inks[index] - inks[index - 1]) / inks[index - 1]);
+    largestTurn = Math.max(largestTurn, spans[index] / spans[index - 1]);
   }
-  console.log(`zoom: pen ${pens[0]} near, ${pens[pens.length - 1].toFixed(3)} fully out, largest step ${largestStep.toFixed(3)} in one 3% turn; `
+  const lawSteepest = steepestPenStep(Math.exp(0.03));
+  console.log(`zoom: pen ${pens[0]} all the way in, ${pens[pens.length - 1].toFixed(3)} fully out, largest step ${largestStep.toFixed(4)} in one 3% turn `
+    + `(the law's own steepest: ${lawSteepest.toFixed(4)}; the largest turn took the camera ${((largestTurn - 1) * 100).toFixed(1)}% further out); `
     + `ink on the figure changes by at most ${(largestInkStep * 100).toFixed(1)}% from one turn to the next`);
+  // Whole at the start, thinned at every turn past 6 m of world, and at the law's value all the way.
   expect(pens[0]).toBe(1);
+  expect(spans[0]).toBeLessThan(GAME_PEN.start);
+  for (let index = 0; index < pens.length; index += 1) expect(pens[index]).toBeCloseTo(penShareAt(spans[index]), 9);
   expect(pens[pens.length - 1]).toBeLessThan(0.6);
-  // The law's own steepest 3% is 0.087 (LOOK.md); a pen that switched at one distance would step by 0.54.
-  expect(largestStep).toBeLessThan(0.1);
+  // The law's own steepest 3% is 0.024, worked out here from the pen's numbers; half as much again is allowed
+  // for a turn that lands a little long. A pen that switched at one distance would step by 0.2 or more
+  // (from whole to 0.76 at the staged view, to 0.38 fully out: 0.62).
+  expect(largestStep).toBeLessThan(lawSteepest * 1.5);
+  expect(lawSteepest * 1.5).toBeLessThan(0.04);
   // The picture itself: the ink on the figure never jumps between two turns.
   expect(largestInkStep).toBeLessThan(0.25);
 });

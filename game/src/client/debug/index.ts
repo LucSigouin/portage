@@ -34,8 +34,9 @@ export function applyDebugParameters(app: App, parameters: DebugParameters): voi
         app.camera.setOrbit({
           yaw: subject.heading + (shot.camera.yawOffset ?? 0), pitch: shot.camera.pitch, distance: shot.camera.distance,
         });
-        if (parameters.cam) app.camera.setOrbit({ distance: parameters.cam.distance, pitch: parameters.cam.pitch, ...(parameters.cam.yaw === null ? {} : { yaw: subject.heading + parameters.cam.yaw }) });
       }
+      // `&cam=` places the camera in every staged view, also one that stages no camera of its own (`shot=play`).
+      if (parameters.cam) app.camera.setOrbit({ distance: parameters.cam.distance, pitch: parameters.cam.pitch, ...(parameters.cam.yaw === null ? {} : { yaw: subject.heading + parameters.cam.yaw }) });
       session.frozen = !parameters.live;
     }
     lines.push(`shot: ${parameters.shot}${!shot.state ? '' : parameters.live ? ' (live)' : ' (held still)'}`);
