@@ -4,6 +4,8 @@
 //   node smoke-feedback.mjs local <dist folder> <_headers file> [break]   |   node smoke-feedback.mjs live https://sigouin.net/portage/
 // "break" forbids every script in the local policy: the test must then fail.
 // The page is read twice: once as a browser reads it, once with scripts off. Both must show every note.
+// The plan too: every job of hub/feedback.json has its card, every open note links to its job, and every link
+// inside the page has somewhere to land, also when the filter has put its note away.
 import { readFileSync, existsSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { chromium } from '/Users/ls/Claude-Workspace/personal/portage/e2e/node_modules/@playwright/test/index.mjs';
@@ -21,6 +23,13 @@ const want = {
   open: words.notes.filter((note) => note.state === 'open').length,
   checks: words.notes.filter((note) => note.state === 'check').length,
 };
+// The plan, as the page must show it: each job with its notes, and the open notes that must each name a job.
+const plan = {
+  jobs: (words.plan?.jobs ?? []).map((job) => ({ id: job.id, notes: job.notes })),
+  open: words.notes.filter((note) => note.state === 'open').map((note) => note.n),
+};
+want.jobs = plan.jobs.length;
+want.fixes = plan.jobs.reduce((sum, job) => sum + job.notes.length, 0);
 
 let base = target;
 let policy = '';
@@ -68,6 +77,32 @@ const shown = (page) => page.evaluate(() => {
   };
   return { handled: tally('#notes .note.is-handled'), open: tally('#notes .note.is-open'), all: tally('#notes .note') };
 });
+// The plan on the page: which job cards are there and show, which links between jobs and notes are missing,
+// and which links inside the page point at nothing.
+const planOf = (page) => page.evaluate((plan) => {
+  const cards = [...document.querySelectorAll('#plan .job')];
+  const ids = cards.map((card) => card.id);
+  const faults = [];
+  for (const job of plan.jobs) {
+    if (!ids.includes(`job-${job.id}`)) faults.push(`the plan's job "${job.id}" has no card on the page`);
+    for (const number of job.notes) {
+      if (!document.querySelector(`#job-${job.id} .job-notes a[href="#note-${number}"]`)) faults.push(`job "${job.id}" has no link to note ${number}`);
+      if (!document.querySelector(`#note-${number}.is-open .fix a[href="#job-${job.id}"]`)) faults.push(`open note ${number} has no planned-fix link to job "${job.id}"`);
+    }
+  }
+  for (const id of ids) if (!plan.jobs.some((job) => `job-${job.id}` === id)) faults.push(`the page has a job card "${id}" that is not in the plan`);
+  for (const number of plan.open) if (!document.querySelector(`#note-${number} .fix a[href^="#job-"]`)) faults.push(`open note ${number} names no planned fix`);
+  for (const note of document.querySelectorAll('#notes .note:not(.is-open)')) if (note.querySelector('.fix')) faults.push(`${note.id} is not open and shows a planned fix`);
+  const inside = [...document.querySelectorAll('a[href^="#"]')].map((link) => link.getAttribute('href'));
+  for (const href of new Set(inside)) if (!document.getElementById(href.slice(1))) faults.push(`a link goes to ${href}, which is not on the page`);
+  return {
+    jobs: cards.length,
+    jobsSeen: cards.filter((card) => !card.hidden && card.getClientRects().length > 0).length,
+    fixes: document.querySelectorAll('#notes .note .fix a[href^="#job-"]').length,
+    inside: inside.length,
+    faults,
+  };
+}, plan);
 const sidewaysOf = (page) => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
 const browser = await chromium.launch({ headless: true });
@@ -96,6 +131,7 @@ const seen = await page.evaluate(() => {
     newestFirst: numbers.length > 0 && numbers.every((number, index) => Number.isInteger(number) && (index === 0 || number < numbers[index - 1])),
   };
 });
+const planSeen = await planOf(page);
 const fonts = await page.evaluate(() => [...document.fonts].filter((face) => face.status === 'loaded').length);
 const sideways = await sidewaysOf(page);
 // Every link that stays on this site must answer. (Links to other sites are not followed.)
@@ -123,6 +159,20 @@ if (scriptRan) {
     const after = await shown(page);
     if (after.all.seen !== after.all.count) filterFaults.push(`after "all": ${after.all.count - after.all.seen} of ${after.all.count} notes are hidden`);
   }
+  // Press "handled": the open notes go away, the plan stays. A job's link to its note must still land, twice over:
+  // the second press of the same link changes no hash.
+  const job = plan.jobs[0];
+  if (job && await press('handled')) {
+    const after = await planOf(page);
+    if (after.jobsSeen !== want.jobs) filterFaults.push(`after "handled": ${after.jobsSeen} of ${want.jobs} job cards show: the filter must leave the plan alone`);
+    const target = `#note-${job.notes[0]}`;
+    const link = `#job-${job.id} .job-notes a[href="${target}"]`;
+    const lands = () => page.evaluate((selector) => { const note = document.querySelector(selector); return Boolean(note) && !note.hidden && note.getClientRects().length > 0 && location.hash === selector; }, target);
+    const follow = (time) => page.click(link, { timeout: 5000 }).then(lands, () => false).then((landed) => { if (!landed) filterFaults.push(`after "handled": the ${time} press of job "${job.id}"'s link did not land on ${target}`); });
+    await follow('first');
+    if (await press('handled')) await follow('second');
+    await press('all');
+  }
 } else {
   filterFaults.push('the filter never came out of hiding, so its buttons were not pressed');
 }
@@ -132,6 +182,7 @@ const filterWorks = filterFaults.length === 0;
 const plain = await reader(browser, 'scripts off: ', false);
 const plainSeen = await shown(plain.page);
 const plainFilterHidden = await plain.page.evaluate(() => { const filter = document.getElementById('filter'); return Boolean(filter) && filter.hidden && filter.getClientRects().length === 0; });
+const plainPlan = await planOf(plain.page);
 const plainSideways = await sidewaysOf(plain.page);
 await browser.close();
 
@@ -139,12 +190,18 @@ const versionOk = /^1\.0\.\d+$/.test(seen.version);
 const countsOk = seen.total === String(want.notes) && seen.handledSaid === String(want.handled) && seen.openSaid === String(want.open);
 console.log(`${mode} feedback: status ${status}, ${seen.notes} of ${want.notes} notes (${seen.handled} of ${want.handled} handled, ${seen.open} of ${want.open} open), `
   + `${seen.handled - seen.uncrossed.length} of ${want.handled} handled crossed out (${seen.wronglyCrossed.length} open crossed out), `
+  + `${planSeen.jobs} of ${want.jobs} jobs of the plan, ${planSeen.fixes} of ${want.fixes} planned-fix links, ${planSeen.inside} links inside the page (${planSeen.faults.length} plan faults), `
   + `counts say ${seen.total || '?'} total ${seen.handledSaid || '?'} handled ${seen.openSaid || '?'} open, version ${seen.version || '?'}, ${seen.checks} of ${want.checks} deploy checks, newest first ${seen.newestFirst}, `
   + `fonts loaded ${fonts}, ${links.count} links on this site answer (${links.dead.length} dead), ${sideways} px of sideways scroll, script ran ${scriptRan}, filter works ${filterWorks}, `
-  + `off-origin requests ${offOrigin.length}, console problems ${problems.length}; scripts off: status ${plain.status}, ${plainSeen.all.seen} of ${want.notes} notes show, filter hidden ${plainFilterHidden}, ${plainSideways} px of sideways scroll`);
+  + `off-origin requests ${offOrigin.length}, console problems ${problems.length}; scripts off: status ${plain.status}, ${plainSeen.all.seen} of ${want.notes} notes show, ${plainPlan.jobsSeen} of ${want.jobs} jobs show, filter hidden ${plainFilterHidden}, ${plainSideways} px of sideways scroll`);
 const lines = [
   ...(status === 200 ? [] : [`the page answered ${status}, not 200`]),
   ...(seen.notes === want.notes && seen.handled === want.handled && seen.open === want.open ? [] : [`the page holds ${seen.notes} notes (${seen.handled} handled, ${seen.open} open): the words give ${want.notes} (${want.handled} handled, ${want.open} open)`]),
+  ...(want.jobs > 0 ? [] : ['hub/feedback.json has no plan with jobs in it']),
+  ...(planSeen.jobs === want.jobs && planSeen.jobsSeen === want.jobs ? [] : [`the page holds ${planSeen.jobs} job cards and shows ${planSeen.jobsSeen}: the plan gives ${want.jobs}`]),
+  ...(planSeen.fixes === want.fixes ? [] : [`the notes hold ${planSeen.fixes} planned-fix links: the plan gives ${want.fixes}`]),
+  ...planSeen.faults.map((fault) => `plan: ${fault}`),
+  ...(plainPlan.jobsSeen === want.jobs && plainPlan.fixes === want.fixes && plainPlan.faults.length === 0 ? [] : [`scripts off: ${plainPlan.jobsSeen} of ${want.jobs} job cards show, ${plainPlan.fixes} of ${want.fixes} planned-fix links, ${plainPlan.faults.length} plan faults`]),
   ...(seen.checks === want.checks ? [] : [`the page holds ${seen.checks} deploy checks: the words give ${want.checks}`]),
   ...(fonts >= 2 ? [] : [`only ${fonts} fonts loaded: at least 2 must`]),
   ...(sideways <= 0 ? [] : [`the page scrolls ${sideways} px sideways on a 390 px screen`]),
@@ -163,7 +220,9 @@ const lines = [
   ...problems,
 ];
 for (const line of lines) console.log(`  ${line}`);
-const ok = status === 200 && seen.notes === want.notes && seen.handled === want.handled && seen.open === want.open
+const planOk = want.jobs > 0 && planSeen.jobs === want.jobs && planSeen.jobsSeen === want.jobs && planSeen.fixes === want.fixes && planSeen.faults.length === 0
+  && plainPlan.jobsSeen === want.jobs && plainPlan.fixes === want.fixes && plainPlan.faults.length === 0;
+const ok = planOk && status === 200 && seen.notes === want.notes && seen.handled === want.handled && seen.open === want.open
   && seen.uncrossed.length === 0 && seen.wronglyCrossed.length === 0 && countsOk && versionOk && seen.checks === want.checks && seen.newestFirst
   && fonts >= 2 && links.dead.length === 0 && sideways <= 0 && scriptRan && filterWorks && offOrigin.length === 0 && problems.length === 0
   && plain.status === 200 && plainSeen.all.count === want.notes && plainSeen.all.seen === want.notes && plainFilterHidden && plainSideways <= 0;
