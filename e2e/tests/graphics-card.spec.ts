@@ -23,9 +23,15 @@ const INVITE = 'ABCDEF';
 
 test.setTimeout(120_000);
 
+/**
+ * To the main menu, as `lobby.spec` and `relay.spec` get there: the game builds its world before it draws the menu,
+ * and in a headless browser that takes far longer than an `expect`'s five seconds. So wait for the menu's first
+ * entry with room to spare, and for the fonts (the note's lines are measured).
+ */
 async function arrive(page: Page, query: string): Promise<void> {
   await page.goto(`${BASE}/${query}`);
-  await expect(page.locator('.iw-lobby-col')).toBeVisible();
+  await page.locator('.iw-lobby-col .iw-mi').first().waitFor({ timeout: 60_000 });
+  await page.evaluate(() => document.fonts.ready);
   // Two frames: the note is worked out at the first one.
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
@@ -98,20 +104,20 @@ for (const [width, height] of SIZES) {
     await page.keyboard.press('Escape');
     await expect(onMenu).toBeVisible();
 
-    // The join card, as a friend with an invite link meets it. (A server with no relay has no such card.)
+    // The join card, as a friend with an invite link meets it. The dev server has a relay setting (`/relay`), so
+    // the card must open: a card that is not there is a failure, never a skipped check.
     await arrive(page, `?card=soft&invite=${INVITE}`);
     const joinCard = page.locator(JOIN_CARD);
-    if (await joinCard.count() > 0) {
-      const onCard = joinCard.locator(NOTE);
-      await expect(onCard).toBeVisible();
-      await expect(onCard).toContainText(TITLE);
-      await expect(page.locator(`${NOTE}:visible`), 'one note on screen: the menu\'s steps back behind the card').toHaveCount(1);
-      expectWellLaid(await lay(page, `${JOIN_CARD} button, ${JOIN_CARD} input`), 'the join card');
-      const card = await joinCard.boundingBox();
-      expect(card!.y, 'the card is whole in the window').toBeGreaterThanOrEqual(0);
-      expect(card!.y + card!.height).toBeLessThanOrEqual(height);
-      await expect(joinCard.getByRole('button', { name: 'Join', exact: true })).toBeVisible();
-    }
+    await expect(joinCard, 'an invite link opens the join card').toBeVisible();
+    const onCard = joinCard.locator(NOTE);
+    await expect(onCard).toBeVisible();
+    await expect(onCard).toContainText(TITLE);
+    await expect(page.locator(`${NOTE}:visible`), 'one note on screen: the menu\'s steps back behind the card').toHaveCount(1);
+    expectWellLaid(await lay(page, `${JOIN_CARD} button, ${JOIN_CARD} input`), 'the join card');
+    const card = await joinCard.boundingBox();
+    expect(card!.y, 'the card is whole in the window').toBeGreaterThanOrEqual(0);
+    expect(card!.y + card!.height).toBeLessThanOrEqual(height);
+    await expect(joinCard.getByRole('button', { name: 'Join', exact: true })).toBeVisible();
   });
 
   test(`card=real: no note anywhere, ${width}x${height}`, async ({ page }) => {
@@ -119,6 +125,7 @@ for (const [width, height] of SIZES) {
     await arrive(page, '?card=real');
     await expect(page.locator(NOTE)).toHaveCount(0);
     await arrive(page, `?card=real&invite=${INVITE}`);
+    await expect(page.locator(JOIN_CARD), 'the join card is open, so its note would show').toBeVisible();
     await expect(page.locator(NOTE)).toHaveCount(0);
   });
 }
@@ -127,6 +134,7 @@ test('no switch: a driven browser and a staged shot get no note', async ({ page 
   await arrive(page, '');
   await expect(page.locator(NOTE)).toHaveCount(0);
   await arrive(page, `?invite=${INVITE}`);
+  await expect(page.locator(JOIN_CARD), 'the join card is open, so its note would show').toBeVisible();
   await expect(page.locator(NOTE)).toHaveCount(0);
   await arrive(page, '?shot=lobby');
   await expect(page.locator(NOTE)).toHaveCount(0);
