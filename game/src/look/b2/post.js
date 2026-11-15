@@ -109,6 +109,11 @@ float crewAt(vec4 t){ return step(3.5, t.x); }
 float heroPen(float depth){
   float past = max(0., uSpan * depth / ${HERO_PEN.start.toFixed(4)} - 1.);
   float fallen = ${HERO_PEN.fall.toFixed(4)} * past * past;
+#ifdef PEN_FULL
+  // a sample may thin a small hero's pen sooner (pens.js: hero); today's numbers otherwise
+  past = max(0., uSpan * depth / PEN_HSTART - 1.);
+  return 1. - uThin * (1. - PEN_HFLOOR) * PEN_HFALL * past * past / (1. + PEN_HFALL * past * past);
+#endif
   return 1. - uThin * ${(1 - HERO_PEN.floor).toFixed(4)} * fallen / (1. + fallen);   // exactly 1 up to the start
 }
 #endif
@@ -313,6 +318,12 @@ void main(){
     // A small hero gets a finer pen, and its lines wander less. A pixel out of that pen's reach of every hero
     // goes round again (world 1) for the world's own lines, drawn as the world draws them.
     float thin = heroW > 0. ? heroPen(1. / heroW) : 1.;
+#ifdef PEN_FULL
+    // a calm sample: as the hero's pen thins, its line stops wandering and swelling (the slim fallback's hand line)
+    float calm = clamp(PEN_CALM * (1. - thin) * 4., 0., 1.);
+    wob *= 1. - calm;
+    weight = mix(weight, PEN_WEIGHT, calm);
+#endif
     float world = 0.;
     vec4 pen;
     float zmin;
@@ -344,6 +355,10 @@ void main(){
 #endif
     // far away, seams inside an object fade so it reads as one washed shape with a clean silhouette
     float inner = mix(1., .2, smoothstep(16., 70., zq));
+#ifdef PEN_FULL
+    // a calm sample: seams inside a small hero fade with its pen, so its parts keep their colour
+    inner *= mix(1., thin, PEN_CALM);
+#endif
     vec4 de;
     zmin = zq;
     for (int i = 0; i < 4; i++) {

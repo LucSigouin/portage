@@ -11,7 +11,7 @@
 // (tests/look/pens.test.ts holds the text that is left against the text before round 4).
 
 /** The samples by name, in the order they are shown. The letters a to d are read too. */
-export const PEN_NAMES = ['today', 'full', 'bold', 'near'];
+export const PEN_NAMES = ['today', 'full', 'bold', 'near', 'soon', 'calm', 'fine'];
 // Luc's pick (round 4, 2026-11-14): "full border on the outline i think it was C". C is the game's pen.
 export const DEFAULT_PEN = 'bold';
 
@@ -29,7 +29,19 @@ export const PENS = {
   bold: { width: 1.6, weight: 0.5, seam: 0.8, from: null, to: null },
   // D: full near, today's pen far off. What is near is the canoe, the crew and what can be reached and used.
   near: { width: 1, weight: 0.5, seam: 0.64, from: 22, to: 60 },
+  // Round pen-far (Luc: "as soon as you zoom out a bit or you change the angle the outline gets all weird").
+  // All three are C up close. hero: the canoe's and crew's pen thins from `start` metres of world across the
+  // window's height (C: 16.5, tuned on one figure), `fall` how fast, never under `floor`. calm 1: as it thins its line
+  // stops wandering (no hand line on small parts) and seams inside fade with it.
+  // soon: C's pen, thinned from 6 m (the camera all the way in sees about 5).
+  soon: { width: 1.6, weight: 0.5, seam: 0.8, from: null, to: null, hero: { start: 6, fall: 1.2, floor: 0.3 }, calm: 0 },
+  // calm: soon, and a thin line is one steady line with quiet seams.
+  calm: { width: 1.6, weight: 0.5, seam: 0.8, from: null, to: null, hero: { start: 6, fall: 1.2, floor: 0.3 }, calm: 1 },
+  // fine: calm, thinner further out (floor .2, faster fall).
+  fine: { width: 1.6, weight: 0.5, seam: 0.8, from: null, to: null, hero: { start: 6, fall: 2.5, floor: 0.2 }, calm: 1 },
 };
+// C's own hero thinning (post.js HERO_PEN), for samples that keep it.
+const HERO_TODAY = { start: 16.5, fall: 37, floor: 0.3 };
 
 const LETTERS = { a: 'today', b: 'full', c: 'bold', d: 'near' };
 
@@ -54,6 +66,10 @@ export function penDefines(name) {
     // no easing: the full pen at every distance (the far plane is 2000 m)
     PEN_FROM: glsl(pen.from ?? 1e6),
     PEN_TO: glsl(pen.to ?? 2e6),
+    PEN_HSTART: glsl((pen.hero ?? HERO_TODAY).start),
+    PEN_HFALL: glsl((pen.hero ?? HERO_TODAY).fall),
+    PEN_HFLOOR: glsl((pen.hero ?? HERO_TODAY).floor),
+    PEN_CALM: glsl(pen.calm ?? 0),
   };
 }
 

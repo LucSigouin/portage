@@ -34,6 +34,7 @@ export function applyDebugParameters(app: App, parameters: DebugParameters): voi
         app.camera.setOrbit({
           yaw: subject.heading + (shot.camera.yawOffset ?? 0), pitch: shot.camera.pitch, distance: shot.camera.distance,
         });
+        if (parameters.cam) app.camera.setOrbit(parameters.cam);
       }
       session.frozen = !parameters.live;
     }
