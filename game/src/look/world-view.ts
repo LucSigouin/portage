@@ -920,6 +920,13 @@ export class InkWashWorldView implements WorldView {
     return pixel[0];
   }
 
+  /** The read-out's line: the ladder's rung and the world's render scale (1: as sharp as the canvas; the heroes are always 1). */
+  ladderNote(): string {
+    const drawn = this.post?.state;
+    const scale = drawn && this.canvasWidth > 0 ? drawn.w / this.canvasWidth : 1;
+    return `rung ${this.ladder.rung} · world at ${scale.toFixed(2)} of the screen`;
+  }
+
   /** Numbers for the browser tests and the console: `window.portage.worldView.probe()`. */
   probe(): LookProbe {
     const state = this.state;
