@@ -57,7 +57,7 @@ const sampleDefines = (material: PenMaterial): Record<string, string | number> =
   Object.fromEntries(Object.entries(material.defines ?? {}).filter(([key]) => key.startsWith('PEN_')));
 
 /** The shader with every block of the samples taken out: what the graphics card compiles with no sample picked. */
-const withoutSamples = (text: string): string => text.replace(/#ifdef PEN_FULL\n[\s\S]*?#endif\n/g, '');
+const withoutSamples = (text: string): string => text.replace(/#ifdef PEN_(FULL|FAR)\n[\s\S]*?#endif\n/g, '');
 
 describe('with no switch the pen is C, Luc\'s pick', () => {
   it('the game\'s pen is bold, and both pens start with it: the world\'s and the heroes\'', () => {
@@ -74,6 +74,43 @@ describe('with no switch the pen is C, Luc\'s pick', () => {
     expect(parseDebugParameters('').pen).toBe('bold');
     expect(parseDebugParameters('?pen=nonsense').pen).toBe('bold');
     expect(penFrom(null)).toBe('bold');
+  });
+});
+
+/**
+ * C (`bold`, the live pen) on `main` at e032290, as the graphics card is handed it: its defines as `#define` lines, then
+ * the shader's text. SHA-256 and length, world pass and hero pass (worked out from `main`'s own post.js, run 4).
+ */
+const BOLD_ON_MAIN = {
+  world: { sha256: '4bad77d9d1d073e32b22a5ba42558ffe806e14de7f2b372c0ffbddef5bd1b07b', length: 17293 },
+  hero: { sha256: '14d24fb8452894f35ffdf61280e2cb1e8055057f94d88c90716afcbcef6ae0ae', length: 17308 },
+};
+
+/** What the chip compiles: the `#ifdef PEN_FAR` blocks of the pen-far samples are dropped unless PEN_FAR is defined. */
+const compiled = (material: PenMaterial): string => {
+  const head = Object.entries(material.defines ?? {}).map(([key, value]) => `#define ${key} ${value}\n`).join('');
+  const text = material.defines?.PEN_FAR === undefined ? material.fragmentShader.replace(/#ifdef PEN_FAR\n[\s\S]*?#endif\n/g, '') : material.fragmentShader;
+  return head + text;
+};
+const sha256 = async (text: string): Promise<string> =>
+  [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+
+describe('C, the live pen, is compiled as it is on main, to the letter (review fault 3)', () => {
+  it('world and hero pass: the same defines and the same text as main gives', async () => {
+    const { world, hero } = pens('bold');
+    expect(world.defines?.PEN_FAR).toBeUndefined();
+    for (const [pass, material] of [['world', world], ['hero', hero]] as const) {
+      const text = compiled(material);
+      expect(text.length, pass).toBe(BOLD_ON_MAIN[pass].length);
+      expect(await sha256(text), pass).toBe(BOLD_ON_MAIN[pass].sha256);
+    }
+  });
+
+  it('the pen-far samples\' lines sit in their own blocks, none inside another', () => {
+    const text = pens(null).world.fragmentShader;
+    const blocks = text.match(/#ifdef PEN_FAR\n[\s\S]*?#endif\n/g) ?? [];
+    expect(blocks.length).toBeGreaterThan(3);
+    for (const block of blocks) expect(block.match(/#if|#else/g)).toHaveLength(1);
   });
 });
 
@@ -163,7 +200,7 @@ describe('the pick screen\'s cards draw with the game\'s pen', () => {
 
 describe('one switch: ?pen=<name>', () => {
   it('reads a name or its letter, in any case', () => {
-    expect(PEN_NAMES).toEqual(['today', 'full', 'bold', 'near', 'soon', 'calm', 'fine', 'calm-keel']);
+    expect(PEN_NAMES).toEqual(['today', 'full', 'bold', 'near', 'soon', 'calm', 'fine', 'calm-keel', 'calm-hull']);
     for (const name of PEN_NAMES) expect(penFrom(name)).toBe(name);
     expect(['a', 'b', 'c', 'd'].map(penFrom)).toEqual(['today', 'full', 'bold', 'near']);
     expect(penFrom(' Bold ')).toBe('bold');
@@ -201,8 +238,11 @@ describe('the samples', () => {
   it('every setting reaches the shader as a number it can read (a float, never a bare integer)', () => {
     for (const name of samples) {
       const defines = penDefines(name);
-      expect(Object.keys(defines).sort()).toEqual(['PEN_CALM', 'PEN_FROM', 'PEN_FULL', 'PEN_HFALL', 'PEN_HFLOOR', 'PEN_HSTART', 'PEN_KEEL', 'PEN_SEAM', 'PEN_TO', 'PEN_WEIGHT', 'PEN_WIDTH']);
-      for (const key of ['PEN_FROM', 'PEN_HFALL', 'PEN_HFLOOR', 'PEN_HSTART', 'PEN_SEAM', 'PEN_TO', 'PEN_WEIGHT', 'PEN_WIDTH']) {
+      const far = PENS[name]!.hero !== undefined;
+      const base = ['PEN_FROM', 'PEN_FULL', 'PEN_SEAM', 'PEN_TO', 'PEN_WEIGHT', 'PEN_WIDTH'];
+      const farKeys = ['PEN_CALM', 'PEN_FAR', 'PEN_HFALL', 'PEN_HFLOOR', 'PEN_HSTART', 'PEN_KEEL', 'PEN_KEELW'];
+      expect(Object.keys(defines).sort(), name).toEqual((far ? [...base, ...farKeys] : base).sort());
+      for (const key of ['PEN_FROM', 'PEN_SEAM', 'PEN_TO', 'PEN_WEIGHT', 'PEN_WIDTH', ...(far ? ['PEN_HFALL', 'PEN_HFLOOR', 'PEN_HSTART'] : [])]) {
         expect(String(defines[key]), `${name} ${key}`).toMatch(/^\d*\.\d*$/);
         expect(Number(defines[key])).toBeGreaterThan(0);
       }
@@ -240,6 +280,22 @@ describe('the samples', () => {
     }
     expect(penReach('near')).toBe(1);
     expect(penReach('bold')).toBeGreaterThan(penReach('full'));
+  });
+});
+
+describe('the waterline line (calm-keel, calm-hull)', () => {
+  it('calm-keel inks every waterline, calm-hull only a hero\'s: the same pen otherwise', () => {
+    expect(penDefines('calm-keel')).toMatchObject({ PEN_KEEL: '1.', PEN_KEELW: '1.' });
+    expect(penDefines('calm-hull')).toMatchObject({ PEN_KEEL: '1.', PEN_KEELW: '0.' });
+    const { PEN_KEELW: _hull, ...hull } = penDefines('calm-hull');
+    const { PEN_KEELW: _keel, ...keel } = penDefines('calm-keel');
+    expect(hull).toEqual(keel);
+    expect(penDefines('calm')).toMatchObject({ PEN_KEEL: '0.' });
+  });
+
+  it('the line is gated on a hero texel on either side of the edge, scaled by PEN_KEELW elsewhere', () => {
+    const text = pens(null).world.fragmentShader;
+    expect(text).toContain('inkS += PEN_KEEL * mix(PEN_KEELW, 1., min(heroAt(t) + heroAt(aux), 1.));');
   });
 });
 

@@ -1,5 +1,5 @@
 /** A sample of the pen: today's, or one of the fuller ones (see pens.js). */
-export type PenName = 'today' | 'full' | 'bold' | 'near' | 'soon' | 'calm' | 'fine';
+export type PenName = 'today' | 'full' | 'bold' | 'near' | 'soon' | 'calm' | 'fine' | 'calm-keel' | 'calm-hull';
 
 /** The samples by name, in the order they are shown. */
 export const PEN_NAMES: readonly PenName[];
@@ -11,7 +11,9 @@ export const DEFAULT_PEN: PenName;
  * `seam`: the ink of a seam inside a thing (today .64). `from`, `to`: metres from the eye, the full pen up to `from`
  * and today's past `to`; null for the full pen everywhere.
  */
-export interface PenSample { width: number; weight: number; seam: number; from: number | null; to: number | null; hero?: { start: number; fall: number; floor: number }; calm?: number }
+export interface PenSample { width: number; weight: number; seam: number; from: number | null; to: number | null; hero?: { start: number; fall: number; floor: number }; calm?: number;
+  /** 1: the ink contour carries on along the waterline under the white foam line. */ keel?: number;
+  /** With `keel`: 1 on every waterline in the world (calm-keel), 0 on heroes alone (calm-hull). */ keelWorld?: number }
 /** Today's pen has no settings: null. */
 export const PENS: Record<PenName, PenSample | null>;
 

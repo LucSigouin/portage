@@ -11,7 +11,7 @@
 // (tests/look/pens.test.ts holds the text that is left against the text before round 4).
 
 /** The samples by name, in the order they are shown. The letters a to d are read too. */
-export const PEN_NAMES = ['today', 'full', 'bold', 'near', 'soon', 'calm', 'fine', 'calm-keel'];
+export const PEN_NAMES = ['today', 'full', 'bold', 'near', 'soon', 'calm', 'fine', 'calm-keel', 'calm-hull'];
 // Luc's pick (round 4, 2026-11-14): "full border on the outline i think it was C". C is the game's pen.
 export const DEFAULT_PEN = 'bold';
 
@@ -40,10 +40,14 @@ export const PENS = {
   // fine: calm, thinner further out (floor .2, faster fall).
   fine: { width: 1.6, weight: 0.5, seam: 0.8, from: null, to: null, hero: { start: 6, fall: 2.5, floor: 0.2 }, calm: 1 },
   // calm-keel: calm, and the ink contour carries on along the waterline under the white foam line (run 3).
-  'calm-keel': { width: 1.6, weight: 0.5, seam: 0.8, from: null, to: null, hero: { start: 6, fall: 1.2, floor: 0.3 }, calm: 1, keel: 1 },
+  'calm-keel': { width: 1.6, weight: 0.5, seam: 0.8, from: null, to: null, hero: { start: 6, fall: 1.2, floor: 0.3 }, calm: 1, keel: 1, keelWorld: 1 },
+  // calm-hull: calm-keel with the waterline ink on heroes alone (the canoe, its floats, a figure in the water): the
+  // world's shores, rocks and docks keep today's foam line, untouched (run 4, review fault 1).
+  'calm-hull': { width: 1.6, weight: 0.5, seam: 0.8, from: null, to: null, hero: { start: 6, fall: 1.2, floor: 0.3 }, calm: 1, keel: 1, keelWorld: 0 },
 };
-// C's own hero thinning (post.js HERO_PEN), for samples that keep it.
-const HERO_TODAY = { start: 16.5, fall: 37, floor: 0.3 };
+// A sample with no `hero` (full, bold, near) is compiled with PEN_FAR not defined: its shader is the one on `main`
+// before round pen-far, to the letter, and its hero thinning is post.js's HERO_PEN, read from that one place
+// (tests/look/pens.test.ts pins bold's compiled text to main's).
 
 const LETTERS = { a: 'today', b: 'full', c: 'bold', d: 'near' };
 
@@ -68,11 +72,15 @@ export function penDefines(name) {
     // no easing: the full pen at every distance (the far plane is 2000 m)
     PEN_FROM: glsl(pen.from ?? 1e6),
     PEN_TO: glsl(pen.to ?? 2e6),
-    PEN_HSTART: glsl((pen.hero ?? HERO_TODAY).start),
-    PEN_HFALL: glsl((pen.hero ?? HERO_TODAY).fall),
-    PEN_HFLOOR: glsl((pen.hero ?? HERO_TODAY).floor),
-    PEN_CALM: glsl(pen.calm ?? 0),
-    PEN_KEEL: glsl(pen.keel ?? 0),
+    ...(pen.hero ? {
+      PEN_FAR: 1,
+      PEN_HSTART: glsl(pen.hero.start),
+      PEN_HFALL: glsl(pen.hero.fall),
+      PEN_HFLOOR: glsl(pen.hero.floor),
+      PEN_CALM: glsl(pen.calm ?? 0),
+      PEN_KEEL: glsl(pen.keel ?? 0),
+      PEN_KEELW: glsl(pen.keelWorld ?? 1),
+    } : {}),
   };
 }
 
