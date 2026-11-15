@@ -27,8 +27,8 @@
 .job:nth-child(3n + 2) { border-image-source: var(--pen-b); }
 .job:nth-child(3n) { border-image-source: var(--pen-c); }
 .job:nth-child(even)::before { left: 54%; transform: rotate(4deg); }
-.job .top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s1) var(--s3); }
-.job-title { min-width: 0; font: 700 1.25rem / 1.25 var(--hand); text-wrap: balance; }
+.job-title { font: 700 1.25rem / 1.25 var(--hand); text-wrap: balance; }
+/* The size, as the small label over the title. */
 .job .size-label { padding-top: 0.15rem; color: var(--rust-deep); }
 /* A job someone jumped to from a note. */
 .job:target .job-title { text-decoration: underline; text-decoration-color: var(--ochre); text-decoration-thickness: 0.2rem; text-underline-offset: 0.2rem; }

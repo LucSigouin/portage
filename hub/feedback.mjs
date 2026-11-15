@@ -213,7 +213,7 @@ function noteHtml(note, jobs) {
 function jobHtml(job, plan) {
   const row = (label, value) => `<div><dt class="over">${label}</dt><dd>${escapeHtml(value)}</dd></div>`;
   return `        <li class="job paper" id="job-${job.id}" data-size="${job.size}">`
-    + `<div class="top"><h4 class="job-title">${escapeHtml(job.title)}</h4><span class="size-label over">${escapeHtml(plan.sizes[job.size])}</span></div>`
+    + `<p class="size-label over">${escapeHtml(plan.sizes[job.size])}</p><h4 class="job-title">${escapeHtml(job.title)}</h4>`
     + `<dl>${row(WORDS.asked, job.asked)}${row(WORDS.fix, job.fix)}${row(WORDS.waits, job.waits)}</dl>`
     + `<p class="job-notes">${job.notes.map((number) => `<a href="#note-${number}">${WORDS.note} ${number}</a>`).join(', ')}</p>`
     + '</li>';
