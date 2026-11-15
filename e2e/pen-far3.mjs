@@ -14,6 +14,7 @@ mkdirSync(dir, { recursive: true });
 const game = join(dirname(fileURLToPath(import.meta.url)), '..', 'game');
 const server = spawn(join(game, 'node_modules', '.bin', 'vite'), ['--port', '5216', '--strictPort'], { cwd: game, stdio: 'ignore' });
 const results = { big: [], near: [], steps: [] };
+const stepsOnly = process.argv.includes('--steps');
 const probeOf = (page) => page.evaluate(() => {
   const p = window.portage.worldView.probe();
   return { rung: p.rung, drawing: [p.drawingWidth, p.drawingHeight], canvas: [p.canvasWidth, p.canvasHeight], windows: p.hero.windows, inkScale: p.hero.inkScale, pen: p.hero.pen };
@@ -66,7 +67,7 @@ try {
   for (const yaw of [0, 1.57, 3.14, 4.71]) big.push(['calm', 10, 0.07, yaw, '']);
   for (const pen of ['bold', 'calm', 'calm-keel']) for (const distance of [7, 10]) big.push([pen, distance, 0.07, 1.57, '&rung=0&hold=1']);
   for (const pen of ['bold', 'calm']) big.push([pen, 10, 0.07, 1.57, '&rung=11&hold=1']);
-  for (const [pen, distance, pitch, yaw, pin] of big) {
+  for (const [pen, distance, pitch, yaw, pin] of stepsOnly ? [] : big) {
     const file = `big-${pen}-d${distance}-p${pitch}-y${yaw}${pin ? '-rung' + pin.match(/rung=(\d+)/)[1] : ''}.png`;
     await load(page, `pen=${pen}&cam=${distance},${pitch},${yaw}${pin}`, pin ? 2500 : 5000);
     const probe = await probeOf(page);
@@ -83,7 +84,7 @@ try {
   await page.close();
   // 3. Near must not change: 1600x900, ladder pinned at rung 0, canoe box only.
   page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
-  for (const pitch of [0.34, 0.07]) {
+  for (const pitch of stepsOnly ? [] : [0.34, 0.07]) {
     let box = null;
     for (const pen of ['bold', 'bold2', 'soon', 'calm', 'fine', 'calm-keel']) {
       const file = `near-${pen}-p${pitch}.png`;
@@ -102,11 +103,11 @@ try {
     const probe = await probeOf(page);
     const box = boxOf(probe.windows, probe.canvas[1]);
     await page.screenshot({ path: join(dir, file) });
-    if (box) await page.screenshot({ path: join(dir, 'crop-' + file), clip: box });
+    if (box) await page.screenshot({ path: join(dir, 'crop-' + file), clip: { x: box.x, y: box.y, width: box.w, height: box.h } });
     results.steps.push({ file, distance, pen: probe.pen, box });
   }
   await browser.close();
 } finally {
-  writeFileSync(join(dir, 'results.json'), JSON.stringify(results, null, 1));
+  writeFileSync(join(dir, stepsOnly ? 'results-steps.json' : 'results.json'), JSON.stringify(results, null, 1));
   server.kill();
 }
