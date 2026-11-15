@@ -522,3 +522,57 @@ describe('the fourth review: a removed key is cleared when its holder is seated 
     expect(readCarry(JSON.parse(storage.getItem(carrySlot('Sam'))!))).toMatchObject({ backpack: [{ itemId: 'stone', count: 5 }] });
   });
 });
+
+/** How many of `itemId` the game holds outside one seat: in the canoe and on everyone else. */
+function elsewhere(rig: Rig, itemId: string, exceptId: number | null): number {
+  const count = (stacks: readonly { itemId: string; count: number }[]): number =>
+    stacks.filter((stack) => stack.itemId === itemId).reduce((sum, stack) => sum + stack.count, 0);
+  return count(rig.game.canoe.cargo) + rig.game.players.filter((player) => player.id !== exceptId).reduce((sum, player) => sum + count(player.backpack), 0);
+}
+
+describe('Luc: "his alone". A player the host takes out keeps their own things, and only they do', () => {
+  it('removed while connected: the canoe and the crew gain nothing, and back by the link they have their pack', () => {
+    const rig = createRig();
+    const storage = browserWith('Sam', null);
+    const sam = joinWith(rig, 'Sam', storage);
+    rig.join('Ann');
+    rig.run(0.5);
+    seatOf(rig, sam).backpack = [{ itemId: 'stone', count: 5 }];
+    rig.run(0.5);
+    const before = elsewhere(rig, 'stone', sam.link.playerId);
+    expect(rig.host.remove(sam.link.playerId)).toBe(0);
+    rig.run(0.5);
+    expect(sam.link.leaveReason).toBe('removed');
+    // One copy, theirs: in their browser, not in the canoe and not on a crewmate.
+    expect(elsewhere(rig, 'stone', null)).toBe(before);
+    expect(readCarry(JSON.parse(storage.getItem(carrySlot('Sam'))!))).toMatchObject({ backpack: [{ itemId: 'stone', count: 5 }] });
+    const back = joinWith(rig, 'Sam', storage);
+    rig.run(0.5);
+    expect(back.link.status).toBe('playing');
+    expect(seatOf(rig, back).backpack).toEqual([{ itemId: 'stone', count: 5 }]);
+    expect(elsewhere(rig, 'stone', back.link.playerId)).toBe(before);
+    expect(rig.settle()).toBe(true);
+  });
+
+  it('removed while away: the same, with the carry their tab wrote when it went hidden', () => {
+    const rig = createRig({ host: { silenceSeconds: 2 } });
+    const storage = browserWith('Sam', null);
+    const sam = joinWith(rig, 'Sam', storage);
+    rig.run(1);
+    const samId = sam.link.playerId;
+    seatOf(rig, sam).backpack = [{ itemId: 'stone', count: 5 }];
+    rig.run(1);
+    sam.link.keepCarry();
+    hostAlone(rig, sam, 4);
+    expect(rig.game.players.find((player) => player.id === samId)!.connected).toBe(false);
+    const before = elsewhere(rig, 'stone', samId);
+    expect(rig.host.remove(samId)).toBe(0);
+    expect(elsewhere(rig, 'stone', null)).toBe(before);
+    // Back by the link, on a new wire: a new seat, with what their own browser kept.
+    const back = joinWith(rig, 'Sam', storage);
+    rig.run(1);
+    expect(back.link.status).toBe('playing');
+    expect(seatOf(rig, back).backpack).toEqual([{ itemId: 'stone', count: 5 }]);
+    expect(elsewhere(rig, 'stone', back.link.playerId)).toBe(before);
+  });
+});

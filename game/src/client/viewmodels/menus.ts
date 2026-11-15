@@ -219,7 +219,7 @@ const CONFIRM_TEXT: Record<ConfirmAction['type'], (slot: number, name: string) =
   quit_to_lobby: () => ({ title: 'Quit to the lobby?', message: 'The game is saved first.', accept: 'Save and quit' }),
   reset_key_bindings: () => ({ title: 'Reset every key?', message: 'All key bindings go back to their defaults.', accept: 'Reset keys' }),
   remove_player: (_slot, name) => ({
-    title: `Take ${name} out of the crew?`, message: 'They leave the game for good. What they carried goes into the canoe.', accept: 'Take out',
+    title: `Take ${name} out of the crew?`, message: 'They leave the game for good. Their things go with them.', accept: 'Take out',
   }),
 };
 

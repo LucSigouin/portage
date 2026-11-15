@@ -195,11 +195,14 @@ export class HostLink {
 
   /**
    * The host takes a player out of the game (`removePlayer`): never its own. Whoever was playing them is told and let
-   * go, and their key is forgotten, so the same friend back on the link is a new guest in a new seat. Returns how many
-   * of their items found no room, or null when nobody was removed.
+   * go, and their key is forgotten, so the same friend back on the link is a new guest in a new seat. Their things go
+   * with them (Luc: "his alone"): the pack is in their own browser as their carry, so the seat's copy is emptied first
+   * and nothing goes to the canoe or the crew. Returns 0, or null when nobody was removed.
    */
   remove(playerId: PlayerId): number | null {
     if (this.closed || playerId === this.hostPlayerId) return null;
+    const seat = this.game.players.find((player) => player.id === playerId);
+    if (seat) seat.backpack = [];
     const lost = removePlayer(this.game, playerId);
     if (lost === null) return null;
     for (const connection of [...this.connections]) {

@@ -906,16 +906,17 @@ export class Session {
 
   /**
    * The host takes a crewmate out of the game: here or away, never itself, never on a guest's screen. With a room
-   * open the host link does it (their window is told); without one the rules do it on their own.
+   * open the host link does it (their window is told); without one the rules do it on their own. Either way their
+   * things go with them (Luc: "his alone"): their own browser holds the pack, so the seat's copy is emptied first.
    */
   private removeFromCrew(playerId: PlayerId, name: string): void {
     const game = this.game;
     if (!game || this.guest || playerId === this.localPlayerId) return;
+    const seat = this.host ? undefined : game.players.find((player) => player.id === playerId);
+    if (seat) seat.backpack = [];
     const lost = this.host ? this.host.remove(playerId) : removePlayer(game, playerId);
     if (lost === null) return;
-    this.notice(lost > 0
-      ? `${name} is out of the crew. ${lost} of their things found no room and are gone.`
-      : `${name} is out of the crew. Their things are in the canoe.`, lost > 0 ? 'warning' : 'info');
+    this.notice(`${name} is out of the crew. Their things go with them.`);
     if (this.slot !== null) this.saveNow();
   }
 

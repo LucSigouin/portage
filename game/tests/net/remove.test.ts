@@ -1,6 +1,6 @@
 /**
  * Luc: "the host needs to be able to kick inactive players". The host takes a crewmate out of the game for good:
- * the figure and the seat go, what they carried stays with the crew, their window is told, and the same friend back
+ * the figure and the seat go, what they carried goes with them (Luc: "his alone"), their window is told, and the same friend back
  * on the link is a new guest.
  */
 import { describe, expect, it } from 'vitest';
@@ -11,7 +11,7 @@ import { removePlayer } from '../../src/sim/index.ts';
 import { calmGame, createRig, key } from './rig.ts';
 
 describe('the host takes a crewmate out', () => {
-  it('the player is gone on every screen, their window is told why, and their things are in the canoe', () => {
+  it('the player is gone on every screen, their window is told why, and their things are not in the canoe', () => {
     const rig = createRig({ game: calmGame() });
     const sam = rig.join('Sam');
     const ann = rig.join('Ann');
@@ -24,7 +24,7 @@ describe('the host takes a crewmate out', () => {
     rig.run(1);
 
     expect(rig.game.players.map((player) => player.id)).not.toContain(samId);
-    expect(countInStacks(rig.game.canoe.cargo, 'driftwood')).toBe(cargoBefore + 7);
+    expect(countInStacks(rig.game.canoe.cargo, 'driftwood')).toBe(cargoBefore);
     expect(sam.link.status).toBe('closed');
     expect(sam.link.leaveReason).toBe('removed');
     // The one who stays sees them gone and plays on.
