@@ -6,7 +6,7 @@
   ],
   "title": "Portage",
   "subtitle": "The workbench: every step so far",
-  "updated": "2026-11-14, 23:35",
+  "updated": "2026-11-15, 08:55",
   "ask": "A flooded world and all you have is a canoe. Scavenge islands, craft, and build a crazy impressive canoe.",
   "now": [
     {
@@ -16,27 +16,27 @@
     },
     {
       "label": "Stage",
-      "value": "Own packs live: Version 1.0.448"
+      "value": "Calmer pen live: Version 1.0.477"
     },
     {
       "label": "Tests",
-      "value": "2631 unit pass. Co-op browser set passes"
+      "value": "2683 unit, 178 in a browser: all pass"
     },
     {
       "label": "Running",
-      "value": "Outline pen, kick pack, card warning"
+      "value": "Nothing"
     },
     {
       "label": "Live now",
-      "value": "Each guest keeps their own pack"
+      "value": "Calmer pen. Kicked keep packs. Card note"
     },
     {
       "label": "Not live yet",
-      "value": "Outline pen, graphics-card warning"
+      "value": "Nothing"
     },
     {
       "label": "Waiting on you",
-      "value": "Play it with a friend"
+      "value": "Play it, look at the new pen"
     }
   ],
   "steps": [
