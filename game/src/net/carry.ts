@@ -8,6 +8,7 @@
  */
 import { ITEMS, TUNING } from '../data/index.ts';
 import type { ItemId } from '../data/types.ts';
+import { STARTING_METERS } from '../sim/index.ts';
 import type { ItemStack, PlayerState } from '../sim/index.ts';
 
 /** Bump when the shape of a kept carry changes. A carry of another version is not read. */
@@ -28,7 +29,7 @@ const METER_TOP = 100;
 
 /** What a seat holds when it goes to someone who brings nothing: the starting kit and the meters `addPlayer` gives. */
 export function freshCarry(): Carry {
-  return { v: CARRY_VERSION, backpack: [], hunger: 80, thirst: 75, energy: 90 };
+  return { v: CARRY_VERSION, backpack: [], ...STARTING_METERS };
 }
 
 /** A player's own things, copied: what a guest keeps of the host's record of them, and which host session sent it. */
