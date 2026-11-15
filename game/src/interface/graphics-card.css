@@ -1,6 +1,6 @@
 /*
  * The graphics card note (`graphics-card.ts`): a slip of the game's paper with a rust edge.
- * Ink on paper is 11 to 1 and the rust title 6 to 1: both past AA. Nothing here moves or fades.
+ * Ink on the bright paper is 12.9 to 1 and the rust title 6.8 to 1: both past AA. Nothing here moves.
  */
 .iw-card-note {
   box-sizing: border-box;
