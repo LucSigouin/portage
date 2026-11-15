@@ -7,7 +7,7 @@
  *
  * Run: PORTAGE_URL=http://localhost:5222 npm --prefix <worktree>/e2e test -- carry.spec.ts --global-timeout=300000
  */
-import { expect, test } from '@playwright/test';
+import { expect as baseExpect, test } from '@playwright/test';
 import type { BrowserContext, Page } from '@playwright/test';
 
 const BASE = process.env.PORTAGE_URL ?? 'http://localhost:5220';
@@ -17,6 +17,18 @@ test.use({
   launchOptions: { args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] },
 });
 test.setTimeout(180_000);
+// A state crosses two tabs and a frame or two of each: on a busy machine that is more than the default five seconds.
+const expect = baseExpect.configure({ timeout: 15_000 });
+
+/**
+ * Close a window the way a person does: the page is left first, so `pagehide`
+ * fires and the game says goodbye. A bare `page.close()` in a test may end the
+ * page before that event runs.
+ */
+async function leave(page: Page): Promise<void> {
+  await page.goto('about:blank');
+  await page.close();
+}
 
 async function open(context: BrowserContext, query: string, problems: string[]): Promise<Page> {
   const page = await context.newPage();
@@ -55,7 +67,7 @@ test('leave and come back with your pack: a guest\'s things go with them to anot
   });
   await expect.poll(() => driftwoodOf(guest, 1)).toBe(6);
   // Sam closes the window: the leave writes the carry at once.
-  await guest.close({ runBeforeUnload: true });
+  await leave(guest);
   await expect.poll(() => first.evaluate(() => (window as unknown as { portage: { session: any } }).portage.session.game.players[1].connected)).toBe(false);
 
   // Another host, another world. Sam joins it from the same browser and brings the six.
@@ -78,7 +90,7 @@ test('leave and come back with your pack: a guest\'s things go with them to anot
     game.players.find((entry: any) => entry.id === id).backpack.push({ itemId: 'driftwood', count: 3 });
   }, samThere);
   await expect.poll(() => driftwoodOf(guest, samThere)).toBe(9);
-  await guest.close({ runBeforeUnload: true });
+  await leave(guest);
 
   // Back to the first host, which has run all along and still holds six on Sam's seat: the nine Sam brings win.
   expect(await driftwoodOf(first, 1)).toBe(6);
@@ -94,7 +106,7 @@ test('leave and come back with your pack: a guest\'s things go with them to anot
     const game = (window as unknown as { portage: { session: any } }).portage.session.game;
     game.players[1].backpack.push({ itemId: 'driftwood', count: 2 });
   });
-  await guest.close({ runBeforeUnload: true });
+  await leave(guest);
   await expect.poll(() => first.evaluate(() => (window as unknown as { portage: { session: any } }).portage.session.game.players[1].connected)).toBe(false);
   guest = await open(context, `?join=carry-a-${stamp}&name=Sam`, problems);
   expect(await localId(guest)).toBe(1);
