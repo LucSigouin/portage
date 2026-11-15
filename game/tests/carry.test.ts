@@ -481,3 +481,44 @@ describe('the third review: a seat that went to someone else, and a key forgotte
     expect(rig.settle()).toBe(true);
   });
 });
+
+describe('the fourth review: a removed key is cleared when its holder is seated again', () => {
+  it('removed, back by the link, later hidden and the seat taken: the knock is told "full", not "removed"', () => {
+    const rig = createRig({ host: { silenceSeconds: 2 } });
+    const storage = browserWith('Sam', { ...good(), backpack: [{ itemId: 'stone', count: 5 }] });
+    const sam = joinWith(rig, 'Sam', storage);
+    rig.join('Ann');
+    rig.join('Bo');
+    rig.join('Cy');
+    rig.run(1);
+    rig.host.remove(sam.link.playerId);
+    rig.run(0.5);
+    expect(sam.link.leaveReason).toBe('removed');
+    // Back by the link: let in as new, with their own carry. The host no longer holds the key as removed.
+    const back = joinWith(rig, 'Sam', storage);
+    rig.run(1);
+    expect(back.link.status).toBe('playing');
+    expect(seatOf(rig, back).backpack).toEqual([{ itemId: 'stone', count: 5 }]);
+    const backId = back.link.playerId;
+    // Sam's tab is hidden while the others play on: the host marks Sam away, and Dee takes the seat.
+    back.link.keepCarry();
+    for (let frame = 0; frame < Math.round(4 / FIXED_STEP); frame += 1) {
+      for (const seat of rig.seats) seat.pair.advance(FIXED_STEP);
+      step(rig.game, rig.host.crewInput({ ...NEUTRAL_INPUT }, 0), FIXED_STEP);
+      rig.host.afterFrame(drainEvents(rig.game), FIXED_STEP);
+      for (const seat of rig.seats) {
+        if (seat === back) continue;
+        seat.link.update(FIXED_STEP);
+        seat.link.sendInput({ ...NEUTRAL_INPUT });
+      }
+    }
+    const dee = joinWith(rig, 'Dee', browserWith('Dee', { ...good(), backpack: [{ itemId: 'clay', count: 3 }] }));
+    rig.run(1);
+    expect(dee.link.playerId).toBe(backId);
+    back.link.knock();
+    rig.run(1);
+    // This time nobody took Sam out: the seat went to someone else.
+    expect(back.link.leaveReason).toBe('full');
+    expect(readCarry(JSON.parse(storage.getItem(carrySlot('Sam'))!))).toMatchObject({ backpack: [{ itemId: 'stone', count: 5 }] });
+  });
+});
