@@ -66,6 +66,8 @@ export interface CrewView {
     problem: JoinProblem | null;
     /** The host's own reason, when it was the host that said no. */
     leave: LeaveReason | null;
+    /** True when that reason came to a guest who was already playing in the crew. */
+    wasSeated?: boolean;
     /** False while the host's own line is down. */
     hostHere: boolean;
   };
@@ -98,6 +100,7 @@ export class CrewLobby {
   private link: GuestLink | null = null;
   private joinProblem: JoinProblem | null = null;
   private joinLeave: LeaveReason | null = null;
+  private joinLeaveWasSeated = false;
   /** What the lines were doing when last looked at, to tell the player when it changes. */
   private told = { host: '', join: '' };
 
@@ -263,11 +266,12 @@ export class CrewLobby {
    * The session's guest link ended. `reason` is the host's, when the host said
    * anything. Returns what the relay knows of why, or null when it was the host's doing.
    */
-  guestEnded(reason: LeaveReason | null): RelayFailure | null {
+  guestEnded(reason: LeaveReason | null, wasSeated = false): RelayFailure | null {
     if (!this.joining) return null;
     const failure = this.wire?.failure ?? null;
     this.joinProblem = failure;
     this.joinLeave = failure === null ? reason : null;
+    this.joinLeaveWasSeated = wasSeated;
     this.wire = this.link = null;
     this.told.join = '';
     return failure;
@@ -353,7 +357,7 @@ export class CrewLobby {
         failure: room ? null : this.hostFailure,
         copied: this.copied,
       },
-      join: { phase: joinPhase, problem: this.joinProblem, leave: this.joinLeave, hostHere: wire?.hostHere ?? true },
+      join: { phase: joinPhase, problem: this.joinProblem, leave: this.joinLeave, wasSeated: this.joinLeaveWasSeated, hostHere: wire?.hostHere ?? true },
     };
   }
 }

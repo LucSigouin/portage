@@ -38,7 +38,7 @@ import type { Transport } from '../net/index.ts';
 import type { CrewLobby } from './crewlobby.ts';
 import type { FeedbackDesk } from './feedback.ts';
 import type { FullscreenSwitch } from './fullscreen.ts';
-import { HOST_BACK_TEXT, JOIN_PROBLEM_TEXT, LEAVE_TEXT } from './viewmodels/crew.ts';
+import { HOST_BACK_TEXT, JOIN_PROBLEM_TEXT, leaveText } from './viewmodels/crew.ts';
 import { crewName } from './viewmodels/hud.ts';
 import { keepCharacter, keptCharacter } from './viewmodels/cast.ts';
 import type { CastDoor, CastView } from './viewmodels/cast.ts';
@@ -564,9 +564,11 @@ export class Session {
     if (guest.status === 'refused' || guest.status === 'closed') {
       const reason = guest.leaveReason ?? 'closed';
       // When it was the line that went and not the host's doing, the crew lobby knows why.
-      const lineFailure = this.crew?.guestEnded(guest.leaveReason) ?? null;
+      // A link told no before it was ever seated ends `refused`: one that ends `closed` was playing in this crew.
+      const wasSeated = guest.status === 'closed';
+      const lineFailure = this.crew?.guestEnded(guest.leaveReason, wasSeated) ?? null;
       this.leaveHost();
-      this.notice(lineFailure !== null ? JOIN_PROBLEM_TEXT[lineFailure] : LEAVE_TEXT[reason], 'warning');
+      this.notice(lineFailure !== null ? JOIN_PROBLEM_TEXT[lineFailure] : leaveText(reason, wasSeated), 'warning');
     }
     const view = this.guest?.status === 'playing' ? this.guest.view() : null;
     if (!view) {
@@ -904,16 +906,17 @@ export class Session {
 
   /**
    * The host takes a crewmate out of the game: here or away, never itself, never on a guest's screen. With a room
-   * open the host link does it (their window is told); without one the rules do it on their own.
+   * open the host link does it (their window is told); without one the rules do it on their own. Either way their
+   * things go with them (Luc: "his alone"): their own browser holds the pack, so the seat's copy is emptied first.
    */
   private removeFromCrew(playerId: PlayerId, name: string): void {
     const game = this.game;
     if (!game || this.guest || playerId === this.localPlayerId) return;
+    const seat = this.host ? undefined : game.players.find((player) => player.id === playerId);
+    if (seat) seat.backpack = [];
     const lost = this.host ? this.host.remove(playerId) : removePlayer(game, playerId);
     if (lost === null) return;
-    this.notice(lost > 0
-      ? `${name} is out of the crew. ${lost} of their things found no room and are gone.`
-      : `${name} is out of the crew. Their things are in the canoe.`, lost > 0 ? 'warning' : 'info');
+    this.notice(`${name} is out of the crew. Their things go with them.`);
     if (this.slot !== null) this.saveNow();
   }
 
