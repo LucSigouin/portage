@@ -8,7 +8,7 @@ import { TUNING } from '../src/data/index.ts';
 import { CARRY_VERSION, applyCarry, carryOf, freshCarry, readCarry } from '../src/net/carry.ts';
 import type { Carry } from '../src/net/carry.ts';
 import { PROTOCOL_VERSION, readClientMessage } from '../src/net/index.ts';
-import { addPlayer, setConnected } from '../src/sim/index.ts';
+import { FIXED_STEP, NEUTRAL_INPUT, addPlayer, drainEvents, setConnected, step } from '../src/sim/index.ts';
 import { CARRY_WRITE_SECONDS, CarryStore, carrySlot } from '../src/client/carrystore.ts';
 import type { CarryStorage } from '../src/client/carrystore.ts';
 import { calmGame, createRig, key } from './net/rig.ts';
@@ -323,5 +323,90 @@ describe('the guest keeps its carry', () => {
     newer.link.close();
     older.link.close();
     expect(readCarry(JSON.parse(storage.getItem(carrySlot('Sam'))!))).toMatchObject({ backpack: [{ itemId: 'clay', count: 6 }] });
+  });
+});
+
+/** The host plays on while a guest's tab is hidden: the wire still carries messages, the guest runs no frame. */
+function hostAlone(rig: Rig, seat: Seat, seconds: number): void {
+  for (let frame = 0; frame < Math.round(seconds / FIXED_STEP); frame += 1) {
+    seat.pair.advance(FIXED_STEP);
+    step(rig.game, rig.host.crewInput({ ...NEUTRAL_INPUT }, 0), FIXED_STEP);
+    rig.host.afterFrame(drainEvents(rig.game), FIXED_STEP);
+  }
+}
+
+const seatOf = (rig: Rig, seat: Seat) => rig.game.players.find((player) => player.id === seat.link.playerId)!;
+
+describe('the carry where the host takes a crewmate out, and where a tab is hidden', () => {
+  it('a removed guest keeps their carry in their own browser, and comes back as new with it', () => {
+    const storage = browserWith('Sam', null);
+    const rig = createRig();
+    const sam = joinWith(rig, 'Sam', storage);
+    rig.run(0.5);
+    seatOf(rig, sam).backpack = [{ itemId: 'stone', count: 5 }];
+    rig.run(0.5);
+    const samId = sam.link.playerId;
+    expect(rig.host.remove(samId)).toBe(0);
+    rig.run(0.5);
+    expect(sam.link.leaveReason).toBe('removed');
+    // The leave wrote the carry: the removal did not skip it.
+    expect(readCarry(JSON.parse(storage.getItem(carrySlot('Sam'))!))).toMatchObject({ backpack: [{ itemId: 'stone', count: 5 }] });
+    // Back on the link: their key was forgotten, so a new seat, with what their own browser kept.
+    const back = joinWith(rig, 'Sam', storage);
+    rig.run(0.5);
+    expect(back.link.status).toBe('playing');
+    expect(seatOf(rig, back).backpack).toEqual([{ itemId: 'stone', count: 5 }]);
+    expect(rig.settle()).toBe(true);
+  });
+
+  it('a newcomer on a removed guest\'s seat starts fresh, or with their own carry, never with the removed one\'s pack', () => {
+    const rig = createRig();
+    const sam = joinWith(rig, 'Sam', browserWith('Sam', good()));
+    rig.run(0.5);
+    const samId = sam.link.playerId;
+    Object.assign(seatOf(rig, sam), { hunger: 20 });
+    rig.host.remove(samId);
+    rig.run(0.5);
+    const kim = joinWith(rig, 'Kim', browserWith('Kim', null));
+    rig.run(0.5);
+    expect(kim.link.playerId).toBe(samId);
+    expect(seatOf(rig, kim).backpack).toEqual([]);
+    expect(seatOf(rig, kim).hunger).toBeCloseTo(80, 0);
+    rig.host.remove(kim.link.playerId);
+    rig.run(0.5);
+    const dee = joinWith(rig, 'Dee', browserWith('Dee', { ...good(), backpack: [{ itemId: 'clay', count: 3 }] }));
+    rig.run(0.5);
+    expect(dee.link.playerId).toBe(samId);
+    expect(seatOf(rig, dee).backpack).toEqual([{ itemId: 'clay', count: 3 }]);
+    expect(rig.settle()).toBe(true);
+  });
+
+  it('hidden long enough to be marked away, then back: the carry was written on hiding, the seat and its newer pack stand', () => {
+    const storage = browserWith('Sam', good());
+    const rig = createRig({ host: { silenceSeconds: 2 } });
+    const sam = joinWith(rig, 'Sam', storage);
+    rig.run(1);
+    const samId = sam.link.playerId;
+    seatOf(rig, sam).backpack.push({ itemId: 'stone', count: 4 });
+    rig.run(1);
+    // The page goes hidden: the carry is written now, and the line stays open.
+    storage.writes = 0;
+    sam.link.keepCarry();
+    expect(storage.writes).toBe(1);
+    expect(sam.link.status).toBe('playing');
+    // While hidden the host gives the seat one more thing the guest's kept carry does not have.
+    hostAlone(rig, sam, 4);
+    expect(rig.game.players.find((player) => player.id === samId)!.connected).toBe(false);
+    seatOf(rig, sam).backpack.push({ itemId: 'clay', count: 2 });
+    // Meanwhile another tab of this browser played at another host and kept its carry: older than this seat, and not this host's.
+    storage.setItem(carrySlot('Sam'), JSON.stringify({ ...good(), confirmedBy: 7 }));
+    // Back on the tab: a knock, which brings no carry, so nothing old is laid over the seat.
+    sam.link.knock();
+    rig.run(1);
+    expect(sam.link.playerId).toBe(samId);
+    expect(rig.game.players.find((player) => player.id === samId)!.connected).toBe(true);
+    expect(seatOf(rig, sam).backpack).toContainEqual({ itemId: 'stone', count: 4 });
+    expect(seatOf(rig, sam).backpack).toContainEqual({ itemId: 'clay', count: 2 });
+    expect(rig.settle()).toBe(true);
   });
 });
