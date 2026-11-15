@@ -463,4 +463,21 @@ describe('the third review: a seat that went to someone else, and a key forgotte
     expect(readCarry(JSON.parse(storage.getItem(carrySlot('Sam'))!))).toMatchObject({ backpack: [{ itemId: 'stone', count: 5 }] });
   });
 
+  it('Sam removed, Kim takes the freed id, Sam back with his old key: a new seat for Sam, Kim plays on', () => {
+    const rig = createRig();
+    const sam = joinWith(rig, 'Sam', browserWith('Sam', good()));
+    rig.run(0.5);
+    const samId = sam.link.playerId;
+    rig.host.remove(samId);
+    rig.run(0.5);
+    const kim = joinWith(rig, 'Kim', browserWith('Kim', { ...good(), backpack: [{ itemId: 'clay', count: 3 }] }));
+    rig.run(0.5);
+    const kimId = kim.link.playerId;
+    const back = joinWith(rig, 'Sam', browserWith('Sam', good()));
+    rig.run(0.5);
+    expect(back.link.playerId).not.toBe(kimId);
+    expect(kim.link.status).toBe('playing');
+    expect(seatOf(rig, kim).backpack).toEqual([{ itemId: 'clay', count: 3 }]);
+    expect(rig.settle()).toBe(true);
+  });
 });
