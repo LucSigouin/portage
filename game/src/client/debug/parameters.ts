@@ -14,6 +14,8 @@
  * - `?join=ROOM&name=...`: join it, from another tab or window on the same computer.
  *   A tester's door (a channel between tabs, no server), not the lobby's.
  * - `&pen=today` (or `full`, `near`, `bold`): draw with one of the pen's samples (`look/b2/pens.js`). The game's own is `bold` (C); `today` is the old pen. Saves stay as they are.
+ * - `&card=soft`: show the note that the browser draws without the graphics card, whoever draws. `&card=real`: never show it.
+ *   With neither, the note follows the renderer's name, and is off in a staged shot (`viewmodels/graphicscard.ts`).
  *
  * And one that is not for testing: `?invite=CODE` is the link a host sends. It opens the lobby's
  * join panel with the code filled in. It touches nothing else: the player's own saves stay as they are.
@@ -55,6 +57,8 @@ export interface DebugParameters {
   invite: string | null;
   /** The pen's sample the look draws with: 'bold' (C) unless the address asks for another. It replaces no game: never a sandbox. */
   pen: PenName;
+  /** The graphics card note: 'soft' forces it on, 'real' forces it off, null leaves it to the renderer's name. Never a sandbox. */
+  card: 'soft' | 'real' | null;
   /** True when a switch replaces the normal game: saves stay untouched. */
   sandbox: boolean;
 }
@@ -96,6 +100,7 @@ export function parseDebugParameters(query: string): DebugParameters {
     name: (values.get('name') ?? '').slice(0, 40),
     invite: /^[A-Za-z0-9-]{6,9}$/.test(values.get('invite') ?? '') ? values.get('invite') : null,
     pen: penFrom(values.get('pen')),
+    card: values.get('card') === 'soft' ? 'soft' : values.get('card') === 'real' ? 'real' : null,
     sandbox: bot || atQuest !== null || shot !== null || crew > 1 || host !== null || join !== null,
   };
 }

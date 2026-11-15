@@ -242,6 +242,8 @@ export interface LobbyModel {
   title: string;
   tagline: string;
   buttons: ButtonModel[];
+  /** The note that this browser draws without the graphics card (`graphicscard.ts`). Absent when there is nothing to say. */
+  graphicsCard?: import('./graphicscard.ts').GraphicsCardNoteModel | null;
 }
 
 export interface SaveSlotModel {
@@ -563,6 +565,8 @@ export type PanelModel = { title: string; close: ButtonModel } & (
     lines: string[];
     join: ButtonModel;
     cancel: ButtonModel | null;
+    /** The same note as the main menu's: a friend with an invite link lands here first. */
+    graphicsCard?: import('./graphicscard.ts').GraphicsCardNoteModel | null;
   }
   | import('./feedback.ts').FeedbackPanelBody
   | import('./cast.ts').CastPanelBody
