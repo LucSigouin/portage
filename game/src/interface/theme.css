@@ -1672,6 +1672,31 @@ html.iw-document {
   line-height: 1.4;
   color: var(--iw-ink-soft);
 }
+/* the host's list of crewmates: a name, here or away, and the button that takes them out */
+.iw-roster {
+  list-style: none;
+  margin: 0.9rem 0 0;
+  padding: 0;
+  border-top: 1px solid var(--iw-ink-faint);
+}
+.iw-roster-mate {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--iw-ink-faint);
+  font-family: var(--iw-hand);
+  font-size: 1.05rem;
+}
+.iw-roster-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.iw-roster-state {
+  color: var(--iw-ink-soft);
+}
 
 /* save slots */
 .iw-save {

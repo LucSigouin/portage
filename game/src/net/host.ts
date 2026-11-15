@@ -25,7 +25,7 @@
  * for each step of the host: so its own screen can show the same walk at once
  * and be right. The host still takes no position from anyone.
  */
-import { addPlayer, dispatch, hashState, setConnected, setPlayerCharacter, setPlayerName, cleanPlayerName, NEUTRAL_INPUT } from '../sim/index.ts';
+import { addPlayer, dispatch, hashState, removePlayer, setConnected, setPlayerCharacter, setPlayerName, cleanPlayerName, NEUTRAL_INPUT } from '../sim/index.ts';
 import type { CommandResult, GameEvent, GameState, PlayerId, StepInput } from '../sim/index.ts';
 import { PROTOCOL_VERSION, answerVersion, isOtherVersion, readClientMessage } from './messages.ts';
 import type { ClientMessage, HostMessage, JoinMessage, LeaveReason } from './messages.ts';
@@ -187,6 +187,25 @@ export class HostLink {
     if (!setConnected(this.game, playerId, false)) return;
     this.leavings += 1;
     this.leftAt.set(playerId, this.leavings);
+  }
+
+  /**
+   * The host takes a player out of the game (`removePlayer`): never its own. Whoever was playing them is told and let
+   * go, and their key is forgotten, so the same friend back on the link is a new guest in a new seat. Returns how many
+   * of their items found no room, or null when nobody was removed.
+   */
+  remove(playerId: PlayerId): number | null {
+    if (this.closed || playerId === this.hostPlayerId) return null;
+    const lost = removePlayer(this.game, playerId);
+    if (lost === null) return null;
+    for (const connection of [...this.connections]) {
+      if (connection.playerId === playerId) this.turnAway(connection, 'removed');
+    }
+    for (const [key, holder] of this.keys) {
+      if (holder === playerId) this.keys.delete(key);
+    }
+    this.leftAt.delete(playerId);
+    return lost;
   }
 
   private turnAway(connection: Connection, reason: LeaveReason, version = PROTOCOL_VERSION): void {

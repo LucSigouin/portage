@@ -68,7 +68,7 @@ export type ClientMessage = JoinMessage | InputMessage | CommandMessage | PingMe
  * - `replaced`: the same key joined on another connection.
  * - `closed`: the host stopped sharing the game.
  */
-export type LeaveReason = 'full' | 'version' | 'replaced' | 'closed';
+export type LeaveReason = 'full' | 'version' | 'replaced' | 'closed' | 'removed';
 
 export interface WelcomeMessage {
   v: number;
@@ -324,7 +324,7 @@ export function readHostMessage(raw: unknown): HostMessage | null {
     case 'ping':
       return typeof raw.time === 'number' ? raw as unknown as PongMessage : null;
     case 'leave':
-      return raw.reason === 'full' || raw.reason === 'version' || raw.reason === 'replaced' || raw.reason === 'closed'
+      return raw.reason === 'full' || raw.reason === 'version' || raw.reason === 'replaced' || raw.reason === 'closed' || raw.reason === 'removed'
         ? raw as unknown as HostLeaveMessage : null;
     default:
       return null;

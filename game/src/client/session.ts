@@ -15,7 +15,7 @@ import {
 } from '../settings/index.ts';
 import type { InputAction, Settings, SettingsStorage } from '../settings/index.ts';
 import {
-  FIXED_STEP, NEUTRAL_INPUT, beltOf, connectedPlayers, createGame, dispatch, drainEvents, playerOf, selectInteractable,
+  FIXED_STEP, NEUTRAL_INPUT, beltOf, connectedPlayers, createGame, dispatch, drainEvents, playerOf, removePlayer, selectInteractable,
   setConnected, setPlayerCharacter, setPlayerName, step,
 } from '../sim/index.ts';
 import type { Command, CommandResult, GameEvent, GameState, PlayerId, StepInput } from '../sim/index.ts';
@@ -38,6 +38,7 @@ import type { CrewLobby } from './crewlobby.ts';
 import type { FeedbackDesk } from './feedback.ts';
 import type { FullscreenSwitch } from './fullscreen.ts';
 import { HOST_BACK_TEXT, JOIN_PROBLEM_TEXT, LEAVE_TEXT } from './viewmodels/crew.ts';
+import { crewName } from './viewmodels/hud.ts';
 import { keepCharacter, keptCharacter } from './viewmodels/cast.ts';
 import type { CastDoor, CastView } from './viewmodels/cast.ts';
 import { applySettingChange } from './viewmodels/settings.ts';
@@ -884,6 +885,9 @@ export class Session {
       case 'quit_to_lobby':
         this.quitToLobby();
         break;
+      case 'remove_player':
+        this.removeFromCrew(action.playerId, action.name);
+        break;
       case 'reset_key_bindings':
         this.bindingNotice = 'Every key is back to its default.';
         this.updateSettings({
@@ -892,6 +896,21 @@ export class Session {
         });
         break;
     }
+  }
+
+  /**
+   * The host takes a crewmate out of the game: here or away, never itself, never on a guest's screen. With a room
+   * open the host link does it (their window is told); without one the rules do it on their own.
+   */
+  private removeFromCrew(playerId: PlayerId, name: string): void {
+    const game = this.game;
+    if (!game || this.guest || playerId === this.localPlayerId) return;
+    const lost = this.host ? this.host.remove(playerId) : removePlayer(game, playerId);
+    if (lost === null) return;
+    this.notice(lost > 0
+      ? `${name} is out of the crew. ${lost} of their things found no room and are gone.`
+      : `${name} is out of the crew. Their things are in the canoe.`, lost > 0 ? 'warning' : 'info');
+    if (this.slot !== null) this.saveNow();
   }
 
   /** True when a panel is open, by id. */
@@ -1013,6 +1032,14 @@ export class Session {
         this.crew.markCopied();
         this.sound('click');
         break;
+      case 'crew_remove': {
+        const game = this.game;
+        const mate = game?.players.find((player) => player.id === intent.playerId);
+        if (!game || !mate || this.guest || mate.id === this.localPlayerId) break;
+        this.applyPanels({ type: 'ask_confirm', action: { type: 'remove_player', playerId: mate.id, name: crewName(game, mate.id) } });
+        this.sound('click');
+        break;
+      }
       case 'crew_join':
         if (!this.crew) break;
         // The name and the code as always; what is wrong with them is said on the card. Then the pick screen: nothing

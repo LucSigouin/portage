@@ -4,7 +4,7 @@ import { TUNING } from '../data/tuning.ts';
 import { ISLANDS, START } from '../data/world.ts';
 import type { CrewMember } from './canoe.ts';
 import { stepOnFoot } from './foot.ts';
-import { connectedPlayers, emit, freeSeat, playerOf } from './inventory.ts';
+import { addToStacks, cargoSlots, connectedPlayers, emit, freeSeat, playerOf } from './inventory.ts';
 import { refillLostFinds } from './keepsakes.ts';
 import { updatePlaces } from './places.ts';
 import { createQuestStates, updateQuests } from './quests.ts';
@@ -111,6 +111,32 @@ export function setConnected(state: GameState, playerId: PlayerId, connected: bo
   if (!quiet) emit(state, { type: 'crew_changed', who: player.id, change: connected ? 'back' : 'away' });
   if (!connected) skipNightIfCrewAsleep(state, playerOf(state, connectedPlayers(state)[0]?.id ?? player.id));
   return true;
+}
+
+/**
+ * Take a player out of the game for good: the host's doing, never the player's own (Luc: "the host needs to be able
+ * to kick inactive players"). The figure, the seat and the map mark go. What the backpack held stays with the crew:
+ * into the canoe's cargo first, then into the others' backpacks, the ones here before the ones away. Returns how many
+ * items found no room and are lost, or null when there is no such player or they are the last one.
+ */
+export function removePlayer(state: GameState, playerId: PlayerId): number | null {
+  const index = state.players.findIndex((candidate) => candidate.id === playerId);
+  if (index < 0 || state.players.length <= 1) return null;
+  const [player] = state.players.splice(index, 1);
+  const others = [...state.players].sort((first, second) => Number(second.connected) - Number(first.connected));
+  let lost = 0;
+  for (const stack of player!.backpack) {
+    let left = addToStacks(state.canoe.cargo, cargoSlots(state), stack.itemId, stack.count);
+    for (const other of others) {
+      if (left <= 0) break;
+      left = addToStacks(other.backpack, TUNING.inventory.backpackSlots, stack.itemId, left);
+    }
+    lost += left;
+  }
+  if (state.pings) state.pings = state.pings.filter((ping) => ping.playerId !== playerId);
+  const here = connectedPlayers(state)[0];
+  if (here) skipNightIfCrewAsleep(state, here);
+  return lost;
 }
 
 /**

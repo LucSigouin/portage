@@ -60,6 +60,8 @@ export type InterfaceIntent =
   | { type: 'crew_copied' }
   | { type: 'crew_join' }
   | { type: 'crew_cancel_join' }
+  /** The host asks to take a crewmate out of the game. A yes is asked first. */
+  | { type: 'crew_remove'; playerId: number }
   // the pick screen (viewmodels/cast.ts): mark one of the four, then start or join as them. Back is `close_panel`.
   | { type: 'cast_mark'; character: CharacterId }
   | { type: 'cast_confirm' }

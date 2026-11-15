@@ -413,6 +413,38 @@ describe('leaving and coming back', () => {
     expect(host.models.at(-1)!.hud!.crew.map((row) => [row.label, row.away])).toEqual([['Luc', false], ['Sam', true]]);
   });
 
+  it('the host takes a guest out: a yes is asked first, then the guest is gone, told why, and their things are in the canoe', () => {
+    const { host, guest, game, tick } = table();
+    tick(1);
+    game.players[1].backpack.push({ itemId: 'driftwood', count: 3 });
+    const cargoBefore = countIn(game.canoe.cargo, 'driftwood');
+    // Not a guest's to ask, and never for oneself.
+    guest.app.session.handleIntent({ type: 'crew_remove', playerId: 0 });
+    host.app.session.handleIntent({ type: 'crew_remove', playerId: 0 });
+    tick(FIXED_STEP);
+    expect(guest.models.at(-1)!.confirm).toBeNull();
+    expect(host.models.at(-1)!.confirm).toBeNull();
+
+    host.app.session.handleIntent({ type: 'crew_remove', playerId: 1 });
+    tick(FIXED_STEP);
+    expect(host.models.at(-1)!.confirm).toMatchObject({ title: 'Take Sam out of the crew?' });
+    expect(game.players).toHaveLength(2);
+    host.app.session.handleIntent({ type: 'answer_confirm', accepted: false });
+    tick(FIXED_STEP);
+    expect(game.players).toHaveLength(2);
+
+    host.app.session.handleIntent({ type: 'crew_remove', playerId: 1 });
+    host.app.session.handleIntent({ type: 'answer_confirm', accepted: true });
+    tick(0.5);
+    expect(game.players.map((player) => player.name)).toEqual(['Luc']);
+    expect(countIn(game.canoe.cargo, 'driftwood')).toBe(cargoBefore + 3);
+    expect(host.toasts()).toContain('Sam is out of the crew. Their things are in the canoe.');
+    expect(host.models.at(-1)!.hud!.crew.map((row) => row.label)).not.toContain('Sam');
+    expect(guest.app.session.screen).toBe('lobby');
+    expect(guest.app.session.game).toBeNull();
+    expect(guest.toasts()).toContain('The host took you out of the crew.');
+  });
+
   it('the same key on a new screen gets the same player back, with what they had', () => {
     const { host, guest, game, link, tick } = table();
     tick(1);
