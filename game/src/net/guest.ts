@@ -240,9 +240,9 @@ export class GuestLink {
 
   private sendJoin(): void {
     this.joinSentAt = this.clock;
-    // The guest's own things: its player as the host last sent it, or before any word from the host, as kept.
-    const me = this.truth?.players.find((player) => player.id === this.playerId);
-    const carry = me ? carryOf(me) : this.carryKeeper?.read() ?? null;
+    // The guest's own things, as kept, on the way in. Asking again once this host has seated it (a knock, a line
+    // back): none, since the host's seat is newer than anything this guest holds, and sending ours would undo its last steps.
+    const carry = this.truth ? null : this.carryKeeper?.read() ?? null;
     this.send({ v: PROTOCOL_VERSION, type: 'join', name: this.name, key: this.key, character: this.character, ...(carry ? { carry } : {}) });
   }
 

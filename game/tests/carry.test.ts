@@ -219,6 +219,17 @@ describe('the guest keeps its carry', () => {
     expect(new CarryStore('Sam', storage).read()).toBeNull();
   });
 
+  it('asking again while seated brings nothing: the host\'s seat is newer than what the guest kept', () => {
+    const rig = createRig();
+    const sam = joinWith(rig, 'Sam', browserWith('Sam', good()));
+    rig.run(0.5);
+    // A pickup the guest has not heard of yet, then a knock.
+    rig.game.players[1]!.backpack.push({ itemId: 'stone', count: 4 });
+    sam.link.knock();
+    rig.run(0.5);
+    expect(rig.game.players[1]!.backpack).toContainEqual({ itemId: 'stone', count: 4 });
+  });
+
   it('two tabs under one name: the tab that was replaced writes nothing more', () => {
     const storage = browserWith('Sam', null);
     const rig = createRig();
