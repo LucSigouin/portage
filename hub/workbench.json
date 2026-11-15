@@ -6,7 +6,7 @@
   ],
   "title": "Portage",
   "subtitle": "The workbench: every step so far",
-  "updated": "2026-11-14, 22:10",
+  "updated": "2026-11-14, 23:35",
   "ask": "A flooded world and all you have is a canoe. Scavenge islands, craft, and build a crazy impressive canoe.",
   "now": [
     {
@@ -16,27 +16,27 @@
     },
     {
       "label": "Stage",
-      "value": "Round 6 fixes live: Version 1.0.430"
+      "value": "Own packs live: Version 1.0.448"
     },
     {
       "label": "Tests",
-      "value": "2605 unit pass. Browser set not rerun"
+      "value": "2631 unit pass. Co-op browser set passes"
     },
     {
       "label": "Running",
-      "value": "Nothing. Round 5 is done"
+      "value": "Outline pen, kick pack, card warning"
     },
     {
       "label": "Live now",
-      "value": "Host can kick. Two fixes for joiners"
+      "value": "Each guest keeps their own pack"
     },
     {
       "label": "Not live yet",
-      "value": "Nothing"
+      "value": "Outline pen, graphics-card warning"
     },
     {
       "label": "Waiting on you",
-      "value": "Play it, and your calls"
+      "value": "Play it with a friend"
     }
   ],
   "steps": [
