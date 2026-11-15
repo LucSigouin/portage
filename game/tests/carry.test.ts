@@ -8,7 +8,7 @@ import { TUNING } from '../src/data/index.ts';
 import { CARRY_VERSION, applyCarry, carryOf, freshCarry, readCarry } from '../src/net/carry.ts';
 import type { Carry } from '../src/net/carry.ts';
 import { PROTOCOL_VERSION, readClientMessage } from '../src/net/index.ts';
-import { addPlayer } from '../src/sim/index.ts';
+import { addPlayer, setConnected } from '../src/sim/index.ts';
 import { CARRY_WRITE_SECONDS, CarryStore, carrySlot } from '../src/client/carrystore.ts';
 import type { CarryStorage } from '../src/client/carrystore.ts';
 import { calmGame, createRig, key } from './net/rig.ts';
@@ -166,6 +166,21 @@ describe('the seat gets the carry, in each case of join', () => {
     expect(rig.game.players[1]!.backpack).toEqual([]);
     expect(rig.game.players[1]!.hunger).toBeCloseTo(80, 0);
     expect(rig.game.players[1]!.thirst).toBeCloseTo(75, 0);
+    expect(rig.settle()).toBe(true);
+  });
+
+  it('a stand-in nobody named, had by one who brings nothing: the starting kit, never what the seat holds', () => {
+    // A staged crew (`?crew=4`): the three extra seats are away, unnamed, bound to no key. One holds a pack.
+    const game = calmGame(4);
+    for (const player of game.players.slice(1)) setConnected(game, player.id, false, true);
+    game.players[1]!.backpack.push({ itemId: 'stone', count: 9 });
+    Object.assign(game.players[1]!, { hunger: 20 });
+    const rig = createRig({ game });
+    const eve = joinWith(rig, 'Eve', null);
+    rig.run(0.5);
+    expect(eve.link.playerId).toBe(1);
+    expect(rig.game.players[1]!.backpack).toEqual([]);
+    expect(rig.game.players[1]!.hunger).toBeCloseTo(80, 0);
     expect(rig.settle()).toBe(true);
   });
 });

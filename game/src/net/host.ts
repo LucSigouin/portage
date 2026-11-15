@@ -356,7 +356,11 @@ export class HostLink {
         !player.connected && player.id !== this.hostPlayerId && !this.bound(player.id);
       // Someone who played under this name before the host last started, a new seat, or a stand-in nobody named.
       const returning = name === '' ? undefined : game.players.find((player) => free(player) && player.name === name);
-      const room = returning ?? addPlayer(game) ?? game.players.find((player) => free(player) && player.name === '');
+      const added = returning ?? addPlayer(game);
+      const standIn = added ? undefined : game.players.find((player) => free(player) && player.name === '');
+      const room = added ?? standIn;
+      // A stand-in holds nobody's things: whoever sits there starts as on a seat taken over.
+      if (standIn) takenOver = true;
       // The canoe is full: the seat of whoever has been away the longest. All four here: no seat.
       const taken = room ?? this.longestAway();
       if (!taken) {
