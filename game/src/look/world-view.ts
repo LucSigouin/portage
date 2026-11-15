@@ -24,7 +24,7 @@ import { Builder, THIN } from './b2/geo.js';
 import { GU, PAL, inkMaterial } from './b2/palette.js';
 import { createPost, heroPen } from './b2/post.js';
 import type { Post } from './b2/post.js';
-import { DEFAULT_PEN } from './b2/pens.js';
+import { DEFAULT_PEN, PENS } from './b2/pens.js';
 import type { PenName } from './b2/pens.js';
 import { createSky } from './b2/sky.js';
 import { SHORE_ISLANDS, createWater } from './b2/water.js';
@@ -166,7 +166,7 @@ export interface LookProbe {
   puffs: number;
   /** Columns of light standing: one for each ping the crew has on the map. */
   beams: number;
-  /** The pen's sample the picture is drawn with: 'bold' (C) unless `?pen=` or `setPen` picked another (`b2/pens.js`). */
+  /** The pen's sample the picture is drawn with: 'calm-hull' (`DEFAULT_PEN`) unless `?pen=` or `setPen` picked another (`b2/pens.js`). */
   penName: PenName;
 }
 
@@ -228,7 +228,7 @@ export class InkWashWorldView implements WorldView {
   private readonly rain = new Rain();
   /** `&rain=0` leaves the rain's strokes out (the rings, the wet and the sky stay): to prove that in rain the land changes only where a stroke is drawn. */
   private rainStrokes = true;
-  /** `?pen=<name>` (or `setPen(name)`) draws with one of the pen's samples (`b2/pens.js`). C, `bold`, unless asked. */
+  /** `?pen=<name>` (or `setPen(name)`) draws with one of the pen's samples (`b2/pens.js`). The game's own, `calm-hull`, unless asked. */
   private penName: PenName = DEFAULT_PEN;
   private readonly islands: IslandView[] = [];
   private readonly beacon = new THREE.Group();
@@ -879,7 +879,7 @@ export class InkWashWorldView implements WorldView {
     if (this.post) Object.assign(this.post.bench, { draws: Math.max(1, Math.min(64, draws)), pass });
   }
 
-  /** Draw with one of the pen's samples (`b2/pens.js`): C, or another for a before-and-after. The same as `?pen=<name>`. */
+  /** Draw with one of the pen's samples (`b2/pens.js`): the game's own, or another for a before-and-after. The same as `?pen=<name>`. */
   setPen(name: PenName): void {
     if (!this.post || name === this.penName) return;
     this.post.setPen(name);
@@ -935,6 +935,13 @@ export class InkWashWorldView implements WorldView {
     return pixel[0];
   }
 
+  /** The read-out's line: the ladder's rung and the world's render scale (1: as sharp as the canvas; the heroes are always 1). */
+  ladderNote(): string {
+    const drawn = this.post?.state;
+    const scale = drawn && this.canvasWidth > 0 ? drawn.w / this.canvasWidth : 1;
+    return `rung ${this.ladder.rung} · world at ${scale.toFixed(2)} of the screen`;
+  }
+
   /** Numbers for the browser tests and the console: `window.portage.worldView.probe()`. */
   probe(): LookProbe {
     const state = this.state;
@@ -959,7 +966,7 @@ export class InkWashWorldView implements WorldView {
         fine: drawn?.heroFine ?? 0,
         crew: this.canoe.figuresShown(),
         figures: state && this.stage !== 'lobby' ? this.canoe.figures() : [],
-        pen: thinned ? heroPen(2 * Math.tan((this.camera.fov * Math.PI) / 360) * depth) : 1,
+        pen: thinned ? heroPen(2 * Math.tan((this.camera.fov * Math.PI) / 360) * depth, PENS[this.penName]?.hero) : 1,
         subject: figure && { x: figure.x / ratio, y: (this.canvasHeight - figure.y - figure.h) / ratio, width: figure.w / ratio, height: figure.h / ratio },
       },
       weather: {

@@ -249,7 +249,7 @@ export class App {
         framesPerSecond: Math.round(stats?.framesPerSecond ?? 0),
         frameMilliseconds: Math.round((stats?.frameMilliseconds ?? 0) * 10) / 10,
         workMilliseconds: Math.round((stats?.workMilliseconds ?? 0) * 10) / 10,
-        lines: debugLines,
+        lines: showFrameRate && this.worldView.ladderNote ? [this.worldView.ladderNote(), ...debugLines] : debugLines,
       } : null,
     });
     this.gameInterface.update(this.lastModel);

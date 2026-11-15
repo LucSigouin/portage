@@ -49,11 +49,13 @@ export const HERO_PEN = { start: 16.5, fall: 37, floor: 0.3 };
 export const CREW_LAYER = 1;
 
 // The share of its full width the pen keeps on a hero, where the window's height covers `span` metres of world.
-// The shader's heroPen() is this, with the same numbers.
-export function heroPen(span) {
-  const past = Math.max(0, span / HERO_PEN.start - 1);
-  const fallen = HERO_PEN.fall * past * past;
-  return 1 - ((1 - HERO_PEN.floor) * fallen) / (1 + fallen);
+// The shader's heroPen() is this, with the same numbers. `numbers`: a pen-far sample's own (pens.js: `hero`, as the
+// game's pen calm-hull has), or HERO_PEN for C and the older pens. The cards and the lobby's canoe (canoe-sketch.ts)
+// are drawn by the world's pen alone and keep HERO_PEN, so they look as they did.
+export function heroPen(span, numbers = HERO_PEN) {
+  const past = Math.max(0, span / numbers.start - 1);
+  const fallen = numbers.fall * past * past;
+  return 1 - ((1 - numbers.floor) * fallen) / (1 + fallen);
 }
 
 const COMPOSITE = /* glsl */ `
@@ -109,6 +111,11 @@ float crewAt(vec4 t){ return step(3.5, t.x); }
 float heroPen(float depth){
   float past = max(0., uSpan * depth / ${HERO_PEN.start.toFixed(4)} - 1.);
   float fallen = ${HERO_PEN.fall.toFixed(4)} * past * past;
+#ifdef PEN_FAR
+  // a pen-far sample (pens.js: hero) thins a small hero's pen sooner (pens.js: hero); today's numbers otherwise
+  past = max(0., uSpan * depth / PEN_HSTART - 1.);
+  return 1. - uThin * (1. - PEN_HFLOOR) * PEN_HFALL * past * past / (1. + PEN_HFALL * past * past);
+#endif
   return 1. - uThin * ${(1 - HERO_PEN.floor).toFixed(4)} * fallen / (1. + fallen);   // exactly 1 up to the start
 }
 #endif
@@ -149,6 +156,11 @@ vec4 penAt(vec2 uv, vec2 apx, float r, vec4 de, float inner, float weight, float
       bool waterT = t.a < .002;
       bool skyT = t.a > .998;
       bool thin = thinC || abs(t.a - THIN) < .0015;
+#ifdef PEN_FAR
+      // calm-keel, calm-hull: where a thing meets the water under its white foam line, the contour carries on along
+      // it. PEN_KEELW: on the world's things too (calm-keel 1), or on heroes alone (calm-hull 0: shores as they are)
+      if (waterC != waterT && (waterC ? t.b : aux.b) > .48 && !(skyC || skyT) && !thin) inkS += PEN_KEEL * mix(PEN_KEELW, 1., min(heroAt(t) + heroAt(aux), 1.));
+#endif
       if (waterC != waterT) {
         float nw = waterC ? t.b : aux.b;
         if (nw > .48) { if (waterC) foam += 1.; }
@@ -313,6 +325,12 @@ void main(){
     // A small hero gets a finer pen, and its lines wander less. A pixel out of that pen's reach of every hero
     // goes round again (world 1) for the world's own lines, drawn as the world draws them.
     float thin = heroW > 0. ? heroPen(1. / heroW) : 1.;
+#ifdef PEN_FAR
+    // a calm sample: as the hero's pen thins, its line stops wandering and swelling (the slim fallback's hand line)
+    float calm = clamp(PEN_CALM * (1. - thin) * 4., 0., 1.);
+    wob *= 1. - calm;
+    weight = mix(weight, PEN_WEIGHT, calm);
+#endif
     float world = 0.;
     vec4 pen;
     float zmin;
@@ -344,6 +362,10 @@ void main(){
 #endif
     // far away, seams inside an object fade so it reads as one washed shape with a clean silhouette
     float inner = mix(1., .2, smoothstep(16., 70., zq));
+#ifdef PEN_FAR
+    // a calm sample: seams inside a small hero fade with its pen, so its parts keep their colour
+    inner *= mix(1., thin, PEN_CALM);
+#endif
     vec4 de;
     zmin = zq;
     for (int i = 0; i < 4; i++) {
@@ -465,7 +487,8 @@ void main(){
 // frame (the camera turning, a paddle swinging) does not rebuild it.
 const roomFor = (room, need) => (need > room || need < room * 0.4 ? Math.ceil((need * 1.2) / 64) * 64 : room);
 
-// pen: the pen's sample both pens start with (pens.js). The game's own unless asked: C, `bold`.
+// pen: the pen's sample both pens start with (pens.js). The game's own unless asked: `calm-hull` (DEFAULT_PEN).
+// (The shader's own comment above PEN_FULL still says "C (bold) by default": that text is hash-pinned to main's, so it stays.)
 export function createPost(renderer, camera, pen = DEFAULT_PEN) {
   // colour: 4x multisampled, resolved by the renderer when the pass ends
   const color = new THREE.WebGLRenderTarget(4, 4, {

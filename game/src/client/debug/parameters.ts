@@ -13,7 +13,7 @@
  * - `?host=ROOM`: start a game that other tabs of this site can join. `&name=...` names the host.
  * - `?join=ROOM&name=...`: join it, from another tab or window on the same computer.
  *   A tester's door (a channel between tabs, no server), not the lobby's.
- * - `&pen=today` (or `full`, `near`, `bold`): draw with one of the pen's samples (`look/b2/pens.js`). The game's own is `bold` (C); `today` is the old pen. Saves stay as they are.
+ * - `&pen=bold` (or `today`, `full`, `near`, and the samples `soon`, `calm`, `fine`, `calm-keel`): draw with one of the pen's samples (`look/b2/pens.js`). The game's own is `calm-hull`; `bold` is C, the pen before it; `today` the pen before C. Saves stay as they are.
  *
  * And one that is not for testing: `?invite=CODE` is the link a host sends. It opens the lobby's
  * join panel with the code filled in. It touches nothing else: the player's own saves stay as they are.
@@ -55,6 +55,8 @@ export interface DebugParameters {
   invite: string | null;
   /** The pen's sample the look draws with: 'bold' (C) unless the address asks for another. It replaces no game: never a sandbox. */
   pen: PenName;
+  /** `&cam=<distance>,<pitch>[,<yaw>]`: a staged shot's camera at this distance (metres), pitch and yaw off the bow (radians). For pen pictures. */
+  cam: { distance: number; pitch: number; yaw: number | null } | null;
   /** True when a switch replaces the normal game: saves stay untouched. */
   sandbox: boolean;
 }
@@ -96,6 +98,7 @@ export function parseDebugParameters(query: string): DebugParameters {
     name: (values.get('name') ?? '').slice(0, 40),
     invite: /^[A-Za-z0-9-]{6,9}$/.test(values.get('invite') ?? '') ? values.get('invite') : null,
     pen: penFrom(values.get('pen')),
+    cam: /^\d+(\.\d+)?,\d+(\.\d+)?(,\d+(\.\d+)?)?$/.test(values.get('cam') ?? '') ? (([distance, pitch, yaw]) => ({ distance, pitch, yaw: yaw ?? null }))((values.get('cam') as string).split(',').map(Number)) : null,
     sandbox: bot || atQuest !== null || shot !== null || crew > 1 || host !== null || join !== null,
   };
 }

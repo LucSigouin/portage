@@ -12,7 +12,7 @@ import { parseDebugParameters } from '../../src/client/debug/parameters.ts';
 import { DEFAULT_PEN, PENS, PEN_NAMES, penDefines, penFrom, penReach } from '../../src/look/b2/pens.js';
 import type { PenName } from '../../src/look/b2/pens.js';
 import { terrainMaterialFor } from '../../src/look/b2/palette.js';
-import { createPost } from '../../src/look/b2/post.js';
+import { createPost, heroPen } from '../../src/look/b2/post.js';
 import { CAST_PEN, castPenWidth } from '../../src/look/cast-sketch.ts';
 
 /** The pen's shader on `main` at 2857012, before this round: its SHA-256 and its length (tools/pen-hash.mjs). */
@@ -57,23 +57,87 @@ const sampleDefines = (material: PenMaterial): Record<string, string | number> =
   Object.fromEntries(Object.entries(material.defines ?? {}).filter(([key]) => key.startsWith('PEN_')));
 
 /** The shader with every block of the samples taken out: what the graphics card compiles with no sample picked. */
-const withoutSamples = (text: string): string => text.replace(/#ifdef PEN_FULL\n[\s\S]*?#endif\n/g, '');
+const withoutSamples = (text: string): string => text.replace(/#ifdef PEN_(FULL|FAR)\n[\s\S]*?#endif\n/g, '');
 
-describe('with no switch the pen is C, Luc\'s pick', () => {
-  it('the game\'s pen is bold, and both pens start with it: the world\'s and the heroes\'', () => {
-    expect(DEFAULT_PEN).toBe('bold');
+describe('with no switch the pen is calm-hull, Luc\'s pick (round pen-far)', () => {
+  it('the game\'s pen is calm-hull, and both pens start with it: the world\'s and the heroes\'', () => {
+    expect(DEFAULT_PEN).toBe('calm-hull');
     const { world, hero, state } = pens(null);
-    expect(state).toBe('bold');
-    expect(sampleDefines(world)).toEqual(penDefines('bold'));
-    expect(sampleDefines(hero)).toEqual(penDefines('bold'));
-    expect(hero.defines).toEqual({ HERO: 1, ...penDefines('bold') });
-    expect(penDefines('bold')).toMatchObject({ PEN_FULL: 1, PEN_WIDTH: '1.6', PEN_SEAM: '0.8' });
+    expect(state).toBe('calm-hull');
+    expect(sampleDefines(world)).toEqual(penDefines('calm-hull'));
+    expect(sampleDefines(hero)).toEqual(penDefines('calm-hull'));
+    expect(hero.defines).toEqual({ HERO: 1, ...penDefines('calm-hull') });
   });
 
-  it('the address with no pen, or one it does not know, is C too', () => {
-    expect(parseDebugParameters('').pen).toBe('bold');
-    expect(parseDebugParameters('?pen=nonsense').pen).toBe('bold');
-    expect(penFrom(null)).toBe('bold');
+  it('it is C up close: C\'s width, weight and seam, and nothing eased by distance from the eye', () => {
+    const { hero: _hero, calm: _calm, keel: _keel, keelWorld: _keelWorld, ...upClose } = PENS['calm-hull']!;
+    expect(upClose).toEqual(PENS.bold);
+    expect(penDefines('calm-hull')).toMatchObject({ PEN_FULL: 1, PEN_WIDTH: '1.6', PEN_SEAM: '0.8', PEN_FAR: 1, PEN_HSTART: '6.', PEN_HFALL: '1.2', PEN_HFLOOR: '0.3', PEN_CALM: '1.', PEN_KEEL: '1.', PEN_KEELW: '0.' });
+    expect(penReach('calm-hull')).toBe(penReach('bold'));
+  });
+
+  it('a small hero\'s pen thins from 6 m of world across the window (C: from 16.5), down to the same floor', () => {
+    const hero = PENS['calm-hull']!.hero!;
+    expect(hero).toEqual({ start: 6, fall: 1.2, floor: 0.3 });
+    for (const span of [0, 3, 5.8, 6]) expect(heroPen(span, hero), `${span} m`).toBe(1);
+    // the staged island view, 8 m away at 60 degrees: 9.2 m across. C's pen is whole there, the game's is not
+    expect(heroPen(9.2)).toBe(1);
+    expect(heroPen(9.2, hero)).toBeLessThan(0.85);
+    expect(heroPen(9.2, hero)).toBeGreaterThan(0.7);
+    for (const span of [7, 9.2, 12, 16.5, 20]) expect(heroPen(span, hero), `${span} m`).toBeLessThan(heroPen(span));
+    expect(heroPen(4000, hero)).toBeGreaterThan(0.3);
+    expect(heroPen(4000, hero)).toBeLessThan(0.31);
+  });
+
+  it('C is still there by name, as it was: bold has none of the pen-far settings', () => {
+    expect(penDefines('bold')).toMatchObject({ PEN_FULL: 1, PEN_WIDTH: '1.6', PEN_SEAM: '0.8' });
+    expect(penDefines('bold').PEN_FAR).toBeUndefined();
+    expect(sampleDefines(pens('bold').world)).toEqual(penDefines('bold'));
+    expect(pens(null, 'bold').state).toBe('bold');
+  });
+
+  it('the address with no pen, or one it does not know, is the game\'s pen too', () => {
+    expect(parseDebugParameters('').pen).toBe('calm-hull');
+    expect(parseDebugParameters('?pen=nonsense').pen).toBe('calm-hull');
+    expect(parseDebugParameters('?pen=bold').pen).toBe('bold');
+    expect(penFrom(null)).toBe('calm-hull');
+  });
+});
+
+/**
+ * C (`bold`, the live pen) on `main` at e032290, as the graphics card is handed it: its defines as `#define` lines, then
+ * the shader's text. SHA-256 and length, world pass and hero pass (worked out from `main`'s own post.js, run 4).
+ */
+const BOLD_ON_MAIN = {
+  world: { sha256: '4bad77d9d1d073e32b22a5ba42558ffe806e14de7f2b372c0ffbddef5bd1b07b', length: 17293 },
+  hero: { sha256: '14d24fb8452894f35ffdf61280e2cb1e8055057f94d88c90716afcbcef6ae0ae', length: 17308 },
+};
+
+/** What the chip compiles: the `#ifdef PEN_FAR` blocks of the pen-far samples are dropped unless PEN_FAR is defined. */
+const compiled = (material: PenMaterial): string => {
+  const head = Object.entries(material.defines ?? {}).map(([key, value]) => `#define ${key} ${value}\n`).join('');
+  const text = material.defines?.PEN_FAR === undefined ? material.fragmentShader.replace(/#ifdef PEN_FAR\n[\s\S]*?#endif\n/g, '') : material.fragmentShader;
+  return head + text;
+};
+const sha256 = async (text: string): Promise<string> =>
+  [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+
+describe('C, the live pen, is compiled as it is on main, to the letter (review fault 3)', () => {
+  it('world and hero pass: the same defines and the same text as main gives', async () => {
+    const { world, hero } = pens('bold');
+    expect(world.defines?.PEN_FAR).toBeUndefined();
+    for (const [pass, material] of [['world', world], ['hero', hero]] as const) {
+      const text = compiled(material);
+      expect(text.length, pass).toBe(BOLD_ON_MAIN[pass].length);
+      expect(await sha256(text), pass).toBe(BOLD_ON_MAIN[pass].sha256);
+    }
+  });
+
+  it('the pen-far samples\' lines sit in their own blocks, none inside another', () => {
+    const text = pens(null).world.fragmentShader;
+    const blocks = text.match(/#ifdef PEN_FAR\n[\s\S]*?#endif\n/g) ?? [];
+    expect(blocks.length).toBeGreaterThan(3);
+    for (const block of blocks) expect(block.match(/#if|#else/g)).toHaveLength(1);
   });
 });
 
@@ -153,9 +217,10 @@ describe('?pen=today is the old pen, to the letter', () => {
 });
 
 describe('the pick screen\'s cards draw with the game\'s pen', () => {
-  it('under C a card\'s line is the game\'s width; under ?pen=today the old cards\' own', () => {
+  it('under C and the game\'s pen a card\'s line is the game\'s width; under ?pen=today the old cards\' own', () => {
     expect(castPenWidth('bold')).toBe(1);
     expect(castPenWidth(DEFAULT_PEN)).toBe(1);
+    expect(castPenWidth('calm-hull')).toBe(1);
     expect(castPenWidth('today')).toBe(CAST_PEN.width);
     expect(CAST_PEN).toEqual({ wobble: 0, weight: 1, width: 0.8 });
   });
@@ -163,22 +228,22 @@ describe('the pick screen\'s cards draw with the game\'s pen', () => {
 
 describe('one switch: ?pen=<name>', () => {
   it('reads a name or its letter, in any case', () => {
-    expect(PEN_NAMES).toEqual(['today', 'full', 'bold', 'near']);
+    expect(PEN_NAMES).toEqual(['today', 'full', 'bold', 'near', 'soon', 'calm', 'fine', 'calm-keel', 'calm-hull']);
     for (const name of PEN_NAMES) expect(penFrom(name)).toBe(name);
     expect(['a', 'b', 'c', 'd'].map(penFrom)).toEqual(['today', 'full', 'bold', 'near']);
     expect(penFrom(' Bold ')).toBe('bold');
     expect(penFrom('C')).toBe('bold');
   });
 
-  it('anything else, or nothing, is the game\'s pen: C', () => {
-    for (const text of [null, undefined, '', 'e', 'thick', '1', 'full;bold', 'constructor', '__proto__', 'toString']) expect(penFrom(text), String(text)).toBe('bold');
+  it('anything else, or nothing, is the game\'s pen: calm-hull', () => {
+    for (const text of [null, undefined, '', 'e', 'thick', '1', 'full;bold', 'constructor', '__proto__', 'toString']) expect(penFrom(text), String(text)).toBe('calm-hull');
   });
 
   it('the address parameter hands it over, and replaces no game: saves stay in use', () => {
-    expect(parseDebugParameters('').pen).toBe('bold');
+    expect(parseDebugParameters('').pen).toBe('calm-hull');
     expect(parseDebugParameters('?pen=today')).toMatchObject({ pen: 'today', sandbox: false, shot: null });
     expect(parseDebugParameters('?shot=island&pen=d')).toMatchObject({ pen: 'near', shot: 'island', sandbox: true });
-    expect(parseDebugParameters('?pen=nonsense').pen).toBe('bold');
+    expect(parseDebugParameters('?pen=nonsense').pen).toBe('calm-hull');
   });
 });
 
@@ -201,8 +266,11 @@ describe('the samples', () => {
   it('every setting reaches the shader as a number it can read (a float, never a bare integer)', () => {
     for (const name of samples) {
       const defines = penDefines(name);
-      expect(Object.keys(defines).sort()).toEqual(['PEN_FROM', 'PEN_FULL', 'PEN_SEAM', 'PEN_TO', 'PEN_WEIGHT', 'PEN_WIDTH']);
-      for (const key of ['PEN_FROM', 'PEN_SEAM', 'PEN_TO', 'PEN_WEIGHT', 'PEN_WIDTH']) {
+      const far = PENS[name]!.hero !== undefined;
+      const base = ['PEN_FROM', 'PEN_FULL', 'PEN_SEAM', 'PEN_TO', 'PEN_WEIGHT', 'PEN_WIDTH'];
+      const farKeys = ['PEN_CALM', 'PEN_FAR', 'PEN_HFALL', 'PEN_HFLOOR', 'PEN_HSTART', 'PEN_KEEL', 'PEN_KEELW'];
+      expect(Object.keys(defines).sort(), name).toEqual((far ? [...base, ...farKeys] : base).sort());
+      for (const key of ['PEN_FROM', 'PEN_SEAM', 'PEN_TO', 'PEN_WEIGHT', 'PEN_WIDTH', ...(far ? ['PEN_HFALL', 'PEN_HFLOOR', 'PEN_HSTART'] : [])]) {
         expect(String(defines[key]), `${name} ${key}`).toMatch(/^\d*\.\d*$/);
         expect(Number(defines[key])).toBeGreaterThan(0);
       }
@@ -240,6 +308,22 @@ describe('the samples', () => {
     }
     expect(penReach('near')).toBe(1);
     expect(penReach('bold')).toBeGreaterThan(penReach('full'));
+  });
+});
+
+describe('the waterline line (calm-keel, calm-hull)', () => {
+  it('calm-keel inks every waterline, calm-hull only a hero\'s: the same pen otherwise', () => {
+    expect(penDefines('calm-keel')).toMatchObject({ PEN_KEEL: '1.', PEN_KEELW: '1.' });
+    expect(penDefines('calm-hull')).toMatchObject({ PEN_KEEL: '1.', PEN_KEELW: '0.' });
+    const { PEN_KEELW: _hull, ...hull } = penDefines('calm-hull');
+    const { PEN_KEELW: _keel, ...keel } = penDefines('calm-keel');
+    expect(hull).toEqual(keel);
+    expect(penDefines('calm')).toMatchObject({ PEN_KEEL: '0.' });
+  });
+
+  it('the line is gated on a hero texel on either side of the edge, scaled by PEN_KEELW elsewhere', () => {
+    const text = pens(null).world.fragmentShader;
+    expect(text).toContain('inkS += PEN_KEEL * mix(PEN_KEELW, 1., min(heroAt(t) + heroAt(aux), 1.));');
   });
 });
 

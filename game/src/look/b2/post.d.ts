@@ -20,7 +20,7 @@ export interface Post {
     heroRoomW: number; heroRoomH: number; heroInkScale: number; heroWindows: PostWindow[]; heroFine: number;
     /** Pixels of hero colour buffer drawn for the last hero window of the last frame. 0 when none was. */
     heroDrawnW: number; heroDrawnH: number;
-    /** The pen's sample both pens are drawn with. The one `createPost` was given ('bold' unless asked), then the last `setPen`. */
+    /** The pen's sample both pens are drawn with. The one `createPost` was given (`DEFAULT_PEN`, 'calm-hull', unless asked), then the last `setPen`. */
     pen: PenName;
   };
   /**
@@ -48,7 +48,7 @@ export interface Post {
   ): void;
   dispose(): void;
 }
-/** `pen`: the pen's sample both pens start with. The game's own (`DEFAULT_PEN`, C) unless asked. */
+/** `pen`: the pen's sample both pens start with. The game's own (`DEFAULT_PEN`, 'calm-hull') unless asked. */
 export function createPost(renderer: WebGLRenderer, camera: Camera, pen?: PenName): Post;
 
 /**
@@ -59,4 +59,4 @@ export const HERO_PEN: { start: number; fall: number; floor: number };
 /** The crew's render layer: every mesh of a figure is on it, and the hero pass marks their texels so the pen draws a figure's edge as a contour. */
 export const CREW_LAYER: number;
 /** The share of its full width the pen keeps on a hero, where the window's height covers `span` metres of world. */
-export function heroPen(span: number): number;
+export function heroPen(span: number, numbers?: { start: number; fall: number; floor: number }): number;
