@@ -537,6 +537,11 @@ export class GuestLink {
     return this.events.splice(0, count).map((entry) => entry.event);
   }
 
+  /** Write the waiting carry now, staying in the game: the page went hidden and may never say it is closing. */
+  keepCarry(): void {
+    this.carryKeeper?.flush();
+  }
+
   /** Leave the game: tell the host and close the wire. */
   close(): void {
     if (this.status === 'closed' || this.status === 'refused') return;

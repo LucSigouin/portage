@@ -484,6 +484,8 @@ export class Session {
       this.endBuiltView();
       this.input.releaseAll();
       if (this.game && this.slot !== null) this.saveNow();
+      // A hidden tab may be killed without a word: a guest writes its carry now.
+      this.guest?.keepCarry();
     } else {
       // A guest hidden for a while may have been marked away: ask straight back in.
       this.guest?.knock();
