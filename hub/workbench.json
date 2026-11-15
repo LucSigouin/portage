@@ -6,7 +6,7 @@
   ],
   "title": "Portage",
   "subtitle": "The workbench: every step so far",
-  "updated": "2026-11-15, 08:55",
+  "updated": "2026-11-15, 11:40",
   "ask": "A flooded world and all you have is a canoe. Scavenge islands, craft, and build a crazy impressive canoe.",
   "now": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "label": "Stage",
-      "value": "Calmer pen live: Version 1.0.477"
+      "value": "Feedback plan live: Version 1.0.484"
     },
     {
       "label": "Tests",
@@ -24,19 +24,19 @@
     },
     {
       "label": "Running",
-      "value": "Nothing"
+      "value": "Round 7: 12 fixes from your notes"
     },
     {
       "label": "Live now",
-      "value": "Calmer pen. Kicked keep packs. Card note"
+      "value": "Calmer pen. A plan for every note"
     },
     {
       "label": "Not live yet",
-      "value": "Nothing"
+      "value": "12 fixes, in test"
     },
     {
       "label": "Waiting on you",
-      "value": "Play it, look at the new pen"
+      "value": "Read the plan on the feedback page"
     }
   ],
   "steps": [
