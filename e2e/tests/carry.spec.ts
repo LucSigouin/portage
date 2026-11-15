@@ -124,7 +124,12 @@ test('leave and come back with your pack: a guest\'s things go with them to anot
   const codeA = await hostCrew(first, 'Luc');
   let sam = await joinByLink(samProfile, codeA, 'Sam', problems);
   const samAtA = await localId(sam);
-  await give(first, samAtA, 6);
+  // One first, then five: the five come inside the carry's five-second write window, so only
+  // the leave's own write can put the six in Sam's browser. (On a slow machine the window may
+  // pass first and the six be written anyway: then this leg cannot see a missing leave write.)
+  await give(first, samAtA, 1);
+  await expect.poll(() => driftwoodOf(sam, samAtA)).toBe(1);
+  await give(first, samAtA, 5);
   await expect.poll(() => driftwoodOf(sam, samAtA)).toBe(6);
   // Sam closes the window: the leave writes the carry into his browser at once.
   await leave(sam);
