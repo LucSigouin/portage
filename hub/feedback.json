@@ -6,12 +6,170 @@
     "A note that is fixed and live: state \"handled\" and \"fixed\" the version that fixed it, like 1.0.410. The page crosses it out.",
     "tag: one short line under the note, or \"\". related: the numbers of notes about the same thing.",
     "shortened: true when the reader cut the note off. The page ends it with an ellipsis.",
+    "plan: what we would do about the open notes. Its jobs are shown grouped by size, in the order small, medium, big, answered.",
+    "A job: id (lower case letters, used once), title, notes (the numbers of the open notes it answers), asked, fix, size, waits.",
+    "size: small, medium, big or answered. sizes holds the name of each and size_words the one line under it.",
+    "Every open note must be in at least one job, and a job may name open notes only: the build stops otherwise.",
+    "When a note is fixed and live: mark it handled, then take it out of its job, and drop a job left with no notes.",
     "Every count on the page is worked out from this list. Type none. Then set \"updated\"."
   ],
   "title": "Portage",
   "subtitle": "Feedback: every note from play testers",
-  "updated": "2026-11-14, 23:30",
-  "intro": "Every note play testers have sent from the game’s Feedback menu, newest first. A note that is crossed out is fixed and live.",
+  "updated": "2026-11-15, 10:30",
+  "intro": "Every note play testers have sent from the game’s Feedback menu, newest first. A note that is crossed out is fixed and live. Each open note names its planned fix.",
+  "plan": {
+    "heading": "What we would do",
+    "intro": "Every open note, sorted into jobs. Each job says what was asked, the fix, and what it waits on. Nothing here is built yet.",
+    "sizes": {
+      "small": "Small",
+      "medium": "Medium",
+      "big": "Big",
+      "answered": "Answered"
+    },
+    "size_words": {
+      "small": "One number or one rule. Several fit in one round.",
+      "medium": "A new piece of the game. One builder, one round.",
+      "big": "Changes the world or the design. A round of its own.",
+      "answered": "Nothing left to build."
+    },
+    "jobs": [
+      {
+        "id": "flags",
+        "title": "The red flags come off the islands",
+        "notes": [24, 13],
+        "asked": "Two of you: the red flags on the landings are clutter. One note also names the yellow sand.",
+        "fix": "The red pennants go. You can land on any shore, so they point at nothing you need. The pale sand at a landing stays: it is the ground itself, and it shows where the slope is easy.",
+        "size": "small",
+        "waits": "Luc: flags only, or the sand too?"
+      },
+      {
+        "id": "names",
+        "title": "An island's name shows once it is charted",
+        "notes": [25, 14],
+        "asked": "Names hang over islands you have not reached yet.",
+        "fix": "Today every name shows from 1,400 m off. After: a name shows from the moment the island is charted, about 260 m from its shore, and not before.",
+        "size": "small",
+        "waits": "Luc's yes."
+      },
+      {
+        "id": "stacks",
+        "title": "99 to a stack",
+        "notes": [28, 23],
+        "asked": "The pack fills too fast. A stack holds 20.",
+        "fix": "A stack holds 99: in the pack, in the canoe and in every chest. The pack keeps its 8 places. Storage builds will matter less after this.",
+        "size": "small",
+        "waits": "Luc's yes."
+      },
+      {
+        "id": "wellfed",
+        "title": "Well fed, less tired",
+        "notes": [27],
+        "asked": "With hunger and thirst at 75 or more, energy should drain half as fast.",
+        "fix": "While both are at 75 or more, everything that costs energy costs half: hard paddling, running, bailing, a cold night, a storm. A word on the screen says when it is on.",
+        "size": "small",
+        "waits": "Luc's yes."
+      },
+      {
+        "id": "sail",
+        "title": "The sail fades out near the wind",
+        "notes": [29],
+        "asked": "The sail should draw as little as 5%. Today its least is 45%.",
+        "fix": "With a rudder the sail draws 45% on every course until the dead zone, then nothing. After: across the wind it still draws 45%, and from there it falls evenly to 5% at the edge of the dead zone.",
+        "size": "small",
+        "waits": "Luc: this, or 5% on every course off the wind? That one makes the rudder worth far less."
+      },
+      {
+        "id": "showcase",
+        "title": "A new piece is shown to the whole crew, for longer",
+        "notes": [21],
+        "asked": "The view of a new build should show for everyone, and last 3 to 5 seconds longer.",
+        "fix": "The still view of the canoe after a build holds 6 seconds, up from 2. Everyone in the crew gets it, not only the builder. Any key still ends it.",
+        "size": "small",
+        "waits": "Luc's yes."
+      },
+      {
+        "id": "pins",
+        "title": "Pin a recipe or a canoe piece",
+        "notes": [19, 20],
+        "asked": "Pinning recipes is a must. A pinned canoe build should show for everyone.",
+        "fix": "A pin on every recipe and every canoe piece. A pinned one stays on the screen with what you have and what is still missing. A pinned recipe is yours alone. A pinned canoe piece shows for the whole crew.",
+        "size": "medium",
+        "waits": "Luc's yes."
+      },
+      {
+        "id": "rejoin",
+        "title": "Left on an island: swim out to the canoe",
+        "notes": [15],
+        "asked": "When a teammate leaves the island with the canoe, go in the water and press F to be put in the boat.",
+        "fix": "When the crew paddles off without you, wade into the water and press F. You are put in the canoe. It works only while the canoe is afloat with someone aboard.",
+        "size": "medium",
+        "waits": "Luc's yes."
+      },
+      {
+        "id": "stutter",
+        "title": "A guest's canoe stutters at speed",
+        "notes": [30],
+        "asked": "The game stutters a lot for a guest when the canoe goes fast.",
+        "fix": "Likely cause, not measured yet: a guest draws the canoe a tenth of a second behind the host. When the host's word comes late the canoe stops, then catches up. At sail speed that shows. The fix: the guest waits a little longer on an uneven line, and the canoe runs on along its course where today it stops.",
+        "size": "medium",
+        "waits": "A measurement on a slow line first."
+      },
+      {
+        "id": "vote",
+        "title": "The crew votes on canoe builds",
+        "notes": [20],
+        "asked": "In a crew, anything that upgrades the canoe needs a majority vote.",
+        "fix": "In a crew, a build on the canoe asks first. A card on every screen names the piece and its cost, with yes and no. More than half say yes: it is built. A tie, or no answer in 20 seconds: it is not. Alone, nothing changes.",
+        "size": "medium",
+        "waits": "Luc's yes. With two players, more than half means both."
+      },
+      {
+        "id": "barrels",
+        "title": "Rain barrels",
+        "notes": [22],
+        "asked": "Rain barrels do not make sense right now.",
+        "fix": "The note does not say what is wrong. Best guess: a barrel on an island fills again every 10 minutes, rain or no rain. If that is it: a barrel fills only while it rains, and reads empty until then.",
+        "size": "small",
+        "waits": "A word from the sender on what did not make sense. Luc set the 10 minute rule himself, so it is also his call."
+      },
+      {
+        "id": "bigknoll",
+        "title": "A much bigger first island",
+        "notes": [16],
+        "asked": "The first island should be five times the size, with the first 3 to 5 quests on it.",
+        "fix": "Home Knoll grows to five times its ground: from about 116 by 92 m to about 260 by 205 m, which still fits between its neighbours. What the first five quests need moves onto it, so the first crossing comes once you can patch and bail.",
+        "size": "big",
+        "waits": "Luc's yes. The ground, the trees, the quests' places and old saves all move, so it gets its own round and its own review."
+      },
+      {
+        "id": "opeongo",
+        "title": "Lake Opeongo",
+        "notes": [18, 26],
+        "asked": "Make the lake the real Lake Opeongo in Algonquin Park, with its own map and new systems.",
+        "fix": "Not planned. The map, the story and every quest stand on the flooded valley, so a new lake is a new game. A small nod is cheap: a bay or an island named after the real lake.",
+        "size": "big",
+        "waits": "Luc's call."
+      },
+      {
+        "id": "oneframe",
+        "title": "One frame at a time",
+        "notes": [10],
+        "asked": "The game ran at about one frame.",
+        "fix": "Cause found: that browser was drawing the game without the graphics card. Since Version 1.0.477 the menu and the join card say so, and name the setting to turn on.",
+        "size": "answered",
+        "waits": "Open until it is seen working on the computer that had it."
+      },
+      {
+        "id": "tracker",
+        "title": "A place to track bugs and ideas",
+        "notes": [31],
+        "asked": "A way to log and track bugs and ideas, sorted and marked by how much they matter.",
+        "fix": "This page is that place now. Every open note has a job, a size and what it waits on. A fixed note is crossed out with the version that fixed it.",
+        "size": "answered",
+        "waits": "Nothing."
+      }
+    ]
+  },
   "notes": [
     {
       "n": 31,
@@ -351,7 +509,7 @@
       "text": "I'm getting one frame",
       "state": "open",
       "fixed": "",
-      "tag": "Cause found, warning not built",
+      "tag": "",
       "related": [],
       "shortened": false
     },

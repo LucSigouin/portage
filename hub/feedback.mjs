@@ -7,6 +7,8 @@
 //
 // KEEPING IT CURRENT
 //   Edit hub/feedback.json only: the words and the notes. Its "_how" lines explain the shape. Then rebuild.
+//   The same file holds the plan ("plan"): the open notes sorted into jobs, each with its fix. The page shows it
+//   as "What we would do", and each open note links to its job. The build stops on a plan that does not fit the notes.
 //   Every count on the page is worked out here from that list. The page is src/feedback.html with the
 //   workbench's rules (src/workbench.css) and its own few (src/feedback.css) inlined.
 //   No word on the page is written here, except the labels in LABELS below.
@@ -36,6 +38,8 @@ const GAME = 'https://sigouin.net/portage/';
 
 const KINDS = ['bug', 'idea', 'other'];
 const STATES = ['open', 'handled', 'check'];
+/** A job's size, in the order the page shows the groups. */
+const SIZES = ['small', 'medium', 'big', 'answered'];
 /** A note with more lines than this shows its first lines, and folds the rest away. */
 const LONG_NOTE_LINES = 6;
 const FIRST_LINES = 2;
@@ -68,6 +72,14 @@ const WORDS = {
   related: 'Related to',
   shortened: 'Shortened: the reader cuts long notes',
   whole: 'Read the whole note',
+  planned: 'Planned fix:',
+  asked: 'Asked',
+  fix: 'The fix',
+  waits: 'Waits on',
+  note: 'Note',
+  jobs: ['job', 'jobs'],
+  jobs_for: 'for',
+  open_notes: ['open note', 'open notes'],
 };
 
 const TICK = '<svg class="tick" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.8c2 1.5 3.6 3.3 4.9 5.4C12 12 15.5 7.5 20.5 3.8"/></svg>';
@@ -108,6 +120,35 @@ function checkWords(words) {
       if (!players.has(other) || other === note.n) fault(`note ${note.n}: "related" names note ${other}, which is not another player's note in the list.`);
     }
   }
+
+  // The plan: every open note sorted into a job. Checked as strictly as the notes.
+  const plan = words.plan;
+  if (plan === null || typeof plan !== 'object' || Array.isArray(plan)) fault('there is no "plan". Every open note needs a job in it.');
+  for (const key of ['heading', 'intro']) text(plan[key], `plan: "${key}"`);
+  for (const key of ['sizes', 'size_words']) {
+    if (plan[key] === null || typeof plan[key] !== 'object') fault(`plan: "${key}" must hold a line of text for each of: ${SIZES.join(', ')}.`);
+    for (const size of SIZES) text(plan[key][size], `plan: "${key}" for "${size}"`);
+  }
+  if (!Array.isArray(plan.jobs) || plan.jobs.length === 0) fault('plan: "jobs" must be a list with a job in it.');
+  const open = new Set(words.notes.filter((note) => note.state === 'open').map((note) => note.n));
+  const ids = new Set();
+  const planned = new Set();
+  plan.jobs.forEach((job, index) => {
+    if (job === null || typeof job !== 'object') fault(`plan: job ${index + 1} in the list is not a job.`);
+    if (typeof job.id !== 'string' || !/^[a-z]+$/.test(job.id)) fault(`plan: job ${index + 1} in the list has the id "${job.id}". An id is lower case letters only.`);
+    const where = `job "${job.id}"`;
+    if (ids.has(job.id)) fault(`${where} is in the plan twice. An id is used once.`);
+    ids.add(job.id);
+    for (const key of ['title', 'asked', 'fix', 'waits']) text(job[key], `${where}: "${key}"`);
+    if (!SIZES.includes(job.size)) fault(`${where}: "size" is "${job.size}". It must be one of: ${SIZES.join(', ')}.`);
+    if (!Array.isArray(job.notes) || job.notes.length === 0) fault(`${where}: "notes" must be a list of note numbers with a number in it.`);
+    for (const number of job.notes) {
+      if (!open.has(number)) fault(`${where} names note ${number}, which is not an open note in the list.`);
+      if (job.notes.indexOf(number) !== job.notes.lastIndexOf(number)) fault(`${where} names note ${number} twice.`);
+      planned.add(number);
+    }
+  });
+  for (const number of open) if (!planned.has(number)) fault(`note ${number} is open and no job in the plan names it.`);
 }
 
 /** The game's version, as the game works it out. 'unknown' without git. */
@@ -147,7 +188,7 @@ function saidHtml(note) {
     + `<details class="more"><summary><span class="btn">${WORDS.whole}</span></summary><p>${wrap(rest)}</p></details></div>`;
 }
 
-function noteHtml(note) {
+function noteHtml(note, jobs) {
   const handled = note.state === 'handled';
   const state = handled
     ? `<span class="state is-done">${TICK}<span>${WORDS.fixed} ${escapeHtml(note.fixed)}</span></span>`
@@ -162,9 +203,40 @@ function noteHtml(note) {
   return `      <li class="note paper is-${note.state}" id="note-${note.n}" data-state="${note.state}">`
     + `<div class="top"><span class="pip">${note.n}</span><span class="kind over">${KIND_LABEL[note.kind]}</span>${state}</div>`
     + saidHtml(note)
+    + (jobs.length ? `<p class="fix">${WORDS.planned} ${jobs.map((job) => `<a href="#job-${job.id}">${escapeHtml(job.title)}</a>`).join(', ')}</p>` : '')
     + `<p class="who">${who}</p>`
     + (tags.length ? `<ul class="tags">${tags.map((tag) => `<li>${tag}</li>`).join('')}</ul>` : '')
     + '</li>';
+}
+
+/** One job of the plan: a card with what was asked, the fix, what it waits on, and its notes as links. */
+function jobHtml(job, plan) {
+  const row = (label, value) => `<div><dt class="over">${label}</dt><dd>${escapeHtml(value)}</dd></div>`;
+  return `        <li class="job paper" id="job-${job.id}" data-size="${job.size}">`
+    + `<div class="top"><h4 class="job-title">${escapeHtml(job.title)}</h4><span class="size-label over">${escapeHtml(plan.sizes[job.size])}</span></div>`
+    + `<dl>${row(WORDS.asked, job.asked)}${row(WORDS.fix, job.fix)}${row(WORDS.waits, job.waits)}</dl>`
+    + `<p class="job-notes">${job.notes.map((number) => `<a href="#note-${number}">${WORDS.note} ${number}</a>`).join(', ')}</p>`
+    + '</li>';
+}
+
+/** The plan's jobs, grouped by size in the order of SIZES. Inside a group the plan's own order is kept. A size with no job is left out. */
+function planHtml(plan) {
+  return SIZES.map((size) => ({ size, jobs: plan.jobs.filter((job) => job.size === size) }))
+    .filter(({ jobs }) => jobs.length > 0)
+    .map(({ size, jobs }) => `    <section class="size" id="size-${size}" aria-labelledby="size-${size}-heading">\n`
+      + `      <h3 class="size-name" id="size-${size}-heading">${escapeHtml(plan.sizes[size])} <b>${jobs.length}</b></h3>\n`
+      + `      <p class="size-words">${escapeHtml(plan.size_words[size])}</p>\n`
+      + `      <ul class="jobs">\n${jobs.map((job) => jobHtml(job, plan)).join('\n')}\n      </ul>\n`
+      + '    </section>').join('\n');
+}
+
+/** "15 jobs for 19 open notes: 7 small, 4 medium, 2 big, 2 answered", every number counted from the list. */
+function planCount(plan, open) {
+  const sizes = SIZES.map((size) => ({ size, count: plan.jobs.filter((job) => job.size === size).length }))
+    .filter(({ count }) => count > 0)
+    .map(({ size, count }) => `${count} ${plan.sizes[size].toLowerCase()}`).join(', ');
+  const many = (count, [one, more]) => `${count} ${count === 1 ? one : more}`;
+  return `${many(plan.jobs.length, WORDS.jobs)} ${WORDS.jobs_for} ${many(open, WORDS.open_notes)}: ${sizes}`;
 }
 
 const checkHtml = (note) => `<li class="check"><p class="said">${escapeHtml(note.text)}</p>`
@@ -186,7 +258,10 @@ export function buildFeedback(out, { words = JSON.parse(read(join(HUB, 'feedback
     handled: players.filter((note) => note.state === 'handled').length,
     open: players.filter((note) => note.state === 'open').length,
     checks: checks.length,
+    jobs: words.plan.jobs.length,
   };
+  /** The jobs that name a note, in the plan's order. Only an open note has any. */
+  const jobsOf = (note) => words.plan.jobs.filter((job) => job.notes.includes(note.n));
   const kinds = KINDS.map((kind) => ({ kind, count: players.filter((note) => note.kind === kind).length }))
     .filter(({ count }) => count > 0)
     .map(({ kind, count }) => `${count} ${KIND_COUNT[kind][count === 1 ? 0 : 1]}`).join(', ');
@@ -219,13 +294,17 @@ export function buildFeedback(out, { words = JSON.parse(read(join(HUB, 'feedback
     version: escapeHtml(gameVersion()),
     kinds: escapeHtml(kinds),
     filter: button('all', LABELS.all, counts.notes, true) + button('open', LABELS.open, counts.open, false) + button('handled', LABELS.handled, counts.handled, false),
-    notes: players.map(noteHtml).join('\n'),
+    notes: players.map((note) => noteHtml(note, jobsOf(note))).join('\n'),
+    plan_heading: escapeHtml(words.plan.heading),
+    plan_intro: escapeHtml(words.plan.intro),
+    plan_count: escapeHtml(planCount(words.plan, counts.open)),
+    plan: planHtml(words.plan),
     check_count: String(counts.checks),
     checks: checks.map(checkHtml).join(''),
     ...Object.fromEntries(Object.entries(LABELS).map(([key, label]) => [`label_${key}`, label])),
   });
   writeFileSync(join(folder, 'feedback.html'), html);
-  say(`feedback.html ${counts.notes} notes, ${counts.handled} handled, ${counts.open} open, ${counts.checks} deploy checks, ${fonts.length} fonts, ${(Buffer.byteLength(html) / 1024).toFixed(0)} KB of HTML: ${folder}`);
+  say(`feedback.html ${counts.notes} notes, ${counts.handled} handled, ${counts.open} open, ${counts.jobs} jobs in the plan, ${counts.checks} deploy checks, ${fonts.length} fonts, ${(Buffer.byteLength(html) / 1024).toFixed(0)} KB of HTML: ${folder}`);
   return { file: join(folder, 'feedback.html'), counts };
 }
 
