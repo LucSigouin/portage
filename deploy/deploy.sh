@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Publishes the game at https://sigouin.net/portage/, and the workbench page at https://sigouin.net/portage/workbench.
+# Publishes the game at https://sigouin.net/portage/, the workbench page at https://sigouin.net/portage/workbench
+# and the feedback page at https://sigouin.net/portage/feedback.
 # It builds main, tests the build under sigouin.net's security policy, copies it into the sigouin.net site
 # folder, runs that site's own deploy script, then checks that the live files are the built files.
 #
@@ -36,6 +37,7 @@ fail() { printf 'STOPPED: %s\nLast lines of %s:\n' "$1" "$LOG" >&2; tail -n 15 "
 [ -z "$(git -C "$SITE" status --porcelain -- site ':!site/portage' ':!site/_headers')" ] || fail 'sigouin-net/site has other uncommitted changes.'
 grep -q '^/portage/$' "$SITE/site/_headers" || fail 'sigouin-net/site/_headers has no /portage/ block.'
 grep -q '^/portage/workbench$' "$SITE/site/_headers" || fail 'sigouin-net/site/_headers has no /portage/workbench block.'
+grep -q '^/portage/feedback$' "$SITE/site/_headers" || fail 'sigouin-net/site/_headers has no /portage/feedback block.'
 
 # The relay's first line is its word that it is up. Its second line names its build, which this script does not need.
 [ "$(curl -s -m 10 "https://sigouin.net${RELAY_PATH}/health?fresh=$(date +%s)" | head -n 1)" = 'portage relay: ok' ] \
@@ -49,10 +51,13 @@ PORTAGE_RELAY="$RELAY_PATH" "$ROOT/game/node_modules/.bin/vite" build "$ROOT/gam
 grep -q "$RELAY_PATH" "$DIST"/assets/*.js && grep -q 'new WebSocket' "$DIST"/assets/*.js || fail 'The build has no relay in it: no "Host a crew" would show.'
 # The public copy of the workbench page goes into the same folder, so it is tested, uploaded and hash-checked with the game.
 node "$ROOT/hub/workbench.mjs" --out "$DIST" --public >> "$LOG" 2>&1 || fail 'The workbench page did not build.'
-printf '2/6 built commit %s, and the workbench page (%s)\n' "$(git -C "$ROOT" rev-parse --short HEAD)" "$(grep -E 'workbench\.html [0-9]+ steps' "$LOG" | tail -n 1 | sed -E 's/^.*workbench\.html (.*): .*$/\1/')"
+# The feedback page goes into the same folder, the same way.
+node "$ROOT/hub/feedback.mjs" --out "$DIST" >> "$LOG" 2>&1 || fail 'The feedback page did not build.'
+printf '2/6 built commit %s, the workbench page (%s) and the feedback page (%s)\n' "$(git -C "$ROOT" rev-parse --short HEAD)" "$(grep -E 'workbench\.html [0-9]+ steps' "$LOG" | tail -n 1 | sed -E 's/^.*workbench\.html (.*): .*$/\1/')" "$(grep -E 'feedback\.html [0-9]+ notes' "$LOG" | tail -n 1 | sed -E 's/^.*feedback\.html (.*): .*$/\1/')"
 
 node "$ROOT/deploy/smoke.mjs" local "$DIST" "$SITE/site/_headers" >> "$LOG" 2>&1 || fail "The build does not run under sigouin.net's security policy."
 node "$ROOT/deploy/smoke-workbench.mjs" local "$DIST" "$SITE/site/_headers" >> "$LOG" 2>&1 || fail "The workbench page fails under sigouin.net's security policy."
+node "$ROOT/deploy/smoke-feedback.mjs" local "$DIST" "$SITE/site/_headers" >> "$LOG" 2>&1 || fail "The feedback page fails under sigouin.net's security policy."
 printf "3/6 the build runs under sigouin.net's security policy\n"
 
 rsync -a --delete "$DIST/" "$SITE/site/portage/"
@@ -73,7 +78,7 @@ while IFS= read -r file; do
   relative="${file#"$DIST"/}"
   [ "$relative" = index.html ] && continue
   local_hash="$(shasum -a 256 < "$file" | cut -d' ' -f1)"
-  # -L: Cloudflare Pages answers workbench.html with a redirect to /portage/workbench.
+  # -L: Cloudflare Pages answers workbench.html with a redirect to /portage/workbench, and feedback.html with one to /portage/feedback.
   live_hash="$(curl -sL "${LIVE}${relative}" | shasum -a 256 | cut -d' ' -f1)"
   [ "$local_hash" = "$live_hash" ] || fail "Live file differs from the build: $relative"
 done < <(find "$DIST" -type f)
@@ -83,6 +88,8 @@ node "$ROOT/deploy/smoke.mjs" live "$LIVE" >> "$LOG" 2>&1 || fail 'The live game
 printf '6/6 the live game starts, takes a click and a key press (%s)\n' "$(grep -E '^live:' "$LOG" | tail -n 1)"
 node "$ROOT/deploy/smoke-workbench.mjs" live "$LIVE" >> "$LOG" 2>&1 || fail 'The live workbench page failed its smoke test.'
 printf '     and the live workbench page reads on a phone-sized screen (%s)\n' "$(grep -E '^live workbench:' "$LOG" | tail -n 1)"
+node "$ROOT/deploy/smoke-feedback.mjs" live "$LIVE" >> "$LOG" 2>&1 || fail 'The live feedback page failed its smoke test.'
+printf '     and the live feedback page reads on a phone-sized screen, scripts on and off (%s)\n' "$(grep -E '^live feedback:' "$LOG" | tail -n 1)"
 node "$ROOT/deploy/smoke-crew.mjs" "$LIVE" >> "$LOG" 2>&1 || fail 'Two browsers could not share a canoe on the live game.'
 printf '     and two browsers share a canoe by an invite link (%s)\n' "$(grep -E '^crew:' "$LOG" | tail -n 1)"
-printf 'LIVE: %s and %sworkbench\n' "$LIVE" "$LIVE"
+printf 'LIVE: %s, %sworkbench and %sfeedback\n' "$LIVE" "$LIVE" "$LIVE"

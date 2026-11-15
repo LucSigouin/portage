@@ -149,7 +149,7 @@ const PAPER_TOOTH = cssPicture("<svg xmlns='http://www.w3.org/2000/svg' width='2
   + "<filter id='tooth' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' seed='4' stitchTiles='stitch'/>"
   + "<feColorMatrix values='0 0 0 0 .16  0 0 0 0 .17  0 0 0 0 .2  0 0 0 .62 -.27'/></filter><rect width='256' height='256' filter='url(#tooth)'/></svg>");
 
-function drawnCss() {
+export function drawnCss() {
   const bright = '#fbf5e6';
   return ':root {\n'
     + `  --pen-a: ${penTile({ seed: 7, paper: bright })};\n`
