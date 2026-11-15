@@ -14,6 +14,8 @@ import type { AudioEngine } from './client/contracts.ts';
 import { parseDebugParameters } from './client/debug/parameters.ts';
 import { createGameInterface } from './interface/index.ts';
 import { withCastPictures } from './interface/cast-host.ts';
+import { withGraphicsCardWarning } from './interface/graphics-card.ts';
+import { rendererNameOfCanvas } from './look/graphics-card.ts';
 import { drawCastSketches } from './look/cast-sketch.ts';
 import { createWorldView } from './look/index.ts';
 import { setLocalPlayerId } from './look/crew.ts';
@@ -93,7 +95,11 @@ function boot(): void {
   const perf = new URLSearchParams(window.location.search).get('perf') === '1';
   const worldView = createWorldView();
   // The pick screen shows the four of the cast (`interface/cast-host.ts`): the interface, with that added.
-  const gameInterface = withCastPictures(createGameInterface(), { draw: drawCastSketches });
+  // And the note on the menu and the join card when the browser draws without the graphics card (`interface/graphics-card.ts`).
+  const gameInterface = withGraphicsCardWarning(withCastPictures(createGameInterface(), { draw: drawCastSketches }), () => ({
+    rendererName: rendererNameOfCanvas(worldElement.querySelector('canvas')), userAgent: navigator.userAgent,
+    forced: parameters.card, staged: parameters.shot !== null, driven: navigator.webdriver === true,
+  }));
   const audio = createAudio();
   let loop: FrameLoop | null = null;
 

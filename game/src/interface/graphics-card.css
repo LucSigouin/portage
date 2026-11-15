@@ -1,0 +1,42 @@
+/*
+ * The graphics card note (`graphics-card.ts`): a slip of the game's paper with a rust edge.
+ * Ink on the bright paper is 12.9 to 1 and the rust title 6.8 to 1: both past AA. Nothing here moves.
+ */
+.iw-card-note {
+  box-sizing: border-box;
+  padding: 0.7rem 0.95rem 0.75rem 1rem;
+  background-color: var(--iw-paper-bright);
+  border: 1px solid var(--iw-ink-faint);
+  border-left: 0.3rem solid var(--iw-rust-fill);
+  color: var(--iw-ink);
+  text-align: left;
+}
+.iw-card-note .iw-card-note-title {
+  margin: 0;
+  font-family: var(--iw-serif);
+  font-size: 1.12rem;
+  line-height: 1.3;
+  color: var(--iw-rust-deep);
+}
+.iw-card-note .iw-card-note-line {
+  margin: 0.3rem 0 0;
+  font-family: var(--iw-hand);
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+/* On the main menu: pinned over the scene, top right, never wider than the room beside the menu's page. */
+.iw-lobby > .iw-card-note {
+  position: absolute;
+  top: 1.6rem;
+  right: 1.6rem;
+  width: 25rem;
+  max-width: calc(100vw - max(42.2vw, 7.4vw + 33rem) - 3.2rem);
+}
+/* Behind an open card the menu is dimmed: its note steps back with it, and the join card carries its own. */
+.iw-lobby.iw-dim > .iw-card-note {
+  display: none;
+}
+/* On the join card: under its lines. */
+.iw-panel .iw-card-note {
+  margin-top: 0.9rem;
+}
